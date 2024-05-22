@@ -1,0 +1,201 @@
+/*
+ * Copyright (c) 2017, NXP
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/sys/byteorder.h>
+
+#define MAX32664_I2C_ADDRESS 0x55
+#define MAX32664_HUB_STAT_DRDY_MASK 0x08
+
+uint8_t m_read_hub_status(const struct device *dev);
+int max32664_get_fifo_count(const struct device *dev);
+int _max32664_fifo_get_samples(const struct device *dev, uint8_t *buf, int len);
+int max32664_get_sample_fifo(const struct device *dev);
+
+enum max32664_channel
+{
+	SENSOR_CHAN_PPG_RED_1 = SENSOR_CHAN_PRIV_START + 4,
+	SENSOR_CHAN_PPG_IR_1 = SENSOR_CHAN_PRIV_START + 5,
+	SENSOR_CHAN_PPG_RED_2 = SENSOR_CHAN_PRIV_START + 6,
+	SENSOR_CHAN_PPG_IR_2 = SENSOR_CHAN_PRIV_START + 7,
+	SENSOR_CHAN_PPG_RED_3 = SENSOR_CHAN_PRIV_START + 8,
+	SENSOR_CHAN_PPG_IR_3 = SENSOR_CHAN_PRIV_START + 9,
+	SENSOR_CHAN_PPG_RED_4 = SENSOR_CHAN_PRIV_START + 10,
+	SENSOR_CHAN_PPG_IR_4 = SENSOR_CHAN_PRIV_START + 11,
+	SENSOR_CHAN_PPG_IR_5 = SENSOR_CHAN_PRIV_START + 12,
+	SENSOR_CHAN_PPG_RED_5 = SENSOR_CHAN_PRIV_START + 13,
+	SENSOR_CHAN_PPG_IR_6 = SENSOR_CHAN_PRIV_START + 14,
+	SENSOR_CHAN_PPG_RED_6 = SENSOR_CHAN_PRIV_START + 15,
+
+	SENSOR_PPG_NUM_SAMPLES = SENSOR_CHAN_PRIV_START + 16,
+
+	SENSOR_CHAN_PPG_HR = SENSOR_CHAN_PRIV_START + 17,
+	SENSOR_CHAN_PPG_SPO2 = SENSOR_CHAN_PRIV_START + 18,
+	SENSOR_CHAN_PPG_BP_SYS = SENSOR_CHAN_PRIV_START + 19,
+	SENSOR_CHAN_PPG_BP_DIA = SENSOR_CHAN_PRIV_START + 20,
+	SENSOR_CHAN_PPG_BPT_STATUS = SENSOR_CHAN_PRIV_START + 21,
+	SENSOR_CHAN_PPG_BPT_PROGRESS = SENSOR_CHAN_PRIV_START + 22,
+	SENSOR_CHAN_PPG_HR_ABOVE_RESTING = SENSOR_CHAN_PRIV_START + 23,
+	SENSOR_CHAN_PPG_SPO2_R_VAL = SENSOR_CHAN_PRIV_START + 24,
+
+	SENSOR_CHAN_PPG_RED = SENSOR_CHAN_PRIV_START + 25,
+	SENSOR_CHAN_PPG_IR = SENSOR_CHAN_PRIV_START + 26,
+};
+
+enum max32664_attribute
+{
+	MAX32664_ATTR_OP_MODE = 0x01,
+	MAX32664_ATTR_DATE_TIME = 0x02,
+	MAX32664_ATTR_BP_CAL_SYS = 0x03,
+	MAX32664_ATTR_BP_CAL = 0x04,
+	MAX32664_ATTR_START_EST = 0x05,
+	MAX32664_ATTR_STOP_EST = 0x06,
+	MAX32664_ATTR_LOAD_CALIB = 0x07,
+};
+
+enum max32664_mode
+{
+	MAX32664_OP_MODE_RAW = 0,
+	MAX32664_OP_MODE_CAL,
+	MAX32664_OP_MODE_BPT,
+	MAX32664_OP_MODE_BPT_CAL_START,
+	MAX32664_OP_MODE_BPT_CAL_GET_VECTOR,
+	MAX32664_OP_MODE_IDLE,
+};
+
+enum max32664_reg_families_t
+{
+	MAX32664_CMD_FAM_HUB_STATUS = 0x00,
+	MAX32664_CMD_FAM_SET_DEVICE_MODE = 0x01,
+	MAX32664_CMD_FAM_READ_DEVICE_MODE = 0x02,
+	MAX32664_CMD_FAM_OUTPUT_MODE = 0x10,
+	MAX32664_CMD_FAM_READ_OUTPUT_MODE = 0x11, // not on the datasheet
+	MAX32664_CMD_FAM_READ_DATA_OUTPUT = 0x12,
+	MAX32664_CMD_FAM_READ_DATA_INPUT = 0x13,
+	MAX32664_CMD_FAM_WRITE_INPUT = 0x14, // not on the datasheet
+	MAX32664_CMD_FAM_WRITE_REGISTER = 0x40,
+	MAX32664_CMD_FAM_READ_REGISTER = 0x41,
+	MAX32664_CMD_FAM_READ_ATTRIBUTES_AFE = 0x42,
+	MAX32664_CMD_FAM_DUMP_REGISTERS = 0x43,
+	MAX32664_CMD_FAM_ENABLE_SENSOR = 0x44,
+	MAX32664_CMD_FAM_READ_SENSOR_MODE = 0x45, // not on the datasheet
+	MAX32664_CMD_FAM_CHANGE_ALGORITHM_CONFIG = 0x50,
+	MAX32664_CMD_FAM_READ_ALGORITHM_CONFIG = 0x51,
+	MAX32664_CMD_FAM_ENABLE_ALGORITHM = 0x52,
+	MAX32664_CMD_FAM_BOOTLOADER_FLASH = 0x80,
+	MAX32664_CMD_FAM_BOOTLOADER_INFO = 0x81,
+	MAX32664_CMD_FAM_IDENTITY = 0xFF
+};
+
+enum max32664_reg_status_t
+{
+	MAX32664_STAT_SUCCESS = 0x00,
+	MAX32664_STAT_ERR_UNAVAIL_CMD = 0x01,
+	MAX32664_STAT_ERR_UNAVAIL_FUNC = 0x02,
+	MAX32664_STAT_ERR_DATA_FORMAT = 0x03,
+	MAX32664_STAT_ERR_INPUT_VALUE = 0x04,
+	MAX32664_STAT_ERR_TRY_AGAIN = 0x05,
+	MAX32664_STAT_ERR_BTLDR_GENERAL = 0x80,
+	MAX32664_STAT_ERR_BTLDR_CHECKSUM = 0x81,
+	MAX32664_STAT_ERR_BTLDR_AUTH = 0x82,
+	MAX32664_STAT_ERR_BTLDR_INVALID_APP = 0x83,
+	MAX32664_STAT_ERR_UNKNOWN = 0xFF
+};
+
+struct max32664_config
+{
+	struct i2c_dt_spec i2c;
+	struct gpio_dt_spec reset_gpio;
+	struct gpio_dt_spec mfio_gpio;
+};
+
+struct max32664_data
+{
+	uint8_t num_channels;
+	uint8_t num_samples;
+
+	uint32_t samples_led_ir[128];
+	uint32_t samples_led_red[128];
+
+	uint8_t op_mode;
+	// uint8_t sample_len;
+
+	uint8_t bpt_status;
+	uint8_t bpt_progress;
+	uint16_t hr;
+	uint8_t bpt_sys;
+	uint8_t bpt_dia;
+	uint16_t spo2;
+	uint16_t spo2_r_val;
+	uint8_t hr_above_resting;
+
+	uint8_t calib_vector[824];
+};
+
+struct sensor_ppg_data
+{
+	struct sensor_data_header header;
+	int8_t shift;
+	struct sensor_ppg_sample_data
+	{
+		uint32_t timestamp_delta;
+		q31_t sample_red;
+		q31_t sample_ir;
+	} readings[1];
+};
+
+// Async API types
+
+struct max32664_decoder_header
+{
+	uint64_t timestamp;
+} __attribute__((__packed__));
+
+/*struct max32664_sample
+{
+	uint32_t timestamp_delta;
+	
+	uint8_t bpt_status;
+	uint8_t bpt_progress;
+	uint16_t hr;
+	uint8_t bpt_sys;
+	uint8_t bpt_dia;
+	uint16_t spo2;
+	uint16_t spo2_r_val;
+	uint8_t hr_above_resting;
+};*/
+
+struct max32664_encoded_data
+{
+	struct max32664_decoder_header header;
+	uint8_t num_samples;
+
+	uint32_t red_samples[32];
+	uint32_t ir_samples[32];
+
+	uint16_t hr;
+	uint16_t spo2;
+
+	// BPT Measurements
+	uint8_t bpt_progress;
+	uint8_t bpt_status;
+	uint8_t bpt_sys;
+	uint8_t bpt_dia;
+};
+
+struct max32664_enc_calib_data
+{
+	struct max32664_decoder_header header;
+	
+	uint8_t calib_vector[824];
+};
+
+
+int max32664_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+
+int max32664_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);

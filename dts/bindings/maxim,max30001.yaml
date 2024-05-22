@@ -1,0 +1,118 @@
+# ProtoCentral Electronics (info@protocentral.com)
+# SPDX-License-Identifier: Apache-2.0
+
+description: MAX30001 SPI Device
+
+compatible: "maxim,max30001"
+
+include: [sensor-device.yaml, spi-device.yaml]
+
+properties:
+  intb-gpios:
+    type: phandle-array
+    required: false
+    description: INTB pin. The INTB pin of MAX30001 is active low. If connected directly the MCU pin should be configured as input.
+  rtor-enabled:
+    type: boolean
+    required: false
+    description: Enable R-to-R detection.
+  ecg-enabled:
+    type: boolean
+    required: false
+    description: Enable ECG channel.
+  bioz-enabled:
+    type: boolean
+    required: false
+    description: Enable BIOZ channel.
+  ecg-dcloff-enable:
+    type: boolean
+    required: false
+    description: Enable ECG channel DC lead-off detection.
+  
+  ecg-gain:
+    type: int
+    required: false
+    default: 2
+    description: |
+      ECG channel gain. 
+
+      -0: 20 V/V
+      -1: 40 V/V
+      -2: 80 V/V
+      -3: 160 V/V
+    enum: [0, 1, 2, 3]
+
+  bioz-gain:
+    type: int
+    required: false
+    default: 2
+    description: |
+      BIOZ channel gain.
+
+      -0: 10 V/V
+      -1: 20 V/V
+      -2: 40 V/V
+      -3: 80 V/V
+    enum: [0, 1, 2, 3]
+
+  bioz_cgmag:
+    type: int
+    required: false
+    default: 4
+    description: | 
+      BIOZ channel current magnitude.
+
+      -0: 0 (Off)
+      -1: 8 uA
+      -2: 16 uA
+      -3: 32 uA
+      -4: 48 uA
+      -5: 64 uA
+      -6: 80 uA
+      -7: 96 uA
+    enum: [0, 1, 2, 3, 4, 5, 6, 7]
+  
+  ecg-dcloff-current:
+    type: int
+    required: false
+    default: 0
+    description: |
+      ECG channel DC lead-off current.
+
+      -0: 0 nA
+      -1: 5 nA
+      -2: 10 nA
+      -3: 20 nA
+      -4: 50 nA
+      -5: 100 nA
+    enum: [0, 1, 2, 3, 4, 5]
+  
+  ecg-invert:
+    type: boolean
+    required: false
+    description: Invert ECG channel output.
+
+  bioz_lc_hi_lo_en:
+    type: boolean
+    required: false
+    description: Enable BIOZ channel Low Current Hi/Lo
+  bioz_dlpf:
+    type: int
+    required: false
+    default: 0
+    description: BIOZ channel digital low pass filter. Default is 0.
+  bioz_dhpf:
+    type: int
+    required: false
+    default: 0
+    description: BIOZ channel digital high pass filter. Default is 0.
+  bioz_ahpf:
+    type: int
+    required: false
+    default: 0
+    description: BIOZ channel analog low pass filter. Default is 0.
+  bioz_ln_en:
+    type: boolean
+    required: false
+    description: Enable BIOZ channel low noise mode
+    

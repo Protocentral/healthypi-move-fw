@@ -1,0 +1,33 @@
+manifest:
+  self:
+    west-commands: scripts/west-commands.yml
+
+  remotes:
+    - name: sdk
+      url-base: https://github.com/nrfconnect
+
+  projects:
+    - name: sdk-nrf
+      remote: sdk
+      revision: v2.6.0
+      path: nrf
+      import:
+        name-blocklist:
+          - ci-tools
+          - hal_altera
+          - hal_cypress
+          - hal_infineon
+          - hal_microchip
+          - hal_nxp
+          - hal_openisa
+          - hal_silabs
+          - hal_xtensa
+          - hal_ti
+          - loramac-node
+          - net-tools
+          - edtt
+          - sof
+      clone-depth: 1
+      
+  self:
+    west-commands: scripts/west-commands.yml

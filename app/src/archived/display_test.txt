@@ -1,0 +1,205 @@
+	/* Sitronix ST7789V LCD */
+	/*
+	st7789v: st7789v@0 {
+		compatible = "sitronix,st7789v";
+		reg = <0>;
+		spi-max-frequency = <28000000>;
+		cmd-data-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+		width = <240>;
+		height = <320>;
+
+		x-offset = <0>;
+		y-offset = <0>;
+		vcom = <0x19>;
+		gctrl = <0x35>;
+		vrhs = <0x12>;
+		vdvs = <0x20>;
+		mdac = <0x00>;
+		gamma = <0x01>;
+		colmod = <0x05>;
+		lcm = <0x2c>;
+		porch-param = [ 0c 0c 00 33 33  ];
+		cmd2en-param = [ 5a 69 02 01  ];
+		pwctrl1-param = [ a4 a1  ];
+		pvgam-param = [ D0 04 0D 11 13 2B 3F 54 4C 18 0D 0B 1F 23  ];
+		nvgam-param = [ D0 04 0C 11 13 2C 3F 44 51 2F 1F 1F 20 23  ];
+		ram-param = [ 00 F0  ];
+		rgb-param = [ CD 08 14  ];
+	};*/
+
+enum corner
+{
+	TOP_LEFT,
+	TOP_RIGHT,
+	BOTTOM_RIGHT,
+	BOTTOM_LEFT
+};
+
+size_t x;
+size_t y;
+size_t rect_w;
+size_t rect_h;
+size_t h_step;
+size_t scale;
+size_t grey_count;
+uint8_t *buf;
+int32_t grey_scale_sleep;
+const struct device *display_dev;
+
+struct display_buffer_descriptor buf_desc;
+size_t buf_size = 0;
+fill_buffer fill_buffer_fnc = NULL;
+struct display_capabilities capabilities;
+
+typedef void (*fill_buffer)(enum corner corner, uint8_t grey, uint8_t *buf,
+							size_t buf_size);
+
+
+static void fill_buffer_argb8888(enum corner corner, uint8_t grey, uint8_t *buf,
+								 size_t buf_size)
+{
+	uint32_t color = 0;
+
+	switch (corner)
+	{
+	case TOP_LEFT:
+		color = 0x00FF0000u;
+		break;
+	case TOP_RIGHT:
+		color = 0x0000FF00u;
+		break;
+	case BOTTOM_RIGHT:
+		color = 0x000000FFu;
+		break;
+	case BOTTOM_LEFT:
+		color = grey << 16 | grey << 8 | grey;
+		break;
+	}
+
+	for (size_t idx = 0; idx < buf_size; idx += 4)
+	{
+		*((uint32_t *)(buf + idx)) = color;
+	}
+}
+
+static void fill_buffer_rgb888(enum corner corner, uint8_t grey, uint8_t *buf,
+							   size_t buf_size)
+{
+	uint32_t color = 0;
+
+	switch (corner)
+	{
+	case TOP_LEFT:
+		color = 0x00FF0000u;
+		break;
+	case TOP_RIGHT:
+		color = 0x0000FF00u;
+		break;
+	case BOTTOM_RIGHT:
+		color = 0x000000FFu;
+		break;
+	case BOTTOM_LEFT:
+		color = grey << 16 | grey << 8 | grey;
+		break;
+	}
+
+	for (size_t idx = 0; idx < buf_size; idx += 3)
+	{
+		*(buf + idx + 0) = color >> 16;
+		*(buf + idx + 1) = color >> 8;
+		*(buf + idx + 2) = color >> 0;
+	}
+}
+
+static uint16_t get_rgb565_color(enum corner corner, uint8_t grey)
+{
+	uint16_t color = 0;
+	uint16_t grey_5bit;
+
+	switch (corner)
+	{
+	case TOP_LEFT:
+		color = 0xF800u;
+		break;
+	case TOP_RIGHT:
+		color = 0x07E0u;
+		break;
+	case BOTTOM_RIGHT:
+		color = 0x001Fu;
+		break;
+	case BOTTOM_LEFT:
+		grey_5bit = grey & 0x1Fu;
+		/* shift the green an extra bit, it has 6 bits */
+		color = grey_5bit << 11 | grey_5bit << (5 + 1) | grey_5bit;
+		break;
+	}
+	return color;
+}
+
+static void fill_buffer_rgb565(enum corner corner, uint8_t grey, uint8_t *buf,
+							   size_t buf_size)
+{
+	uint16_t color = get_rgb565_color(corner, grey);
+
+	for (size_t idx = 0; idx < buf_size; idx += 2)
+	{
+		*(buf + idx + 0) = (color >> 8) & 0xFFu;
+		*(buf + idx + 1) = (color >> 0) & 0xFFu;
+	}
+}
+
+static void fill_buffer_bgr565(enum corner corner, uint8_t grey, uint8_t *buf,
+							   size_t buf_size)
+{
+	uint16_t color = get_rgb565_color(corner, grey);
+
+	for (size_t idx = 0; idx < buf_size; idx += 2)
+	{
+		*(uint16_t *)(buf + idx) = color;
+	}
+}
+
+static void fill_buffer_mono(enum corner corner, uint8_t grey, uint8_t *buf,
+							 size_t buf_size)
+{
+	uint16_t color;
+
+	switch (corner)
+	{
+	case BOTTOM_LEFT:
+		color = (grey & 0x01u) ? 0xFFu : 0x00u;
+		break;
+	default:
+		color = 0;
+		break;
+	}
+
+	memset(buf, color, buf_size);
+}
+
+#define RETURN_FROM_MAIN(exit_code) return
+
+
+/*lv_obj_t *label;
+	lv_obj_t *btn1 = lv_btn_create(lv_scr_act());
+	// lv_obj_add_event(btn1, event_handler, LV_EVENT_ALL, NULL);
+	lv_obj_align(btn1, LV_ALIGN_CENTER, 0, -40);
+
+	label = lv_label_create(btn1);
+	lv_label_set_text(label, "Button");
+	lv_obj_center(label);
+
+	/*Create a spinner*/
+	// lv_obj_t *spinner = lv_spinner_create(lv_scr_act(), 1000, 60);
+	// lv_obj_set_size(spinner, 100, 100);
+	// lv_obj_center(spinner);
+
+	/*hello_world_label = lv_label_create(lv_scr_act());
+	lv_label_set_text(hello_world_label, "Hello world!");
+	lv_obj_align(hello_world_label, LV_ALIGN_CENTER, 0, 0);
+
+	count_label = lv_label_create(lv_scr_act());
+	lv_label_set_text(count_label, "Test");
+	lv_obj_align(count_label, LV_ALIGN_BOTTOM_MID, 0, 0);
+	*/

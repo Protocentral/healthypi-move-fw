@@ -1,0 +1,21 @@
+mainmenu "HealthyPi 5 Project Configuration"
+
+config HEALTHYPI_USB_CDC_ENABLED
+    bool "Enable USB CDC"
+    default n
+    help
+      Enable USB CDC
+
+config HEALTHYPI_DISPLAY_ENABLED
+    bool "Enable Display"
+    default n
+    help
+      Enable Display
+
+config HEALTHYPI_USB_MSC_ENABLED
+    bool "Enable USB Mass Storage"
+    default n
+    help
+      Enable USB MSC
+
+source "Kconfig.zephyr"

@@ -1,0 +1,411 @@
+/*
+ * Copyright (c) 2019-2020 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include "healthypi_move_nrf5340_cpuapp_common-pinctrl.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <dt-bindings/regulator/npm1300.h>
+
+/ {
+
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,uart-mcumgr = &uart0;
+		zephyr,bt-mon-uart = &uart0;
+		zephyr,bt-c2h-uart = &uart0;
+		zephyr,bt-hci-ipc = &ipc0;
+		nordic,802154-spinel-ipc = &ipc0;
+		zephyr,ieee802154 = &ieee802154;
+		zephyr,display = &gc9a01; //&st7789v;
+		nordic,pm-ext-flash = &w25q01jv;
+	};
+
+	pwmleds {
+		compatible = "pwm-leds";
+		pwm_led0: pwm_led_0 {
+			status = "okay";
+			pwms = <&sw_pwm 0 PWM_MSEC(10) PWM_POLARITY_NORMAL>;
+		};
+	};
+
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		button_up: sw1 {
+			label = "Button UP / SW1";
+			gpios = <&gpio0 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_UP>;
+		};
+		button_back: sw2 {
+			label = "Button Back / SW2";
+			gpios = <&gpio0 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_BACK>;
+		};
+		button_down: sw3 {
+			label = "Button DOWN / SW3";
+			gpios = <&gpio0 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			zephyr,code = <INPUT_KEY_DOWN>;
+		};
+
+
+	};
+
+	aliases {
+		pwm-led0 = &pwm_led0;
+		mcuboot-button0 = &button_up;
+
+		watchdog0 = &wdt0;
+		esp-uart= &uart0;
+
+		max30001 = &max30001;
+		max32664 = &max32664;
+
+		rtc = &rtc_rv;
+	};
+
+};
+
+/ {
+	lvgl_pointer_input: lvgl_pointer {
+		compatible = "zephyr,lvgl-pointer-input";
+		input = <&cst816s>;
+		invert-y;
+		//swap-xy;
+		//invert-x;
+	};
+};
+
+&adc {
+	status = "okay";
+};
+
+&gpiote {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&i2c1 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	pinctrl-0 = <&i2c1_default>;
+	pinctrl-1 = <&i2c1_sleep>;
+	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-names = "default", "sleep";
+
+	cst816s: cst816s@15 {
+		compatible = "hynitron,cst816s";
+		reg = <0x15>;
+		status = "okay";
+		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
+		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&i2c2 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	pinctrl-0 = <&i2c2_default>;
+	pinctrl-1 = <&i2c2_sleep>;
+	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-names = "default", "sleep";
+
+	max32664: max32664@55 {
+		compatible = "maxim,max32664";
+		reg = <0x55>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	max17048: max17048@36 {
+		compatible = "maxim,max17048";
+		status = "okay";
+		reg = <0x36>;
+	};
+
+	max30205: max30205@48 {
+		compatible = "maxim,max30205";
+		status = "okay";
+		reg = <0x48>;
+	};
+
+	rtc_rv: rv@51 {
+		compatible = "microcrystal,rv8263";
+		reg = <0x51>;
+	};
+
+
+	lsm6: lsm6dso@6a {
+		compatible = "st,lsm6dso";
+		reg = <0x6a>;
+		status = "okay";
+		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+	};
+
+	npm_pmic: pmic@6b {
+		compatible = "nordic,npm1300";
+		reg = <0x6b>;
+
+		npm_pmic_gpio: gpio-controller {
+			compatible = "nordic,npm1300-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <5>;
+		};
+
+		npm_pmic_regulators: regulators {
+			compatible = "nordic,npm1300-regulator";
+
+			/* limits are set to min/max allowed values */
+			npm_pmic_buck1: BUCK1 {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			npm_pmic_buck2: BUCK2 {
+				regulator-min-microvolt = <1000000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-init-microvolt = <3300000>;
+				retention-microvolt = <2500000>;
+				//enable-gpios = <&npm_pmic_gpio 1 GPIO_ACTIVE_LOW>;
+				//retention-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_HIGH>;
+				//pwm-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
+			};
+
+			npm_pmic_ldo1: LDO1 {
+				//regulator-min-microvolt = <1000000>;
+				//regulator-max-microvolt = <3300000>;
+				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				regulator-boot-on;
+				//enable-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
+			};
+
+			npm_pmic_ldo2: LDO2 {
+				//regulator-min-microvolt = <1000000>;
+				//regulator-max-microvolt = <3300000>;
+				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+
+				//enable-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
+				
+			};
+		};
+
+		npm_pmic_charger: charger {
+			compatible = "nordic,npm1300-charger";
+			term-microvolt = <4150000>;
+			term-warm-microvolt = <4000000>;
+			current-microamp = <300000>;
+			dischg-limit-microamp = <1000000>;
+			vbus-limit-microamp = <500000>;
+			thermistor-ohms = <10000>;
+			thermistor-beta = <3380>;
+			charging-enable;
+		};
+
+		npm_pmic_buttons: buttons {
+			compatible = "gpio-keys";
+			pmic_button0: pmic_button_0 {
+				gpios = < &npm_pmic_gpio 0 GPIO_ACTIVE_HIGH>;
+				label = "Pmic button switch 0";
+			zephyr,code = <INPUT_KEY_0>;
+			};
+		};
+
+		npm_pmic_leds: leds {
+			compatible = "nordic,npm1300-led";
+			nordic,led0-mode = "error";
+			nordic,led1-mode = "charging";
+			nordic,led2-mode = "host";
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-1 = <&uart0_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+
+&pwm0 {
+	status = "disabled";
+	pinctrl-0 = <&pwm0_default>;
+	pinctrl-1 = <&pwm0_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+
+
+&sw_pwm {
+	status = "okay";
+	channel-gpios = <&gpio1 5 PWM_POLARITY_INVERTED>;
+};
+
+
+&qspi {
+	status = "okay";
+	pinctrl-0 = <&qspi_default>;
+	pinctrl-1 = <&qspi_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	w25q01jv: w25q01jveiq@0 {
+		compatible = "nordic,qspi-nor";
+		reg = <0>;
+		//writeoc = "pp2o";
+		//readoc = "read2o";
+		//quad-enable-requirements = "S2B1v5";
+		sck-frequency = <128000000>;
+		size = <DT_SIZE_M(128)>;
+		has-dpd;
+		t-enter-dpd = <3000>;
+		t-exit-dpd = <30000>;
+		jedec-id = [ ef 40 18 ];
+		status = "okay";
+	};
+};
+
+
+/*&uart1 {
+	compatible = "nordic,nrf-uarte";
+	current-speed = <115200>;
+	pinctrl-0 = <&uart1_default>;
+	pinctrl-1 = <&uart1_sleep>;
+	pinctrl-names = "default", "sleep";
+};
+ */
+
+
+&spi3 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+
+	pinctrl-0 = <&spi3_default>;
+	pinctrl-1 = <&spi3_sleep>;
+	pinctrl-names = "default", "sleep";
+	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+
+	max30001: max30001@0 {
+		compatible = "maxim,max30001";
+		status = "okay";
+		reg = <0x0>;
+		spi-max-frequency = <DT_FREQ_M(1)>;
+		intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
+		rtor-enabled;
+		ecg-enabled;
+		bioz-enabled;
+		ecg-gain = <2>; 
+		ecg-invert;
+		//ecg-dcloff-enable;
+		//ecg-dcloff-current = <1>; // 5 nA
+		
+	};
+};
+
+&spi4 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi4_default>;
+	pinctrl-1 = <&spi4_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	gc9a01: gc9a01@0 {
+		compatible = "waveshare,gc9a01a";
+		spi-max-frequency = <30000000>;
+		reg = <0>;
+		cmd-data-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		//bl-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
+		backlight-gpios = <&pwm_led0>;
+		//backlight-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
+		width = <240>;
+		height = <240>;
+		pixel-format = <0>;//<GC9A01A_PIXEL_FORMAT_RGB565>;
+		display-inversion;
+		rotation = <0>;
+		status = "okay";
+	};
+};
+
+&flash0 {
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0x00010000>;
+		};
+		slot0_partition: partition@10000 {
+			label = "image-0";
+		};
+		slot0_ns_partition: partition@50000 {
+			label = "image-0-nonsecure";
+		};
+		slot1_partition: partition@80000 {
+			label = "image-1";
+		};
+		slot1_ns_partition: partition@c0000 {
+			label = "image-1-nonsecure";
+		};
+		/* 0xf0000 to 0xf7fff reserved for TF-M partitions */
+		storage_partition: partition@f8000 {
+			label = "storage";
+			reg = <0x000f8000 DT_SIZE_K(20)>;
+		};
+	};
+};
+
+&ieee802154 {
+	status = "okay";
+};
+
+zephyr_udc0: &usbd {
+	compatible = "nordic,nrf-usbd";
+	status = "okay";
+	cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/ {
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		sram0_image: image@20000000 {
+			/* Zephyr image(s) memory */
+		};
+
+		sram0_s: image_s@20000000 {
+			/* Secure image memory */
+		};
+
+		sram0_ns: image_ns@20040000 {
+			/* Non-Secure image memory */
+		};
+	};
+};
+
+/* Include partition configuration file */
+#include "healthypi_move_nrf5340_cpuapp_partition_conf.dtsi"

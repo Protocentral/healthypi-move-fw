@@ -1,0 +1,210 @@
+// TDCS3 Command Data Service
+// Ashwin Whitchurch
+
+#include <zephyr/kernel.h>
+#include <zephyr/types.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <zephyr/sys/byteorder.h>
+
+#include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/hci.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/uuid.h>
+#include <zephyr/bluetooth/gatt.h>
+
+//#include <zephyr/sys/reboot.h>
+
+#ifdef CONFIG_MCUMGR_CMD_OS_MGMT
+#include "os_mgmt/os_mgmt.h"
+#endif
+#ifdef CONFIG_MCUMGR_CMD_IMG_MGMT
+#include "img_mgmt/img_mgmt.h"
+#endif
+#ifdef CONFIG_MCUMGR_CMD_STAT_MGMT
+#include "stat_mgmt/stat_mgmt.h"
+#endif
+
+#include <zephyr/logging/log.h>
+
+#include "command_data_service.h"
+
+#include "tdcs3.h"
+#include <zephyr/toolchain.h>
+
+//#include <zephyr/mgmt/mcumgr/smp_bt.h>
+
+
+static uint8_t ble_mfg_data[7] = {0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00}; // 0,1: MFR ID, 2: Battery Level, 3: Rec Status, 4,5: Rec Progress, 6: Flags (0x01=Lead on)
+
+static const struct bt_data ad[] = {
+	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+	BT_DATA_BYTES(BT_DATA_UUID16_ALL,
+				  BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
+				  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
+				  BT_UUID_16_ENCODE(BT_UUID_DIS_VAL))
+
+	//BT_DATA(BT_DATA_MANUFACTURER_DATA, ble_mfg_data, 7)
+	};
+
+static const struct bt_data sd[] = {
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_DIS_VAL),
+};
+
+bool tdcs_add_macaddr_string(char *name)
+{
+	bt_addr_le_t mac_addr;
+	size_t id_count = 1;
+	bt_id_get(&mac_addr, &id_count);
+	sprintf(&name[6], "%02X%02X%02X", mac_addr.a.val[2], mac_addr.a.val[1], mac_addr.a.val[0]);
+
+	return true;
+}
+
+static void connected(struct bt_conn *conn, uint8_t err)
+{
+	if (err)
+	{
+		printk("Connection failed (err 0x%02x)\n", err);
+	}
+	else
+	{
+		printk("Connected\n");
+		display_show_ble_connected();
+	}
+}
+
+static void disconnected(struct bt_conn *conn, uint8_t reason)
+{
+	printk("Disconnected (reason 0x%02x)\n", reason);
+	
+	sys_reboot();
+}
+
+BT_CONN_CB_DEFINE(conn_callbacks) = {
+	.connected = connected,
+	.disconnected = disconnected,
+};
+
+static int set_dis_parameters(void)
+{
+#if defined(CONFIG_BT_DIS_SETTINGS)
+	settings_runtime_set("bt/dis/model",
+						 "patch pro",
+						 sizeof("patch pro"));
+	settings_runtime_set("bt/dis/manuf",
+						 "Patch Inc",
+						 sizeof("Patch Inc"));
+#if defined(CONFIG_BT_DIS_SERIAL_NUMBER)
+	settings_runtime_set("bt/dis/serial",
+						 "000010",
+						 sizeof("000010"));
+#endif
+#if defined(CONFIG_BT_DIS_SW_REV)
+	settings_runtime_set("bt/dis/sw",
+						 CONFIG_BT_DIS_SW_REV_STR,
+						 sizeof(CONFIG_BT_DIS_SW_REV_STR));
+#endif
+#if defined(CONFIG_BT_DIS_FW_REV)
+	settings_runtime_set("bt/dis/fw",
+						 CONFIG_BT_DIS_FW_REV_STR,
+						 sizeof(CONFIG_BT_DIS_FW_REV_STR));
+#endif
+#if defined(CONFIG_BT_DIS_HW_REV)
+	settings_runtime_set("bt/dis/hw",
+						 CONFIG_BT_DIS_HW_REV_STR,
+						 sizeof(CONFIG_BT_DIS_HW_REV_STR));
+#endif
+#endif
+	return 0;
+}
+
+static void bt_ready(void)
+{
+	int err;
+
+	char dev_name[15] = "WISER-";
+
+    tdcs_add_macaddr_string(dev_name);
+	bt_set_name(dev_name);
+
+    printk("Set device name: %s", dev_name);
+
+	set_dis_parameters();
+
+	//printk("Bluetooth initialized\n");
+
+	/* Initialize the Bluetooth mcumgr transport. */
+	smp_bt_register();
+
+	err = cmd_data_service_init();
+	if (err)
+	{
+		printk("Command/Data service failed (err %d)\n", err);
+		return;
+	}
+
+	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
+	if (err)
+	{
+		printk("Advertising failed to start (err %d)\n", err);
+		return;
+	}
+
+	printk("Advertising successfully started\n");
+}
+
+static void auth_cancel(struct bt_conn *conn)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Pairing cancelled: %s\n", addr);
+}
+
+static struct bt_conn_auth_cb auth_cb_display = {
+	.cancel = auth_cancel,
+};
+
+/*
+static void bas_notify(void)
+{
+	uint8_t battery_level = bt_bas_get_battery_level();
+
+	battery_level--;
+
+	if (!battery_level)
+	{
+		battery_level = 100U;
+	}
+
+	//bt_bas_set_battery_level(battery_level);
+}*/
+
+void ble_init(void)
+{
+	int err;
+	err = bt_enable(NULL);
+	if (err)
+	{
+		printk("Bluetooth init failed (err %d)\n", err);
+		return;
+	}
+
+#ifdef CONFIG_MCUMGR_CMD_OS_MGMT
+	os_mgmt_register_group();
+#endif
+#ifdef CONFIG_MCUMGR_CMD_IMG_MGMT
+	img_mgmt_register_group();
+#endif
+#ifdef CONFIG_MCUMGR_CMD_STAT_MGMT
+	stat_mgmt_register_group();
+#endif
+
+	bt_ready();
+
+	bt_conn_auth_cb_register(&auth_cb_display);
+}

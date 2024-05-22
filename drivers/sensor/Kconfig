@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
+rsource "max30001/Kconfig"
+rsource "max30205/Kconfig"
+rsource "max32664/Kconfig"

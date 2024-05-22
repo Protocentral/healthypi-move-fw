@@ -1,0 +1,23 @@
+/delete-node/ &storage_partition;
+
+/ {
+	chosen {
+		nordic,pm-ext-flash = &w25q01jv;
+	};
+};
+
+&w25q01jv {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        storage_partition: partition@0 {
+            label = "storage";
+            reg = <0x00000000 0x10000>;
+        };
+    };
+};
+
+
+
