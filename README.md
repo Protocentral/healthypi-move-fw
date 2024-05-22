@@ -6,7 +6,7 @@
 
 # HealthyPi Move Firmware 
 
-This repository contains the firmware for the HealthyPi Move device. The firmware is based on the [Zephyr RTOS](https://www.zephyrproject.org/). This repo itself is laid out to be a Zephyr application, and can be built using the Zephyr SDK. For more information on setting up and compiling Zephyr applications, please refer to the [Zephyr documentation](https://docs.zephyrproject.org/latest/).
+This repository contains the firmware for the HealthyPi Move device. The firmware is based on the [Zephyr RTOS](https://www.zephyrproject.org/). 
 
 HealthyPi Move is an open hardware device that lets you track all your vital signs to a high degree of accuracy. But it’s not just another smartwatch with a heart rate monitor. It is a complete vital signs monitoring and recording device on your wrist that can measure electrocardiogram (ECG), photoplethysmogram (PPG), SpO₂, blood pressure (finger-based), EDA/GSR, heart rate variability (HRV), respiration rate, and even body temperature.
 
@@ -24,6 +24,8 @@ HealthyPi Move is now available for pre-order in the ongoing campaign on [Crowd 
 * **/scripts** - Convenience scripts 
 
 ## Compiling the firmware
+
+This repo itself is laid out to be a Zephyr application, and can be built using the Zephyr SDK. For more information on setting up and compiling Zephyr applications, please refer to the [Zephyr documentation](https://docs.zephyrproject.org/latest/).
 
 *Guide coming soon..*
 
