@@ -645,15 +645,13 @@ void hw_thread(void)
     rtc_get_time(rtc_dev, &curr_time);
     printk("Current time: %d:%d:%d %d/%d/%d \n", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    // struct timespec tspec;
-    // tspec.tv_sec = curr_time.
-    // clock_settime(CLOCK_REALTIME, &tspec);
-
     fs_module_init();
 
-    struct sensor_value mode_set;
-    mode_set.val1 = 1;
-    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
+    // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
+    /*struct sensor_value mode_set;
+    //mode_set.val1 = 1;
+    sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
+    */
 
     // init_settings();
 
@@ -666,10 +664,6 @@ void hw_thread(void)
 
     k_sem_give(&sem_hw_inited);
 
-    // ble_module_init();
-
-    // read_temp();
-
     for (;;)
     {
         /*if (k_sem_take(&sem_start_cal, K_NO_WAIT) == 0)
@@ -677,18 +671,13 @@ void hw_thread(void)
             hw_bpt_start_cal();
         }*/
 
-        // ifndef MOVE_SAMPLING_DISABLED
         // fetch_and_display(acc_dev);
-        // k_sleep(K_MSEC(3000));
+
         npm_fuel_gauge_update(charger);
-
         rtc_get_time(rtc_dev, &global_system_time);
-
-        send_usb_cdc("H ",1);
+        send_usb_cdc("H ", 1);
 
         k_sleep(K_MSEC(3000));
-
-        // hw_pmic_read_sensors();
     }
 }
 
