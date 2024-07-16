@@ -9,7 +9,7 @@
 #include "maxm86146.h"
 
 #include "sampling_module.h"
-#include "sys_sm_module.h"
+
 
 #include "display_module.h"
 

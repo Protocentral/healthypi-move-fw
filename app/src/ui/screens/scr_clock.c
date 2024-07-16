@@ -11,12 +11,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/rtc.h>
 
-// #include "sys_sm_module.h"
-// #include "
 #include "display_module.h"
 #include "sampling_module.h"
-
-#include "sys_sm_module.h"
 
 #include "ui/move_ui.h"
 

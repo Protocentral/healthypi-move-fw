@@ -10,7 +10,7 @@
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/settings/settings.h>
 
-#include "sys_sm_module.h"
+
 #include "sampling_module.h"
 
 LOG_MODULE_REGISTER(fs_module);

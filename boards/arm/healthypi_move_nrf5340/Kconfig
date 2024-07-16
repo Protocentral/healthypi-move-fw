@@ -38,7 +38,7 @@ config BOARD_ENABLE_CPUNET
 
 config DOMAIN_CPUNET_BOARD
 	string
-	default "nrf5340dk_nrf5340_cpunet"
+	default "healthypi_move_nrf5340_cpunet"
 	depends on BOARD_ENABLE_CPUNET
 	help
 	  The board which will be used for CPUNET domain when creating a multi
@@ -50,8 +50,8 @@ endif #  BOARD_HEALTHYPI_MOVE_NRF5340_CPUAPP || BOARD_HEALTHYPI_MOVE_NRF5340_CPU
 
 config DOMAIN_CPUAPP_BOARD
 	string
-	default "nrf5340dk_nrf5340_cpuapp"
-	depends on BOARD_NRF5340DK_NRF5340_CPUNET
+	default "healthypi_move_nrf5340_cpuapp"
+	depends on BOARD_HEALTHYPI_MOVE_NRF5340_CPUNET
 	help
 	  The board which will be used for CPUAPP domain when creating a multi
 	  image application where one or more images should be located on

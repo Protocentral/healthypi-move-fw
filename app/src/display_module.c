@@ -13,7 +13,6 @@
 #include <zephyr/posix/time.h>
 #include <zephyr/drivers/rtc.h>
 
-#include "sys_sm_module.h"
 #include "hw_module.h"
 #include "display_module.h"
 #include "sampling_module.h"
@@ -49,7 +48,6 @@ lv_obj_t *ui_hr_number;
 lv_obj_t *ui_spo2_number;
 
 static lv_obj_t *lbl_time;
-static lv_obj_t *lbl_date;
 
 // LVGL Styles
 static lv_style_t style_sub;
@@ -75,19 +73,13 @@ lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
 
 static lv_obj_t *roller_session_select;
-
-static lv_obj_t *label_current_mode;
 static lv_style_t style_scr_back;
 
 lv_obj_t *btn_bpt_start_stop;
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
-static lv_obj_t *label_sym_ble;
-
-static lv_obj_t *label_hr;
-
-int curr_mode = MODE_STANDBY;
+lv_obj_t *cui_battery_percent;
 
 bool display_inited = false;
 
@@ -99,17 +91,11 @@ K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 100, 1);
 
 static const struct device *touch_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(cst816s));
-static int bpt_cal_last_progress = 0;
-static int bpt_cal_last_status = 0;
-bool bpt_cal_started = false;
 
+bool bpt_cal_started = false;
 int global_bp_sys = 0;
 int global_bp_dia = 0;
 int global_hr = 0;
-
-lv_obj_t *cui_battery_percent;
-
-static lv_obj_t *ui_battery_group;
 
 // Externs
 extern struct k_sem sem_hw_inited;
@@ -670,8 +656,6 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
     char buf[32];
     sprintf(buf, "%d %% ", batt_level);
     lv_label_set_text(label_batt_level_val, buf);
-
-    char *batt_icon = LV_SYMBOL_BATTERY_EMPTY;
 
     if (batt_level > 75)
     {

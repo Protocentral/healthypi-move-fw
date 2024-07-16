@@ -30,7 +30,7 @@
 //#include "max32664.h"
 #include "maxm86146.h"
 
-#include "sys_sm_module.h"
+
 #include "hw_module.h"
 #include "fs_module.h"
 #include "display_module.h"

@@ -13,8 +13,6 @@
 #include "display_module.h"
 #include "sampling_module.h"
 
-#include "sys_sm_module.h"
-
 #include "ui/move_ui.h"
 
 lv_obj_t *scr_ecg;
