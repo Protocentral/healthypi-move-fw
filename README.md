@@ -1,6 +1,6 @@
 <div align="center">
   
-![HealthyPi Move Logo](/docs/images/healthypi_move_logo.png)
+![HealthyPi Move Logo](docs/images/healthypi_move_logo.png)
 
 </div>
 
@@ -10,7 +10,7 @@ This repository contains the firmware for the HealthyPi Move device. The firmwar
 
 HealthyPi Move is an open hardware device that lets you track all your vital signs to a high degree of accuracy. But it’s not just another smartwatch with a heart rate monitor. It is a complete vital signs monitoring and recording device on your wrist that can measure electrocardiogram (ECG), photoplethysmogram (PPG), SpO₂, blood pressure (finger-based), EDA/GSR, heart rate variability (HRV), respiration rate, and even body temperature.
 
-![HealthyPi Move](/docs/images/healthypi-move-hand.jpg)
+![HealthyPi Move](docs/images/healthypi-move.jpg)
 
 The hwardware files for the HealthyPi Move are available at their own repository - [HealthyPi Move Hardare](https://github.com/Protocentral/healthypi-move-hw)
 
@@ -25,9 +25,24 @@ HealthyPi Move is now available for pre-order in the ongoing campaign on [Crowd 
 
 ## Compiling the firmware
 
-This repo itself is laid out to be a Zephyr application, and can be built using the Zephyr SDK. For more information on setting up and compiling Zephyr applications, please refer to the [Zephyr documentation](https://docs.zephyrproject.org/latest/).
+Do not use the "Code" button to download the zip file, as it will not include the Zephyr submodules correctly.
 
-*Guide coming soon..*
+For a quick start, you can use the following steps to compile the firmware :
+
+```
+west init -m https://github.com/protocentral/healthypi-move-fw --mr main healthypi-move-workspace
+cd healthypi-move-workspace
+west update
+```
+
+You can then build the firmware by running the following commands.
+
+```
+west build -b healthypi_move_nrf5340_cpuapp application/app
+west flash
+```
+
+You can also open the project in Visual Studio Code and use the nRF Connect extension to open the project and build the firmware from there. This will ensure that you have all the required tools installed. For more about installing the nRF Connect extension, please refer to [Nordic's Documentation](https://docs.nordicsemi.com/bundle/ncs-latest/page/nrf/installation/install_ncs.html).
 
 ## License Information
 
