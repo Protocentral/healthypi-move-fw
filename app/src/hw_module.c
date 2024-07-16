@@ -27,15 +27,14 @@
 #include <zephyr/posix/time.h>
 
 #include "max30001.h"
-//#include "max32664.h"
+// #include "max32664.h"
 #include "maxm86146.h"
-
 
 #include "hw_module.h"
 #include "fs_module.h"
 #include "display_module.h"
 
-//#include "max32664c_msbl.h"
+// #include "max32664c_msbl.h"
 
 #include <zephyr/sys/reboot.h>
 #include <zephyr/drivers/mfd/npm1300.h>
@@ -64,7 +63,7 @@ const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 const struct device *acc_dev = DEVICE_DT_GET_ONE(st_lsm6dso);
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
-// const struct device *usb_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 
 // GPIO Keys and LEDs Device
 static const struct device *const gpio_keys_dev = DEVICE_DT_GET_ANY(gpio_keys);
@@ -145,12 +144,11 @@ INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
 void send_usb_cdc(const char *buf, size_t len)
 {
     int rb_len;
-    // rb_len = ring_buf_put(&ringbuf_usb_cdc, buf, len);
-    // uart_irq_tx_enable(usb_dev);
+    rb_len = ring_buf_put(&ringbuf_usb_cdc, buf, len);
+    uart_irq_tx_enable(usb_cdc_uart_dev);
 }
 
-/*
-static void interrupt_handler(const struct device *dev, void *user_data)
+static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_data)
 {
     ARG_UNUSED(user_data);
 
@@ -220,7 +218,6 @@ static void interrupt_handler(const struct device *dev, void *user_data)
         }
     }
 }
-*/
 
 uint8_t read_battery_level(void)
 {
@@ -340,24 +337,18 @@ int npm_fuel_gauge_update(const struct device *charger)
     tte = nrf_fuel_gauge_tte_get();
     ttf = nrf_fuel_gauge_ttf_get(cc_charging, -term_charge_current);
 
-    //printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
-    //printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
-    //printk("Charge status: %d\n", chg_status);
+    // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
+    // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
+    // printk("Charge status: %d\n", chg_status);
 
     global_batt_level = (int)soc;
 
     return 0;
 }
 
-static void usb_init()
+static int usb_init()
 {
     int ret = 0;
-
-    /*if (!device_is_ready(usb_dev))
-    {
-        LOG_ERR("CDC ACM device not ready");
-        // return;
-    }
 
     ret = usb_enable(NULL);
     if (ret != 0)
@@ -365,16 +356,22 @@ static void usb_init()
         LOG_ERR("Failed to enable USB");
         // return;
     }
-    */
 
     /* Enabled USB CDC interrupts */
 
     ring_buf_init(&ringbuf_usb_cdc, sizeof(ring_buffer), ring_buffer);
+
+    uint32_t dtr = 0U;
+
+    uart_line_ctrl_get(usb_cdc_uart_dev, UART_LINE_CTRL_DTR, &dtr);
+
     k_msleep(100);
-    // uart_irq_callback_set(usb_dev, interrupt_handler);
-    // uart_irq_rx_enable(usb_dev);
+    uart_irq_callback_set(usb_cdc_uart_dev, usb_cdc_uart_interrupt_handler);
+    uart_irq_rx_enable(usb_cdc_uart_dev);
 
     printk("\nUSB Init complete\n\n");
+
+    return ret;
 }
 
 static inline float out_ev(struct sensor_value *val)
@@ -541,11 +538,11 @@ void setup_pmic_callbacks(void)
     }
 
     /* Setup callback for shiphold button press */
-    //static struct gpio_callback event_cb;
+    // static struct gpio_callback event_cb;
 
-    //gpio_init_callback(&event_cb, event_callback, BIT(NPM1300_EVENT_SHIPHOLD_PRESS));
+    // gpio_init_callback(&event_cb, event_callback, BIT(NPM1300_EVENT_SHIPHOLD_PRESS));
 
-    //mfd_npm1300_add_callback(pmic, &event_cb);
+    // mfd_npm1300_add_callback(pmic, &event_cb);
 }
 
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
@@ -556,8 +553,8 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
     time_set.tm_min = m_min;
     time_set.tm_hour = m_hour;
     time_set.tm_mday = m_day;
-    time_set.tm_mon = (m_month-1);
-    time_set.tm_year = (m_year+100);
+    time_set.tm_mon = (m_month - 1);
+    time_set.tm_year = (m_year + 100);
 
     int ret = rtc_set_time(rtc_dev, &time_set);
     printk("RTC Set Time: %d\n", ret);
@@ -585,7 +582,7 @@ void hw_thread(void)
         return 0;
     }
 
-    //regulator_disable(sensor_brd_ldsw);
+    // regulator_disable(sensor_brd_ldsw);
     k_sleep(K_MSEC(100));
 
     regulator_enable(sensor_brd_ldsw);
@@ -594,7 +591,7 @@ void hw_thread(void)
     if (!device_is_ready(max30001_dev))
     {
         printk("MAX30001 device not found! Rebooting !");
-        //sys_reboot(SYS_REBOOT_COLD);
+        // sys_reboot(SYS_REBOOT_COLD);
     }
     else
     {
@@ -606,7 +603,7 @@ void hw_thread(void)
     }
 #endif
 
-    if(!device_is_ready(maxm86146_dev))
+    if (!device_is_ready(maxm86146_dev))
     {
         printk("MAXM86146 device not found!\n");
     }
@@ -617,7 +614,7 @@ void hw_thread(void)
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
-    //setup_pmic_callbacks();
+    // setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
@@ -660,14 +657,14 @@ void hw_thread(void)
 
     // init_settings();
 
+    usb_init();
+
     printk("HW Thread started\n");
 
     // hw_msbl_load();
     //  printk("Initing...\n");
 
     k_sem_give(&sem_hw_inited);
-
-    // usb_init();
 
     // ble_module_init();
 
@@ -681,11 +678,13 @@ void hw_thread(void)
         }*/
 
         // ifndef MOVE_SAMPLING_DISABLED
-        //fetch_and_display(acc_dev);
+        // fetch_and_display(acc_dev);
         // k_sleep(K_MSEC(3000));
         npm_fuel_gauge_update(charger);
 
         rtc_get_time(rtc_dev, &global_system_time);
+
+        send_usb_cdc("H ",1);
 
         k_sleep(K_MSEC(3000));
 
