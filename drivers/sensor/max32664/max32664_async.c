@@ -29,7 +29,7 @@ static int max32664_async_calib_fetch(const struct device *dev, uint8_t calib_ve
     }
     printk("Calibration vector fetched\n");
 
-    data->op_mode=MAX32664_OP_MODE_IDLE;
+    data->op_mode = MAX32664_OP_MODE_IDLE;
 
     return 0;
 }
@@ -47,6 +47,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
     uint8_t hub_stat = m_read_hub_status(dev);
     if (hub_stat & MAX32664_HUB_STAT_DRDY_MASK)
     {
+        // printk("DRDY ");
         int fifo_count = max32664_get_fifo_count(dev);
         // printk("F: %d | \n", fifo_count);
 
@@ -142,6 +143,8 @@ int max32664_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     struct max32664_encoded_data *edata;
     struct max32664_enc_calib_data *calib_data;
 
+    struct maxm86146_encoded_data *m_edata;
+
     struct max32664_data *data = dev->data;
 
     /* Get the buffer for the frame, it may be allocated dynamically by the rtio context */
@@ -167,7 +170,12 @@ int max32664_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         calib_data = (struct max32664_enc_calib_data *)buf;
 
         rc = max32664_async_calib_fetch(dev, calib_data->calib_vector);
-       
+    }
+    
+    else
+    {
+        // printk("Invalid operation mode\n");
+        // return 4;
     }
 
     if (rc != 0)

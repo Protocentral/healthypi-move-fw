@@ -38,29 +38,24 @@
 			gpios = <&gpio0 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 			zephyr,code = <INPUT_KEY_UP>;
 		};
-		button_back: sw2 {
-			label = "Button Back / SW2";
-			gpios = <&gpio0 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-			zephyr,code = <INPUT_KEY_BACK>;
-		};
+
 		button_down: sw3 {
 			label = "Button DOWN / SW3";
 			gpios = <&gpio0 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 			zephyr,code = <INPUT_KEY_DOWN>;
 		};
-
-
 	};
 
 	aliases {
 		pwm-led0 = &pwm_led0;
-		mcuboot-button0 = &button_up;
+		//mcuboot-button0 = &button_up;
 
 		watchdog0 = &wdt0;
 		esp-uart= &uart0;
 
 		max30001 = &max30001;
-		max32664 = &max32664;
+		//max32664 = &max32664;
+		maxm86146 = &maxm86146;
 
 		rtc = &rtc_rv;
 	};
@@ -73,12 +68,12 @@
 		input = <&cst816s>;
 		invert-y;
 		//swap-xy;
-		//invert-x;
+		invert-x;
 	};
 };
 
 &adc {
-	status = "okay";
+	status = "disabled";
 };
 
 &gpiote {
@@ -108,51 +103,11 @@
 		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
 		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
 	};
-};
-
-&i2c2 {
-	compatible = "nordic,nrf-twim";
-	status = "okay";
-	pinctrl-0 = <&i2c2_default>;
-	pinctrl-1 = <&i2c2_sleep>;
-	clock-frequency = <I2C_BITRATE_FAST>;
-	pinctrl-names = "default", "sleep";
-
-	max32664: max32664@55 {
-		compatible = "maxim,max32664";
-		reg = <0x55>;
-		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
-		mfio-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
-		status = "okay";
-	};
-
-	max17048: max17048@36 {
-		compatible = "maxim,max17048";
-		status = "okay";
-		reg = <0x36>;
-	};
-
-	max30205: max30205@48 {
-		compatible = "maxim,max30205";
-		status = "okay";
-		reg = <0x48>;
-	};
-
-	rtc_rv: rv@51 {
-		compatible = "microcrystal,rv8263";
-		reg = <0x51>;
-	};
-
-
-	lsm6: lsm6dso@6a {
-		compatible = "st,lsm6dso";
-		reg = <0x6a>;
-		status = "okay";
-		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
-	};
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
+		//host-int-gpios = <&gpio0 2 GPIO_ACTIVE_LOW>;
+		//pmic-int-pin = <3>;
 		reg = <0x6b>;
 
 		npm_pmic_gpio: gpio-controller {
@@ -169,33 +124,28 @@
 			npm_pmic_buck1: BUCK1 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-init-microvolt = <3300000>;
 			};
 
 			npm_pmic_buck2: BUCK2 {
-				regulator-min-microvolt = <1000000>;
+				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3300000>;
 				retention-microvolt = <2500000>;
+				//regulator-boot-on;
 				//enable-gpios = <&npm_pmic_gpio 1 GPIO_ACTIVE_LOW>;
 				//retention-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_HIGH>;
 				//pwm-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
 			};
 
 			npm_pmic_ldo1: LDO1 {
-				//regulator-min-microvolt = <1000000>;
-				//regulator-max-microvolt = <3300000>;
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
-				regulator-boot-on;
-				//enable-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
+				//regulator-boot-on;
+				//startup-delay-us = <100000>;
 			};
 
 			npm_pmic_ldo2: LDO2 {
-				//regulator-min-microvolt = <1000000>;
-				//regulator-max-microvolt = <3300000>;
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
-
-				//enable-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
-				
 			};
 		};
 
@@ -203,7 +153,7 @@
 			compatible = "nordic,npm1300-charger";
 			term-microvolt = <4150000>;
 			term-warm-microvolt = <4000000>;
-			current-microamp = <300000>;
+			current-microamp = <200000>;
 			dischg-limit-microamp = <1000000>;
 			vbus-limit-microamp = <500000>;
 			thermistor-ohms = <10000>;
@@ -214,9 +164,9 @@
 		npm_pmic_buttons: buttons {
 			compatible = "gpio-keys";
 			pmic_button0: pmic_button_0 {
-				gpios = < &npm_pmic_gpio 0 GPIO_ACTIVE_HIGH>;
+				gpios = <&npm_pmic_gpio 0 GPIO_ACTIVE_LOW>;
 				label = "Pmic button switch 0";
-			zephyr,code = <INPUT_KEY_0>;
+				zephyr,code = <INPUT_KEY_0>;
 			};
 		};
 
@@ -226,6 +176,43 @@
 			nordic,led1-mode = "charging";
 			nordic,led2-mode = "host";
 		};
+	};
+
+	rtc_rv: rv@51 {
+		compatible = "microcrystal,rv8263";
+		reg = <0x51>;
+	};
+
+	lsm6: lsm6dso@6a {
+		compatible = "st,lsm6dso";
+		reg = <0x6a>;
+		status = "okay";
+		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&i2c2 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	pinctrl-0 = <&i2c2_default>;
+	pinctrl-1 = <&i2c2_sleep>;
+	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-names = "default", "sleep";
+	zephyr,concat-buf-size = <16384>;
+	zephyr,flash-buf-max-size = <16384>;
+
+	maxm86146: maxm86146@55 {
+		compatible = "maxim,maxm86146";
+		reg = <0x55>;
+		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	max30205: max30205@48 {
+		compatible = "maxim,max30205";
+		status = "okay";
+		reg = <0x48>;
 	};
 };
 
@@ -269,7 +256,7 @@
 		has-dpd;
 		t-enter-dpd = <3000>;
 		t-exit-dpd = <30000>;
-		jedec-id = [ ef 40 18 ];
+		jedec-id = [ ef 40 21  ];
 		status = "okay";
 	};
 };
@@ -303,11 +290,11 @@
 		rtor-enabled;
 		ecg-enabled;
 		bioz-enabled;
-		ecg-gain = <2>; 
+		ecg-gain = <3>;
 		ecg-invert;
 		//ecg-dcloff-enable;
 		//ecg-dcloff-current = <1>; // 5 nA
-		
+
 	};
 };
 
@@ -321,7 +308,7 @@
 
 	gc9a01: gc9a01@0 {
 		compatible = "waveshare,gc9a01a";
-		spi-max-frequency = <30000000>;
+		spi-max-frequency = <DT_FREQ_M(45)>;
 		reg = <0>;
 		cmd-data-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;

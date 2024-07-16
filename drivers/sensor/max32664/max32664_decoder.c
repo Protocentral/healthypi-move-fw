@@ -55,35 +55,15 @@ static int max32664_decoder_decode(const uint8_t *buffer, enum sensor_channel ch
 								   size_t channel_idx, uint32_t *fit,
 								   uint16_t max_count, void *data_out)
 {
-	const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buffer;
-	const struct max32664_decoder_header *header = &edata->header;
-
+	
 	if (*fit != 0)
 	{
 		return 0;
 	}
 
-	printk("D ");
-	//printk("Num samples: %u\n", edata->samples[0].ir_sample);
 
-	switch (channel)
-	{
-	case SENSOR_CHAN_PPG_RED:
-
-		struct sensor_ppg_data *out = data_out;
-		out->header.base_timestamp_ns = header->timestamp;
-		//out->readings[0].sample_ir = edata->ir_samples[0];
-		//out->readings[0].sample_red = edata->red_samples[0];
-		out->readings[0].timestamp_delta = 0;
-
-		//out->header.base_timestamp_ns = edata->header.timestamp;
-		//out->header.reading_count = edata->num_samples;
-
-		
-
-		//((struct sensor_three_axis_data *)data_out)->x = edata->samples[0];
-		break;
-	}
+	return 0;
+	
 }
 
 SENSOR_DECODER_API_DT_DEFINE() = {

@@ -1,6 +1,5 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
@@ -17,53 +16,43 @@
 
 #include "sys_sm_module.h"
 
-#define SAMPLE_RATE 125
+#include "ui/move_ui.h"
 
-#define PPG_DISP_WINDOW_SIZE 256 // SAMPLE_RATE * 4
-#define DISP_WINDOW_SIZE_EDA 250
-#define DISP_WINDOW_SIZE_ECG 256
-
-#define SCREEN_TRANS_TIME 300
-#define DISP_THREAD_REFRESH_INT_MS 10
+#include <time.h>
+#include <zephyr/posix/time.h>
+#include <zephyr/drivers/rtc.h>
 
 LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
-
-lv_obj_t *btn_start_session;
-lv_obj_t *btn_return;
 
 // LVGL Common Objects
 static lv_indev_drv_t m_keypad_drv;
 static lv_indev_t *m_keypad_indev = NULL;
 extern uint8_t m_key_pressed;
 
+extern struct rtc_time global_system_time;
+
 const struct device *display_dev;
 lv_indev_t *touch_indev;
 
-// GUI Charts
-static lv_obj_t *chart1;
-static lv_chart_series_t *ser1;
-
-// GUI Labels
-static lv_obj_t *label_hr;
-static lv_obj_t *label_spo2;
 static lv_obj_t *label_temp;
-
-static lv_obj_t *label_bp_val;
-static lv_obj_t *label_bp_dia_val;
 
 // LVGL Screens
 lv_obj_t *scr_splash;
 lv_obj_t *scr_home;
 lv_obj_t *scr_menu;
-lv_obj_t *scr_clock;
-lv_obj_t *scr_ppg;
-lv_obj_t *scr_ecg;
-lv_obj_t *scr_eda;
-lv_obj_t *scr_vitals_home;
 
-lv_obj_t *scr_bpt_home;
-lv_obj_t *scr_bpt_calibrate;
-lv_obj_t *scr_bpt_measure;
+lv_obj_t *ui_hour_group;
+lv_obj_t *ui_label_hour;
+lv_obj_t *ui_label_min;
+lv_obj_t *ui_label_date;
+
+lv_obj_t *ui_step_group;
+
+lv_obj_t *btn_hr_disp;
+lv_obj_t *btn_spo2_disp;
+
+lv_obj_t *ui_hr_number;
+lv_obj_t *ui_spo2_number;
 
 static lv_obj_t *lbl_time;
 static lv_obj_t *lbl_date;
@@ -83,27 +72,18 @@ static lv_style_t style_info;
 static lv_style_t style_icon;
 static lv_style_t style_scr_black;
 
-static lv_style_t style_lbl_red;
-static lv_style_t style_lbl_red_small;
-static lv_style_t style_lbl_white;
-static lv_style_t style_lbl_white_small;
-static lv_style_t style_lbl_orange;
-static lv_style_t style_lbl_white_tiny;
-static lv_style_t style_lbl_white_14;
-
-bool bpt_start_flag = false;
-lv_obj_t *label_btn_bpt;
-lv_obj_t *bar_bpt_progress;
-lv_obj_t *label_progress;
-
-lv_obj_t *btn_bpt_start_cal;
+lv_style_t style_lbl_red;
+lv_style_t style_lbl_red_small;
+lv_style_t style_lbl_white;
+lv_style_t style_lbl_white_small;
+lv_style_t style_lbl_orange;
+lv_style_t style_lbl_white_tiny;
+lv_style_t style_lbl_white_14;
 
 static lv_obj_t *roller_session_select;
 
 static lv_obj_t *label_current_mode;
 static lv_style_t style_scr_back;
-
-static lv_obj_t *label_ecg_lead_off;
 
 lv_obj_t *btn_bpt_start_stop;
 
@@ -111,48 +91,22 @@ static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
 static lv_obj_t *label_sym_ble;
 
-lv_obj_t *btn_bpt_measure_start;
+static lv_obj_t *label_hr;
 
-lv_obj_t *label_bp_sys_sub;
-lv_obj_t *label_bp_sys_cap;
-
-// Function declarations
-
-void draw_scr_ppg(enum scroll_dir m_scroll_dir);
-void m_cycle_screens(bool scr_back);
-
-bool chart1_update = true;
-bool chart2_update = true;
-bool chart3_update = false;
-
-float y1_max = 0;
-float y1_min = 10000;
-
-float y2_max = 0;
-float y2_min = 10000;
-
-float y3_max = 0;
-float y3_min = 10000;
-static float gx = 0;
+extern bool chart_ecg_update;
 
 int curr_mode = MODE_STANDBY;
 
 bool display_inited = false;
 
-static int curr_screen = SCR_VITALS;
+int curr_screen = SCR_VITALS;
 
 K_SEM_DEFINE(sem_disp_inited, 0, 1);
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 100, 1);
+K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 100, 1);
 
 static const struct device *touch_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(cst816s));
-
-static bool bpt_meas_done_flag = false;
-static bool bpt_cal_done_flag = false;
-
-static int bpt_meas_last_progress = 0;
-static int bpt_meas_last_status = 0;
-bool bpt_meas_started = false;
 
 static int bpt_cal_last_progress = 0;
 static int bpt_cal_last_status = 0;
@@ -160,9 +114,24 @@ bool bpt_cal_started = false;
 
 int global_bp_sys = 0;
 int global_bp_dia = 0;
+int global_hr = 0;
 
+lv_obj_t *cui_battery_percent;
+
+static lv_obj_t *ui_battery_group;
+
+// Externs
 extern struct k_sem sem_hw_inited;
 extern struct k_sem sem_sampling_start;
+extern uint8_t global_batt_level;
+extern bool global_batt_charging;
+
+extern lv_obj_t *scr_clock;
+extern lv_obj_t *scr_ppg;
+extern lv_obj_t *scr_vitals;
+
+LV_IMG_DECLARE(pc_logo_bg3);
+LV_IMG_DECLARE(logo_round_white);
 
 void display_init_styles()
 {
@@ -172,7 +141,7 @@ void display_init_styles()
     lv_style_set_text_font(&style_sub, &lv_font_montserrat_16);
 
     lv_style_init(&style_batt_sym);
-    lv_style_set_text_color(&style_batt_sym, lv_color_white());
+    lv_style_set_text_color(&style_batt_sym, lv_palette_main(LV_PALETTE_GREY));
     lv_style_set_text_font(&style_batt_sym, &lv_font_montserrat_24);
 
     lv_style_init(&style_batt_percent);
@@ -281,6 +250,7 @@ void display_init_styles()
     lv_style_set_border_width(&style_scr_black, 0);
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
 }
+
 static void keypad_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
     static int call_count = 0;
@@ -354,22 +324,38 @@ void draw_header_minimal(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
 
-    LV_IMG_DECLARE(logo_round_white);
     lv_obj_t *img_logo = lv_img_create(parent);
     lv_img_set_src(img_logo, &logo_round_white);
     lv_obj_set_size(img_logo, 25, 25);
-    lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, -30, 5);
+    lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, -35, 5);
 
     // Battery Level
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 20, -2);
+    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 15, -2);
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, 0, -2);
+    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, -2, -2);
+
+    /*ui_battery_group = ui_battery(parent);
+    lv_obj_set_x(ui_battery_group, 20);
+    lv_obj_set_y(ui_battery_group, 5);
+    lv_obj_set_style_border_opa(ui_battery_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);*/
+}
+
+void draw_bg(lv_obj_t *parent)
+{
+    lv_obj_t *logo_bg = lv_img_create(parent);
+    lv_img_set_src(logo_bg, &pc_logo_bg3);
+    lv_obj_set_width(logo_bg, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(logo_bg, LV_SIZE_CONTENT); /// 1
+    lv_obj_set_align(logo_bg, LV_ALIGN_CENTER);
+    lv_obj_add_flag(logo_bg, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
+    lv_obj_clear_flag(logo_bg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    lv_obj_add_style(parent, &style_scr_black, 0);
 }
 
 void draw_header(lv_obj_t *parent, bool showFWVersion)
@@ -430,104 +416,221 @@ void draw_header(lv_obj_t *parent, bool showFWVersion)
     */
 }
 
-void hpi_disp_add_samples(int num_samples)
+lv_obj_t *create_ui_hr_button(lv_obj_t *comp_parent)
 {
-    gx += num_samples;
+    btn_hr_disp = lv_btn_create(comp_parent);
+    lv_obj_set_width(btn_hr_disp, 65);
+    lv_obj_set_height(btn_hr_disp, 65);
+    lv_obj_set_x(btn_hr_disp, 0);
+    lv_obj_set_y(btn_hr_disp, 0);
+    lv_obj_set_align(btn_hr_disp, LV_ALIGN_CENTER);
+    lv_obj_add_flag(btn_hr_disp, LV_OBJ_FLAG_SCROLL_ON_FOCUS); /// Flags
+    lv_obj_clear_flag(btn_hr_disp, LV_OBJ_FLAG_SCROLLABLE);    /// Flags
+    lv_obj_set_style_radius(btn_hr_disp, 100, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(btn_hr_disp, lv_palette_main(LV_PALETTE_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(btn_hr_disp, 64, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // lv_obj_set_style_bg_img_src(cui_buttonround, &ui_img_measure_png, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // lv_obj_set_style_bg_img_src(cui_buttonround, &heart, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_color(btn_hr_disp, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_opa(btn_hr_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_width(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_pad(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_shadow_color(btn_hr_disp, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_opa(btn_hr_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_width(btn_hr_disp, 50, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_spread(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_PRESSED);
+
+    lv_obj_t *cui_heart;
+    cui_heart = lv_img_create(btn_hr_disp);
+    lv_img_set_src(cui_heart, &ui_img_heart_png);
+    lv_obj_set_width(cui_heart, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(cui_heart, LV_SIZE_CONTENT); /// 1
+    lv_obj_set_align(cui_heart, LV_ALIGN_TOP_MID);
+    lv_obj_add_flag(cui_heart, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
+    lv_obj_clear_flag(cui_heart, LV_OBJ_FLAG_SCROLLABLE); /// Flags*/
+
+    ui_hr_number = lv_label_create(btn_hr_disp);
+    lv_obj_set_width(ui_hr_number, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(ui_hr_number, LV_SIZE_CONTENT); /// 1
+    lv_obj_set_align(ui_hr_number, LV_ALIGN_BOTTOM_MID);
+    lv_label_set_text(ui_hr_number, "--");
+    lv_obj_set_style_text_color(ui_hr_number, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_hr_number, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_hr_number, &ui_font_Title, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    /*lv_obj_t *cui_bpm;
+    cui_bpm = lv_label_create(cui_pulsegroup);
+    lv_obj_set_width( cui_bpm, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height( cui_bpm, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_align( cui_bpm, LV_ALIGN_CENTER );
+    lv_label_set_text(cui_bpm,"bpm");
+    lv_obj_set_style_text_color(cui_bpm, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT );
+    lv_obj_set_style_text_opa(cui_bpm, 255, LV_PART_MAIN| LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(cui_bpm, &ui_font_Title, LV_PART_MAIN| LV_STATE_DEFAULT);*/
+
+    return btn_hr_disp;
 }
 
-void hpi_disp_do_set_scale(int disp_window_size)
+lv_obj_t *create_ui_spo2_button(lv_obj_t *comp_parent)
 {
-    if (gx >= (disp_window_size))
-    {
-        if (chart1_update == true)
-            lv_chart_set_range(chart1, LV_CHART_AXIS_PRIMARY_Y, y1_min, y1_max);
+    btn_spo2_disp = lv_btn_create(comp_parent);
+    lv_obj_set_width(btn_spo2_disp, 65);
+    lv_obj_set_height(btn_spo2_disp, 65);
+    lv_obj_set_x(btn_spo2_disp, 0);
+    lv_obj_set_y(btn_spo2_disp, 0);
+    lv_obj_set_align(btn_spo2_disp, LV_ALIGN_CENTER);
+    lv_obj_add_flag(btn_spo2_disp, LV_OBJ_FLAG_SCROLL_ON_FOCUS); /// Flags
+    lv_obj_clear_flag(btn_spo2_disp, LV_OBJ_FLAG_SCROLLABLE);    /// Flags
+    lv_obj_set_style_radius(btn_spo2_disp, 100, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(btn_spo2_disp, lv_palette_main(LV_PALETTE_DEEP_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(btn_spo2_disp, 64, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // lv_obj_set_style_bg_img_src(cui_buttonround, &ui_img_measure_png, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // lv_obj_set_style_bg_img_src(cui_buttonround, &heart, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_color(btn_spo2_disp, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_opa(btn_spo2_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_width(btn_spo2_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_pad(btn_spo2_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_shadow_color(btn_spo2_disp, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_opa(btn_spo2_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_width(btn_spo2_disp, 50, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_spread(btn_spo2_disp, 2, LV_PART_MAIN | LV_STATE_PRESSED);
 
-        // if (chart2_update == true)
-        // lv_chart_set_range(chart2, LV_CHART_AXIS_PRIMARY_Y, y2_min, y2_max);
+    lv_obj_t *cui_o2;
+    cui_o2 = lv_img_create(btn_spo2_disp);
+    lv_img_set_src(cui_o2, &o2);
+    lv_obj_set_width(cui_o2, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(cui_o2, LV_SIZE_CONTENT); /// 1
+    lv_obj_set_align(cui_o2, LV_ALIGN_TOP_MID);
+    lv_obj_add_flag(cui_o2, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
+    lv_obj_clear_flag(cui_o2, LV_OBJ_FLAG_SCROLLABLE); /// Flags*/
 
-        gx = 0;
+    ui_spo2_number = lv_label_create(btn_spo2_disp);
+    lv_obj_set_width(ui_spo2_number, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(ui_spo2_number, LV_SIZE_CONTENT); /// 1
+    lv_obj_set_align(ui_spo2_number, LV_ALIGN_BOTTOM_MID);
+    lv_label_set_text(ui_spo2_number, "--");
+    lv_obj_set_style_text_color(ui_spo2_number, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_spo2_number, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_spo2_number, &ui_font_Title, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-        y1_max = -900000;
-        y1_min = 900000;
-    }
+    /*lv_obj_t *cui_bpm;
+    cui_bpm = lv_label_create(cui_pulsegroup);
+    lv_obj_set_width( cui_bpm, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height( cui_bpm, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_align( cui_bpm, LV_ALIGN_CENTER );
+    lv_label_set_text(cui_bpm,"bpm");
+    lv_obj_set_style_text_color(cui_bpm, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT );
+    lv_obj_set_style_text_opa(cui_bpm, 255, LV_PART_MAIN| LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(cui_bpm, &ui_font_Title, LV_PART_MAIN| LV_STATE_DEFAULT);*/
+
+    return btn_spo2_disp;
 }
 
-bool ecg_plot_hidden = false;
-
-void hpi_disp_draw_plotECG(float data_ecg, bool ecg_lead_off)
+lv_obj_t *create_ui_steps(lv_obj_t *comp_parent)
 {
-    if (chart1_update == true && ecg_lead_off == false)
-    {
-        if (data_ecg < y1_min)
-        {
-            y1_min = data_ecg;
-        }
+    lv_obj_t *cui_buttonround;
+    cui_buttonround = lv_btn_create(comp_parent);
+    lv_obj_set_width(cui_buttonround, 65);
+    lv_obj_set_height(cui_buttonround, 65);
+    lv_obj_set_x(cui_buttonround, 0);
+    lv_obj_set_y(cui_buttonround, 0);
+    lv_obj_set_align(cui_buttonround, LV_ALIGN_CENTER);
+    lv_obj_add_flag(cui_buttonround, LV_OBJ_FLAG_SCROLL_ON_FOCUS); /// Flags
+    lv_obj_clear_flag(cui_buttonround, LV_OBJ_FLAG_SCROLLABLE);    /// Flags
+    lv_obj_set_style_radius(cui_buttonround, 100, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(cui_buttonround, lv_palette_main(LV_PALETTE_BLUE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(cui_buttonround, 64, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // lv_obj_set_style_bg_img_src(cui_buttonround, &ui_img_measure_png, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // lv_obj_set_style_bg_img_src(cui_buttonround, &heart, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_color(cui_buttonround, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_opa(cui_buttonround, 255, LV_PART_MAIN | LV_STATE_PRESSED | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_width(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_pad(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_shadow_color(cui_buttonround, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_opa(cui_buttonround, 255, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_width(cui_buttonround, 50, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_shadow_spread(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_PRESSED);
 
-        if (data_ecg > y1_max)
-        {
-            y1_max = data_ecg;
-        }
+    /*lv_obj_t *cui_stepgroup;
+    cui_stepgroup = lv_obj_create(comp_parent);
+    lv_obj_set_width(cui_stepgroup, 100);
+    lv_obj_set_height(cui_stepgroup, 26);
+    lv_obj_set_x(cui_stepgroup, 0);
+    lv_obj_set_y(cui_stepgroup, -40);
+    lv_obj_set_align(cui_stepgroup, LV_ALIGN_BOTTOM_MID);
+    lv_obj_set_flex_flow(cui_stepgroup, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cui_stepgroup, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(cui_stepgroup, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    lv_obj_set_style_bg_color(cui_stepgroup, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(cui_stepgroup, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_row(cui_stepgroup, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_column(cui_stepgroup, 8, LV_PART_MAIN | LV_STATE_DEFAULT);*/
 
-        if (ecg_plot_hidden == true)
-        {
-            lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-            ecg_plot_hidden = false;
-        }
+    lv_obj_t *cui_step;
+    cui_step = lv_img_create(cui_buttonround);
+    lv_img_set_src(cui_step, &ui_img_step_png);
+    lv_obj_set_width(cui_step, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(cui_step, LV_SIZE_CONTENT); /// 1
+    lv_obj_set_align(cui_step, LV_ALIGN_TOP_MID);
+    lv_obj_add_flag(cui_step, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
+    lv_obj_clear_flag(cui_step, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
-        // printk("E");
-        lv_chart_set_next_value(chart1, ser1, data_ecg);
-        hpi_disp_add_samples(1);
-        hpi_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
-    }
-    else if (ecg_lead_off == true)
-    {
-        lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-        ecg_plot_hidden = true;
-    }
+    lv_obj_t *cui_step_label;
+    cui_step_label = lv_label_create(cui_buttonround);
+    lv_obj_set_width(cui_step_label, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(cui_step_label, LV_SIZE_CONTENT); /// 1
+    // lv_obj_set_x(cui_step_label, 2);
+    // lv_obj_set_y(cui_step_label, -4);
+    lv_obj_set_align(cui_step_label, LV_ALIGN_BOTTOM_MID);
+    lv_label_set_text(cui_step_label, "124");
+    lv_obj_set_style_text_color(cui_step_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(cui_step_label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(cui_step_label, &ui_font_Title, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    // lv_obj_t **children = lv_mem_alloc(sizeof(lv_obj_t *) * _UI_COMP_STEPGROUP_NUM);
+
+    // children[UI_COMP_STEPGROUP_STEPGROUP] = cui_stepgroup;
+    // children[UI_COMP_STEPGROUP_STEP] = cui_step;
+    // children[UI_COMP_STEPGROUP_STEP_LABEL] = cui_step_label;
+
+    // lv_obj_add_event_cb(cui_stepgroup, get_component_child_event_cb, LV_EVENT_GET_COMP_CHILD, children);
+    // lv_obj_add_event_cb(cui_stepgroup, del_component_child_event_cb, LV_EVENT_DELETE, children);
+    // ui_comp_stepgroup_create_hook(cui_stepgroup);
+    return cui_buttonround;
 }
 
-void hpi_disp_draw_plotEDA(float data_eda)
+void ui_time_display_update(uint8_t hour, uint8_t min, bool small)
 {
-    if (chart1_update == true)
+    if (ui_label_hour == NULL || ui_label_min == NULL)
+        return;
+
+    char buf[5];
+    if (small)
     {
-        if (data_eda < y1_min)
-        {
-            y1_min = data_eda;
-        }
-
-        if (data_eda > y1_max)
-        {
-            y1_max = data_eda;
-        }
-
-        // printk("E");
-        lv_chart_set_next_value(chart1, ser1, data_eda);
-        hpi_disp_add_samples(1);
-        hpi_disp_do_set_scale(DISP_WINDOW_SIZE_EDA);
+        sprintf(buf, "%02d:", hour);
     }
+    else
+    {
+        sprintf(buf, "%02d", hour);
+    }
+    lv_label_set_text(ui_label_hour, buf);
+
+    sprintf(buf, "%02d", min);
+    lv_label_set_text(ui_label_min, buf);
 }
 
-void hpi_disp_draw_plotPPG(float data_ppg)
+void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year)
 {
-    if (chart1_update == true)
-    {
-        if (data_ppg < y1_min)
-        {
-            y1_min = data_ppg;
-        }
+    if (ui_label_date == NULL)
+        return;
 
-        if (data_ppg > y1_max)
-        {
-            y1_max = data_ppg;
-        }
+    char buf[20];
 
-        // printk("E");
-        lv_chart_set_next_value(chart1, ser1, data_ppg);
-        hpi_disp_add_samples(1);
-        hpi_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
-    }
+    char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+    sprintf(buf, "%02d %s %04d", day, mon_strs[month], year);
+    lv_label_set_text(ui_label_date, buf);
 }
 
 void hpi_disp_update_temp(int temp)
@@ -541,61 +644,27 @@ void hpi_disp_update_temp(int temp)
     lv_label_set_text(label_temp, buf);
 }
 
-void hpi_disp_update_hr(int hr)
+void hpi_scr_home_hr_display_update(uint8_t hr_bpm)
 {
-    if (label_hr == NULL)
+    if (ui_hr_number == NULL)
         return;
 
-    char buf[32];
-    if (hr == 0)
-    {
-        sprintf(buf, "--");
-    }
-    else
-    {
-        sprintf(buf, "%d", hr);
-    }
-
-    lv_label_set_text(label_hr, buf);
+    char buf[4];
+    sprintf(buf, "%d", hr_bpm);
+    lv_label_set_text(ui_hr_number, buf);
 }
 
-void hpi_disp_update_spo2(int spo2)
+void hpi_scr_home_spo2_display_update(uint8_t spo2)
 {
-    if (label_spo2 == NULL)
+    if (ui_spo2_number == NULL)
         return;
 
-    char buf[32];
-    if (spo2 == 0)
-    {
-        sprintf(buf, "--");
-    }
-    else
-    {
-        sprintf(buf, "%d", spo2);
-    }
-    // sprintf(buf, "%d", spo2);
-    lv_label_set_text(label_spo2, buf);
+    char buf[4];
+    sprintf(buf, "%d", spo2);
+    lv_label_set_text(ui_spo2_number, buf);
 }
 
-void hpi_disp_update_bp(int sys, int dia)
-{
-    if (label_bp_val == NULL)
-        return;
-
-    char buf[32];
-    if (sys == 0 || dia == 0)
-    {
-        sprintf(buf, "-- / --");
-    }
-    else
-    {
-        sprintf(buf, "%d / %d", sys, dia);
-    }
-
-    lv_label_set_text(label_bp_val, buf);
-}
-
-void hpi_disp_update_batt_level(int batt_level)
+void hpi_disp_update_batt_level(int batt_level, bool charging)
 {
     if (label_batt_level == NULL || label_batt_level_val == NULL)
     {
@@ -606,162 +675,83 @@ void hpi_disp_update_batt_level(int batt_level)
     sprintf(buf, "%d %% ", batt_level);
     lv_label_set_text(label_batt_level_val, buf);
 
+    char* batt_icon = LV_SYMBOL_BATTERY_EMPTY;
+
     if (batt_level > 75)
     {
-        lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
+        if (charging)
+            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_FULL);
+        else
+            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     }
     else if (batt_level > 50)
     {
-        lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_3);
+        if (charging)
+            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_3);
+        else
+            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_3);
     }
     else if (batt_level > 25)
     {
-        lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_2);
+        if (charging)
+            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_2);
+        else
+            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_2);
     }
     else if (batt_level > 10)
     {
-        lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_1);
+        if (charging)
+            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_1);
+        else
+            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_1);
     }
     else
     {
-        lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_EMPTY);
+        if (charging)
+            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_EMPTY);
+        else
+            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_EMPTY);
     }
 }
 
-static void event_handler(lv_event_t *e)
+void disp_screen_event(lv_event_t *e)
 {
-    lv_event_code_t code = lv_event_get_code(e);
+    lv_event_code_t event_code = lv_event_get_code(e);
+    //lv_obj_t *target = lv_event_get_target(e);
 
-    if (code == LV_EVENT_CLICKED)
+    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_LEFT)
     {
-        LV_LOG_USER("Clicked");
+        lv_indev_wait_release(lv_indev_get_act());
+        printf("Left at %d\n", curr_screen);
+
+        if ((curr_screen + 1) == SCR_LIST_END)
+        {
+            printk("End of list\n");
+            return;
+        }
+        else
+        {
+            printk("Loading screen %d\n", curr_screen + 1);
+            hpi_move_load_screen(curr_screen + 1, SCROLL_LEFT);
+        }
     }
-    else if (code == LV_EVENT_VALUE_CHANGED)
+
+    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_RIGHT)
     {
-        LV_LOG_USER("Toggled");
+        lv_indev_wait_release(lv_indev_get_act());
+        printf("Right at %d\n", curr_screen);
+        if ((curr_screen - 1) == SCR_LIST_START)
+        {
+            printk("Start of list\n");
+            return;
+        }
+        else
+        {
+
+            printk("Loading screen %d\n", curr_screen - 1);
+            hpi_move_load_screen(curr_screen - 1, SCROLL_RIGHT);
+        }
     }
-}
-
-void screen_event(lv_event_t *e)
-{
-    lv_dir_t dir = lv_indev_get_gesture_dir(touch_indev);
-
-    switch (dir)
-    {
-    case LV_DIR_LEFT:
-        printf("Left\n");
-        m_cycle_screens(true);
-        break;
-    case LV_DIR_RIGHT:
-        printf("Right\n");
-        m_cycle_screens(false);
-        break;
-    case LV_DIR_TOP:
-        printf("Top\n");
-        break;
-    case LV_DIR_BOTTOM:
-        printf("Bottom\n");
-        break;
-    }
-}
-
-void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
-{
-    scr_vitals_home = lv_obj_create(NULL);
-
-    draw_header_minimal(scr_vitals_home);
-
-    // HR Number label
-    label_hr = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_hr, "120");
-    lv_obj_align_to(label_hr, NULL, LV_ALIGN_CENTER, -60, -30);
-    lv_obj_add_style(label_hr, &style_lbl_white, 0);
-
-    // HR Sub bpm label
-    lv_obj_t *label_hr_sub = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_hr_sub, " bpm");
-    lv_obj_align_to(label_hr_sub, label_hr, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-
-    // HR caption label
-    lv_obj_t *label_hr_cap = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_hr_cap, "HR");
-    lv_obj_align_to(label_hr_cap, label_hr, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
-
-    /*LV_IMG_DECLARE(heart);
-    lv_obj_t *img1 = lv_img_create(scr_vitals_home);
-    lv_img_set_src(img1, &heart);
-    lv_obj_set_size(img1, 35, 33);
-    lv_obj_align_to(img1, label_hr, LV_ALIGN_OUT_LEFT_MID, -5, 0);
-    */
-
-    // SpO2 Number label
-    label_spo2 = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_spo2, "98");
-    lv_obj_align_to(label_spo2, NULL, LV_ALIGN_CENTER, 40, -30);
-    lv_obj_add_style(label_spo2, &style_lbl_white, 0);
-    // lv_obj_add_style(label_spo2, &style_spo2, 0);
-
-    // SpO2 Sub % label
-    lv_obj_t *label_spo2_sub = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_spo2_sub, " %");
-    lv_obj_align_to(label_spo2_sub, label_spo2, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-
-    // SpO2 caption label
-    lv_obj_t *label_spo2_cap = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_spo2_cap, "SpO2");
-    lv_obj_align_to(label_spo2_cap, label_spo2, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_spo2_cap, &style_lbl_red, 0);
-
-    /*LV_IMG_DECLARE(o2);
-    lv_obj_t *img2 = lv_img_create(scr_vitals_home);
-    lv_img_set_src(img2, &o2);
-    lv_obj_set_size(img2, 22, 35);
-    lv_obj_align_to(img2, label_spo2, LV_ALIGN_OUT_LEFT_MID, -5, 0);
-    */
-
-    // BP Systolic Number label
-    label_bp_val = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_bp_val, "120 / 80");
-    lv_obj_align_to(label_bp_val, NULL, LV_ALIGN_CENTER, -30, 45);
-    lv_obj_add_style(label_bp_val, &style_lbl_white, 0);
-
-    // BP Systolic Sub mmHg label
-    lv_obj_t *label_bp_sys_sub = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_bp_sys_sub, " mmHg");
-    lv_obj_align_to(label_bp_sys_sub, label_bp_val, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-
-    // BP Systolic caption label
-    lv_obj_t *label_bp_sys_cap = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_bp_sys_cap, "BP(Sys/Dia)");
-    lv_obj_align_to(label_bp_sys_cap, label_bp_val, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_bp_sys_cap, &style_lbl_red, 0);
-
-    // Temp Number label
-    label_temp = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_temp, "36.7");
-    lv_obj_align_to(label_temp, NULL, LV_ALIGN_CENTER, 10, 95);
-    lv_obj_add_style(label_temp, &style_lbl_white_small, 0);
-
-    // Temp Sub deg C label
-    lv_obj_t *label_temp_sub = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_temp_sub, " °C");
-    lv_obj_align_to(label_temp_sub, label_temp, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
-
-    // Temp caption label
-    lv_obj_t *label_temp_cap = lv_label_create(scr_vitals_home);
-    lv_label_set_text(label_temp_cap, "Temp");
-    lv_obj_align_to(label_temp_cap, label_temp, LV_ALIGN_OUT_LEFT_MID, -10, 0);
-    lv_obj_add_style(label_temp_cap, &style_lbl_red_small, 0);
-
-    lv_obj_add_event_cb(scr_vitals_home, screen_event, LV_EVENT_GESTURE, NULL);
-
-    curr_screen = SCR_VITALS;
-
-    if (m_scroll_dir == SCROLL_LEFT)
-        lv_scr_load_anim(scr_vitals_home, LV_SCR_LOAD_ANIM_MOVE_RIGHT, SCREEN_TRANS_TIME, 0, true);
-    else
-        lv_scr_load_anim(scr_vitals_home, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
 }
 
 void draw_scr_splash(void)
@@ -804,641 +794,50 @@ void draw_scr_splash(void)
     lv_scr_load_anim(scr_splash, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0, true);
 }
 
-void draw_scr_ppg(enum scroll_dir m_scroll_dir)
+void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
 {
-    scr_ppg = lv_obj_create(NULL);
-    draw_header_minimal(scr_ppg);
-
-    // Create Chart 1 - ECG
-    chart1 = lv_chart_create(scr_ppg);
-    lv_obj_set_size(chart1, 200, 100);
-    lv_obj_set_style_bg_color(chart1, lv_color_black(), LV_STATE_DEFAULT);
-
-    lv_obj_set_style_size(chart1, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_border_width(chart1, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart1, PPG_DISP_WINDOW_SIZE);
-    // lv_chart_set_type(chart1, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    lv_chart_set_range(chart1, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    // lv_chart_set_range(chart1, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
-    lv_chart_set_div_line_count(chart1, 0, 0);
-    lv_chart_set_update_mode(chart1, LV_CHART_UPDATE_MODE_CIRCULAR);
-    // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
-    lv_obj_align(chart1, LV_ALIGN_CENTER, 0, -35);
-    ser1 = lv_chart_add_series(chart1, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart1, 3, LV_PART_ITEMS);
-
-    // HR Number label
-    label_hr = lv_label_create(scr_ppg);
-    lv_label_set_text(label_hr, "--");
-    lv_obj_align_to(label_hr, NULL, LV_ALIGN_CENTER, -50, 50);
-    lv_obj_add_style(label_hr, &style_lbl_white, 0);
-
-    // HR Sub bpm label
-    lv_obj_t *label_hr_sub = lv_label_create(scr_ppg);
-    lv_label_set_text(label_hr_sub, " bpm");
-    lv_obj_align_to(label_hr_sub, label_hr, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-
-    // HR caption label
-    lv_obj_t *label_hr_cap = lv_label_create(scr_ppg);
-    lv_label_set_text(label_hr_cap, "HR");
-    lv_obj_align_to(label_hr_cap, label_hr, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
-
-    /*LV_IMG_DECLARE(heart);
-    lv_obj_t *img1 = lv_img_create(scr_ppg);
-    lv_img_set_src(img1, &heart);
-    lv_obj_set_size(img1, 35, 33);
-    lv_obj_align_to(img1, label_hr, LV_ALIGN_OUT_LEFT_MID, -5, 0);*/
-
-    // SpO2 Number label
-    label_spo2 = lv_label_create(scr_ppg);
-    lv_label_set_text(label_spo2, "--");
-    lv_obj_align_to(label_spo2, NULL, LV_ALIGN_CENTER, 30, 50);
-    lv_obj_add_style(label_spo2, &style_lbl_white, 0);
-
-    // SpO2 Sub % label
-    lv_obj_t *label_spo2_sub = lv_label_create(scr_ppg);
-    lv_label_set_text(label_spo2_sub, " %");
-    lv_obj_align_to(label_spo2_sub, label_spo2, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-
-    // SpO2 caption label
-    lv_obj_t *label_spo2_cap = lv_label_create(scr_ppg);
-    lv_label_set_text(label_spo2_cap, "SpO2");
-    lv_obj_align_to(label_spo2_cap, label_spo2, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_spo2_cap, &style_lbl_red, 0);
-
-    // Bottom signal label
-    lv_obj_t *label_signal = lv_label_create(scr_ppg);
-    lv_label_set_text(label_signal, "PPG");
-    lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
-
-    /*LV_IMG_DECLARE(o2);
-    lv_obj_t *img2 = lv_img_create(scr_ppg);
-    lv_img_set_src(img2, &o2);
-    lv_obj_set_size(img2, 22, 35);
-    lv_obj_align_to(img2, label_spo2, LV_ALIGN_OUT_LEFT_MID, -5, 0);*/
-
-    lv_obj_add_event_cb(scr_ppg, screen_event, LV_EVENT_GESTURE, NULL);
-    curr_screen = SCR_PLOT_PPG;
+    lv_obj_add_event_cb(parent, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
     if (m_scroll_dir == SCROLL_LEFT)
-        lv_scr_load_anim(scr_ppg, LV_SCR_LOAD_ANIM_MOVE_RIGHT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
     else
-        lv_scr_load_anim(scr_ppg, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
-
-    hw_bpt_start_est();
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_MOVE_RIGHT, SCREEN_TRANS_TIME, 0, true);
 }
 
-static void draw_scr_ecg(enum scroll_dir m_scroll_dir)
+void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
 {
-    scr_ecg = lv_obj_create(NULL);
-    draw_header_minimal(scr_ecg);
-
-    // Create Chart 1 - ECG
-    chart1 = lv_chart_create(scr_ecg);
-    lv_obj_set_size(chart1, 200, 100);
-    lv_obj_set_style_bg_color(chart1, lv_color_black(), LV_STATE_DEFAULT);
-
-    lv_obj_set_style_size(chart1, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_border_width(chart1, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart1, DISP_WINDOW_SIZE_ECG);
-    // lv_chart_set_type(chart1, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    lv_chart_set_range(chart1, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    // lv_chart_set_range(chart1, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
-    lv_chart_set_div_line_count(chart1, 0, 0);
-    lv_chart_set_update_mode(chart1, LV_CHART_UPDATE_MODE_CIRCULAR);
-    // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
-    lv_obj_align(chart1, LV_ALIGN_CENTER, 0, -35);
-    ser1 = lv_chart_add_series(chart1, lv_palette_main(LV_PALETTE_YELLOW), LV_CHART_AXIS_PRIMARY_Y);
-
-    // HR Number label
-    label_hr = lv_label_create(scr_ecg);
-    lv_label_set_text(label_hr, "--");
-    lv_obj_align_to(label_hr, NULL, LV_ALIGN_CENTER, -10, 50);
-    lv_obj_add_style(label_hr, &style_lbl_white, 0);
-
-    // HR Sub bpm label
-    lv_obj_t *label_hr_sub = lv_label_create(scr_ecg);
-    lv_label_set_text(label_hr_sub, " bpm");
-    lv_obj_align_to(label_hr_sub, label_hr, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-
-    // HR caption label
-    lv_obj_t *label_hr_cap = lv_label_create(scr_ecg);
-    lv_label_set_text(label_hr_cap, "HR");
-    lv_obj_align_to(label_hr_cap, label_hr, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
-
-    // Bottom signal label
-    lv_obj_t *label_signal = lv_label_create(scr_ecg);
-    lv_label_set_text(label_signal, "ECG");
-    lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
-
-    label_ecg_lead_off = lv_label_create(scr_ecg);
-    lv_label_set_text(label_ecg_lead_off, LV_SYMBOL_UP "\nPlace finger \non sensor \nto start ECG");
-    lv_obj_align_to(label_ecg_lead_off, NULL, LV_ALIGN_CENTER, -20, -40);
-    lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
-    lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-
-    /*LV_IMG_DECLARE(heart);
-    lv_obj_t *img1 = lv_img_create(scr_ecg);
-    lv_img_set_src(img1, &heart);
-    lv_obj_set_size(img1, 35, 33);
-    lv_obj_align_to(img1, label_hr, LV_ALIGN_OUT_LEFT_MID, 0, 0);*/
-
-    lv_obj_add_event_cb(scr_ecg, screen_event, LV_EVENT_GESTURE, NULL);
-    curr_screen = SCR_PLOT_ECG;
-
-    if (m_scroll_dir == SCROLL_LEFT)
-        lv_scr_load_anim(scr_ecg, LV_SCR_LOAD_ANIM_MOVE_RIGHT, SCREEN_TRANS_TIME, 0, true);
-    else
-        lv_scr_load_anim(scr_ecg, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
-}
-
-static void draw_scr_eda(enum scroll_dir m_scroll_dir)
-{
-    scr_eda = lv_obj_create(NULL);
-    draw_header_minimal(scr_eda);
-
-    // Create Chart 1 - ECG
-    chart1 = lv_chart_create(scr_eda);
-    lv_obj_set_size(chart1, 200, 100);
-    lv_obj_set_style_bg_color(chart1, lv_color_black(), LV_STATE_DEFAULT);
-
-    lv_obj_set_style_size(chart1, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_border_width(chart1, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart1, DISP_WINDOW_SIZE_EDA);
-    lv_chart_set_range(chart1, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    lv_chart_set_div_line_count(chart1, 0, 0);
-    lv_chart_set_update_mode(chart1, LV_CHART_UPDATE_MODE_CIRCULAR);
-    lv_obj_align(chart1, LV_ALIGN_CENTER, 0, -35);
-    ser1 = lv_chart_add_series(chart1, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
-
-    // Bottom signal label
-    lv_obj_t *label_signal = lv_label_create(scr_eda);
-    lv_label_set_text(label_signal, "EDA/GSR");
-    lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
-
-    lv_obj_add_event_cb(scr_eda, screen_event, LV_EVENT_GESTURE, NULL);
-    curr_screen = SCR_PLOT_EDA;
-
-    if (m_scroll_dir == SCROLL_LEFT)
+    switch (m_screen)
     {
-        lv_scr_load_anim(scr_eda, LV_SCR_LOAD_ANIM_MOVE_RIGHT, SCREEN_TRANS_TIME, 0, true);
-    }
-    else
-    {
-        lv_scr_load_anim(scr_eda, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
-    }
-}
-
-static void hpi_disp_bpt_update_progress(int progress)
-{
-    if (label_progress == NULL || bar_bpt_progress == NULL)
-    {
-        return;
-    }
-
-    lv_bar_set_value(bar_bpt_progress, progress, LV_ANIM_OFF);
-    lv_label_set_text_fmt(label_progress, "Progress: %d %%", progress);
-}
-
-static void scr_bpt_btn_cal_start_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED)
-    {
-        hw_bpt_start_cal();
-    }
-}
-
-static void scr_bpt_btn_cal_exit_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED)
-    {
-        draw_scr_bpt_home();
-    }
-}
-
-lv_obj_t *label_cal_done;
-lv_obj_t *btn_bpt_cal_start;
-lv_obj_t *btn_bpt_cal_exit;
-
-static void draw_scr_bpt_calibrate(void)
-{
-    scr_bpt_calibrate = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_calibrate);
-
-    // Draw Blood Pressure label
-
-    lv_obj_t *label_bp = lv_label_create(scr_bpt_calibrate);
-    lv_label_set_text(label_bp, "BP Calibration");
-    lv_obj_align(label_bp, LV_ALIGN_TOP_MID, 0, 40);
-    lv_obj_add_style(label_bp, &style_lbl_white_14, 0);
-
-    // Create Chart 1 - ECG
-    chart1 = lv_chart_create(scr_bpt_calibrate);
-    lv_obj_set_size(chart1, 200, 75);
-    lv_obj_set_style_bg_color(chart1, lv_color_black(), LV_STATE_DEFAULT);
-
-    lv_obj_set_style_size(chart1, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_border_width(chart1, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart1, PPG_DISP_WINDOW_SIZE);
-    // lv_chart_set_type(chart1, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    lv_chart_set_range(chart1, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    // lv_chart_set_range(chart1, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
-    lv_chart_set_div_line_count(chart1, 0, 0);
-    lv_chart_set_update_mode(chart1, LV_CHART_UPDATE_MODE_CIRCULAR);
-    // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
-    lv_obj_align_to(chart1, label_bp, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
-    ser1 = lv_chart_add_series(chart1, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-
-    label_cal_done = lv_label_create(scr_bpt_calibrate);
-    lv_label_set_text(label_cal_done, "Calibration\nDone");
-    lv_obj_align_to(label_cal_done, NULL, LV_ALIGN_CENTER, -30, -25);
-    lv_obj_set_style_text_align(label_cal_done, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_cal_done, &style_lbl_white, 0);
-    lv_obj_add_flag(label_cal_done, LV_OBJ_FLAG_HIDDEN);
-
-    // Draw Progress bar
-    bar_bpt_progress = lv_bar_create(scr_bpt_calibrate);
-    lv_obj_set_size(bar_bpt_progress, 200, 5);
-    lv_obj_align_to(bar_bpt_progress, chart1, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
-    lv_bar_set_value(bar_bpt_progress, 0, LV_ANIM_OFF);
-
-    // Draw Progress bar label
-    label_progress = lv_label_create(scr_bpt_calibrate);
-    lv_label_set_text(label_progress, "Progress: --");
-    lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
-    lv_obj_add_style(label_progress, &style_lbl_white_14, 0);
-
-    // Draw button to start BP calibration
-
-    btn_bpt_cal_start = lv_btn_create(scr_bpt_calibrate);
-    lv_obj_add_event_cb(btn_bpt_cal_start, scr_bpt_btn_cal_start_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_cal_start, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
-    lv_obj_set_height(btn_bpt_cal_start, 55);
-    lv_obj_set_width(btn_bpt_cal_start, 240);
-    lv_obj_set_style_bg_color(btn_bpt_cal_start, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN);
-
-    lv_obj_t *label_btn_bpt = lv_label_create(btn_bpt_cal_start);
-    lv_label_set_text(label_btn_bpt, "Start");
-    lv_obj_add_style(label_btn_bpt, &style_lbl_white_small, 0);
-    lv_obj_center(label_btn_bpt);
-
-    btn_bpt_cal_exit = lv_btn_create(scr_bpt_calibrate);
-    lv_obj_add_event_cb(btn_bpt_cal_exit, scr_bpt_btn_cal_exit_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_cal_exit, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
-    lv_obj_set_height(btn_bpt_cal_exit, 55);
-    lv_obj_set_width(btn_bpt_cal_exit, 240);
-    lv_obj_set_style_bg_color(btn_bpt_cal_exit, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
-
-    lv_obj_t *label_btn_bpt_exit = lv_label_create(btn_bpt_cal_exit);
-    lv_label_set_text(label_btn_bpt_exit, "Exit");
-    lv_obj_add_style(label_btn_bpt_exit, &style_lbl_white_small, 0);
-    lv_obj_center(label_btn_bpt_exit);
-
-    // Hide exit button by default
-    lv_obj_add_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
-
-    lv_obj_add_event_cb(scr_bpt_calibrate, screen_event, LV_EVENT_GESTURE, NULL);
-    curr_screen = SCR_BPT_CALIBRATE;
-
-    lv_scr_load_anim(scr_bpt_calibrate, LV_SCR_LOAD_ANIM_MOVE_TOP, SCREEN_TRANS_TIME, 0, true);
-}
-
-lv_obj_t *btn_bpt_measure_exit;
-
-static void scr_bpt_btn_measure_exit_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        bpt_meas_done_flag = false;
-        bpt_meas_last_progress = 0;
-        bpt_meas_last_status = 0;
-        bpt_meas_started = false;
-
-        draw_scr_bpt_home();
-    }
-}
-
-static void scr_bpt_btn_measure_start_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        // lv_obj_add_flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
-
-        bpt_meas_done_flag = false;
-        bpt_meas_last_progress = 0;
-        bpt_meas_last_status = 0;
-
-        lv_obj_add_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-        // lv_obj__flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
-
-        bpt_meas_started = true;
-        hw_bpt_start_est();
-    }
-}
-
-static void draw_scr_bpt_measure(void)
-{
-    scr_bpt_measure = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_measure);
-
-    // Draw Blood Pressure label
-
-    lv_obj_t *label_bp = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_bp, "BP Measurement");
-    lv_obj_align(label_bp, LV_ALIGN_TOP_MID, 0, 40);
-    lv_obj_add_style(label_bp, &style_lbl_white_14, 0);
-
-    // Create Chart 1 - ECG
-    chart1 = lv_chart_create(scr_bpt_measure);
-    lv_obj_set_size(chart1, 200, 75);
-    lv_obj_set_style_bg_color(chart1, lv_color_black(), LV_STATE_DEFAULT);
-
-    lv_obj_set_style_size(chart1, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_border_width(chart1, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart1, PPG_DISP_WINDOW_SIZE);
-    // lv_chart_set_type(chart1, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    lv_chart_set_range(chart1, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    // lv_chart_set_range(chart1, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
-    lv_chart_set_div_line_count(chart1, 0, 0);
-    lv_chart_set_update_mode(chart1, LV_CHART_UPDATE_MODE_CIRCULAR);
-    // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
-    lv_obj_align_to(chart1, label_bp, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
-    ser1 = lv_chart_add_series(chart1, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-
-    // BP Systolic Number label
-    label_bp_val = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_bp_val, "-- / --");
-    lv_obj_align_to(label_bp_val, NULL, LV_ALIGN_CENTER, -30, -25);
-    lv_obj_add_style(label_bp_val, &style_lbl_white, 0);
-    lv_obj_add_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
-
-    // BP Systolic Sub mmHg label
-    label_bp_sys_sub = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_bp_sys_sub, " mmHg");
-    lv_obj_align_to(label_bp_sys_sub, label_bp_val, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-    lv_obj_add_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-
-    // BP Systolic caption label
-    label_bp_sys_cap = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_bp_sys_cap, "BP(Sys/Dia)");
-    lv_obj_align_to(label_bp_sys_cap, label_bp_val, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_bp_sys_cap, &style_lbl_red, 0);
-    lv_obj_add_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-
-    // Draw Progress bar
-    bar_bpt_progress = lv_bar_create(scr_bpt_measure);
-    lv_obj_set_size(bar_bpt_progress, 200, 5);
-    lv_obj_align_to(bar_bpt_progress, chart1, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
-    lv_bar_set_value(bar_bpt_progress, 0, LV_ANIM_OFF);
-
-    // Draw Progress bar label
-    label_progress = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_progress, "Progress: --");
-    lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
-
-    // Draw button to start BP measurement
-
-    btn_bpt_measure_start = lv_btn_create(scr_bpt_measure);
-    lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_btn_measure_start_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_measure_start, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
-    lv_obj_set_height(btn_bpt_measure_start, 55);
-    lv_obj_set_width(btn_bpt_measure_start, 240);
-    lv_obj_set_style_bg_color(btn_bpt_measure_start, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN);
-
-    lv_obj_t *label_btn_bpt = lv_label_create(btn_bpt_measure_start);
-    lv_label_set_text(label_btn_bpt, "Start");
-    lv_obj_add_style(label_btn_bpt, &style_lbl_white_small, 0);
-    lv_obj_center(label_btn_bpt);
-
-    btn_bpt_measure_exit = lv_btn_create(scr_bpt_measure);
-    lv_obj_add_event_cb(btn_bpt_measure_exit, scr_bpt_btn_measure_exit_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_measure_exit, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
-    lv_obj_set_height(btn_bpt_measure_exit, 55);
-    lv_obj_set_width(btn_bpt_measure_exit, 240);
-    lv_obj_set_style_bg_color(btn_bpt_measure_exit, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
-
-    lv_obj_t *label_btn_bpt_exit = lv_label_create(btn_bpt_measure_exit);
-    lv_label_set_text(label_btn_bpt_exit, "Exit");
-    lv_obj_add_style(label_btn_bpt_exit, &style_lbl_white_small, 0);
-    lv_obj_center(label_btn_bpt_exit);
-
-    // Hide exit button by default
-    lv_obj_add_flag(btn_bpt_measure_exit, LV_OBJ_FLAG_HIDDEN);
-
-    lv_obj_add_event_cb(scr_bpt_measure, screen_event, LV_EVENT_GESTURE, NULL);
-    curr_screen = SCR_BPT_MEASURE;
-
-    lv_scr_load_anim(scr_bpt_measure, LV_SCR_LOAD_ANIM_MOVE_BOTTOM, SCREEN_TRANS_TIME, 0, true);
-}
-
-static void scr_bpt_calib_btn_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        draw_scr_bpt_calibrate();
-    }
-}
-
-static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-
-        draw_scr_bpt_measure();
-    }
-}
-
-void draw_scr_bpt_home(void)
-{
-    scr_bpt_home = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_home);
-
-    // Draw button to measure BP
-
-    lv_obj_t *btn_bpt_measure_start = lv_btn_create(scr_bpt_home);
-    lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_measure_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_bpt_measure_start, LV_ALIGN_CENTER, 0, -40);
-    lv_obj_set_height(btn_bpt_measure_start, 50);
-
-    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_bpt_measure_start);
-    lv_label_set_text(label_btn_bpt_measure, "Measure BP");
-    lv_obj_center(label_btn_bpt_measure);
-
-    // Draw button to calibrate BP
-
-    lv_obj_t *btn_bpt_calibrate = lv_btn_create(scr_bpt_home);
-    lv_obj_add_event_cb(btn_bpt_calibrate, scr_bpt_calib_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_bpt_calibrate, LV_ALIGN_CENTER, 0, 40);
-    lv_obj_set_height(btn_bpt_calibrate, 50);
-
-    lv_obj_t *label_btn_bpt_calibrate = lv_label_create(btn_bpt_calibrate);
-    lv_label_set_text(label_btn_bpt_calibrate, "Calibrate BP");
-    lv_obj_center(label_btn_bpt_calibrate);
-
-    lv_obj_add_event_cb(scr_bpt_home, screen_event, LV_EVENT_GESTURE, NULL);
-    curr_screen = SCR_BPT_HOME;
-
-    lv_scr_load_anim(scr_bpt_home, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
-
-    // hw_bpt_stop();
-}
-
-static lv_obj_t *meter;
-
-static void set_value(void *indic, int32_t v)
-{
-    lv_meter_set_indicator_end_value(meter, (lv_meter_indicator_t *)indic, v);
-}
-
-void draw_scr_clockface(void)
-{
-    scr_clock = lv_obj_create(NULL);
-    meter = lv_meter_create(scr_clock);
-    lv_obj_set_size(meter, 220, 220);
-    lv_obj_center(meter);
-    lv_obj_set_style_bg_color(meter, lv_color_white(), LV_STATE_DEFAULT);
-
-    /*Create a scale for the minutes*/
-    /*61 ticks in a 360 degrees range (the last and the first line overlaps)*/
-    lv_meter_scale_t *scale_min = lv_meter_add_scale(meter);
-    lv_meter_set_scale_ticks(meter, scale_min, 61, 1, 10, lv_color_make(22, 83, 105));
-    lv_meter_set_scale_range(meter, scale_min, 0, 60, 360, 270);
-
-    /*Create another scale for the hours. It's only visual and contains only major ticks*/
-    lv_meter_scale_t *scale_hour = lv_meter_add_scale(meter);
-    lv_meter_set_scale_ticks(meter, scale_hour, 12, 0, 0, lv_color_make(22, 83, 105));           /*12 ticks*/
-    lv_meter_set_scale_major_ticks(meter, scale_hour, 1, 2, 20, lv_color_make(22, 83, 105), 10); /*Every tick is major*/
-    lv_meter_set_scale_range(meter, scale_hour, 1, 12, 330, 300);                                /*[1..12] values in an almost full circle*/
-
-    LV_IMG_DECLARE(img_hand);
-
-    /*Add a the hands from images*/
-    lv_meter_indicator_t *indic_min = lv_meter_add_needle_img(meter, scale_min, &img_hand, 5, 5);
-    lv_meter_indicator_t *indic_hour = lv_meter_add_needle_img(meter, scale_min, &img_hand, 5, 5);
-
-    /*Create an animation to set the value*/
-    /*
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_exec_cb(&a, set_value);
-    lv_anim_set_values(&a, 0, 60);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_set_time(&a, 2000); //2 sec for 1 turn of the minute hand (1 hour)
-    lv_anim_set_var(&a, indic_min);
-    lv_anim_start(&a);
-
-    lv_anim_set_var(&a, indic_hour);
-    lv_anim_set_time(&a, 24000); //24 sec for 1 turn of the hour hand
-    lv_anim_set_values(&a, 0, 60);
-    lv_anim_start(&a);
-    */
-
-    // ProtoCentral logo
-    /* LV_IMG_DECLARE(logo_oneline);
-     lv_obj_t *img1 = lv_img_create(scr_clock);
-     lv_img_set_src(img1, &logo_oneline);
-     lv_obj_align_to(img1, meter, LV_ALIGN_CENTER, 0, 30);
-     lv_obj_set_size(img1, 150, 10);
-
-     // ProtoCentral round logo
-     LV_IMG_DECLARE(logo_round_50x50);
-     lv_obj_t *img2 = lv_img_create(scr_clock);
-     lv_img_set_src(img2, &logo_round_50x50);
-     lv_obj_align_to(img2, meter, LV_ALIGN_CENTER, 0, -30);
-     lv_obj_set_size(img2, 50, 50);
-     */
-
-    curr_screen = SCR_CLOCK;
-
-    lv_scr_load_anim(scr_clock, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
-}
-
-void m_cycle_screens(bool scr_back)
-{
-    switch (curr_screen)
-    {
-    case SCR_VITALS:
-        if (scr_back)
-        {
-            draw_scr_eda(SCROLL_LEFT);
-        }
-        else
-        {
-            draw_scr_ppg(SCROLL_RIGHT);
-        }
+    case SCR_CLOCK_SMALL:
+        draw_scr_clock_small(m_scroll_dir);
         break;
     case SCR_PLOT_PPG:
-        if (scr_back)
-        {
-            draw_scr_vitals_home(SCROLL_LEFT);
-        }
-        else
-        {
-            draw_scr_ecg(SCROLL_RIGHT);
-        }
-        // draw_scr_ecg();
+        draw_scr_ppg(m_scroll_dir);
         break;
     case SCR_PLOT_ECG:
-        if (scr_back)
-        {
-            draw_scr_ppg(SCROLL_LEFT);
-        }
-        else
-        {
-            draw_scr_bpt_home();
-        }
-        break;
-    case SCR_BPT_HOME:
-        if (scr_back)
-        {
-            draw_scr_ecg(SCROLL_LEFT);
-        }
-        else
-        {
-            draw_scr_eda(SCROLL_RIGHT);
-        }
-
-        break;
-    case SCR_BPT_CALIBRATE:
-    case SCR_BPT_MEASURE:
-        if (scr_back)
-        {
-            draw_scr_eda(SCROLL_LEFT);
-        }
-        else
-        {
-            draw_scr_bpt_home();
-        }
+        draw_scr_ecg(m_scroll_dir);
         break;
     case SCR_PLOT_EDA:
-        if (scr_back)
-        {
-            draw_scr_bpt_home();
-        }
-        else
-        {
-            draw_scr_vitals_home(SCROLL_RIGHT);
-        }
+        draw_scr_eda(m_scroll_dir);
         break;
+    case SCR_PLOT_HRV:
+        draw_scr_hrv(m_scroll_dir);
+        break;
+    case SCR_PLOT_HRV_SCATTER:
+        draw_scr_hrv_scatter(m_scroll_dir);
+        break;
+    /*
+    case SCR_CLOCK:
+        draw_scr_clockface(m_scroll_dir);
+        break;
+    case SCR_VITALS:
+        draw_scr_vitals_home(m_scroll_dir);
+        break;
+     case SCR_BPT_HOME:
+         draw_scr_bpt_home(m_scroll_dir);
+         break;*/
+    default:
+        printk("Invalid screen: %d", m_screen);
     }
 }
 
@@ -1484,63 +883,101 @@ void display_screens_thread(void)
 
     printk("Display screens inited");
 
-    // k_sem_give(&sem_disp_inited);
-    // draw_scr_menu("A\nB\n");
     // draw_scr_home();
     // draw_scr_splash();
-    // lv_task_handler();
-    // k_sleep(K_MSEC(2000));
-
     // draw_scr_vitals_home();
-    //  draw_scr_clockface();
+    // draw_scr_clockface(SCROLL_RIGHT);
+    // draw_scr_clock_small(SCROLL_RIGHT);
     //   draw_scr_charts();
+    //draw_scr_hrv(SCROLL_RIGHT);
+    draw_scr_hrv_scatter(SCROLL_RIGHT);
 
-    draw_scr_ppg(SCROLL_RIGHT);
-    //    draw_scr_ecg();
-    // draw_scr_bpt_home();
-    //   draw_scr_eda();
+    // draw_scr_ppg(SCROLL_RIGHT);
+    //   draw_scr_ecg(SCROLL_RIGHT);
+    //    draw_scr_bpt_home();
+    //      draw_scr_eda();
 
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
 
-    uint8_t batt_level;
-    int32_t temp_val;
+    struct hpi_computed_hrv_t hrv_sample;
 
-    int temp_disp_counter = 0;
+    //uint8_t batt_level;
+    //int32_t temp_val;
+
+    //int temp_disp_counter = 0;
     int batt_refresh_counter = 0;
+    int hr_refresh_counter = 0;
+    int time_refresh_counter = 0;
 
     int m_disp_inact_refresh_counter = 0;
     int m_disp_status_off = false;
 
     int scr_ppg_hr_spo2_refresh_counter = 0;
 
+    static volatile uint16_t prev_rtor;
+
+    // k_sem_take(&sem_hw_inited, K_FOREVER);
     k_sem_give(&sem_sampling_start);
 
     while (1)
     {
-
-        if (curr_screen == SCR_PLOT_PPG)
+        if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
         {
-            if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
+            if (curr_screen == SCR_PLOT_PPG)
             {
-                hpi_disp_draw_plotPPG((float)((ppg_sensor_sample.raw_red * 1.0000)));
+
+                hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
                 if (scr_ppg_hr_spo2_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
                 {
-                    hpi_disp_update_hr(ppg_sensor_sample.hr);
-                    hpi_disp_update_spo2(ppg_sensor_sample.spo2);
+                    hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
+                    hpi_ppg_disp_update_spo2(94);//ppg_sensor_sample.spo2);
+
                     scr_ppg_hr_spo2_refresh_counter = 0;
                 }
                 else
                 {
                     scr_ppg_hr_spo2_refresh_counter++;
                 }
-                // hpi_disp_update_hr(ppg_sensor_sample.hr);
-                // hpi_disp_update_spo2(ppg_sensor_sample.spo2);
             }
-        }
+            else if ((curr_screen == SCR_CLOCK) || (curr_screen == SCR_CLOCK_SMALL))
+            {
+                if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                {
+                    // Fetch and update HR
+                    hpi_scr_home_hr_display_update(ppg_sensor_sample.hr);
+                    hpi_scr_home_spo2_display_update(94);//(ppg_sensor_sample.spo2);
+                    hr_refresh_counter = 0;
+                }
+                else
+                {
+                    hr_refresh_counter++;
+                }
+            }
+            else if (curr_screen == SCR_PLOT_HRV)
+            {
+                if (ppg_sensor_sample.rtor != 0)// && ppg_sensor_sample.rtor != prev_rtor)
+                {
+                    // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
+                    hpi_disp_hrv_draw_plot_rtor((float)((ppg_sensor_sample.rtor)));
+                    hpi_disp_hrv_update_rtor(ppg_sensor_sample.rtor);
+                    prev_rtor = ppg_sensor_sample.rtor;
+                }
+            }
+            else if(curr_screen == SCR_PLOT_HRV_SCATTER)
+            {
+                if (ppg_sensor_sample.rtor != 0 )//&& ppg_sensor_sample.rtor != prev_rtor)
+                {
+                    // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
+                    hpi_disp_hrv_scatter_draw_plot_rtor((float)((ppg_sensor_sample.rtor)), (float) prev_rtor);
+                    hpi_disp_hrv_scatter_update_rtor(ppg_sensor_sample.rtor);
+                    prev_rtor = ppg_sensor_sample.rtor;
+                }
+            }
 
-        if (curr_screen == SCR_BPT_MEASURE)
-        {
+            /*
+            if (curr_screen == SUBSCR_BPT_MEASURE)
+            {
             if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
             {
                 if (bpt_meas_started == true)
@@ -1574,7 +1011,7 @@ void display_screens_thread(void)
                             bpt_meas_started = false;
                             hpi_disp_update_bp(global_bp_sys, global_bp_dia);
 
-                            if (curr_screen == SCR_BPT_MEASURE)
+                            if (curr_screen == SUBSCR_BPT_MEASURE)
                             {
                                 lv_obj_clear_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
                                 lv_obj_clear_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
@@ -1590,75 +1027,108 @@ void display_screens_thread(void)
                     lv_disp_trig_activity(NULL);
                 }
             }
-        }
+            }
+            */
 
-        if (curr_screen == SCR_BPT_CALIBRATE)
-        {
-            if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
+            /*if (curr_screen == SUBSCR_BPT_CALIBRATE)
             {
-                hpi_disp_draw_plotPPG((float)((ppg_sensor_sample.raw_red * 1.0000)));
-                if (bpt_cal_done_flag == false)
+                if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
                 {
-                    if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
+                    hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
+                    if (bpt_cal_done_flag == false)
                     {
-                        bpt_cal_last_status = ppg_sensor_sample.bpt_status;
-                        printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-                    }
-                    if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
-                    {
-                        bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
-                        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                    }
-                    if (ppg_sensor_sample.bpt_progress == 100)
-                    {
-                        hw_bpt_stop();
-
-                        if (ppg_sensor_sample.bpt_status == 2)
+                        if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
                         {
-                            printk("Calibration done");
+                            bpt_cal_last_status = ppg_sensor_sample.bpt_status;
+                            printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
                         }
-                        bpt_cal_done_flag = true;
+                        if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
+                        {
+                            bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
+                            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                        }
+                        if (ppg_sensor_sample.bpt_progress == 100)
+                        {
+                            hw_bpt_stop();
 
-                        hw_bpt_get_calib();
+                            if (ppg_sensor_sample.bpt_status == 2)
+                            {
+                                printk("Calibration done");
+                            }
+                            bpt_cal_done_flag = true;
 
-                        ppg_data_stop();
+                            hw_bpt_get_calib();
 
-                        lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(label_cal_done, LV_OBJ_FLAG_HIDDEN);
+                            ppg_data_stop();
 
-                        lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_clear_flag(label_cal_done, LV_OBJ_FLAG_HIDDEN);
+
+                            lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
+                            lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
+                        }
+                        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                        lv_disp_trig_activity(NULL);
                     }
-                    hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                    lv_disp_trig_activity(NULL);
                 }
+            }*/
+            //}
+        }
+
+        if (k_msgq_get(&q_plot_hrv, &hrv_sample, K_NO_WAIT) == 0)
+        {
+            if (curr_screen == SCR_PLOT_HRV)
+            {
+                hpi_disp_hrv_update_sdnn(hrv_sample.rmssd);
+            }
+            else if (curr_screen == SCR_PLOT_HRV_SCATTER)
+            {
+                hpi_disp_hrv_scatter_update_sdnn(hrv_sample.rmssd);
             }
         }
 
-        if (curr_screen == SCR_PLOT_ECG)
+        if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
-            if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+            if (curr_screen == SCR_PLOT_ECG)
             {
 
-                hpi_disp_draw_plotECG((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
-                hpi_disp_update_hr(ecg_bioz_sensor_sample.hr_sample);
+                hpi_ecg_disp_draw_plotECG((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
+                hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr_sample);
             }
-        }
-
-        if (curr_screen == SCR_PLOT_EDA)
-        {
-            if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+            else if (curr_screen == SCR_PLOT_EDA)
             {
                 hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
             }
         }
 
-        if (curr_screen == SCR_VITALS)
+        if (curr_screen == SCR_CLOCK || curr_screen == SCR_CLOCK_SMALL)
+        {
+            if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+            {
+                // TEST ONLY: time
+                if (curr_screen == SCR_CLOCK_SMALL)
+                {
+                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true);
+                    ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, global_system_time.tm_year + 1900);
+                }
+                else
+                {
+                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
+                }
+                time_refresh_counter = 0;
+            }
+            else
+            {
+                time_refresh_counter++;
+            }
+        }
+
+        /*(curr_screen == SCR_VITALS)
         {
             if (temp_disp_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS)) // Once a second
             {
-                temp_val = read_temp();
-                hpi_disp_update_temp(temp_val);
+                // temp_val = read_temp();
+                // hpi_disp_update_temp(temp_val);
                 temp_disp_counter = 0;
             }
             else
@@ -1666,13 +1136,31 @@ void display_screens_thread(void)
                 temp_disp_counter++;
             }
             // lv_task_handler();
-        }
+        }*/
+
+        /*if (curr_screen == SCR_CLOCK)
+        {
+            if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+            {
+                // Fetch and update HR
+                // ui_hr_display_update(global_hr);
+                hr_refresh_counter = 0;
+
+                // TEST ONLY: time
+                // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min);
+            }
+            else
+            {
+                hr_refresh_counter++;
+            }
+        }*/
 
         if (batt_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
         {
-            // Fetch and update battery level
-            //batt_level = read_battery_level();
-            //hpi_disp_update_batt_level(batt_level);
+            // if (curr_screen == SCR_CLOCK)
+            //{
+            hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
+            //}
             batt_refresh_counter = 0;
         }
         else
@@ -1684,14 +1172,14 @@ void display_screens_thread(void)
         {
             int inactivity_time = lv_disp_get_inactive_time(NULL);
             // printk("Inactivity time: %d", inactivity_time);
-            if (inactivity_time > 20000)
+            if (inactivity_time > DISP_SLEEP_TIME_MS)
             {
                 if (m_disp_status_off == false)
                 {
                     printk("Display off");
 
                     display_set_brightness(display_dev, 0);
-                    //  display_blanking_on(display_dev);
+                    //   display_blanking_on(display_dev);
 
                     m_disp_status_off = true;
                 }
@@ -1702,7 +1190,7 @@ void display_screens_thread(void)
                 {
                     printk("Display on");
                     display_set_brightness(display_dev, 20);
-                    //  display_blanking_off(display_dev);
+                    //   display_blanking_off(display_dev);
                     m_disp_status_off = false;
                 }
             }
@@ -1718,7 +1206,7 @@ void display_screens_thread(void)
     }
 }
 
-#define DISPLAY_SCREENS_THREAD_STACKSIZE 8192
+#define DISPLAY_SCREENS_THREAD_STACKSIZE 32768
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

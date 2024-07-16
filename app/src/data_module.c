@@ -12,6 +12,9 @@
 #include "hw_module.h"
 #include "sampling_module.h"
 #include "fs_module.h"
+#include "ble_module.h"
+
+#include "algos.h"
 
 // ProtoCentral data formats
 #define CES_CMDIF_PKT_START_1 0x0A
@@ -30,15 +33,21 @@ extern const struct device *const max32664_dev;
 static bool settings_send_usb_enabled = true;
 static bool settings_send_ble_enabled = true;
 static bool settings_plot_enabled = true;
-static bool settings_send_rpi_uart_enabled = false;
 
-static bool settings_log_data_enabled = false; // true;
+enum hpi5_data_format
+{
+    DATA_FMT_OPENVIEW,
+    DATA_FMT_PLAIN_TEXT,
+} hpi5_data_format_t;
+
+static bool settings_log_data_enabled = true; // true;
 static int settings_data_format = DATA_FMT_OPENVIEW;
 
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_sample;
 extern struct k_msgq q_plot_ecg_bioz;
 extern struct k_msgq q_plot_ppg;
+extern struct k_msgq q_plot_hrv;
 
 #define SAMPLING_FREQ 104 // in Hz.
 
@@ -130,56 +139,6 @@ void send_data_text_1(int32_t in_sample)
     send_usb_cdc(data, strlen(data));
 }
 
-// Start a new session log
-void record_init_session_log()
-{
-    // current_session_log.session_id = 0;
-    current_session_log_id = 0;
-    // strcpy(current_session_log.session_header, "Session Header");
-    for (int i = 0; i < LOG_BUFFER_LENGTH; i++)
-    {
-        log_buffer[i].ecg_sample = 0;
-        log_buffer[i].bioz_sample = 0;
-        // log_buffer[i].raw_red = 0;
-        // log_buffer[i].raw_ir = 0;
-        // log_buffer[i].temp = 0;
-        log_buffer[i]._bioZSkipSample = false;
-    }
-
-    current_session_log_counter = 0;
-    current_session_log_id = (uint16_t)sys_rand32_get(); // Create random session ID
-
-    // printk("Init Session ID %s \n", log_get_current_session_id_str());
-}
-
-char *log_get_current_session_id_str(void)
-{
-    sprintf(session_id_str, "%d", current_session_log_id);
-    return session_id_str;
-}
-
-// Add a log point to the current session log
-void record_session_add_point(int32_t ecg_val, int32_t bioz_val, int32_t raw_ir_val, int32_t raw_red_val, int16_t temp)
-{
-
-    if ((current_session_log_counter - 1) < LOG_BUFFER_LENGTH)
-    {
-        current_session_log_counter++;
-    }
-    else
-    {
-        printk("Log Buffer Full at %d \n", k_uptime_get_32());
-        record_write_to_file(current_session_log_id, current_session_log_counter, log_buffer);
-        current_session_log_counter = 0;
-    }
-
-    // log_buffer[current_session_log_counter].ecg_sample = time;
-    log_buffer[current_session_log_counter].ecg_sample = ecg_val;
-    log_buffer[current_session_log_counter].bioz_sample = bioz_val;
-    // log_buffer[current_session_log_counter].raw_ir = raw_ir_val;
-    // log_buffer[current_session_log_counter].raw_red = raw_red_val;
-    // log_buffer[current_session_log_counter].temp = temp;
-}
 /*
 function y = iir_filter(x, filter_instance)
  y = 0;
@@ -297,16 +256,25 @@ void data_thread(void)
     float32_t ecg_output = 0;
     float32_t ecg_output2 = 0;
 
+    int32_t hrv_max;
+    int32_t hrv_min;
+    float hrv_mean;
+    float hrv_sdnn;
+    float hrv_pnn;
+    float hrv_rmssd;
+    bool hrv_ready_flag = false;
+
+    struct hpi_computed_hrv_t hrv_calculated;
+
     for (;;)
     {
-        k_sleep(K_USEC(500));
+        k_sleep(K_USEC(50));
 
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
             ecg_input = (float32_t)(ecg_bioz_sensor_sample.ecg_sample / 100000.0000);
             ecg_output2 = iir_filt(ecg_input, &iir_filt_notch_inst);
             ecg_output = iir_filt(ecg_output2, &iir_filt_low_inst);
-            
 
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
@@ -338,11 +306,12 @@ void data_thread(void)
             }
         }
 
+        // Check if PPG data is available
         if (k_msgq_get(&q_ppg_sample, &ppg_sensor_sample, K_NO_WAIT) == 0)
         {
             if (settings_send_ble_enabled)
             {
-                ppg_sample_buffer[ppg_sample_buffer_count++] = ppg_sensor_sample.raw_ir;
+                ppg_sample_buffer[ppg_sample_buffer_count++] = ppg_sensor_sample.raw_green;
                 if (ppg_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
                     ble_ppg_notify(ppg_sample_buffer, ppg_sample_buffer_count);
@@ -369,6 +338,24 @@ void data_thread(void)
                     //        sensor_sample.raw_red);
                 }*/
             }
+
+            if (ppg_sensor_sample.rtor != 0)
+            {
+                calculate_hrv(ppg_sensor_sample.rtor, &hrv_max, &hrv_min, &hrv_mean, &hrv_sdnn, &hrv_pnn, &hrv_rmssd, &hrv_ready_flag);
+                if (hrv_ready_flag == true)
+                {
+                    hrv_calculated.hrv_ready_flag = hrv_ready_flag;
+                    hrv_calculated.hrv_max = hrv_max;
+                    hrv_calculated.hrv_min = hrv_min;
+                    hrv_calculated.mean = hrv_mean;
+                    hrv_calculated.sdnn = hrv_sdnn;
+                    hrv_calculated.pnn = hrv_pnn;
+                    hrv_calculated.rmssd = hrv_rmssd;
+
+                    k_msgq_put(&q_plot_hrv, &hrv_calculated, K_NO_WAIT);
+                    // printk("mean: %f, max: %d, min: %d, sdnn: %f, pnn: %f, rmssd:%f\n", hrv_calculated.mean, hrv_calculated.hrv_max, hrv_calculated.hrv_min, hrv_calculated.sdnn, hrv_calculated.pnn, hrv_calculated.rmssd);
+                }
+            }
         }
 
         // Data is now available in sensor_sample
@@ -381,13 +368,12 @@ void data_thread(void)
 
         //
 
-        /*if (settings_log_data_enabled)
+        if (settings_log_data_enabled)
         {
             // log_data(sensor_sample.ecg_sample, sensor_sample.bioz_sample, sensor_sample.raw_red, sensor_sample.raw_ir,
             //          sensor_sample.temp, 0, 0, 0, sensor_sample._bioZSkipSample);
-            record_session_add_point(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.raw_red,
-                                     ecg_bioz_sensor_sample.raw_ir, ecg_bioz_sensor_sample.temp);
-        }*/
+            // record_session_add_point(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample);
+        }
     }
 }
 

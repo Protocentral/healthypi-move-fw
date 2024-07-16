@@ -1,0 +1,8 @@
+# Configuration options
+
+config SENSOR_MAXM86146
+	bool "MAXM86146 Driver"
+	default y
+	select I2C
+	help
+		Enable the driver for the Maxim MAXM86146 sensor

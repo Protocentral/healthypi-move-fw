@@ -644,10 +644,6 @@ static const struct display_driver_api gc9a01a_api = {
 	.set_orientation = gc9a01a_set_orientation,
 };
 
-// /.backlight = GPIO_DT_SPEC_GET(DT_PROP(INST_DT_GC9A01A(n), backlight_gpios)),\
-
-//.bl_gpio = GPIO_DT_SPEC_GET_OR(INST_DT_GC9A01A(n),        		\
-		//	bl_gpios, {0}),
 #define INST_DT_GC9A01A(n) DT_INST(n, waveshare_gc9a01a)
 
 #define GC9A01A_INIT(n, t)                                                          \

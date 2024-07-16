@@ -23,15 +23,25 @@
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
+#include <time.h>
+#include <zephyr/posix/time.h>
+
 #include "max30001.h"
-#include "max32664.h"
+//#include "max32664.h"
+#include "maxm86146.h"
 
 #include "sys_sm_module.h"
 #include "hw_module.h"
 #include "fs_module.h"
 #include "display_module.h"
 
+//#include "max32664c_msbl.h"
+
 #include <zephyr/sys/reboot.h>
+#include <zephyr/drivers/mfd/npm1300.h>
+#include <zephyr/drivers/regulator.h>
+
+#include "nrf_fuel_gauge.h"
 
 LOG_MODULE_REGISTER(hw_module);
 char curr_string[40];
@@ -45,9 +55,12 @@ extern struct k_msgq q_session_cmd_msg;
 #define HW_THREAD_PRIORITY 7
 
 // Peripheral Device Pointers
-const struct device *fg_dev = DEVICE_DT_GET_ANY(maxim_max17048);
+// const struct device *fg_dev = DEVICE_DT_GET_ANY(maxim_max17048);
 const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
 const struct device *max32664_dev = DEVICE_DT_GET_ANY(maxim_max32664);
+
+const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
+
 const struct device *acc_dev = DEVICE_DT_GET_ONE(st_lsm6dso);
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
@@ -59,12 +72,19 @@ static const struct pwm_dt_spec pwm_led0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led0));
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
+static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *leds = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_leds));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
+// static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
+
+// static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
+
 uint8_t global_batt_level = 0;
 int32_t global_temp;
+bool global_batt_charging = false;
+struct rtc_time global_system_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
@@ -78,6 +98,17 @@ K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
+
+static float max_charge_current;
+static float term_charge_current;
+static int64_t ref_time;
+
+static const struct battery_model battery_model = {
+#include "battery_profile_200.inc"
+};
+
+/* nPM1300 CHARGER.BCHGCHARGESTATUS.CONSTANTCURRENT register bitmask */
+#define NPM1300_CHG_STATUS_CC_MASK BIT_MASK(3)
 
 static void gpio_keys_cb_handler(struct input_event *evt)
 {
@@ -95,7 +126,7 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         case INPUT_KEY_UP:
             // m_key_pressed = GPIO_KEYPAD_KEY_UP;
             LOG_INF("UP Key Pressed");
-            sys_reboot(SYS_REBOOT_COLD);
+            // sys_reboot(SYS_REBOOT_COLD);
             break;
         case INPUT_KEY_DOWN:
             // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
@@ -108,6 +139,7 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         }
     }
 }
+
 INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
 
 void send_usb_cdc(const char *buf, size_t len)
@@ -192,8 +224,9 @@ static void interrupt_handler(const struct device *dev, void *user_data)
 
 uint8_t read_battery_level(void)
 {
-    int ret = 0;
     uint8_t batt_level = 0;
+
+    /*int ret = 0;
 
     fuel_gauge_prop_t props[] = {
         FUEL_GAUGE_RUNTIME_TO_EMPTY,
@@ -217,9 +250,103 @@ uint8_t read_battery_level(void)
         // printk("Voltage %d\n", vals[3].voltage);
 
         batt_level = vals[2].relative_state_of_charge;
-    }
+    }*/
 
     return batt_level;
+}
+
+static int npm_read_sensors(const struct device *charger,
+                            float *voltage, float *current, float *temp, int32_t *chg_status)
+{
+    struct sensor_value value;
+    int ret;
+
+    ret = sensor_sample_fetch(charger);
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_VOLTAGE, &value);
+    *voltage = (float)value.val1 + ((float)value.val2 / 1000000);
+
+    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_TEMP, &value);
+    *temp = (float)value.val1 + ((float)value.val2 / 1000000);
+
+    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_AVG_CURRENT, &value);
+    *current = (float)value.val1 + ((float)value.val2 / 1000000);
+
+    sensor_channel_get(charger, SENSOR_CHAN_NPM1300_CHARGER_STATUS, &value);
+    *chg_status = value.val1;
+
+    return 0;
+}
+
+int npm_fuel_gauge_init(const struct device *charger)
+{
+    struct sensor_value value;
+    struct nrf_fuel_gauge_init_parameters parameters = {
+        .model = &battery_model,
+        .opt_params = NULL,
+    };
+    int32_t chg_status;
+    int ret;
+
+    printk("nRF Fuel Gauge version: %s\n", nrf_fuel_gauge_version);
+
+    ret = npm_read_sensors(charger, &parameters.v0, &parameters.i0, &parameters.t0, &chg_status);
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    /* Store charge nominal and termination current, needed for ttf calculation */
+    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_DESIRED_CHARGING_CURRENT, &value);
+    max_charge_current = (float)value.val1 + ((float)value.val2 / 1000000);
+    term_charge_current = max_charge_current / 10.f;
+
+    nrf_fuel_gauge_init(&parameters, NULL);
+
+    ref_time = k_uptime_get();
+
+    return 0;
+}
+
+int npm_fuel_gauge_update(const struct device *charger)
+{
+    float voltage;
+    float current;
+    float temp;
+    float soc;
+    float tte;
+    float ttf;
+    float delta;
+    int32_t chg_status;
+    bool cc_charging;
+    int ret;
+
+    ret = npm_read_sensors(charger, &voltage, &current, &temp, &chg_status);
+    if (ret < 0)
+    {
+        printk("Error: Could not read from charger device\n");
+        return ret;
+    }
+
+    cc_charging = (chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0;
+
+    delta = (float)k_uptime_delta(&ref_time) / 1000.f;
+
+    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, NULL);
+    tte = nrf_fuel_gauge_tte_get();
+    ttf = nrf_fuel_gauge_ttf_get(cc_charging, -term_charge_current);
+
+    //printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
+    //printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
+    //printk("Charge status: %d\n", chg_status);
+
+    global_batt_level = (int)soc;
+
+    return 0;
 }
 
 static void usb_init()
@@ -262,7 +389,6 @@ static void fetch_and_display(const struct device *dev)
 
     // trig_cnt++;
 
-    /* lsm6dso accel */
     sensor_sample_fetch_chan(dev, SENSOR_CHAN_ACCEL_XYZ);
     sensor_channel_get(dev, SENSOR_CHAN_ACCEL_X, &x);
     sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Y, &y);
@@ -271,7 +397,6 @@ static void fetch_and_display(const struct device *dev)
     printf("accel x:%f ms/2 y:%f ms/2 z:%f ms/2\n",
            (double)out_ev(&x), (double)out_ev(&y), (double)out_ev(&z));
 
-    /* lsm6dso gyro */
     sensor_sample_fetch_chan(dev, SENSOR_CHAN_GYRO_XYZ);
     sensor_channel_get(dev, SENSOR_CHAN_GYRO_X, &x);
     sensor_channel_get(dev, SENSOR_CHAN_GYRO_Y, &y);
@@ -342,6 +467,7 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
 #define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
 #define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
 
+/*
 void hw_bpt_start_cal(void)
 {
     printk("Starting BPT Calibration\n");
@@ -399,31 +525,42 @@ void hw_bpt_get_calib(void)
     struct sensor_value mode_val;
     mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_GET_VECTOR;
     sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
+}*/
+
+static void event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+    printk("Event detected\n");
 }
 
-void hw_pmic_read_sensors(void)
+void setup_pmic_callbacks(void)
 {
-	struct sensor_value volt;
-	struct sensor_value current;
-	struct sensor_value temp;
-	struct sensor_value error;
-	struct sensor_value status;
+    if (!device_is_ready(pmic))
+    {
+        printk("PMIC device not ready.\n");
+        return;
+    }
 
-	sensor_sample_fetch(charger);
-	sensor_channel_get(charger, SENSOR_CHAN_GAUGE_VOLTAGE, &volt);
-	sensor_channel_get(charger, SENSOR_CHAN_GAUGE_AVG_CURRENT, &current);
-	sensor_channel_get(charger, SENSOR_CHAN_GAUGE_TEMP, &temp);
-	sensor_channel_get(charger, SENSOR_CHAN_NPM1300_CHARGER_STATUS, &status);
-	sensor_channel_get(charger, SENSOR_CHAN_NPM1300_CHARGER_ERROR, &error);
+    /* Setup callback for shiphold button press */
+    //static struct gpio_callback event_cb;
 
-	printk("V: %d.%03d ", volt.val1, volt.val2 / 1000);
+    //gpio_init_callback(&event_cb, event_callback, BIT(NPM1300_EVENT_SHIPHOLD_PRESS));
 
-	printk("I: %s%d.%04d ", ((current.val1 < 0) || (current.val2 < 0)) ? "-" : "",
-	       abs(current.val1), abs(current.val2) / 100);
+    //mfd_npm1300_add_callback(pmic, &event_cb);
+}
 
-	printk("T: %d.%02d\n", temp.val1, temp.val2 / 10000);
+void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
+{
+    struct rtc_time time_set;
 
-	printk("Charger Status: %d, Error: %d\n", status.val1, error.val1);
+    time_set.tm_sec = m_sec;
+    time_set.tm_min = m_min;
+    time_set.tm_hour = m_hour;
+    time_set.tm_mday = m_day;
+    time_set.tm_mon = (m_month-1);
+    time_set.tm_year = (m_year+100);
+
+    int ret = rtc_set_time(rtc_dev, &time_set);
+    printk("RTC Set Time: %d\n", ret);
 }
 
 void hw_thread(void)
@@ -431,35 +568,69 @@ void hw_thread(void)
     // int ret = 0;
     static struct rtc_time curr_time;
 
+    if (!device_is_ready(regulators))
+    {
+        printk("Error: Regulator device is not ready\n");
+        // return 0;
+    }
+
+    if (!device_is_ready(charger))
+    {
+        printk("Charger device not ready.\n");
+        // return 0;
+    }
+    if (npm_fuel_gauge_init(charger) < 0)
+    {
+        printk("Could not initialise fuel gauge.\n");
+        return 0;
+    }
+
+    //regulator_disable(sensor_brd_ldsw);
+    k_sleep(K_MSEC(100));
+
+    regulator_enable(sensor_brd_ldsw);
+
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
-        printk("MAX30001 device not found!");
+        printk("MAX30001 device not found! Rebooting !");
+        //sys_reboot(SYS_REBOOT_COLD);
+    }
+    else
+    {
         struct sensor_value ecg_mode_set;
-        // ecg_mode_set.val1 = 1;
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
 
-        // return;
+        ecg_mode_set.val1 = 1;
+        sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
+        sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
 
-    if (!device_is_ready(max32664_dev))
+    if (!device_is_ready(maxm86146_dev))
     {
         printk("MAX32664 device not found!\n");
         // return;
     }
     else
     {
-        struct sensor_value mode_set;
-        mode_set.val1 = MAX32664_OP_MODE_BPT;
-        sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+        //struct sensor_value mode_set;
+        //mode_set.val1 = MAX32664_ATTR_OP_MODE;
+        //sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
-    if (!device_is_ready(fg_dev))
+    if(!device_is_ready(maxm86146_dev))
     {
-        printk("No device found...\n");
+        printk("MAXM86146 device not found!\n");
     }
+    else
+    {
+        struct sensor_value mode_set;
+        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+    }
+
+    //setup_pmic_callbacks();
+
     if (!device_is_ready(max30205_dev))
     {
         LOG_ERR("MAX30205 device not found!\n");
@@ -487,33 +658,31 @@ void hw_thread(void)
         // return 0;
     }
 
-    if (!device_is_ready(regulators)) {
-		printk("Error: Regulator device is not ready\n");
-		return 0;
-	}
-
-	if (!device_is_ready(charger)) {
-		printk("Charger device not ready.\n");
-		return 0;
-	}
-
     rtc_get_time(rtc_dev, &curr_time);
+    printk("Current time: %d:%d:%d %d/%d/%d \n", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    printk("Current time: %d:%d:%d\n", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec);
-    printk("Current date: %d/%d/%d\n", curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
+    // struct timespec tspec;
+    // tspec.tv_sec = curr_time.
+    // clock_settime(CLOCK_REALTIME, &tspec);
 
-    // fs_module_init();
+    //fs_module_init();
+
+    struct sensor_value mode_set;
+    mode_set.val1 = 1;
+    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     // init_settings();
 
     printk("HW Thread started\n");
-    // printk("Initing...\n");
+
+    // hw_msbl_load();
+    //  printk("Initing...\n");
 
     k_sem_give(&sem_hw_inited);
 
-    ppg_thread_create();
+    //ppg_data_start();
 
-    
+    // ppg_thread_create();
 
     // usb_init();
 
@@ -529,11 +698,15 @@ void hw_thread(void)
         }*/
 
         // ifndef MOVE_SAMPLING_DISABLED
-        // fetch_and_display(acc_dev);
+        //fetch_and_display(acc_dev);
         // k_sleep(K_MSEC(3000));
+        npm_fuel_gauge_update(charger);
+
+        rtc_get_time(rtc_dev, &global_system_time);
+
         k_sleep(K_MSEC(3000));
 
-        hw_pmic_read_sensors();
+        // hw_pmic_read_sensors();
     }
 }
 

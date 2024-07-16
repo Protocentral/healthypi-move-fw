@@ -12,6 +12,8 @@
 
 #include <zephyr/settings/settings.h>
 
+#include "cmd_module.h"
+
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 LOG_MODULE_REGISTER(ble_module);
 
@@ -46,6 +48,21 @@ static uint8_t temp_att_ble[2];
 // Resp rate Characteristic cd5ca86f-4448-7db8-ae4c-d1da8cba36d0
 #define UUID_HPI_RESP_RATE_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xcd5ca86f, 0x4448, 0x7db8, 0xae4c, 0xd1da8cba36d0))
 
+#define CMD_SERVICE_UUID 0xdc, 0xad, 0x7f, 0xc4, 0x23, 0x90, 0x4d, 0xd4, \
+						 0x96, 0x8d, 0x0f, 0x97, 0x92, 0x74, 0xbf, 0x01
+
+#define CMD_TX_CHARACTERISTIC_UUID 0xdc, 0xad, 0x7f, 0xc4, 0x23, 0x90, 0x4d, 0xd4, \
+								   0x96, 0x8d, 0x0f, 0x97, 0x28, 0x15, 0xbf, 0x01
+
+#define CMD_RX_CHARACTERISTIC_UUID 0xdc, 0xad, 0x7f, 0xc4, 0x23, 0x90, 0x4d, 0xd4, \
+								   0x96, 0x8d, 0x0f, 0x97, 0x27, 0x15, 0xbf, 0x01
+
+#define UUID_HPI_CMD_SERVICE BT_UUID_DECLARE_128(CMD_SERVICE_UUID)
+#define UUID_HPI_CMD_SERVICE_CHAR_TX BT_UUID_DECLARE_128(CMD_TX_CHARACTERISTIC_UUID)
+#define UUID_HPI_CMD_SERVICE_CHAR_RX BT_UUID_DECLARE_128(CMD_RX_CHARACTERISTIC_UUID)
+
+extern struct k_msgq q_cmd_msg;
+
 static void spo2_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 }
@@ -75,6 +92,8 @@ static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t v
 		printk("Error, CCCD has been set to an invalid value");
 	}
 }
+
+uint8_t in_data_buffer[50];
 
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
@@ -131,6 +150,70 @@ BT_GATT_SERVICE_DEFINE(hpi_ppg_resp_service,
 											  BT_GATT_PERM_READ,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(ecg_resp_on_cccd_changed,
+								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
+
+/* This function is called whenever the RX Characteristic has been written to by a Client */
+static ssize_t on_receive_cmd(struct bt_conn *conn,
+							  const struct bt_gatt_attr *attr,
+							  const void *buf,
+							  uint16_t len,
+							  uint16_t offset,
+							  uint8_t flags)
+{
+	const uint8_t *buffer = buf;
+
+	printk("Received CMD len %d \n", len);
+
+	for (uint8_t i = 0; i < len; i++)
+	{
+		in_data_buffer[i] = buffer[i];
+		printk("%02X", buffer[i]);
+	}
+	printk("\n");
+
+	struct hpi_cmd_data_obj_t cmd_data_obj;
+	cmd_data_obj.pkt_type = 0x00;
+	cmd_data_obj.data_len = len;
+	memcpy(cmd_data_obj.data, buffer, len);
+
+	k_msgq_put(&q_cmd_msg, &cmd_data_obj, K_MSEC(100));
+
+	return len;
+}
+
+static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+	ARG_UNUSED(attr);
+	switch (value)
+	{
+	case BT_GATT_CCC_NOTIFY:
+		printk("CMD RX/TX CCCD subscribed");
+		break;
+
+	case BT_GATT_CCC_INDICATE:
+		// Start sending stuff via indications
+		break;
+
+	case 0:
+		printk("CMD RX/TX CCCD unsubscribed");
+		break;
+
+	default:
+		printk("Error, CCCD has been set to an invalid value");
+	}
+}
+
+BT_GATT_SERVICE_DEFINE(hpi_cmd_service,
+					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_CMD_SERVICE),
+					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_TX,
+											  BT_GATT_CHRC_WRITE | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
+											  NULL, on_receive_cmd, NULL),
+					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_RX,
+											  BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
+											  BT_GATT_PERM_READ,
+											  NULL, NULL, NULL),
+					   BT_GATT_CCC(cmd_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 void ble_spo2_notify(uint16_t spo2_val)

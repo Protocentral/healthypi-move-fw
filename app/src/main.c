@@ -26,7 +26,7 @@
 //#include "tf/main_functions.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-LOG_MODULE_REGISTER(healthypi5, LOG_LEVEL);
+LOG_MODULE_REGISTER(healthypi_move, LOG_LEVEL);
 
 //const struct device *display_dev;
 
@@ -60,12 +60,12 @@ int main(void)
 	err = bt_enable(NULL);
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
-		return;
+		return err;
 	}
 
 	bt_ready();
 	
-	printk("\nHealthyPi Move started !! FW version: %d.%d.%d \n\n", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
+	printk("\nHealthyPi Move %d.%d.%d started!\n", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 	
 	return 0;	
 }

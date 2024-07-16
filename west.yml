@@ -1,33 +1,23 @@
 manifest:
   self:
-    west-commands: scripts/west-commands.yml
-
+    path: application
+    
   remotes:
-    - name: sdk
+    - name: nrf
       url-base: https://github.com/nrfconnect
+    - name: protocentral
+      url-base: https://github.com/Protocentral
 
   projects:
     - name: sdk-nrf
-      remote: sdk
-      revision: v2.6.0
+      remote: nrf
       path: nrf
+      revision: v2.6.1
       import:
-        name-blocklist:
-          - ci-tools
-          - hal_altera
-          - hal_cypress
-          - hal_infineon
-          - hal_microchip
-          - hal_nxp
-          - hal_openisa
-          - hal_silabs
-          - hal_xtensa
-          - hal_ti
-          - loramac-node
-          - net-tools
-          - edtt
-          - sof
+        path-prefix: external
       clone-depth: 1
-      
-  self:
-    west-commands: scripts/west-commands.yml
+    - name: max30001
+      repo-path: protocentral_max30001_zephyr_driver
+      remote: protocentral
+      revision: main
+      path: drivers/sensor/max30001

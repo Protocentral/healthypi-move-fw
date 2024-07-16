@@ -50,8 +50,7 @@ uint16_t length_1_val = 40;
 uint32_t length_2_val = 60;
 int32_t voltage_val = -3000;
 
-
-
+/*
 static int littlefs_flash_erase(unsigned int id)
 {
     const struct flash_area *pfa;
@@ -69,7 +68,7 @@ static int littlefs_flash_erase(unsigned int id)
            id, (unsigned int)pfa->fa_off, pfa->fa_dev->name,
            (unsigned int)pfa->fa_size);
 
-    /* Optional wipe flash contents */
+    /* Optional wipe flash contents 
     if (IS_ENABLED(CONFIG_APP_WIPE_STORAGE))
     {
         rc = flash_area_erase(pfa, 0, pfa->fa_size);
@@ -78,7 +77,7 @@ static int littlefs_flash_erase(unsigned int id)
 
     flash_area_close(pfa);
     return rc;
-}
+}*/
 
 static int littlefs_mount(struct fs_mount_t *mp)
 {
@@ -343,8 +342,8 @@ void record_wipe_all(void)
             break;
         }
 
-        // printk("%s%s %d\n", entry.name,
-        //	      (entry.type == FS_DIR_ENTRY_DIR) ? "/" : "",entry.size);
+        printk("%s%s %d\n", entry.name,
+        	      (entry.type == FS_DIR_ENTRY_DIR) ? "/" : "",entry.size);
 
         // if (strstr(entry.name, "") != NULL)
         //{
@@ -371,7 +370,7 @@ void fs_module_init(void)
         return;
     }
 
-    /*rc = fs_statvfs(mp->mnt_point, &sbuf);
+    rc = fs_statvfs(mp->mnt_point, &sbuf);
     if (rc < 0)
     {
         // printk("FAIL: statvfs: %d\n", rc);
@@ -383,11 +382,11 @@ void fs_module_init(void)
            mp->mnt_point,
            sbuf.f_bsize, sbuf.f_frsize,
            sbuf.f_blocks, sbuf.f_bfree);
-    */
-    /*rc = lsdir("/lfs/log");
+    
+    rc = lsdir("/lfs/log");
     if (rc < 0)
     {
         LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         // goto out;
-    }*/
+    }
 }

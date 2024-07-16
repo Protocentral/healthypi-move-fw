@@ -1,31 +1,51 @@
 #define pragma once
 
-enum disp_screns {
-    SCR_HOME,
-    SCR_VITALS,
-    SCR_CLOCK,
+#include <lvgl.h>
+
+#define SCREEN_TRANS_TIME 100
+#define DISP_THREAD_REFRESH_INT_MS 10
+#define DISP_SLEEP_TIME_MS 60000
+
+#define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
+#define HRV_DISP_WINDOW_SIZE 128 
+enum hpi_disp_screens
+{
+    SCR_LIST_START,
+    SCR_CLOCK_SMALL,
+    
     SCR_PLOT_PPG,
     SCR_PLOT_EDA,
     SCR_PLOT_ECG,
-    SCR_BPT_HOME,
-    SCR_BPT_CALIBRATE,
-    SCR_BPT_MEASURE,
+    SCR_PLOT_HRV,
+    SCR_PLOT_HRV_SCATTER,
+    
+    SCR_LIST_END,
+    // Should not go here
+    SCR_CLOCK,
+    SCR_VITALS,
+    //SCR_BPT_HOME,
 };
 
-enum scroll_dir {
+enum hpi_disp_subscreens
+{
+    SUBSCR_BPT_CALIBRATE,
+    SUBSCR_BPT_MEASURE,
+};
+
+enum scroll_dir
+{
     SCROLL_UP,
     SCROLL_DOWN,
     SCROLL_LEFT,
     SCROLL_RIGHT,
 };
 
-void draw_scr_home_menu(void);
 void draw_scr_ppg(enum scroll_dir m_scroll_dir);
-void draw_scr_menu(char* session_names);
 
-void draw_plotppg(float data_ppg);
-void draw_plotresp(float data_resp);
-void draw_plotECG(float data_ecg);
+void draw_scr_vitals_home(enum scroll_dir m_scroll_dir);
 
-void hpi_disp_update_batt_level(int batt_level);
+void hpi_disp_update_batt_level(int batt_level, bool charging);
 void hpi_disp_update_temp(int temp);
+
+void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
+void disp_screen_event(lv_event_t *e);
