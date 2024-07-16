@@ -9,27 +9,21 @@
 #include <app_version.h>
 #include <zephyr/logging/log.h>
 
+#include <time.h>
+#include <zephyr/posix/time.h>
+#include <zephyr/drivers/rtc.h>
+
 #include "sys_sm_module.h"
 #include "hw_module.h"
 #include "display_module.h"
 #include "sampling_module.h"
-
-#include "sys_sm_module.h"
-
 #include "ui/move_ui.h"
-
-#include <time.h>
-#include <zephyr/posix/time.h>
-#include <zephyr/drivers/rtc.h>
 
 LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
 
 // LVGL Common Objects
 static lv_indev_drv_t m_keypad_drv;
 static lv_indev_t *m_keypad_indev = NULL;
-extern uint8_t m_key_pressed;
-
-extern struct rtc_time global_system_time;
 
 const struct device *display_dev;
 lv_indev_t *touch_indev;
@@ -93,8 +87,6 @@ static lv_obj_t *label_sym_ble;
 
 static lv_obj_t *label_hr;
 
-extern bool chart_ecg_update;
-
 int curr_mode = MODE_STANDBY;
 
 bool display_inited = false;
@@ -107,7 +99,6 @@ K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 100, 1);
 
 static const struct device *touch_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(cst816s));
-
 static int bpt_cal_last_progress = 0;
 static int bpt_cal_last_status = 0;
 bool bpt_cal_started = false;
@@ -129,6 +120,11 @@ extern bool global_batt_charging;
 extern lv_obj_t *scr_clock;
 extern lv_obj_t *scr_ppg;
 extern lv_obj_t *scr_vitals;
+
+extern bool chart_ecg_update;
+
+extern uint8_t m_key_pressed;
+extern struct rtc_time global_system_time;
 
 LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(logo_round_white);
@@ -675,7 +671,7 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
     sprintf(buf, "%d %% ", batt_level);
     lv_label_set_text(label_batt_level_val, buf);
 
-    char* batt_icon = LV_SYMBOL_BATTERY_EMPTY;
+    char *batt_icon = LV_SYMBOL_BATTERY_EMPTY;
 
     if (batt_level > 75)
     {
@@ -717,7 +713,7 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
 void disp_screen_event(lv_event_t *e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
-    //lv_obj_t *target = lv_event_get_target(e);
+    // lv_obj_t *target = lv_event_get_target(e);
 
     if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_LEFT)
     {
@@ -881,31 +877,28 @@ void display_screens_thread(void)
 
     display_blanking_off(display_dev);
 
-    printk("Display screens inited");
-
     // draw_scr_home();
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    //   draw_scr_charts();
-    //draw_scr_hrv(SCROLL_RIGHT);
-    draw_scr_hrv_scatter(SCROLL_RIGHT);
-
+    // draw_scr_charts();
+    // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    //   draw_scr_ecg(SCROLL_RIGHT);
-    //    draw_scr_bpt_home();
-    //      draw_scr_eda();
+    // draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_bpt_home();
+    // draw_scr_eda();
+    draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
 
     struct hpi_computed_hrv_t hrv_sample;
 
-    //uint8_t batt_level;
-    //int32_t temp_val;
+    // uint8_t batt_level;
+    // int32_t temp_val;
 
-    //int temp_disp_counter = 0;
+    // int temp_disp_counter = 0;
     int batt_refresh_counter = 0;
     int hr_refresh_counter = 0;
     int time_refresh_counter = 0;
@@ -917,6 +910,7 @@ void display_screens_thread(void)
 
     static volatile uint16_t prev_rtor;
 
+    printk("Display screens inited\n");
     // k_sem_take(&sem_hw_inited, K_FOREVER);
     k_sem_give(&sem_sampling_start);
 
@@ -931,7 +925,7 @@ void display_screens_thread(void)
                 if (scr_ppg_hr_spo2_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
                 {
                     hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
-                    hpi_ppg_disp_update_spo2(94);//ppg_sensor_sample.spo2);
+                    hpi_ppg_disp_update_spo2(94); // ppg_sensor_sample.spo2);
 
                     scr_ppg_hr_spo2_refresh_counter = 0;
                 }
@@ -946,7 +940,7 @@ void display_screens_thread(void)
                 {
                     // Fetch and update HR
                     hpi_scr_home_hr_display_update(ppg_sensor_sample.hr);
-                    hpi_scr_home_spo2_display_update(94);//(ppg_sensor_sample.spo2);
+                    hpi_scr_home_spo2_display_update(94); //(ppg_sensor_sample.spo2);
                     hr_refresh_counter = 0;
                 }
                 else
@@ -956,7 +950,7 @@ void display_screens_thread(void)
             }
             else if (curr_screen == SCR_PLOT_HRV)
             {
-                if (ppg_sensor_sample.rtor != 0)// && ppg_sensor_sample.rtor != prev_rtor)
+                if (ppg_sensor_sample.rtor != 0) // && ppg_sensor_sample.rtor != prev_rtor)
                 {
                     // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
                     hpi_disp_hrv_draw_plot_rtor((float)((ppg_sensor_sample.rtor)));
@@ -964,12 +958,12 @@ void display_screens_thread(void)
                     prev_rtor = ppg_sensor_sample.rtor;
                 }
             }
-            else if(curr_screen == SCR_PLOT_HRV_SCATTER)
+            else if (curr_screen == SCR_PLOT_HRV_SCATTER)
             {
-                if (ppg_sensor_sample.rtor != 0 )//&& ppg_sensor_sample.rtor != prev_rtor)
+                if (ppg_sensor_sample.rtor != 0) //&& ppg_sensor_sample.rtor != prev_rtor)
                 {
                     // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
-                    hpi_disp_hrv_scatter_draw_plot_rtor((float)((ppg_sensor_sample.rtor)), (float) prev_rtor);
+                    hpi_disp_hrv_scatter_draw_plot_rtor((float)((ppg_sensor_sample.rtor)), (float)prev_rtor);
                     hpi_disp_hrv_scatter_update_rtor(ppg_sensor_sample.rtor);
                     prev_rtor = ppg_sensor_sample.rtor;
                 }

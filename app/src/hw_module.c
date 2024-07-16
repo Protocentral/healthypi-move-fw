@@ -606,18 +606,6 @@ void hw_thread(void)
     }
 #endif
 
-    if (!device_is_ready(maxm86146_dev))
-    {
-        printk("MAX32664 device not found!\n");
-        // return;
-    }
-    else
-    {
-        //struct sensor_value mode_set;
-        //mode_set.val1 = MAX32664_ATTR_OP_MODE;
-        //sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
-    }
-
     if(!device_is_ready(maxm86146_dev))
     {
         printk("MAXM86146 device not found!\n");
@@ -639,7 +627,7 @@ void hw_thread(void)
 
     if (!device_is_ready(acc_dev))
     {
-        printk("LSM6DSO device not ready!\n");
+        LOG_ERR("LSM6DSO device not ready!\n");
         // return 0;
     }
     else
@@ -653,8 +641,7 @@ void hw_thread(void)
 
     if (!pwm_is_ready_dt(&pwm_led0))
     {
-        printk("Error: PWM device %s is not ready\n",
-               pwm_led0.dev->name);
+        LOG_ERR("PWM device %s is not ready\n", pwm_led0.dev->name);
         // return 0;
     }
 
@@ -665,7 +652,7 @@ void hw_thread(void)
     // tspec.tv_sec = curr_time.
     // clock_settime(CLOCK_REALTIME, &tspec);
 
-    //fs_module_init();
+    fs_module_init();
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
@@ -679,10 +666,6 @@ void hw_thread(void)
     //  printk("Initing...\n");
 
     k_sem_give(&sem_hw_inited);
-
-    //ppg_data_start();
-
-    // ppg_thread_create();
 
     // usb_init();
 
