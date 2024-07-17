@@ -1,6 +1,6 @@
 manifest:
   self:
-    path: .
+    path: application
     
   remotes:
     - name: nrf
