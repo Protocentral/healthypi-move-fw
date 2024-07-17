@@ -66,7 +66,7 @@ static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 
 // GPIO Keys and LEDs Device
-static const struct device *const gpio_keys_dev = DEVICE_DT_GET_ANY(gpio_keys);
+const struct device *const gpio_keys_dev = DEVICE_DT_GET(DT_NODELABEL(gpiokeys));
 static const struct pwm_dt_spec pwm_led0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led0));
 
 // PMIC Device Pointers
@@ -131,7 +131,7 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
             LOG_INF("DOWN Key Pressed");
             // k_sem_give(&sem_start_cal);
-            sys_reboot(SYS_REBOOT_COLD);
+            //sys_reboot(SYS_REBOOT_COLD);
             break;
         default:
             break;
@@ -538,11 +538,11 @@ void setup_pmic_callbacks(void)
     }
 
     /* Setup callback for shiphold button press */
-    // static struct gpio_callback event_cb;
+    static struct gpio_callback event_cb;
 
-    // gpio_init_callback(&event_cb, event_callback, BIT(NPM1300_EVENT_SHIPHOLD_PRESS));
+    gpio_init_callback(&event_cb, event_callback, BIT(NPM1300_EVENT_SHIPHOLD_PRESS));
 
-    // mfd_npm1300_add_callback(pmic, &event_cb);
+    mfd_npm1300_add_callback(pmic, &event_cb);
 }
 
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
@@ -590,7 +590,7 @@ void hw_thread(void)
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
-        printk("MAX30001 device not found! Rebooting !");
+        printk("MAX30001 device not found!");// Rebooting !");
         // sys_reboot(SYS_REBOOT_COLD);
     }
     else
@@ -614,7 +614,7 @@ void hw_thread(void)
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
-    // setup_pmic_callbacks();
+    setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
