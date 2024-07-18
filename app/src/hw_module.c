@@ -131,7 +131,7 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
             LOG_INF("DOWN Key Pressed");
             // k_sem_give(&sem_start_cal);
-            //sys_reboot(SYS_REBOOT_COLD);
+            // sys_reboot(SYS_REBOOT_COLD);
             break;
         default:
             break;
@@ -524,10 +524,27 @@ void hw_bpt_get_calib(void)
     sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }*/
 
-static void event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+static volatile bool vbus_connected;
+
+static void pmic_event_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
     printk("Event detected\n");
+
+    if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))
+    {
+        printk("Vbus connected\n");
+        vbus_connected = true;
+    }
+
+    if (pins & BIT(NPM1300_EVENT_VBUS_REMOVED))
+    {
+        printk("Vbus removed\n");
+        vbus_connected = false;
+    }
 }
+
+/* Setup callback for shiphold button press */
+static struct gpio_callback pmic_event_cb;
 
 void setup_pmic_callbacks(void)
 {
@@ -537,12 +554,23 @@ void setup_pmic_callbacks(void)
         return;
     }
 
-    /* Setup callback for shiphold button press */
-    static struct gpio_callback event_cb;
+    gpio_init_callback(&pmic_event_cb, pmic_event_handler,
+                       BIT(NPM1300_EVENT_SHIPHOLD_PRESS) | BIT(NPM1300_EVENT_SHIPHOLD_RELEASE) |
+                           BIT(NPM1300_EVENT_VBUS_DETECTED) |
+                           BIT(NPM1300_EVENT_VBUS_REMOVED));
 
-    gpio_init_callback(&event_cb, event_callback, BIT(NPM1300_EVENT_SHIPHOLD_PRESS));
+    mfd_npm1300_add_callback(pmic, &pmic_event_cb);
 
-    mfd_npm1300_add_callback(pmic, &event_cb);
+    /* Initialise vbus detection status */
+    struct sensor_value val;
+    int ret = sensor_attr_get(charger, SENSOR_CHAN_CURRENT, SENSOR_ATTR_UPPER_THRESH, &val);
+
+    if (ret < 0)
+    {
+        return false;
+    }
+
+    vbus_connected = (val.val1 != 0) || (val.val2 != 0);
 }
 
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
@@ -590,7 +618,7 @@ void hw_thread(void)
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
-        printk("MAX30001 device not found!");// Rebooting !");
+        printk("MAX30001 device not found!"); // Rebooting !");
         // sys_reboot(SYS_REBOOT_COLD);
     }
     else
