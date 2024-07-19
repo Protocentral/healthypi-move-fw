@@ -2,7 +2,6 @@
 #include <zephyr/drivers/spi.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/led.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
@@ -67,17 +66,14 @@ const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 
 // GPIO Keys and LEDs Device
 const struct device *const gpio_keys_dev = DEVICE_DT_GET(DT_NODELABEL(gpiokeys));
-static const struct pwm_dt_spec pwm_led0 = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led0));
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
 static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
-static const struct device *leds = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_leds));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
-
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
 uint8_t global_batt_level = 0;
@@ -662,12 +658,6 @@ void hw_thread(void)
             // return;
             printk("Error setting sampling frequency\n");
         }
-    }
-
-    if (!pwm_is_ready_dt(&pwm_led0))
-    {
-        LOG_ERR("PWM device %s is not ready\n", pwm_led0.dev->name);
-        // return 0;
     }
 
     rtc_get_time(rtc_dev, &curr_time);
