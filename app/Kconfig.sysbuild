@@ -1,0 +1,13 @@
+# Copyright 2023 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
+
+source "share/sysbuild/Kconfig"
+
+config NET_CORE_BOARD
+	string
+	default "healthypi_move/nrf5340/cpunet" if "$(BOARD)" = "healthypi_move"
+
+config NET_CORE_IMAGE_HCI_IPC
+	bool "HCI IPC image on network core"
+	default y
+	depends on NET_CORE_BOARD != ""

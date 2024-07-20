@@ -62,6 +62,7 @@ int main(void)
 		printk("Bluetooth init failed (err %d)\n", err);
 		return err;
 	}
+	printk("Bluetooth initialized\n");
 
 	bt_ready();
 	
