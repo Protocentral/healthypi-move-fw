@@ -27,6 +27,7 @@ extern lv_obj_t *ui_label_min;
 extern lv_obj_t *ui_label_date;
 
 extern lv_obj_t *ui_step_group;
+extern lv_obj_t *ui_dailymission_group;
 
 extern struct rtc_time global_system_time;
 extern int curr_screen;
@@ -90,9 +91,13 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(spo2_display, NULL, LV_ALIGN_TOP_MID, 60, 115);
     lv_obj_set_style_border_opa(spo2_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-     ui_step_group = create_ui_steps(scr_clock_small);
+    ui_step_group = create_ui_steps(scr_clock_small);
     lv_obj_align_to(ui_step_group, NULL, LV_ALIGN_TOP_MID, 0, 170);
     lv_obj_set_style_border_opa(ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_dailymission_group = ui_dailymissiongroup_create(scr_clock_small);
+    lv_obj_align_to(ui_dailymission_group, NULL, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_set_style_border_opa(ui_dailymission_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 

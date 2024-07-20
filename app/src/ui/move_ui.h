@@ -54,6 +54,8 @@ lv_obj_t *create_ui_steps(lv_obj_t *comp_parent);
 lv_obj_t *create_ui_hr_button(lv_obj_t *comp_parent);
 lv_obj_t *create_ui_spo2_button(lv_obj_t *comp_parent);
 
+lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent);
+
 void draw_bg(lv_obj_t *parent);
 
 LV_IMG_DECLARE(heart);

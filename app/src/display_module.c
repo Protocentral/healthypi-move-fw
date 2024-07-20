@@ -41,6 +41,8 @@ lv_obj_t *ui_label_date;
 
 lv_obj_t *ui_step_group;
 
+lv_obj_t *ui_dailymission_group;
+
 lv_obj_t *btn_hr_disp;
 lv_obj_t *btn_spo2_disp;
 
@@ -865,14 +867,14 @@ void display_screens_thread(void)
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
-    // draw_scr_clock_small(SCROLL_RIGHT);
+    draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home();
     // draw_scr_eda();
-    draw_scr_hrv_scatter(SCROLL_RIGHT);
+    //draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
