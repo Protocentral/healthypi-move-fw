@@ -10,7 +10,7 @@
 
 / {
 	model = "ProtoCentral HealthyPi Move NRF5340 Network";
-	compatible = "nordic,healthypi-move-nrf5340-cpunet";
+	compatible = "protocentral,healthypi-move-nrf5340-cpunet";
 
 	chosen {
 		zephyr,console = &uart0;

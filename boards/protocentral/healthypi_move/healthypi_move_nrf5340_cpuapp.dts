@@ -6,11 +6,11 @@
 
 /dts-v1/;
 #include <nordic/nrf5340_cpuapp_qkaa.dtsi>
-#include "healthypi_move_nrf5340_cpuapp_common.dtsi"
+#include "nrf5340_cpuapp_common.dtsi"
 
 / {
 	model = "HealthyPi Move NRF5340 Application";
-	compatible = "nordic,healthypi-move-nrf5340-cpuapp";
+	compatible = "protocentral,healthypi-move-nrf5340-cpuapp";
 
 	chosen {
 		zephyr,sram = &sram0_image;

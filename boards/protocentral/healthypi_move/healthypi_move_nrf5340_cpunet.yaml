@@ -1,4 +1,4 @@
-identifier: healthypi_move_nrf5340_cpunet
+identifier: healthypi_move/nrf5340/cpunet
 name: HealthyPi-Move-NRF5340-network-MCU
 type: mcu
 arch: arm
@@ -11,3 +11,4 @@ flash: 256
 supported:
   - watchdog
   - gpio
+vendor: protocentral
