@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "healthypi_move_nrf5340_cpuapp_common-pinctrl.dtsi"
+#include "nrf5340_cpuapp_common-pinctrl.dtsi"
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <dt-bindings/regulator/npm1300.h>
 
@@ -397,4 +397,4 @@ zephyr_udc0: &usbd {
 };
 
 /* Include partition configuration file */
-#include "healthypi_move_nrf5340_cpuapp_partition_conf.dtsi"
+#include "nrf5340_cpuapp_partition_conf.dtsi"

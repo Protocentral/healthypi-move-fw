@@ -1,4 +1,4 @@
-identifier: healthypi_move_nrf5340_cpuapp
+identifier: healthypi_move/nrf5340/cpuapp
 name: HealthyPi-Move-NRF5340-application-MCU
 type: mcu
 arch: arm
@@ -18,3 +18,4 @@ supported:
   - usb_device
   - netif:openthread
   - gpio
+vendor: protocentral
