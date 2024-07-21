@@ -83,15 +83,15 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true );
     ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, (global_system_time.tm_year+2000));
 
-    lv_obj_t *hr_display = create_ui_hr_button(scr_clock_small);
+    lv_obj_t *hr_display = ui_hr_button_create(scr_clock_small);
     lv_obj_align_to(hr_display, NULL, LV_ALIGN_TOP_MID, -60, 115);
     lv_obj_set_style_border_opa(hr_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_t *spo2_display = create_ui_spo2_button(scr_clock_small);
+    lv_obj_t *spo2_display = ui_spo2_button_create(scr_clock_small);
     lv_obj_align_to(spo2_display, NULL, LV_ALIGN_TOP_MID, 60, 115);
     lv_obj_set_style_border_opa(spo2_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_step_group = create_ui_steps(scr_clock_small);
+    ui_step_group = ui_steps_button_create(scr_clock_small);
     lv_obj_align_to(ui_step_group, NULL, LV_ALIGN_TOP_MID, 0, 170);
     lv_obj_set_style_border_opa(ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 

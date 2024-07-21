@@ -74,7 +74,6 @@ static void sensor_processing_callback(int result, uint8_t *buf,
                         ppg_sensor_sample.steps_run = edata->steps_run;
                         ppg_sensor_sample.steps_walk = edata->steps_walk;
                         
-
                         //printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
                         // ppg_sensor_sample.bp_sys = edata->bpt_sys;
                         // ppg_sensor_sample.bp_dia = edata->bpt_dia;

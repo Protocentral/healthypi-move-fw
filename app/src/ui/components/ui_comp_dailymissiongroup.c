@@ -36,9 +36,11 @@
 
 // COMPONENT dailymissiongroup
 
+lv_obj_t *cui_daily_mission_arc;
+lv_obj_t *cui_daily_mission_arc_2;
+
 lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent)
 {
-
     lv_obj_t *cui_dailymissiongroup;
     cui_dailymissiongroup = lv_obj_create(comp_parent);
     lv_obj_set_width(cui_dailymissiongroup, 240);
@@ -48,10 +50,9 @@ lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent)
     lv_obj_set_style_bg_color(cui_dailymissiongroup, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(cui_dailymissiongroup, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_t *cui_daily_mission_arc;
     cui_daily_mission_arc = lv_arc_create(cui_dailymissiongroup);
-   
-    lv_obj_set_size(cui_daily_mission_arc, 230, 230); 
+
+    lv_obj_set_size(cui_daily_mission_arc, 230, 230);
     lv_obj_set_align(cui_daily_mission_arc, LV_ALIGN_CENTER);
     lv_obj_add_flag(cui_daily_mission_arc, LV_OBJ_FLAG_ADV_HITTEST); /// Flags
     lv_arc_set_value(cui_daily_mission_arc, 25);
@@ -64,13 +65,12 @@ lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent)
     lv_obj_set_style_arc_opa(cui_daily_mission_arc, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc, true, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
-    lv_obj_set_style_arc_width(cui_daily_mission_arc, 7, LV_PART_MAIN); // Changes background arc width
-    lv_obj_set_style_arc_width(cui_daily_mission_arc, 7, LV_PART_INDICATOR); // Changes set part width 
+    lv_obj_set_style_arc_width(cui_daily_mission_arc, 7, LV_PART_MAIN);      // Changes background arc width
+    lv_obj_set_style_arc_width(cui_daily_mission_arc, 7, LV_PART_INDICATOR); // Changes set part width
 
     lv_obj_set_style_bg_color(cui_daily_mission_arc, lv_color_hex(0xFFFFFF), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(cui_daily_mission_arc, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
 
-    lv_obj_t *cui_daily_mission_arc_2;
     cui_daily_mission_arc_2 = lv_arc_create(cui_dailymissiongroup);
 
     lv_obj_set_size(cui_daily_mission_arc_2, 230, 230);
@@ -86,11 +86,20 @@ lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent)
     lv_obj_set_style_arc_opa(cui_daily_mission_arc_2, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc_2, true, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
-    lv_obj_set_style_arc_width(cui_daily_mission_arc_2, 7, LV_PART_MAIN); // Changes background arc width
+    lv_obj_set_style_arc_width(cui_daily_mission_arc_2, 7, LV_PART_MAIN);      // Changes background arc width
     lv_obj_set_style_arc_width(cui_daily_mission_arc_2, 7, LV_PART_INDICATOR); // Changes set part width
 
     lv_obj_set_style_bg_color(cui_daily_mission_arc_2, lv_color_hex(0xFFFFFF), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(cui_daily_mission_arc_2, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
 
     return cui_dailymissiongroup;
+}
+
+void ui_dailymissiongroup_update(uint32_t steps_walk, uint32_t steps_run)
+{
+    if (cui_daily_mission_arc == NULL || cui_daily_mission_arc_2 == NULL)
+        return;
+
+    lv_arc_set_value(cui_daily_mission_arc, steps_walk);
+    lv_arc_set_value(cui_daily_mission_arc_2, steps_run);
 }
