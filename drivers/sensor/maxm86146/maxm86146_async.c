@@ -119,15 +119,15 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
 
                     *hr = (hr_val / 10);
 
-                    uint16_t spo2_val = (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 11 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
-                    spo2_val |= (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 12 + MAXM86146_SENSOR_DATA_OFFSET];
-
-                    *spo2 = (spo2_val / 10);
-
                     uint16_t rtor_val = (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 4 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
                     rtor_val |= (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 5 + MAXM86146_SENSOR_DATA_OFFSET];
 
                     *rtor = (rtor_val / 10);
+
+                    uint16_t spo2_val = (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 44 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
+                    spo2_val |= (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 45 + MAXM86146_SENSOR_DATA_OFFSET];
+
+                    *spo2 = (spo2_val / 10);
 
                     uint32_t walk_steps = (uint32_t)(buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 8 + MAXM86146_SENSOR_DATA_OFFSET] << 24 
                     | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 9 + MAXM86146_SENSOR_DATA_OFFSET] << 16 
