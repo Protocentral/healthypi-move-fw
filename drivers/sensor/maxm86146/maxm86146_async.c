@@ -7,27 +7,26 @@ LOG_MODULE_REGISTER(MAXM86146_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 int maxm86146_get_fifo_count(const struct device *dev)
 {
-	const struct maxm86146_config *config = dev->config;
-	uint8_t rd_buf[2] = {0x00, 0x00};
-	uint8_t wr_buf[2] = {0x12, 0x00};
+    const struct maxm86146_config *config = dev->config;
+    uint8_t rd_buf[2] = {0x00, 0x00};
+    uint8_t wr_buf[2] = {0x12, 0x00};
 
-	uint8_t fifo_count;
-	gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_USEC(300));
+    uint8_t fifo_count;
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
 
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
-	gpio_pin_set_dt(&config->mfio_gpio, 1);
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	fifo_count = rd_buf[1];
-	return (int)fifo_count;
+    fifo_count = rd_buf[1];
+    return (int)fifo_count;
 }
 
-
 static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
-                                        uint32_t *num_samples, uint16_t *spo2, uint16_t *hr, uint16_t *rtor, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run,
-                                        uint32_t *steps_walk)
+                                        uint32_t *num_samples, uint16_t *spo2, uint16_t *hr, uint16_t *rtor, uint8_t *scd_state, uint8_t *activity_class,
+                                        uint32_t *steps_run, uint32_t *steps_walk)
 {
     struct maxm86146_data *data = dev->data;
     const struct maxm86146_config *config = dev->config;
@@ -129,6 +128,20 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
                     rtor_val |= (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 5 + MAXM86146_SENSOR_DATA_OFFSET];
 
                     *rtor = (rtor_val / 10);
+
+                    uint32_t walk_steps = (uint32_t)(buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 8 + MAXM86146_SENSOR_DATA_OFFSET] << 24 
+                    | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 9 + MAXM86146_SENSOR_DATA_OFFSET] << 16 
+                    | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 10 + MAXM86146_SENSOR_DATA_OFFSET] << 8 
+                    | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 11 + MAXM86146_SENSOR_DATA_OFFSET]);
+
+                    *steps_walk = walk_steps;
+
+                    uint32_t run_steps = (uint32_t)(buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 12 + MAXM86146_SENSOR_DATA_OFFSET] << 24
+                    | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 13 + MAXM86146_SENSOR_DATA_OFFSET] << 16
+                    | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 14 + MAXM86146_SENSOR_DATA_OFFSET] << 8
+                    | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 15 + MAXM86146_SENSOR_DATA_OFFSET]);
+
+                    *steps_run = run_steps;
                 }
             }
         }
@@ -141,9 +154,9 @@ int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     int rc;
     uint8_t *buf;
     uint32_t buf_len;
-    
-    //struct maxm86146_encoded_data *edata;
-    //struct maxm86146_enc_calib_data *calib_data;
+
+    // struct maxm86146_encoded_data *edata;
+    // struct maxm86146_enc_calib_data *calib_data;
 
     struct maxm86146_encoded_data *m_edata;
 

@@ -65,7 +65,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     ui_label_min = lv_label_create(scr_clock_small);
     lv_obj_set_width(ui_label_min, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(ui_label_min, LV_SIZE_CONTENT); /// 1
-    lv_obj_align_to(ui_label_min, ui_label_hour, LV_ALIGN_OUT_RIGHT_TOP, 20, 0);
+    lv_obj_align_to(ui_label_min, ui_label_hour, LV_ALIGN_OUT_RIGHT_TOP, 25, 0);
     lv_label_set_text(ui_label_min, "--");
     lv_obj_set_style_text_color(ui_label_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_label_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);

@@ -54,7 +54,7 @@ static void sensor_processing_callback(int result, uint8_t *buf,
 
         const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
 
-        struct hpi_ppg_sensor_data_t sensor_sample;
+        struct hpi_ppg_sensor_data_t ppg_sensor_sample;
         // printk("NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
         {
@@ -62,20 +62,26 @@ static void sensor_processing_callback(int result, uint8_t *buf,
 
                 for (int i = 0; i < n_samples; i++) // edata->num_samples; i++)
                 {
-                        sensor_sample.raw_red = edata->red_samples[i];
-                        sensor_sample.raw_ir = edata->ir_samples[i];
-                        sensor_sample.raw_green = edata->green_samples[i];
+                        ppg_sensor_sample.raw_red = edata->red_samples[i];
+                        ppg_sensor_sample.raw_ir = edata->ir_samples[i];
+                        ppg_sensor_sample.raw_green = edata->green_samples[i];
 
-                        sensor_sample.hr = edata->hr;
-                        sensor_sample.spo2 = edata->spo2;
-                        sensor_sample.rtor = edata->rtor;
-                        sensor_sample.scd_state = edata->scd_state;
-                        // sensor_sample.bp_sys = edata->bpt_sys;
-                        // sensor_sample.bp_dia = edata->bpt_dia;
-                        // sensor_sample.bpt_status = edata->bpt_status;
-                        // sensor_sample.bpt_progress = edata->bpt_progress;
+                        ppg_sensor_sample.hr = edata->hr;
+                        ppg_sensor_sample.spo2 = edata->spo2;
+                        ppg_sensor_sample.rtor = edata->rtor;
+                        ppg_sensor_sample.scd_state = edata->scd_state;
 
-                        k_msgq_put(&q_ppg_sample, &sensor_sample, K_MSEC(1));
+                        ppg_sensor_sample.steps_run = edata->steps_run;
+                        ppg_sensor_sample.steps_walk = edata->steps_walk;
+                        
+
+                        //printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
+                        // ppg_sensor_sample.bp_sys = edata->bpt_sys;
+                        // ppg_sensor_sample.bp_dia = edata->bpt_dia;
+                        // ppg_sensor_sample.bpt_status = edata->bpt_status;
+                        // ppg_sensor_sample.bpt_progress = edata->bpt_progress;
+
+                        k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
                 }
                 // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
         }

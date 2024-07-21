@@ -472,7 +472,7 @@ lv_obj_t *create_ui_spo2_button(lv_obj_t *comp_parent)
     // lv_obj_set_style_bg_img_src(cui_buttonround, &heart, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_color(btn_spo2_disp, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_opa(btn_spo2_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED | LV_STATE_DEFAULT);
-    lv_obj_set_style_outline_width(btn_spo2_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_width(btn_spo2_disp, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(btn_spo2_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_shadow_color(btn_spo2_disp, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_shadow_opa(btn_spo2_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED);
