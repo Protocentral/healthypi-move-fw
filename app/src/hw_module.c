@@ -125,7 +125,9 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             break;
         case INPUT_KEY_DOWN:
             // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
-            LOG_INF("DOWN Key Pressed");
+            printk("DOWN Key Pressed");
+            printk("Entering Ship Mode\n");
+            regulator_parent_ship_mode(regulators);
             // k_sem_give(&sem_start_cal);
             // sys_reboot(SYS_REBOOT_COLD);
             break;
