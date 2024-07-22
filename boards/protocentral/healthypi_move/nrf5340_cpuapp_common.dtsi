@@ -18,7 +18,8 @@
 		zephyr,bt-hci-ipc = &ipc0;
 		nordic,802154-spinel-ipc = &ipc0;
 		zephyr,ieee802154 = &ieee802154;
-		zephyr,display = &gc9a01; //&st7789v;
+		//zephyr,display = &gc9a01; //&st7789v;
+		zephyr,display= &sh8601a;
 		nordic,pm-ext-flash = &w25q01jv;
 	};
 
@@ -308,7 +309,7 @@
 	pinctrl-1 = <&spi4_sleep>;
 	pinctrl-names = "default", "sleep";
 
-	gc9a01: gc9a01@0 {
+	/*gc9a01: gc9a01@0 {
 		compatible = "waveshare,gc9a01a";
 		spi-max-frequency = <DT_FREQ_M(45)>;
 		reg = <0>;
@@ -319,6 +320,23 @@
 		//backlight-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
 		width = <240>;
 		height = <240>;
+		pixel-format = <0>;//<GC9A01A_PIXEL_FORMAT_RGB565>;
+		display-inversion;
+		rotation = <0>;
+		status = "okay";
+	};*/
+
+	sh8601a: sh8601a@0 {
+		compatible = "shengetech,sh8601a";
+		spi-max-frequency = <DT_FREQ_M(45)>;
+		reg = <0>;
+		cmd-data-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		//bl-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
+		
+		//backlight-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
+		width = <480>;
+		height = <480>;
 		pixel-format = <0>;//<GC9A01A_PIXEL_FORMAT_RGB565>;
 		display-inversion;
 		rotation = <0>;

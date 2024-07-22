@@ -17,5 +17,6 @@ module-str = display
 source "subsys/logging/Kconfig.template.log_config"
 
 rsource "Kconfig.gc9a01a"
+rsource "Kconfig.sh8601a"
 
 endif

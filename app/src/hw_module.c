@@ -605,7 +605,7 @@ void hw_thread(void)
     if (npm_fuel_gauge_init(charger) < 0)
     {
         printk("Could not initialise fuel gauge.\n");
-        return 0;
+        //return 0;
     }
 
     // regulator_disable(sensor_brd_ldsw);
@@ -623,9 +623,9 @@ void hw_thread(void)
     {
         struct sensor_value ecg_mode_set;
 
-        ecg_mode_set.val1 = 1;
-        sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-        sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
+        //ecg_mode_set.val1 = 1;
+        //sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
+        //sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
 
@@ -635,9 +635,9 @@ void hw_thread(void)
     }
     else
     {
-        struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
-        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        //struct sensor_value mode_set;
+        //mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
     setup_pmic_callbacks();
@@ -665,7 +665,7 @@ void hw_thread(void)
     rtc_get_time(rtc_dev, &curr_time);
     printk("Current time: %d:%d:%d %d/%d/%d \n", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    fs_module_init();
+    //fs_module_init();
 
     // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
     /*struct sensor_value mode_set;
@@ -693,9 +693,9 @@ void hw_thread(void)
 
         // fetch_and_display(acc_dev);
 
-        npm_fuel_gauge_update(charger);
-        rtc_get_time(rtc_dev, &global_system_time);
-        send_usb_cdc("H ", 1);
+        //npm_fuel_gauge_update(charger);
+        //rtc_get_time(rtc_dev, &global_system_time);
+        //send_usb_cdc("H ", 1);
 
         k_sleep(K_MSEC(3000));
     }

@@ -1,5 +1,10 @@
 {
     "nrf-connect.applications": [
         "${workspaceFolder}/app"
-    ]
+    ],
+    "cmake.configureOnOpen": false,
+    "files.associations": {
+        "log.h": "c",
+        "display.h": "c"
+    }
 }

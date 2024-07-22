@@ -828,16 +828,20 @@ void display_screens_thread(void)
     display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
     if (!device_is_ready(display_dev))
     {
-        // LOG_ERR("Device not ready, aborting test");
-        return;
+        LOG_ERR("Device not ready, aborting test");
+        //return;
     }
 
-    display_set_brightness(display_dev, 20);
+    printk("Display device: %s", display_dev->name);
+
+    //display_set_brightness(display_dev, 20);
 
     if (!device_is_ready(touch_dev))
     {
-        LOG_WRN("Device touch not ready.");
+        LOG_ERR("Device touch not ready.");
     }
+
+    printk("Touch device: %s", touch_dev->name);
 
     // Init all styles globally
     display_init_styles();

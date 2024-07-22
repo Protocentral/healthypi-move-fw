@@ -1,0 +1,11 @@
+# SH8601A display driver configuration options
+
+# SPDX-License-Identifier: Apache-2.0
+
+config SH8601A
+	bool "SH8601A display driver"
+	default y
+	depends on DT_HAS_SHENGETECH_SH8601A_ENABLED
+	select SPI
+	help
+	  Enable driver for SH8601A display driver.
