@@ -868,15 +868,15 @@ void display_screens_thread(void)
     // draw_scr_home();
     // draw_scr_splash();
     // draw_scr_vitals_home();
-    // draw_scr_clockface(SCROLL_RIGHT);
-    // draw_scr_clock_small(SCROLL_RIGHT);
+    //draw_scr_clockface(SCROLL_RIGHT);
+    draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home();
     // draw_scr_eda();
-    draw_scr_hrv_scatter(SCROLL_RIGHT);
+    //draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
@@ -1083,7 +1083,7 @@ void display_screens_thread(void)
             }
         }
 
-        if (curr_screen == SCR_CLOCK || curr_screen == SCR_CLOCK_SMALL)
+        if (curr_screen == SCR_CLOCK) //|| curr_screen == SCR_CLOCK_SMALL)
         {
             if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
             {
@@ -1188,7 +1188,7 @@ void display_screens_thread(void)
     }
 }
 
-#define DISPLAY_SCREENS_THREAD_STACKSIZE 32768
+#define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

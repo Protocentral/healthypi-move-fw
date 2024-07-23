@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2019-2020 Nordic Semiconductor ASA
  *
@@ -19,7 +20,7 @@
 		nordic,802154-spinel-ipc = &ipc0;
 		zephyr,ieee802154 = &ieee802154;
 		//zephyr,display = &gc9a01; //&st7789v;
-		zephyr,display= &sh8601a;
+		zephyr,display= &sh8601;
 		nordic,pm-ext-flash = &w25q01jv;
 	};
 
@@ -64,6 +65,7 @@
 	};
 
 };
+
 
 / {
 	lvgl_pointer_input: lvgl_pointer {
@@ -326,18 +328,14 @@
 		status = "okay";
 	};*/
 
-	sh8601a: sh8601a@0 {
-		compatible = "shengetech,sh8601a";
-		spi-max-frequency = <DT_FREQ_M(45)>;
+	sh8601: sh8601@0 {
+		compatible = "sitronix,sh8601";
+		spi-max-frequency = <DT_FREQ_M(10)>;
 		reg = <0>;
-		cmd-data-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
-		//bl-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
-		
-		//backlight-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
-		width = <480>;
-		height = <480>;
-		pixel-format = <0>;//<GC9A01A_PIXEL_FORMAT_RGB565>;
+		width = <240>;
+		height = <240>;
+		pixel-format = <0>;
 		display-inversion;
 		rotation = <0>;
 		status = "okay";

@@ -5,35 +5,23 @@
  *
  * SH8601 AMOLED display driver.
  */
-#ifndef ZEPHYR_DRIVERS_DISPLAY_DISPLAY_GC9A01A_H_
-#define ZEPHYR_DRIVERS_DISPLAY_DISPLAY_GC9A01A_H_
+#ifndef ZEPHYR_DRIVERS_DISPLAY_DISPLAY_SH8601_H_
+#define ZEPHYR_DRIVERS_DISPLAY_DISPLAY_SH8601_H_
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/pwm.h>
 #include <zephyr/sys/util.h>
 
 /*Configuration data struct.*/
-struct sh8601a_config
+struct sh8601_config
 {
   struct spi_dt_spec spi;
-  struct gpio_dt_spec cmd_data;
   struct gpio_dt_spec reset;
-  struct pwm_dt_spec backlight;
-  struct gpio_dt_spec bl_gpio;
   uint8_t pixel_format;
   uint16_t rotation;
   uint16_t x_resolution;
   uint16_t y_resolution;
   bool inversion;
-  const void *regs;
-  int (*regs_init_fn)(const struct device *dev);
-};
-
-/* GC9A01A registers to be intitialized*/
-struct sh8601a_regs
-{
-  uint8_t reg_arr[222];
 };
 
 #define SH8601_MAXWIDTH 480  ///< SH8601 max TFT width
@@ -151,7 +139,7 @@ enum
 };
 
 /*
-static const uint8_t sh8601a_regs[] =
+static const uint8_t sh8601_regs[] =
     {
         BEGIN_WRITE,
 
@@ -198,10 +186,7 @@ static const uint8_t sh8601a_regs[] =
         DELAY, 10}
 };
 */
-
-int sh8601a_regs_init(const struct device *dev);
-
-int sh8601a_transmit(const struct device *dev, uint8_t cmd,
+int sh8601_transmit(const struct device *dev, uint8_t cmd,
                      const void *tx_data, size_t tx_len);
 
-#endif /* ZEPHYR_DRIVERS_DISPLAY_DISPLAY_GC9A01A_H_ */
+#endif

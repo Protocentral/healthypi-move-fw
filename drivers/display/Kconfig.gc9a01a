@@ -4,7 +4,7 @@
 
 config GC9A01A
 	bool "GC9A01A display driver"
-	default y
+	default n
 	depends on DT_HAS_WAVESHARE_GC9A01A_ENABLED
 	select SPI
 	select PWM
