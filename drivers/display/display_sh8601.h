@@ -186,7 +186,7 @@ static const uint8_t sh8601_regs[] =
         DELAY, 10}
 };
 */
-int sh8601_transmit(const struct device *dev, uint8_t cmd,
+int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd,
                      const void *tx_data, size_t tx_len);
 
 #endif
