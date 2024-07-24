@@ -869,7 +869,7 @@ void display_screens_thread(void)
     // draw_scr_splash();
     // draw_scr_vitals_home();
     //draw_scr_clockface(SCROLL_RIGHT);
-    draw_scr_clock_small(SCROLL_RIGHT);
+    //draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
@@ -1182,7 +1182,7 @@ void display_screens_thread(void)
             m_disp_inact_refresh_counter++;
         }
 
-        lv_task_handler();
+        //lv_task_handler();
 
         k_sleep(K_MSEC(DISP_THREAD_REFRESH_INT_MS));
     }

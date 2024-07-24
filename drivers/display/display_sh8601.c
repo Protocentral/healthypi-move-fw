@@ -34,18 +34,38 @@ struct sh8601_data
  * @return 0 on success, errno otherwise.
  */
 int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_data,
-					 size_t tx_len)
+						size_t tx_len)
 {
 	const struct sh8601_config *config = dev->config;
 
 	int r;
-	struct spi_buf tx_buf;
-	struct spi_buf_set tx_bufs = {.buffers = &tx_buf, .count = 1U};
+	struct spi_buf tx_buf[3];
+	struct spi_buf_set tx_bufs = {.buffers = tx_buf, .count = 2U};
 
 	// Send Pre command
-	uint8_t pre_cmd[2] = {0x02, 0x00};
-	tx_buf.buf = &pre_cmd;
-	tx_buf.len = 2U;
+	uint8_t pre_cmd[4] = {0x02,00};
+	tx_buf[0].buf = &pre_cmd;
+	tx_buf[0].len = 2U;
+
+	uint8_t cmd_buf[2] = {cmd,00};
+	tx_buf[1].buf = &cmd_buf;
+	tx_buf[1].len = 2U;
+
+	/* send data (if any) */
+	if (tx_data != NULL)
+	{
+		tx_buf[2].buf = (void *)tx_data;
+		tx_buf[2].len = tx_len;
+
+		tx_bufs.count = 3U;
+
+		// gpio_pin_set_dt(&config->cmd_data, SH8601_DATA);
+		//r = spi_write_dt(&config->spi, &tx_bufs);
+		//if (r < 0)
+		//{
+		//	return r;
+		//}
+	}
 
 	// gpio_pin_set_dt(&config->cmd_data, SH8601_CMD);
 	r = spi_write_dt(&config->spi, &tx_bufs);
@@ -55,7 +75,7 @@ int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_da
 	}
 
 	/* send command */
-	tx_buf.buf = &cmd;
+	/*(tx_buf.buf = &cmd;
 	tx_buf.len = 1U;
 
 	// gpio_pin_set_dt(&config->cmd_data, SH8601_CMD);
@@ -63,10 +83,10 @@ int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_da
 	if (r < 0)
 	{
 		return r;
-	}
+	}*/
 
 	/* send data (if any) */
-	if (tx_data != NULL)
+	/*if (tx_data != NULL)
 	{
 		tx_buf.buf = (void *)tx_data;
 		tx_buf.len = tx_len;
@@ -77,7 +97,7 @@ int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_da
 		{
 			return r;
 		}
-	}
+	}*/
 
 	return 0;
 }
@@ -166,7 +186,7 @@ static int sh8601_display_blanking_on(const struct device *dev)
  *
  */
 static int sh8601_set_pixel_format(const struct device *dev,
-									const enum display_pixel_format pixel_format)
+								   const enum display_pixel_format pixel_format)
 {
 	struct sh8601_data *data = dev->data;
 	uint8_t bytes_per_pixel = 3;
@@ -209,7 +229,7 @@ static int sh8601_set_pixel_format(const struct device *dev,
  * @return 0 when succesful, errno otherwise.
  */
 static int sh8601_set_orientation(const struct device *dev,
-								   const enum display_orientation orientation)
+								  const enum display_orientation orientation)
 {
 	struct sh8601_data *data = dev->data;
 
@@ -252,7 +272,7 @@ static int sh8601_set_orientation(const struct device *dev,
  * @return 0 when succesful, errno otherwise.
  */
 static int sh8601_set_brightness(const struct device *dev,
-								  const uint8_t brightness)
+								 const uint8_t brightness)
 {
 
 	const struct sh8601_config *config = dev->config;
@@ -316,7 +336,7 @@ static int sh8601_configure(const struct device *dev)
 
 	if (config->inversion)
 	{
-		//r = sh8601_transmit(dev, SH8601_INVON, NULL, 0U); // Display inversion mode.
+		// r = sh8601_transmit(dev, SH8601_INVON, NULL, 0U); // Display inversion mode.
 		if (r < 0)
 		{
 			return r;
@@ -339,7 +359,7 @@ static int sh8601_init(const struct device *dev)
 	if (!spi_is_ready_dt(&config->spi))
 	{
 		LOG_ERR("SPI device is not ready");
-		//return -ENODEV;
+		// return -ENODEV;
 	}
 
 	if (config->reset.port != NULL)
@@ -347,14 +367,14 @@ static int sh8601_init(const struct device *dev)
 		if (!device_is_ready(config->reset.port))
 		{
 			LOG_ERR("Reset GPIO device not ready");
-			//return -ENODEV;
+			// return -ENODEV;
 		}
 
 		r = gpio_pin_configure_dt(&config->reset, GPIO_OUTPUT_INACTIVE);
 		if (r < 0)
 		{
 			LOG_ERR("Could not configure reset GPIO (%d)", r);
-			//return r;
+			// return r;
 		}
 	}
 
@@ -367,8 +387,8 @@ static int sh8601_init(const struct device *dev)
 	uint8_t args[1] = {0};
 	uint8_t args2[2] = {0};
 
-	//Init sequence
-		
+	// Init sequence
+
 	args2[0] = 0x5A;
 	args2[1] = 0x5A;
 	r = sh8601_transmit_cmd(dev, 0xC0, args2, 2U);
@@ -377,15 +397,15 @@ static int sh8601_init(const struct device *dev)
 	args[0] = 0x01;
 	r = sh8601_transmit_cmd(dev, 0xE4, args, 1U);
 
-	args[0]=0x04;
-	r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
+	//args[0]=0x04;
+	//r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
 
 	uint8_t args14[14] = {0x01,0x07,0x00,0x64,0x00,0xFF,0x03,0x04,0x01,0x38,0x1D,0x61,0x00,0x7C};
 	r = sh8601_transmit_cmd(dev, 0xBD, args14, 14U);
-	
+
 	r = sh8601_send_cmd(dev, SH8601_C_SLPOUT);
 	k_msleep(SH8601_SLPOUT_DELAY);
-	
+
 	uint8_t args4[4]={0x00,0x00,0x01,0x85};
 	r = sh8601_transmit_cmd(dev, 0x2A, args4, 4U);
 	r=sh8601_transmit_cmd(dev, 0x2B, args4, 4U);
@@ -399,8 +419,13 @@ static int sh8601_init(const struct device *dev)
 	args[0]=0x77;
 	r=sh8601_transmit_cmd(dev, 0x3A, args, 1U);
 
+	//args[0]=0x04;
+	//r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
+
 	k_msleep(25);
-/*	
+	r = sh8601_send_cmd(dev, SH8601_C_DISPON);
+	
+/*
 	r = sh8601_send_cmd(dev, SH8601_C_NORON);
 	r = sh8601_send_cmd(dev, SH8601_C_INVOFF);
 	args[0] = 0x05;
@@ -415,7 +440,31 @@ static int sh8601_init(const struct device *dev)
 	k_sleep(K_MSEC(10));
 */
 
+	
+/*	r = sh8601_send_cmd(dev, SH8601_C_SLPOUT);
+	k_msleep(SH8601_SLPOUT_DELAY);
+	k_msleep(120);
+
+	uint8_t args4[4] = {0x00, 0x00, 0x01, 0xC5};
+	r = sh8601_transmit_cmd(dev, 0x2A, args4, 4U);
+	r = sh8601_transmit_cmd(dev, 0x2B, args4, 4U);
+	args2[0] = 0x00;
+	args2[1] = 0x0A;
+	r = sh8601_transmit_cmd(dev, 0x44, args2, 2U);
+	args[0] = 0x00;
+	r = sh8601_transmit_cmd(dev, 0x35, args, 1U);
+	args[0] = 0x55;
+	r = sh8601_transmit_cmd(dev, 0x3A, args, 1U);
+	args[0] = 0x20;
+	r = sh8601_transmit_cmd(dev, 0x53, args, 1U);
+	args[0] = 0x77;
+	r = sh8601_transmit_cmd(dev, 0x3A, args, 1U);
+	args[0] = 0x80;
+	r = sh8601_transmit_cmd(dev, 0xC4, args, 1U);
+
 	r = sh8601_send_cmd(dev, SH8601_C_DISPON);
+*/
+	// r=
 
 	return 0;
 }
@@ -431,8 +480,8 @@ static int sh8601_init(const struct device *dev)
  * @return 0 when succesful, errno otherwise.
  */
 static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
-								const uint16_t y, const uint16_t w,
-								const uint16_t h)
+							   const uint16_t y, const uint16_t w,
+							   const uint16_t h)
 {
 	int r;
 	uint16_t spi_data[2];
@@ -467,9 +516,9 @@ static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
  * @return 0 when succesful, errno otherwise.
  */
 static int sh8601_write(const struct device *dev, const uint16_t x,
-						 const uint16_t y,
-						 const struct display_buffer_descriptor *desc,
-						 const void *buf)
+						const uint16_t y,
+						const struct display_buffer_descriptor *desc,
+						const void *buf)
 {
 	const struct sh8601_config *config = dev->config;
 	struct sh8601_data *data = dev->data;
@@ -506,7 +555,7 @@ static int sh8601_write(const struct device *dev, const uint16_t x,
 		nbr_of_writes = 1U;
 	}
 
-	//r = sh8601_transmit(dev, SH8601_RAMWR, write_data_start,
+	// r = sh8601_transmit(dev, SH8601_RAMWR, write_data_start,
 	//					 desc->width * data->bytes_per_pixel * write_h);
 	sh8601_send_cmd(dev, SH8601_W_RAMWR);
 	if (r < 0)
@@ -546,8 +595,8 @@ static int sh8601_write(const struct device *dev, const uint16_t x,
  * @return Not supported
  */
 static int sh8601_read(const struct device *dev, const uint16_t x,
-						const uint16_t y,
-						const struct display_buffer_descriptor *desc, void *buf)
+					   const uint16_t y,
+					   const struct display_buffer_descriptor *desc, void *buf)
 {
 	LOG_ERR("Reading not supported");
 	return -ENOTSUP;
@@ -573,7 +622,7 @@ static void *sh8601_get_framebuffer(const struct device *dev)
  * @return Not supported
  */
 static int sh8601_set_contrast(const struct device *dev,
-								const uint8_t contrast)
+							   const uint8_t contrast)
 {
 	LOG_ERR("Set contrast not supported");
 	return -ENOTSUP;
@@ -587,7 +636,7 @@ static int sh8601_set_contrast(const struct device *dev,
  * @return None.
  */
 static void sh8601_get_capabilities(const struct device *dev,
-									 struct display_capabilities *capabilities)
+									struct display_capabilities *capabilities)
 {
 	struct sh8601_data *data = dev->data;
 	const struct sh8601_config *config = dev->config;
@@ -629,23 +678,23 @@ static const struct display_driver_api sh8601_api = {
 
 #define INST_DT_SH8601(n) DT_INST(n, sitronix_sh8601)
 
-#define SH8601_INIT(n, t)                                           \
-	static const struct sh8601_config sh8601_config_##n = {        \
-		.spi = SPI_DT_SPEC_GET(INST_DT_SH8601(n),                   \
+#define SH8601_INIT(n, t)                                            \
+	static const struct sh8601_config sh8601_config_##n = {          \
+		.spi = SPI_DT_SPEC_GET(INST_DT_SH8601(n),                    \
 							   SPI_OP_MODE_MASTER | SPI_WORD_SET(8), \
 							   0),                                   \
-		.reset = GPIO_DT_SPEC_GET_OR(INST_DT_SH8601(n),             \
+		.reset = GPIO_DT_SPEC_GET_OR(INST_DT_SH8601(n),              \
 									 reset_gpios, {0}),              \
-		.pixel_format = DT_PROP(INST_DT_SH8601(n), pixel_format),   \
-		.rotation = DT_PROP(INST_DT_SH8601(n), rotation),           \
-		.x_resolution = DT_PROP(INST_DT_SH8601(n), width),          \
-		.y_resolution = DT_PROP(INST_DT_SH8601(n), height),         \
-		.inversion = DT_PROP(INST_DT_SH8601(n), display_inversion), \
+		.pixel_format = DT_PROP(INST_DT_SH8601(n), pixel_format),    \
+		.rotation = DT_PROP(INST_DT_SH8601(n), rotation),            \
+		.x_resolution = DT_PROP(INST_DT_SH8601(n), width),           \
+		.y_resolution = DT_PROP(INST_DT_SH8601(n), height),          \
+		.inversion = DT_PROP(INST_DT_SH8601(n), display_inversion),  \
 	};                                                               \
-	static struct sh8601_data sh8601_data_##n;                     \
-	DEVICE_DT_DEFINE(INST_DT_SH8601(n), sh8601_init,               \
-					 NULL, &sh8601_data_##n,                        \
-					 &sh8601_config_##n, POST_KERNEL,               \
+	static struct sh8601_data sh8601_data_##n;                       \
+	DEVICE_DT_DEFINE(INST_DT_SH8601(n), sh8601_init,                 \
+					 NULL, &sh8601_data_##n,                         \
+					 &sh8601_config_##n, POST_KERNEL,                \
 					 CONFIG_DISPLAY_INIT_PRIORITY, &sh8601_api)
 
 #define DT_INST_FOREACH_SH8601_STATUS_OKAY \
