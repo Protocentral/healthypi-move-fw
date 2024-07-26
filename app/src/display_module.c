@@ -636,7 +636,7 @@ void display_screens_thread(void)
         LOG_ERR("Device touch not ready.");
     }
 
-    printk("Touch device: %s", touch_dev->name);
+   // printk("Touch device: %s", touch_dev->name);
 
     // Init all styles globally
     display_init_styles();
