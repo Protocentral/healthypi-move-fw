@@ -82,12 +82,12 @@ void draw_scr_clockface(enum scroll_dir m_scroll_dir)
 
     ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
 
-    ui_step_group = create_ui_steps(scr_clock);
+    ui_step_group = ui_steps_button_create(scr_clock);
     lv_obj_set_x(ui_step_group, -60);
     lv_obj_set_y(ui_step_group, 60);
     lv_obj_set_style_border_opa(ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_t *hr_display = create_ui_hr_button(scr_clock);
+    lv_obj_t *hr_display = ui_hr_button_create(scr_clock);
     lv_obj_set_x(hr_display, 66);
     lv_obj_set_y(hr_display, -140);
     lv_obj_set_style_border_opa(hr_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);

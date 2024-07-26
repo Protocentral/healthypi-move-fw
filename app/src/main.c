@@ -10,9 +10,6 @@
 
 #include <zephyr/logging/log.h>
 
-
-#include "fs_module.h"
-
 #include <app_version.h>
 
 #include <zephyr/bluetooth/bluetooth.h>

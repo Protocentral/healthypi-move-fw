@@ -27,6 +27,7 @@ extern lv_obj_t *ui_label_min;
 extern lv_obj_t *ui_label_date;
 
 extern lv_obj_t *ui_step_group;
+extern lv_obj_t *ui_dailymission_group;
 
 extern struct rtc_time global_system_time;
 extern int curr_screen;
@@ -64,7 +65,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     ui_label_min = lv_label_create(scr_clock_small);
     lv_obj_set_width(ui_label_min, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(ui_label_min, LV_SIZE_CONTENT); /// 1
-    lv_obj_align_to(ui_label_min, ui_label_hour, LV_ALIGN_OUT_RIGHT_TOP, 20, 0);
+    lv_obj_align_to(ui_label_min, ui_label_hour, LV_ALIGN_OUT_RIGHT_TOP, 25, 0);
     lv_label_set_text(ui_label_min, "--");
     lv_obj_set_style_text_color(ui_label_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_label_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -82,17 +83,21 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true );
     ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, (global_system_time.tm_year+2000));
 
-    lv_obj_t *hr_display = create_ui_hr_button(scr_clock_small);
+    lv_obj_t *hr_display = ui_hr_button_create(scr_clock_small);
     lv_obj_align_to(hr_display, NULL, LV_ALIGN_TOP_MID, -60, 115);
     lv_obj_set_style_border_opa(hr_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_t *spo2_display = create_ui_spo2_button(scr_clock_small);
+    lv_obj_t *spo2_display = ui_spo2_button_create(scr_clock_small);
     lv_obj_align_to(spo2_display, NULL, LV_ALIGN_TOP_MID, 60, 115);
     lv_obj_set_style_border_opa(spo2_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-     ui_step_group = create_ui_steps(scr_clock_small);
+    ui_step_group = ui_steps_button_create(scr_clock_small);
     lv_obj_align_to(ui_step_group, NULL, LV_ALIGN_TOP_MID, 0, 170);
     lv_obj_set_style_border_opa(ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_dailymission_group = ui_dailymissiongroup_create(scr_clock_small);
+    lv_obj_align_to(ui_dailymission_group, NULL, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_set_style_border_opa(ui_dailymission_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 

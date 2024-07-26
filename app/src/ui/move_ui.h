@@ -9,7 +9,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void hpi_disp_draw_plotEDA(float data_eda);
 
 
-void hpi_scr_home_hr_display_update(uint8_t hr_bpm);
+
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
@@ -50,9 +50,20 @@ void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
 // Helper objects
 void draw_header_minimal(lv_obj_t *parent);
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir);
-lv_obj_t *create_ui_steps(lv_obj_t *comp_parent);
-lv_obj_t *create_ui_hr_button(lv_obj_t *comp_parent);
-lv_obj_t *create_ui_spo2_button(lv_obj_t *comp_parent);
+
+
+//Component objects
+lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);
+void ui_hr_button_update(uint8_t hr_bpm);
+
+lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent);
+void ui_spo2_button_update(uint8_t spo2);
+
+lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent);
+void ui_dailymissiongroup_update(uint32_t steps_walk, uint32_t steps_run);
+
+lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent);
+void ui_steps_button_update(uint16_t steps);
 
 void draw_bg(lv_obj_t *parent);
 
@@ -63,7 +74,7 @@ LV_IMG_DECLARE( ui_img_heart_png);   // assets/heart2.png
 LV_IMG_DECLARE( ui_img_heart2_png);   // assets/heart2.png
 LV_IMG_DECLARE( ui_img_daily_mission_png);   // assets/daily_mission.png
 LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png
-LV_IMG_DECLARE( o2);
+
 
 LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE( ui_font_Number_big);
