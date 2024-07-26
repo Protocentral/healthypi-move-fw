@@ -29,10 +29,7 @@ properties:
         - 0 # RGB565
         - 1 # RGB888
       description:
-        Display pixel format. Note that when RGB888 pixel format is selected
-        only 6 color bits are actually used being in practice equivalent to
-        RGB666.
-
+        Display pixel format. 
     rotation:
       type: int
       default: 0

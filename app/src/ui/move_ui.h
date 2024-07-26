@@ -65,8 +65,8 @@ LV_IMG_DECLARE( ui_img_daily_mission_png);   // assets/daily_mission.png
 LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png
 LV_IMG_DECLARE( o2);
 
-LV_FONT_DECLARE( ui_font_H1);
-LV_FONT_DECLARE( ui_font_Number_big);
-LV_FONT_DECLARE( ui_font_Number_extra);
-LV_FONT_DECLARE( ui_font_Subtitle);
-LV_FONT_DECLARE( ui_font_Title);
+//LV_FONT_DECLARE( ui_font_H1);
+//LV_FONT_DECLARE( ui_font_Number_big);
+//LV_FONT_DECLARE( ui_font_Number_extra);
+//LV_FONT_DECLARE( ui_font_Subtitle);
+//LV_FONT_DECLARE( ui_font_Title);

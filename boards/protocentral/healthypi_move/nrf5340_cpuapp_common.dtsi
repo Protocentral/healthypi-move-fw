@@ -330,12 +330,12 @@
 
 	sh8601: sh8601@0 {
 		compatible = "sitronix,sh8601";
-		spi-max-frequency = <DT_FREQ_M(4)>;
+		spi-max-frequency = <DT_FREQ_M(48)>;
 		reg = <0>;
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
-		width = <240>;
-		height = <240>;
-		pixel-format = <0>;
+		width = <390>;
+		height = <390>;
+		pixel-format = <1>;
 		display-inversion;
 		rotation = <0>;
 		status = "okay";

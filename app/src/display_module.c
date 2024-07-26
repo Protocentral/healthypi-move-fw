@@ -112,6 +112,7 @@ extern bool chart_ecg_update;
 extern uint8_t m_key_pressed;
 extern struct rtc_time global_system_time;
 
+//LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(logo_round_white);
 
@@ -829,12 +830,12 @@ void display_screens_thread(void)
     if (!device_is_ready(display_dev))
     {
         LOG_ERR("Device not ready, aborting test");
-        //return;
+        // return;
     }
 
     printk("Display device: %s", display_dev->name);
 
-    //display_set_brightness(display_dev, 20);
+    // display_set_brightness(display_dev, 20);
 
     if (!device_is_ready(touch_dev))
     {
@@ -868,15 +869,15 @@ void display_screens_thread(void)
     // draw_scr_home();
     // draw_scr_splash();
     // draw_scr_vitals_home();
-    //draw_scr_clockface(SCROLL_RIGHT);
-    //draw_scr_clock_small(SCROLL_RIGHT);
+    // draw_scr_clockface(SCROLL_RIGHT);
+    draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home();
     // draw_scr_eda();
-    //draw_scr_hrv_scatter(SCROLL_RIGHT);
+    // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
@@ -1182,7 +1183,7 @@ void display_screens_thread(void)
             m_disp_inact_refresh_counter++;
         }
 
-        //lv_task_handler();
+        lv_task_handler();
 
         k_sleep(K_MSEC(DISP_THREAD_REFRESH_INT_MS));
     }

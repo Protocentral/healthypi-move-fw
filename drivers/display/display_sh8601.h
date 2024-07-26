@@ -91,25 +91,6 @@ struct sh8601_config
 #define SH8601_R_WDBRIGHTNESSVALHBM 0x64 // Read Display Brightness Value in HBM Mode
 #define SH8601_W_WHBMCTL 0x66            // Write HBM Control
 
-#define SH8601_W_COLORSET0 0x70  // Color Set 0
-#define SH8601_W_COLORSET1 0x71  // Color Set 1
-#define SH8601_W_COLORSET2 0x72  // Color Set 2
-#define SH8601_W_COLORSET3 0x73  // Color Set 3
-#define SH8601_W_COLORSET4 0x74  // Color Set 4
-#define SH8601_W_COLORSET5 0x75  // Color Set 5
-#define SH8601_W_COLORSET6 0x76  // Color Set 6
-#define SH8601_W_COLORSET7 0x77  // Color Set 7
-#define SH8601_W_COLORSET8 0x78  // Color Set 8
-#define SH8601_W_COLORSET9 0x79  // Color Set 9
-#define SH8601_W_COLORSET10 0x7A // Color Set 10
-#define SH8601_W_COLORSET11 0x7B // Color Set 11
-#define SH8601_W_COLORSET12 0x7C // Color Set 12
-#define SH8601_W_COLORSET13 0x7D // Color Set 13
-#define SH8601_W_COLORSET14 0x7E // Color Set 14
-#define SH8601_W_COLORSET15 0x7F // Color Set 15
-
-#define SH8601_W_COLOROPTION 0x80 // Color Option
-
 #define SH8601_R_RDDBSTART 0xA1         // Read DDB start
 #define SH8601_R_DDBCONTINUE 0xA8       // Read DDB Continue
 #define SH8601_R_RFIRCHECKSUN 0xAA      // Read First Checksum
