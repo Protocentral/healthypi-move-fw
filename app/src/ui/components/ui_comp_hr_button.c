@@ -50,7 +50,7 @@ lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent)
     lv_label_set_text(ui_hr_number, "--");
     lv_obj_set_style_text_color(ui_hr_number, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_hr_number, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_hr_number, &ui_font_Title, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_hr_number, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     /*lv_obj_t *cui_bpm;
     cui_bpm = lv_label_create(cui_pulsegroup);
