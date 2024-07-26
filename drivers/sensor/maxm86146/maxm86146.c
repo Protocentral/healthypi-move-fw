@@ -185,6 +185,43 @@ static int maxm86146_set_spo2_coeffs(const struct device *dev, float a, float b,
 	return 0;
 }
 
+static int maxm86146_set_mode_extended_algo(const struct device *dev)
+{
+    printk("MAXM86146 entering extended ALGO mode...\n");
+
+    maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
+
+     // Output mode sensor + algo data
+    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set interrupt threshold
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set report period
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set continuous mode
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00);
+
+    // Enable AEC
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01);
+
+    // Disable Auto PD
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01);
+
+    // Disable SCD
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01);
+
+    // Set AGC target PD current
+    // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
+
+    // Enable HR, SpO2 algo
+    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x02, 500);
+    k_sleep(K_MSEC(500));
+
+    return 0;
+}
+
 static int maxm86146_set_mode_algo(const struct device *dev)
 {
     printk("MAXM86146 entering ALGO mode...\n");
@@ -309,6 +346,11 @@ static int maxm86146_attr_set(const struct device *dev,
         {
             maxm86146_set_mode_algo(dev);
             data->op_mode = MAXM86146_OP_MODE_ALGO;
+        }
+        else if (val->val1 == MAXM86146_OP_MODE_ALGO_EXTENDED)
+        {
+            maxm86146_set_mode_extended_algo(dev);
+            data->op_mode = MAXM86146_OP_MODE_ALGO_EXTENDED;
         }
         else
         {
