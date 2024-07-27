@@ -1,7 +1,9 @@
-/*
- * Copyright (c) 2024 Nicolas Goualard <nicolas.goualard@sfr.fr>
+/**
+ * Copyright 2024 Protocentral Electronics
  *
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * CHSC5816 Capacitive Touch Panel driver
  */
 
 #define DT_DRV_COMPAT chipsemi_chsc5816
