@@ -28,15 +28,6 @@ static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
 							   const uint16_t y, const uint16_t w,
 							   const uint16_t h);
 
-/**
- * @brief Transmit values to the display driver
- *
- * @param dev SH8601 device instance.
- * @param cmd command associated with the register.
- * @param tx_data Data to be sent.
- * @param tx_len Length of buffer to be sent.
- * @return 0 on success, errno otherwise.
- */
 int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_data,
 						size_t tx_len)
 {
@@ -82,7 +73,7 @@ int sh8601_transmit_data(const struct device *dev, const void *tx_data,
 	struct spi_buf tx_buf[3];
 	struct spi_buf_set tx_bufs = {.buffers = tx_buf, .count = 2U};
 
-	//printk("Transmitting data: %d", tx_len);
+	// printk("Transmitting data: %d", tx_len);
 
 	// Send Pre command
 	uint8_t pre_cmd[4] = {0x02, 00};
@@ -312,13 +303,6 @@ static int sh8601_set_orientation(const struct device *dev,
 	return 0;
 }
 
-/**
- * @brief To set the backlight brightness of the display.
- *
- * @param dev SH8601 device instance.
- * @param brightness percentage of brightness of the backlight.
- * @return 0 when succesful, errno otherwise.
- */
 static int sh8601_set_brightness(const struct device *dev,
 								 const uint8_t brightness)
 {
@@ -328,12 +312,6 @@ static int sh8601_set_brightness(const struct device *dev,
 	return 0;
 }
 
-/**
- * @brief To do overall display device configuration.
- *
- * @param dev SH8601 device instance.
- * @return 0 when succesful, errno otherwise.
- */
 static int sh8601_configure(const struct device *dev)
 {
 	const struct sh8601_config *config = dev->config;
@@ -392,12 +370,6 @@ static int sh8601_configure(const struct device *dev)
 	}
 }
 
-/**
- * @brief To initialize the peripherals associated with the display.
- *
- * @param dev SH8601 device instance.
- * @return 0 when succesful, errno otherwise.
- */
 static int sh8601_init(const struct device *dev)
 {
 	const struct sh8601_config *config = dev->config;
@@ -452,24 +424,24 @@ static int sh8601_init(const struct device *dev)
 	k_msleep(SH8601_SLPOUT_DELAY);
 
 	uint8_t args4[4] = {0x00, 0x00, 0x01, 0x85};
-	r = sh8601_transmit_cmd(dev, 0x2A, args4, 4U);
-	r = sh8601_transmit_cmd(dev, 0x2B, args4, 4U);
+	r = sh8601_transmit_cmd(dev, SH8601_W_CASET, args4, 4U);
+	r = sh8601_transmit_cmd(dev, SH8601_W_PASET, args4, 4U);
 
 	args2[0] = 0x00;
 	args2[1] = 0x0A;
-	r = sh8601_transmit_cmd(dev, 0x44, args2, 2U);
+	r = sh8601_transmit_cmd(dev, SH8601_W_SETTSL, args2, 2U);
 
 	args[0] = 0x00;
-	r = sh8601_transmit_cmd(dev, 0x35, args, 1U);
+	r = sh8601_transmit_cmd(dev, SH8601_WC_TEARON, args, 1U);
 
 	args[0] = 0x20;
-	r = sh8601_transmit_cmd(dev, 0x53, args, 1U);
+	r = sh8601_transmit_cmd(dev, SH8601_W_WCTRLD1, args, 1U);
 
 	args[0] = 0x77;
-	r = sh8601_transmit_cmd(dev, 0x3A, args, 1U);
+	r = sh8601_transmit_cmd(dev, SH8601_W_PIXFMT, args, 1U);
 
-	args[0] = 0xFF;
-	r = sh8601_transmit_cmd(dev, 0x51, args, 1U);
+	args[0] = 0xAF;
+	r = sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
 	args[0] = 0x88;
 	r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
@@ -479,59 +451,9 @@ static int sh8601_init(const struct device *dev)
 
 	k_msleep(200);
 
-	/*
-		r = sh8601_send_cmd(dev, SH8601_C_NORON);
-		r = sh8601_send_cmd(dev, SH8601_C_INVOFF);
-		args[0] = 0x05;
-		r = sh8601_transmit(dev, SH8601_W_PIXFMT, args, 1U);
-		r = sh8601_send_cmd(dev, SH8601_C_DISPON);
-		args[0] = 0x28;
-		r = sh8601_transmit(dev, SH8601_W_WCTRLD1, args, 1U);
-		args[0] = 0x1F;
-		r = sh8601_transmit(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
-		args[0] = 0x07;
-		r = sh8601_transmit(dev, SH8601_W_WCE, args, 1U);
-		k_sleep(K_MSEC(10));
-	*/
-
-	/*	r = sh8601_send_cmd(dev, SH8601_C_SLPOUT);
-		k_msleep(SH8601_SLPOUT_DELAY);
-		k_msleep(120);
-
-		uint8_t args4[4] = {0x00, 0x00, 0x01, 0xC5};
-		r = sh8601_transmit_cmd(dev, 0x2A, args4, 4U);
-		r = sh8601_transmit_cmd(dev, 0x2B, args4, 4U);
-		args2[0] = 0x00;
-		args2[1] = 0x0A;
-		r = sh8601_transmit_cmd(dev, 0x44, args2, 2U);
-		args[0] = 0x00;
-		r = sh8601_transmit_cmd(dev, 0x35, args, 1U);
-		args[0] = 0x55;
-		r = sh8601_transmit_cmd(dev, 0x3A, args, 1U);
-		args[0] = 0x20;
-		r = sh8601_transmit_cmd(dev, 0x53, args, 1U);
-		args[0] = 0x77;
-		r = sh8601_transmit_cmd(dev, 0x3A, args, 1U);
-		args[0] = 0x80;
-		r = sh8601_transmit_cmd(dev, 0xC4, args, 1U);
-
-		r = sh8601_send_cmd(dev, SH8601_C_DISPON);
-	*/
-	// r=
-
 	return 0;
 }
 
-/**
- * @brief To set the memory area to transmit on the display
- *
- * @param dev SH8601 device instance.
- * @param x	start point of the window.
- * @param y	end point of the window.
- * @param w	width point of the window.
- * @param h	height point of the window.
- * @return 0 when succesful, errno otherwise.
- */
 static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
 							   const uint16_t y, const uint16_t w,
 							   const uint16_t h)
@@ -541,8 +463,8 @@ static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
 
 	spi_data[0] = x >> 8;	// sys_cpu_to_be16(x);
 	spi_data[1] = x & 0xff; // sys_cpu_to_be16(x + w - 1U);
-	spi_data[2] = (x+w-1) >> 8;
-	spi_data[3] = (x+w-1) & 0xff;
+	spi_data[2] = (x + w - 1) >> 8;
+	spi_data[3] = (x + w - 1) & 0xff;
 
 	r = sh8601_transmit_cmd(dev, SH8601_W_CASET, spi_data, 4U);
 	if (r < 0)
@@ -552,8 +474,8 @@ static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
 
 	spi_data[0] = y >> 8; // sys_cpu_to_be16(y);
 	spi_data[1] = y & 0xff;
-	spi_data[2] = (h+y-1) >> 8;
-	spi_data[3] = (h+y-1) & 0xff;
+	spi_data[2] = (h + y - 1) >> 8;
+	spi_data[3] = (h + y - 1) & 0xff;
 
 	r = sh8601_transmit_cmd(dev, SH8601_W_PASET, spi_data, 4U);
 	if (r < 0)
@@ -564,36 +486,14 @@ static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
 	return 0;
 }
 
-/**
- * @brief To handle writing to the display(setting memory area and transmit).
- *
- * @param dev  SH8601 device instance.
- * @param x	start point of the window.
- * @param y	end point of the window.
- * @param desc pointer to the buffer descriptor.
- * @param buf pointer to the buffer to be sent
- * @return 0 when succesful, errno otherwise.
- */
 static int sh8601_write(const struct device *dev, const uint16_t x,
 						const uint16_t y,
 						const struct display_buffer_descriptor *desc,
 						const void *buf)
 {
 	const struct sh8601_config *config = dev->config;
-	struct sh8601_data *data = dev->data;
-
 	int r;
-	const uint8_t *write_data_start = (const uint8_t *)buf;
 	struct spi_buf tx_buf;
-	struct spi_buf_set tx_bufs;
-	uint16_t write_cnt;
-	uint16_t nbr_of_writes;
-	uint16_t write_h;
-
-	//__ASSERT(desc->width <= desc->pitch, "Pitch is smaller than width");
-	//__ASSERT((desc->pitch * data->bytes_per_pixel * desc->height) <=
-	//			 desc->buf_size,
-	//		 "Input buffer to small");
 
 	// printk("Writing %dx%d (w,h) @ %dx%d (x,y)", desc->width, desc->height,
 	//		x, y);
@@ -602,47 +502,15 @@ static int sh8601_write(const struct device *dev, const uint16_t x,
 	{
 		return r;
 	}
-
-	// r = sh8601_transmit(dev, SH8601_RAMWR, write_data_start,
-	//					 desc->width * data->bytes_per_pixel * write_h);
-	// sh8601_send_cmd(dev, SH8601_W_RAMWR);
 	sh8601_transmit_data(dev, buf, desc->buf_size);
 	if (r < 0)
 	{
 		return r;
 	}
 
-	/*tx_bufs.buffers = &tx_buf;
-	tx_bufs.count = 1;
-
-	write_data_start += desc->pitch * data->bytes_per_pixel;
-	for (write_cnt = 1U; write_cnt < nbr_of_writes; ++write_cnt)
-	{
-		tx_buf.buf = (void *)write_data_start;
-		tx_buf.len = desc->width * data->bytes_per_pixel * write_h;
-
-		//r = spi_write_dt(&config->spi, &tx_bufs);
-		if (r < 0)
-		{
-			return r;
-		}
-
-		write_data_start += desc->pitch * data->bytes_per_pixel;
-	}*/
-
 	return 0;
 }
 
-/**
- * @brief To handle reading from the display.
- *
- * @param dev  SH8601 device instance.
- * @param x	start point of the window.
- * @param y	end point of the window.
- * @param desc pointer to the buffer descriptor.
- * @param buf pointer to the buffer to be read
- * @return Not supported
- */
 static int sh8601_read(const struct device *dev, const uint16_t x,
 					   const uint16_t y,
 					   const struct display_buffer_descriptor *desc, void *buf)
@@ -651,12 +519,6 @@ static int sh8601_read(const struct device *dev, const uint16_t x,
 	return -ENOTSUP;
 }
 
-/**
- * @brief To get framebuffer from the display.
- *
- * @param dev  SH8601 device instance.
- * @return Not supported
- */
 static void *sh8601_get_framebuffer(const struct device *dev)
 {
 	LOG_ERR("Direct framebuffer access not supported");
@@ -677,13 +539,6 @@ static int sh8601_set_contrast(const struct device *dev,
 	return -ENOTSUP;
 }
 
-/**
- * @brief To set contrast of the display.
- *
- * @param dev  SH8601 device instance.
- * @param capabilities  pointer to the capabalities struct.
- * @return None.
- */
 static void sh8601_get_capabilities(const struct device *dev,
 									struct display_capabilities *capabilities)
 {
