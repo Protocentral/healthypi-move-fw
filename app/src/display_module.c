@@ -631,13 +631,6 @@ void display_screens_thread(void)
 
     // display_set_brightness(display_dev, 20);
 
-    if (!device_is_ready(touch_dev))
-    {
-        LOG_ERR("Device touch not ready.");
-    }
-
-   // printk("Touch device: %s", touch_dev->name);
-
     // Init all styles globally
     display_init_styles();
 

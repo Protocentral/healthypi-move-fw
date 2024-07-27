@@ -72,7 +72,7 @@
 		compatible = "zephyr,lvgl-pointer-input";
 		input = <&chsc5816>; //<&cst816s>;
 		//invert-y;
-		//swap-xy;
+		swap-xy;
 		//invert-x;
 	};
 };

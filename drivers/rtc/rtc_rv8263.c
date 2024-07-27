@@ -135,7 +135,7 @@ static int rv8263_init(const struct device *dev)
 	ret = i2c_reg_read_byte_dt(&config->i2c, RV8263_CONTROL1_REG, &reg);
 	if (ret)
 	{
-		LOG_ERR("Failed to read from PCF85063! (err %i)", ret);
+		LOG_ERR("Failed to read from RV8263! (err %i)", ret);
 		return -EIO;
 	}
 
