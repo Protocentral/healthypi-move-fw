@@ -3,6 +3,6 @@
 
 if INPUT
 
-rsource "Kconfig.chsc6x"
+rsource "Kconfig.chsc5816"
 
 endif # INPUT

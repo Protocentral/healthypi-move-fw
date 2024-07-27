@@ -86,7 +86,7 @@ K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1
 K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 100, 1);
 
-static const struct device *touch_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(cst816s));
+static const struct device *touch_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(chsc6x));
 
 bool bpt_cal_started = false;
 int global_bp_sys = 0;

@@ -70,10 +70,10 @@
 / {
 	lvgl_pointer_input: lvgl_pointer {
 		compatible = "zephyr,lvgl-pointer-input";
-		input = <&chsc6x>; //<&cst816s>;
-		invert-y;
+		input = <&chsc5816>; //<&cst816s>;
+		//invert-y;
 		//swap-xy;
-		invert-x;
+		//invert-x;
 	};
 };
 
@@ -109,11 +109,12 @@
 		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
 	};*/
 
-	chsc6x: chsc6x@2e {
+	chsc5816: chsc5816@2e {
 		status = "okay";
-		compatible = "chipsemi,chsc6x";
+		compatible = "chipsemi,chsc5816";
 		reg = <0x2e>;
 		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
+		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
 	};
 
 	npm_pmic: pmic@6b {
