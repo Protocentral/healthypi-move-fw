@@ -67,7 +67,7 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
     lv_label_set_text(cui_step_label, "124");
     lv_obj_set_style_text_color(cui_step_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(cui_step_label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(cui_step_label, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(cui_step_label, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // lv_obj_t **children = lv_mem_alloc(sizeof(lv_obj_t *) * _UI_COMP_STEPGROUP_NUM);
 

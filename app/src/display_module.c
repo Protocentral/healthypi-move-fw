@@ -126,7 +126,7 @@ void display_init_styles()
 
     lv_style_init(&style_batt_percent);
     lv_style_set_text_color(&style_batt_percent, lv_color_white());
-    lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_12);
+    lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_16);
 
     // HR Number label style
     lv_style_init(&style_hr);
@@ -161,7 +161,7 @@ void display_init_styles()
     // H2 welcome screen style
     lv_style_init(&style_h2);
     lv_style_set_text_color(&style_h2, lv_palette_main(LV_PALETTE_ORANGE));
-    lv_style_set_text_font(&style_h2, &lv_font_montserrat_28);
+    lv_style_set_text_font(&style_h2, &lv_font_montserrat_34);
 
     // Info welcome screen style
     lv_style_init(&style_info);
@@ -176,7 +176,7 @@ void display_init_styles()
     // Label White
     lv_style_init(&style_lbl_white);
     lv_style_set_text_color(&style_lbl_white, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_28);
+    lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_34);
 
     // Label Orange
     lv_style_init(&style_lbl_orange);
@@ -196,12 +196,12 @@ void display_init_styles()
     // Label White Tiny
     lv_style_init(&style_lbl_white_tiny);
     lv_style_set_text_color(&style_lbl_white_tiny, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_tiny, &lv_font_montserrat_12);
+    lv_style_set_text_font(&style_lbl_white_tiny, &lv_font_montserrat_16);
 
     // Label White 14
     lv_style_init(&style_lbl_white_14);
     lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_14);
+    lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_16);
 
     // Screen background style
     lv_style_init(&style_scr_back);

@@ -77,7 +77,7 @@ LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png
 
 
 //LV_FONT_DECLARE( ui_font_H1);
-//LV_FONT_DECLARE( ui_font_Number_big);
+LV_FONT_DECLARE( ui_font_Number_big);
 //LV_FONT_DECLARE( ui_font_Number_extra);
 //LV_FONT_DECLARE( ui_font_Subtitle);
 //LV_FONT_DECLARE( ui_font_Title);
