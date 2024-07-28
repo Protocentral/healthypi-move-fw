@@ -153,16 +153,6 @@ void display_init_styles()
     lv_style_set_text_color(&style_icon, lv_palette_main(LV_PALETTE_YELLOW));
     lv_style_set_text_font(&style_icon, &lv_font_montserrat_42);
 
-    // H1 welcome screen style
-    lv_style_init(&style_h1);
-    lv_style_set_text_color(&style_h1, lv_color_white());
-    lv_style_set_text_font(&style_h1, &lv_font_montserrat_34);
-
-    // H2 welcome screen style
-    lv_style_init(&style_h2);
-    lv_style_set_text_color(&style_h2, lv_palette_main(LV_PALETTE_ORANGE));
-    lv_style_set_text_font(&style_h2, &lv_font_montserrat_34);
-
     // Info welcome screen style
     lv_style_init(&style_info);
     lv_style_set_text_color(&style_info, lv_color_white());
@@ -176,7 +166,7 @@ void display_init_styles()
     // Label White
     lv_style_init(&style_lbl_white);
     lv_style_set_text_color(&style_lbl_white, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_34);
+    lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_42);
 
     // Label Orange
     lv_style_init(&style_lbl_orange);
