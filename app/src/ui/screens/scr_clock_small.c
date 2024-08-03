@@ -47,10 +47,10 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     scr_clock_small = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_clock_small, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
-    lv_obj_set_style_bg_color(scr_clock_small, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(scr_clock_small, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(scr_clock_small, lv_color_black(), LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(scr_clock_small, 1, LV_STATE_DEFAULT);
 
-    draw_bg(scr_clock_small);
+   // draw_bg(scr_clock_small);
     draw_header_minimal(scr_clock_small);
 
     ui_label_hour = lv_label_create(scr_clock_small);
@@ -94,10 +94,13 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     ui_step_group = ui_steps_button_create(scr_clock_small);
     lv_obj_align_to(ui_step_group, NULL, LV_ALIGN_TOP_MID, 0, 170);
     lv_obj_set_style_border_opa(ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    
 
-    ui_dailymission_group = ui_dailymissiongroup_create(scr_clock_small);
+    /*ui_dailymission_group = ui_dailymissiongroup_create(scr_clock_small);
     lv_obj_align_to(ui_dailymission_group, NULL, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_obj_set_style_border_opa(ui_dailymission_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    */
+    
 
     lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 

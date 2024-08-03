@@ -292,7 +292,7 @@ void menu_roller_remove_event(void)
 
 void draw_header_minimal(lv_obj_t *parent)
 {
-    lv_obj_add_style(parent, &style_scr_black, 0);
+    //lv_obj_add_style(parent, &style_scr_black, 0);
 
     lv_obj_t *img_logo = lv_img_create(parent);
     lv_img_set_src(img_logo, &logo_round_white);
@@ -619,8 +619,7 @@ void display_screens_thread(void)
 
     printk("Display device: %s", display_dev->name);
 
-    // display_set_brightness(display_dev, 20);
-
+    
     // Init all styles globally
     display_init_styles();
 
@@ -642,6 +641,10 @@ void display_screens_thread(void)
     }
 
     display_blanking_off(display_dev);
+    display_set_brightness(display_dev, 50);
+
+
+    lv_disp_set_bg_color(NULL, lv_color_black());
 
     // draw_scr_home();
     // draw_scr_splash();
@@ -705,9 +708,9 @@ void display_screens_thread(void)
                 if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
                 {
                     // Fetch and update HR
-                    ui_hr_button_update(ppg_sensor_sample.hr);
-                    ui_spo2_button_update(ppg_sensor_sample.spo2);
-                    ui_steps_button_update(ppg_sensor_sample.steps_walk);
+                    //ui_hr_button_update(ppg_sensor_sample.hr);
+                    //ui_spo2_button_update(ppg_sensor_sample.spo2);
+                    //ui_steps_button_update(ppg_sensor_sample.steps_walk);
                     hr_refresh_counter = 0;
                 }
                 else

@@ -308,6 +308,8 @@ static int sh8601_set_brightness(const struct device *dev,
 {
 
 	const struct sh8601_config *config = dev->config;
+	uint8_t args[1] = {brightness};
+	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
 	return 0;
 }
@@ -440,7 +442,7 @@ static int sh8601_init(const struct device *dev)
 	args[0] = 0x77;
 	r = sh8601_transmit_cmd(dev, SH8601_W_PIXFMT, args, 1U);
 
-	args[0] = 0xAF;
+	args[0] = 0xFF;
 	r = sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
 	args[0] = 0x88;
