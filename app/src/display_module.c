@@ -641,7 +641,7 @@ void display_screens_thread(void)
     }
 
     display_blanking_off(display_dev);
-    display_set_brightness(display_dev, 50);
+    //display_set_brightness(display_dev, 90);
 
 
     lv_disp_set_bg_color(NULL, lv_color_black());
@@ -942,7 +942,7 @@ void display_screens_thread(void)
                 {
                     printk("Display off");
 
-                    display_set_brightness(display_dev, 0);
+                    //display_set_brightness(display_dev, 0);
                     //   display_blanking_on(display_dev);
 
                     m_disp_status_off = true;
@@ -953,7 +953,7 @@ void display_screens_thread(void)
                 if (m_disp_status_off == true)
                 {
                     printk("Display on");
-                    display_set_brightness(display_dev, 20);
+                   // display_set_brightness(display_dev, 80);
                     //   display_blanking_off(display_dev);
                     m_disp_status_off = false;
                 }

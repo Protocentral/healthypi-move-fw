@@ -25,6 +25,8 @@
 #include <time.h>
 #include <zephyr/posix/time.h>
 
+#include <nrfx_clock.h>
+
 #include "max30001.h"
 // #include "max32664.h"
 #include "maxm86146.h"
@@ -639,6 +641,9 @@ void hw_thread(void)
         //mode_set.val1 = MAXM86146_OP_MODE_ALGO;
         //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
+
+    nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK,
+			       NRF_CLOCK_HFCLK_DIV_1);
 
     setup_pmic_callbacks();
 
