@@ -69,7 +69,9 @@ const struct device *const gpio_keys_dev = DEVICE_DT_GET(DT_NODELABEL(gpiokeys))
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
-static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
+static const struct device *sensor_brd_3v3_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
+static const struct device *sensor_brd_1v8_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
+
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
@@ -606,10 +608,11 @@ void hw_thread(void)
         return 0;
     }
 
-    // regulator_disable(sensor_brd_ldsw);
+    // regulator_disable(sensor_brd_3v3_ldsw);
     k_sleep(K_MSEC(100));
 
-    regulator_enable(sensor_brd_ldsw);
+    regulator_enable(sensor_brd_3v3_ldsw);
+    regulator_enable(sensor_brd_1v8_ldsw);
 
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))

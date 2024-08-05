@@ -126,14 +126,14 @@
 			npm_pmic_buck1: BUCK1 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <3300000>;
+				regulator-init-microvolt = <3000000>;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <3300000>;
-				retention-microvolt = <2500000>;
+				regulator-init-microvolt = <3000000>;
+				//retention-microvolt = <2500000>;
 				//regulator-boot-on;
 				//enable-gpios = <&npm_pmic_gpio 1 GPIO_ACTIVE_LOW>;
 				//retention-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_HIGH>;
@@ -142,12 +142,20 @@
 
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				// On HealthyPi Move v7, input to LDSW1 is from 
 				//regulator-boot-on;
 				//startup-delay-us = <100000>;
 			};
 
 			npm_pmic_ldo2: LDO2 {
-				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				// AKW: On HealthyPi Move v7, input to LDO2 is from VDD (BUCK1 - 3V)
+				// LDO2 output goes to sensor board 1.8v supply rail.
+				regulator-min-microvolt = <1000000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-init-microvolt = <1800000>;
+				regulator-initial-mode = <NPM1300_LDSW_MODE_LDO>;
+				// soft-start-microamp = <10000>;
+				regulator-boot-on;
 			};
 		};
 
