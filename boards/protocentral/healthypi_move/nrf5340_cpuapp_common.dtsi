@@ -101,15 +101,13 @@
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
 
-	/*cst816s: cst816s@15 {
-		compatible = "hynitron,cst816s";
-		reg = <0x15>;
+	chsc5816: chsc5816@2e {
 		status = "okay";
+		compatible = "chipsemi,chsc5816";
+		reg = <0x2e>;
 		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
 		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
-	};*/
-
-	
+	};
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
@@ -211,8 +209,8 @@
 	maxm86146: maxm86146@55 {
 		compatible = "maxim,maxm86146";
 		reg = <0x55>;
-		reset-gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;
-		mfio-gpios = <&gpio0 26 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
@@ -220,14 +218,6 @@
 		compatible = "maxim,max30205";
 		status = "okay";
 		reg = <0x48>;
-	};
-
-	chsc5816: chsc5816@2e {
-		status = "okay";
-		compatible = "chipsemi,chsc5816";
-		reg = <0x2e>;
-		irq-gpios = <&gpio0 28 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
 	};
 };
 
@@ -316,7 +306,7 @@
 &spi4 {
 	compatible = "nordic,nrf-spim";
 	status = "okay";
-	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
 	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
 	pinctrl-1 = <&spi4_sleep>;
@@ -345,7 +335,7 @@
 		spi-max-frequency = <DT_FREQ_M(33)>;
 		reg = <0>;
 		
-		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 		//<&gpio0 29 GPIO_ACTIVE_HIGH>;
 		width = <390>;
 		height = <390>;
