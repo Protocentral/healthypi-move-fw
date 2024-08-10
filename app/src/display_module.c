@@ -107,7 +107,7 @@ extern uint8_t m_key_pressed;
 extern struct rtc_time global_system_time;
 
 // LV_IMG_DECLARE(pc_logo_bg3);
-LV_IMG_DECLARE(pc_move_bg);
+LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(logo_round_white);
 
@@ -319,7 +319,7 @@ void draw_header_minimal(lv_obj_t *parent)
 void draw_bg(lv_obj_t *parent)
 {
     lv_obj_t *logo_bg = lv_img_create(parent);
-    lv_img_set_src(logo_bg, &pc_move_bg);
+    lv_img_set_src(logo_bg, &pc_move_bg_200);
     lv_obj_set_width(logo_bg, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(logo_bg, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(logo_bg, LV_ALIGN_CENTER);
@@ -564,9 +564,9 @@ void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(parent, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
     if (m_scroll_dir == SCROLL_LEFT)
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, SCREEN_TRANS_TIME, 0, true);
     else
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_MOVE_RIGHT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, SCREEN_TRANS_TIME, 0, true);
 }
 
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
@@ -667,10 +667,10 @@ void display_screens_thread(void)
     // draw_scr_home();
     // draw_scr_splash();
     // draw_scr_vitals_home();
-    // draw_scr_clockface(SCROLL_RIGHT);
-    //draw_scr_clock_small(SCROLL_RIGHT);
+    //draw_scr_clockface(SCROLL_RIGHT);
+    draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
-     draw_scr_hrv(SCROLL_RIGHT);
+    // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home();
@@ -863,7 +863,7 @@ void display_screens_thread(void)
             }
         }
 
-        if (curr_screen == SCR_CLOCK) //|| curr_screen == SCR_CLOCK_SMALL)
+        if (curr_screen == SCR_CLOCK|| curr_screen == SCR_CLOCK_SMALL)
         {
             if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
             {

@@ -678,9 +678,9 @@ void hw_thread(void)
 
     // init_settings();
 
-    printk("Switching application core from 64 MHz and 128 MHz. \n");
-    nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
-    printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
+    //printk("Switching application core from 64 MHz and 128 MHz. \n");
+    //nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+    //printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
 
     nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
     nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
@@ -689,7 +689,7 @@ void hw_thread(void)
     printk("spi has 32MHz\n");
 #endif
 
-    // printk("Switching application core from 128 MHz and 64 MHz. \n");
+    //printk("Switching application core from 128 MHz and 64 MHz. \n");
     // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
     // printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
 
@@ -711,8 +711,8 @@ void hw_thread(void)
 
         // fetch_and_display(acc_dev);
 
-        // npm_fuel_gauge_update(charger);
-        // rtc_get_time(rtc_dev, &global_system_time);
+        npm_fuel_gauge_update(charger);
+        rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
         printk("H ");
 
