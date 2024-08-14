@@ -13,8 +13,8 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 {
     lv_obj_t *cui_buttonround;
     cui_buttonround = lv_btn_create(comp_parent);
-    lv_obj_set_width(cui_buttonround, 65);
-    lv_obj_set_height(cui_buttonround, 65);
+    lv_obj_set_width(cui_buttonround, 120);
+    lv_obj_set_height(cui_buttonround, 120);
     lv_obj_set_x(cui_buttonround, 0);
     lv_obj_set_y(cui_buttonround, 0);
     lv_obj_set_align(cui_buttonround, LV_ALIGN_CENTER);

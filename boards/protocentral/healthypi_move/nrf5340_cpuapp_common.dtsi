@@ -50,12 +50,23 @@
 		};
 	};
 
+	ctrlgpio: gpio_ctrl {
+		compatible = "gpio-leds";
+		sensor_dcdc_en: dcdc_en {
+			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+			label = "Boost 5V converter enable";
+
+		};
+	};
+
+
+
 	aliases {
 		pwm-led0 = &pwm_led0;
 		//mcuboot-button0 = &button_up;
 
-		watchdog0 = &wdt0;
-		esp-uart= &uart0;
+		//watchdog0 = &wdt0;
+
 
 		max30001 = &max30001;
 		//max32664 = &max32664;
@@ -100,22 +111,6 @@
 	pinctrl-1 = <&i2c1_sleep>;
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
-
-	/*cst816s: cst816s@15 {
-		compatible = "hynitron,cst816s";
-		reg = <0x15>;
-		status = "okay";
-		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
-	};*/
-
-	chsc5816: chsc5816@2e {
-		status = "okay";
-		compatible = "chipsemi,chsc5816";
-		reg = <0x2e>;
-		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
-	};
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
@@ -202,6 +197,22 @@
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 	};
+
+	chsc5816: chsc5816@2e {
+		status = "okay";
+		compatible = "chipsemi,chsc5816";
+		reg = <0x2e>;
+		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
+		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+	};
+
+	max32664: max32664@55 {
+		compatible = "maxim,max32664";
+		reg=<0x55>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+		status ="okay";
+	};
 };
 
 &i2c2 {
@@ -227,6 +238,8 @@
 		status = "okay";
 		reg = <0x48>;
 	};
+
+	
 };
 
 &uart0 {
@@ -292,7 +305,7 @@
 	pinctrl-0 = <&spi3_default>;
 	pinctrl-1 = <&spi3_sleep>;
 	pinctrl-names = "default", "sleep";
-	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
 
 	max30001: max30001@0 {
 		compatible = "maxim,max30001";
@@ -314,13 +327,14 @@
 &spi4 {
 	compatible = "nordic,nrf-spim";
 	status = "okay";
-	
+
+	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
+	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
 	pinctrl-1 = <&spi4_sleep>;
 	pinctrl-names = "default", "sleep";
-	//clock-frequency = <32000000>;
+	clock-frequency = <DT_FREQ_M(32)>;
 
-	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;
 
 	/*gc9a01: gc9a01@0 {
 		compatible = "waveshare,gc9a01a";
@@ -341,10 +355,13 @@
 
 	sh8601: sh8601@0 {
 		compatible = "sitronix,sh8601";
-		//spi-max-frequency = <DT_FREQ_M(48)>;
-		spi-max-frequency = <DT_FREQ_M(8)>;
+
+		spi-max-frequency = <DT_FREQ_M(33)>;
+
 		reg = <0>;
+		
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		//<&gpio0 29 GPIO_ACTIVE_HIGH>;
 		width = <390>;
 		height = <390>;
 		pixel-format = <1>;

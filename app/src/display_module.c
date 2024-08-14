@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <zephyr/smf.h>
 #include <app_version.h>
-#include <zephyr/logging/log.h>
-
 #include <time.h>
 #include <zephyr/posix/time.h>
 #include <zephyr/drivers/rtc.h>
@@ -108,10 +106,12 @@ extern bool chart_ecg_update;
 extern uint8_t m_key_pressed;
 extern struct rtc_time global_system_time;
 
-//LV_IMG_DECLARE(pc_logo_bg3);
-LV_IMG_DECLARE(pc_move_bg);
-//LV_IMG_DECLARE(pc_logo_bg3);
+// LV_IMG_DECLARE(pc_logo_bg3);
+LV_IMG_DECLARE(pc_move_bg_200);
+// LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(logo_round_white);
+
+#define DISPLAY_DEFAULT_BRIGHTNESS 100
 
 void display_init_styles()
 {
@@ -292,7 +292,7 @@ void menu_roller_remove_event(void)
 
 void draw_header_minimal(lv_obj_t *parent)
 {
-    //lv_obj_add_style(parent, &style_scr_black, 0);
+    // lv_obj_add_style(parent, &style_scr_black, 0);
 
     lv_obj_t *img_logo = lv_img_create(parent);
     lv_img_set_src(img_logo, &logo_round_white);
@@ -319,7 +319,7 @@ void draw_header_minimal(lv_obj_t *parent)
 void draw_bg(lv_obj_t *parent)
 {
     lv_obj_t *logo_bg = lv_img_create(parent);
-    lv_img_set_src(logo_bg, &pc_move_bg);
+    lv_img_set_src(logo_bg, &pc_move_bg_200);
     lv_obj_set_width(logo_bg, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(logo_bg, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(logo_bg, LV_ALIGN_CENTER);
@@ -564,9 +564,9 @@ void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(parent, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
     if (m_scroll_dir == SCROLL_LEFT)
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_MOVE_LEFT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, SCREEN_TRANS_TIME, 0, true);
     else
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_MOVE_RIGHT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, SCREEN_TRANS_TIME, 0, true);
 }
 
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
@@ -608,6 +608,26 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
 
 void display_screens_thread(void)
 {
+    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_ppg_sensor_data_t ppg_sensor_sample;
+
+    struct hpi_computed_hrv_t hrv_sample;
+
+    // uint8_t batt_level;
+    // int32_t temp_val;
+
+    // int temp_disp_counter = 0;
+    int batt_refresh_counter = 0;
+    int hr_refresh_counter = 0;
+    int time_refresh_counter = 0;
+
+    int m_disp_inact_refresh_counter = 0;
+    int m_disp_status_off = false;
+
+    int scr_ppg_hr_spo2_refresh_counter = 0;
+
+    static volatile uint16_t prev_rtor;
+
     k_sem_take(&sem_hw_inited, K_FOREVER);
 
     display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
@@ -619,7 +639,6 @@ void display_screens_thread(void)
 
     printk("Display device: %s", display_dev->name);
 
-    
     // Init all styles globally
     display_init_styles();
 
@@ -641,15 +660,17 @@ void display_screens_thread(void)
     }
 
     display_blanking_off(display_dev);
-    //display_set_brightness(display_dev, 90);
 
+    // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+
+    //display_set_brightness(display_dev, 90);
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 
     // draw_scr_home();
     // draw_scr_splash();
     // draw_scr_vitals_home();
-    // draw_scr_clockface(SCROLL_RIGHT);
+    //draw_scr_clockface(SCROLL_RIGHT);
     draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
@@ -658,26 +679,6 @@ void display_screens_thread(void)
     // draw_scr_bpt_home();
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
-
-    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
-    struct hpi_ppg_sensor_data_t ppg_sensor_sample;
-
-    struct hpi_computed_hrv_t hrv_sample;
-
-    // uint8_t batt_level;
-    // int32_t temp_val;
-
-    // int temp_disp_counter = 0;
-    int batt_refresh_counter = 0;
-    int hr_refresh_counter = 0;
-    int time_refresh_counter = 0;
-
-    int m_disp_inact_refresh_counter = 0;
-    int m_disp_status_off = false;
-
-    int scr_ppg_hr_spo2_refresh_counter = 0;
-
-    static volatile uint16_t prev_rtor;
 
     printk("Display screens inited\n");
     // k_sem_take(&sem_hw_inited, K_FOREVER);
@@ -708,9 +709,9 @@ void display_screens_thread(void)
                 if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
                 {
                     // Fetch and update HR
-                    //ui_hr_button_update(ppg_sensor_sample.hr);
-                    //ui_spo2_button_update(ppg_sensor_sample.spo2);
-                    //ui_steps_button_update(ppg_sensor_sample.steps_walk);
+                    // ui_hr_button_update(ppg_sensor_sample.hr);
+                    // ui_spo2_button_update(ppg_sensor_sample.spo2);
+                    // ui_steps_button_update(ppg_sensor_sample.steps_walk);
                     hr_refresh_counter = 0;
                 }
                 else
@@ -865,7 +866,7 @@ void display_screens_thread(void)
             }
         }
 
-        if (curr_screen == SCR_CLOCK) //|| curr_screen == SCR_CLOCK_SMALL)
+        if (curr_screen == SCR_CLOCK|| curr_screen == SCR_CLOCK_SMALL)
         {
             if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
             {
@@ -942,7 +943,11 @@ void display_screens_thread(void)
                 {
                     printk("Display off");
 
+
+                    // display_set_brightness(display_dev, 0);
+
                     //display_set_brightness(display_dev, 0);
+
                     //   display_blanking_on(display_dev);
 
                     m_disp_status_off = true;
@@ -953,6 +958,10 @@ void display_screens_thread(void)
                 if (m_disp_status_off == true)
                 {
                     printk("Display on");
+
+                    // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+                    //    display_blanking_off(display_dev);
+
                    // display_set_brightness(display_dev, 80);
                     //   display_blanking_off(display_dev);
                     m_disp_status_off = false;

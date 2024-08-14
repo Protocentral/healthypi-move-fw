@@ -5,6 +5,13 @@
     "cmake.configureOnOpen": false,
     "files.associations": {
         "log.h": "c",
-        "display.h": "c"
+        "display.h": "c",
+        "rtc.h": "c",
+        "time.h": "c",
+        "nrfx_spim.h": "c",
+        "max32664.h": "c"
+    },
+    "nrf-connect.debugging.bindings": {
+        "${workspaceFolder}/app/build": "Launch build"
     }
 }

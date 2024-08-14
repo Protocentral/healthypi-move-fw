@@ -13,8 +13,8 @@ lv_obj_t *ui_spo2_number;
 lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent)
 {
     btn_spo2_disp = lv_btn_create(comp_parent);
-    lv_obj_set_width(btn_spo2_disp, 65);
-    lv_obj_set_height(btn_spo2_disp, 65);
+    lv_obj_set_width(btn_spo2_disp, 120);
+    lv_obj_set_height(btn_spo2_disp, 120);
     lv_obj_set_x(btn_spo2_disp, 0);
     lv_obj_set_y(btn_spo2_disp, 0);
     lv_obj_set_align(btn_spo2_disp, LV_ALIGN_CENTER);
