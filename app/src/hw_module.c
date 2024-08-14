@@ -29,7 +29,7 @@
 #include <nrfx_spim.h>
 
 #include "max30001.h"
-// #include "max32664.h"
+#include "max32664.h"
 #include "maxm86146.h"
 
 #include "hw_module.h"
@@ -75,6 +75,9 @@ static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_reg
 static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
+
+static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
+
 
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
@@ -591,7 +594,7 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
 
 void hw_thread(void)
 {
-    // int ret = 0;
+    int ret = 0;
     static struct rtc_time curr_time;
 
     if (!device_is_ready(regulators))
@@ -616,6 +619,16 @@ void hw_thread(void)
 
     regulator_enable(sensor_brd_ldsw);
 
+    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
+    if (ret < 0)
+    {
+        //return;
+        printk("Error: Could not configure GPIO pin DC/DC 5v EN\n");
+    }
+
+    gpio_pin_set_dt(&dcdc_5v_en, 1);
+
+    /*
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
@@ -631,6 +644,8 @@ void hw_thread(void)
         // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
+    */
+
 
     if (!device_is_ready(maxm86146_dev))
     {
@@ -641,6 +656,19 @@ void hw_thread(void)
         // struct sensor_value mode_set;
         // mode_set.val1 = MAXM86146_OP_MODE_ALGO;
         // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+    }
+
+    if(!device_is_ready(max32664_dev))
+    {
+        printk("MAX32664D device not found!\n");
+    }
+    else
+    {
+        struct sensor_value mode_set;
+        mode_set.val1 = MAX32664_OP_MODE_BPT;
+        sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+
+        
     }
 
     setup_pmic_callbacks();

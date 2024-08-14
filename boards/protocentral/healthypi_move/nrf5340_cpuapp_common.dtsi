@@ -50,12 +50,23 @@
 		};
 	};
 
+	ctrlgpio: gpio_ctrl {
+		compatible = "gpio-leds";
+		sensor_dcdc_en: dcdc_en {
+			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+			label = "Boost 5V converter enable";
+
+		};
+	};
+
+
+
 	aliases {
 		pwm-led0 = &pwm_led0;
 		//mcuboot-button0 = &button_up;
 
-		watchdog0 = &wdt0;
-		esp-uart= &uart0;
+		//watchdog0 = &wdt0;
+
 
 		max30001 = &max30001;
 		//max32664 = &max32664;
@@ -100,14 +111,6 @@
 	pinctrl-1 = <&i2c1_sleep>;
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
-
-	chsc5816: chsc5816@2e {
-		status = "okay";
-		compatible = "chipsemi,chsc5816";
-		reg = <0x2e>;
-		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
-	};
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
@@ -194,6 +197,22 @@
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 	};
+
+	chsc5816: chsc5816@2e {
+		status = "okay";
+		compatible = "chipsemi,chsc5816";
+		reg = <0x2e>;
+		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
+		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+	};
+
+	max32664: max32664@55 {
+		compatible = "maxim,max32664";
+		reg=<0x55>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+		status ="okay";
+	};
 };
 
 &i2c2 {
@@ -219,6 +238,8 @@
 		status = "okay";
 		reg = <0x48>;
 	};
+
+	
 };
 
 &uart0 {
