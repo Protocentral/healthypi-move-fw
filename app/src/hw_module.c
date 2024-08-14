@@ -26,7 +26,9 @@
 #include <zephyr/posix/time.h>
 
 #include <nrfx_clock.h>
+
 #include <nrfx_spim.h>
+
 
 #include "max30001.h"
 #include "max32664.h"
@@ -670,6 +672,9 @@ void hw_thread(void)
 
         
     }
+
+    nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK,
+			       NRF_CLOCK_HFCLK_DIV_1);
 
     setup_pmic_callbacks();
 

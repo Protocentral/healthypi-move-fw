@@ -442,10 +442,11 @@ static int sh8601_init(const struct device *dev)
 	args[0] = 0x77;
 	r = sh8601_transmit_cmd(dev, SH8601_W_PIXFMT, args, 1U);
 
-	args[0] = 0xFF;
-	r = sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+	args2[0] = 0xFF;
+	args2[1] = 0x03;
+	r = sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args2, 2U);
 
-	args[0] = 0x88;
+	args[0] = 0x08;
 	r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
 
 	k_msleep(25);

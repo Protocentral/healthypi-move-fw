@@ -2,8 +2,10 @@
 
 #include <lvgl.h>
 
+
 #define SCREEN_TRANS_TIME 0
 #define DISP_THREAD_REFRESH_INT_MS 30
+
 #define DISP_SLEEP_TIME_MS 60000
 
 #define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
