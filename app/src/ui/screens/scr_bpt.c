@@ -198,14 +198,14 @@ void draw_scr_bpt_measure(void)
 
     btn_bpt_measure_start = lv_btn_create(scr_bpt_measure);
     lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_btn_measure_start_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_measure_start, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
+    lv_obj_align_to(btn_bpt_measure_start, NULL, LV_ALIGN_BOTTOM_MID, -110, -120);
     lv_obj_set_height(btn_bpt_measure_start, 55);
     lv_obj_set_width(btn_bpt_measure_start, 240);
     lv_obj_set_style_bg_color(btn_bpt_measure_start, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN);
 
     lv_obj_t *label_btn_bpt = lv_label_create(btn_bpt_measure_start);
     lv_label_set_text(label_btn_bpt, "Start");
-    lv_obj_add_style(label_btn_bpt, &style_lbl_white_small, 0);
+    //lv_obj_add_style(label_btn_bpt, &style_lbl_white_small, 0);
     lv_obj_center(label_btn_bpt);
 
     btn_bpt_measure_exit = lv_btn_create(scr_bpt_measure);
@@ -281,7 +281,7 @@ void draw_scr_bpt_calibrate(void)
 
     btn_bpt_cal_start = lv_btn_create(scr_bpt_calibrate);
     lv_obj_add_event_cb(btn_bpt_cal_start, scr_bpt_btn_cal_start_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_cal_start, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
+    lv_obj_align_to(btn_bpt_cal_start, NULL, LV_ALIGN_BOTTOM_MID, -110, -200);
     lv_obj_set_height(btn_bpt_cal_start, 55);
     lv_obj_set_width(btn_bpt_cal_start, 240);
     lv_obj_set_style_bg_color(btn_bpt_cal_start, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN);
@@ -293,7 +293,7 @@ void draw_scr_bpt_calibrate(void)
 
     btn_bpt_cal_exit = lv_btn_create(scr_bpt_calibrate);
     lv_obj_add_event_cb(btn_bpt_cal_exit, scr_bpt_btn_cal_exit_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_cal_exit, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
+    lv_obj_align_to(btn_bpt_cal_exit, NULL, LV_ALIGN_BOTTOM_MID, -110, -50);
     lv_obj_set_height(btn_bpt_cal_exit, 55);
     lv_obj_set_width(btn_bpt_cal_exit, 240);
     lv_obj_set_style_bg_color(btn_bpt_cal_exit, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
@@ -320,7 +320,7 @@ void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
     // Draw button to measure BP
 
     lv_obj_t *btn_bpt_measure_start = lv_btn_create(scr_bpt_home);
-    // lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_measure_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_measure_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_align(btn_bpt_measure_start, LV_ALIGN_CENTER, 0, -40);
     lv_obj_set_height(btn_bpt_measure_start, 50);
 
@@ -331,7 +331,7 @@ void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
     // Draw button to calibrate BP
 
     lv_obj_t *btn_bpt_calibrate = lv_btn_create(scr_bpt_home);
-    // lv_obj_add_event_cb(btn_bpt_calibrate, scr_bpt_calib_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(btn_bpt_calibrate, scr_bpt_calib_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_align(btn_bpt_calibrate, LV_ALIGN_CENTER, 0, 40);
     lv_obj_set_height(btn_bpt_calibrate, 50);
 

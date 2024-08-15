@@ -28,7 +28,7 @@ const char DataPacketFooter[2] = {0, CES_CMDIF_PKT_STOP};
 const char DataPacketHeader[5] = {CES_CMDIF_PKT_START_1, CES_CMDIF_PKT_START_2, DATA_LEN, 0, CES_CMDIF_TYPE_DATA};
 
 extern const struct device *const max30001_dev;
-extern const struct device *const max32664_dev;
+extern const struct device *const max32664d_dev;
 
 static bool settings_send_usb_enabled = false;
 static bool settings_send_ble_enabled = true;

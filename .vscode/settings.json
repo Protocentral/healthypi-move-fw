@@ -9,7 +9,8 @@
         "rtc.h": "c",
         "time.h": "c",
         "nrfx_spim.h": "c",
-        "max32664.h": "c"
+        "max32664.h": "c",
+        "display_module.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build"

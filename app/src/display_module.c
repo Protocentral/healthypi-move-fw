@@ -191,7 +191,7 @@ void display_init_styles()
     // Label White 14
     lv_style_init(&style_lbl_white_14);
     lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_16);
+    lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_24);
 
     // Screen background style
     lv_style_init(&style_scr_back);
@@ -292,7 +292,7 @@ void menu_roller_remove_event(void)
 
 void draw_header_minimal(lv_obj_t *parent)
 {
-    // lv_obj_add_style(parent, &style_scr_black, 0);
+    lv_obj_add_style(parent, &style_scr_black, 0);
 
     lv_obj_t *img_logo = lv_img_create(parent);
     lv_img_set_src(img_logo, &logo_round_white);
@@ -671,12 +671,12 @@ void display_screens_thread(void)
     // draw_scr_splash();
     // draw_scr_vitals_home();
     //draw_scr_clockface(SCROLL_RIGHT);
-    draw_scr_clock_small(SCROLL_RIGHT);
+    //draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
-    // draw_scr_bpt_home();
+    draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
 

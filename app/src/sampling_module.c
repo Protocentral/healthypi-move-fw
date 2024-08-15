@@ -6,6 +6,7 @@
 
 #include "max30001.h"
 //#include "max32664.h"
+
 #include "maxm86146.h"
 
 #include "sampling_module.h"
@@ -15,6 +16,7 @@
 
 extern const struct device *const max30001_dev;
 extern const struct device *const maxm86146_dev;
+extern const struct device *const max32664d_dev;
 
 #define SAMPLING_INTERVAL_MS 8
 #define PPG_SAMPLING_INTERVAL_MS 1
@@ -38,6 +40,9 @@ struct k_thread ppg_sampling_thread_data;
 
 k_tid_t global_ppg_sampling_thread_id;
 
+bool ppg_wrist_sampling_on=false;
+bool ppg_finger_sampling_on=false;
+
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
                          32,  /* submission queue size */
                          32,  /* completion queue size */
@@ -46,7 +51,7 @@ RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
                          4    /* memory alignment */
 );
 
-static void sensor_processing_callback(int result, uint8_t *buf,
+static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
                                        uint32_t buf_len, void *userdata)
 {
 
@@ -94,7 +99,7 @@ void ppg_sampling_trigger_thread(void)
         for (;;)
         {
                 sensor_read(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
-                sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_processing_callback);
+                sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
                 k_sleep(K_MSEC(40));
         }
