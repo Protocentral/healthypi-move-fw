@@ -69,7 +69,7 @@
 
 
 		max30001 = &max30001;
-		//max32664 = &max32664;
+		max32664d = &max32664d;
 		maxm86146 = &maxm86146;
 
 		rtc = &rtc_rv;
@@ -206,7 +206,7 @@
 		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
 	};
 
-	max32664: max32664@55 {
+	max32664d: max32664d@55 {
 		compatible = "maxim,max32664";
 		reg=<0x55>;
 		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;

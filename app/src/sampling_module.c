@@ -6,12 +6,8 @@
 
 #include "max30001.h"
 //#include "max32664.h"
-
 #include "maxm86146.h"
-
 #include "sampling_module.h"
-
-
 #include "display_module.h"
 
 extern const struct device *const max30001_dev;
@@ -29,8 +25,7 @@ K_SEM_DEFINE(sem_sampling_start, 0, 1);
 // ASync sensor RTIO defines
 
 SENSOR_DT_READ_IODEV(maxm86146_iodev, DT_ALIAS(maxm86146), SENSOR_CHAN_VOLTAGE);
-//static struct sensor_decoder_api *maxm86146_decoder = SENSOR_DECODER_DT_GET(DT_ALIAS(maxm86146));
-
+SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), SENSOR_CHAN_VOLTAGE);
 
 #define PPG_SAMPLING_THREAD_STACKSIZE 2048
 #define PPG_SAMPLING_THREAD_PRIORITY 7
@@ -44,6 +39,14 @@ bool ppg_wrist_sampling_on=false;
 bool ppg_finger_sampling_on=false;
 
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
+                         32,  /* submission queue size */
+                         32,  /* completion queue size */
+                         128, /* number of memory blocks */
+                         64,  /* size of each memory block */
+                         4    /* memory alignment */
+);
+
+RTIO_DEFINE_WITH_MEMPOOL(max32664d_read_rtio_ctx,
                          32,  /* submission queue size */
                          32,  /* completion queue size */
                          128, /* number of memory blocks */
@@ -157,7 +160,7 @@ void ecg_sampling_thread(void)
 #define ECG_SAMPLING_THREAD_STACKSIZE 2048
 #define ECG_SAMPLING_THREAD_PRIORITY 7
 
-//K_THREAD_DEFINE(ppg_sampling_trigger_thread_id, 8192, ppg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ppg_sampling_trigger_thread_id, 8192, ppg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 //K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 
 // K_THREAD_DEFINE(ppg_sampling_thread_id, SAMPLING_THREAD_STACKSIZE, ppg_sampling_thread, NULL, NULL, NULL, SAMPLING_THREAD_PRIORITY, 0, 1000);

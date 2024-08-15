@@ -140,12 +140,14 @@ static int chsc5816_process(const struct device *dev)
 		}
 		else
 		{
-			row = (CHSC5816_rpt_point.rp.x_h4 << 4) | CHSC5816_rpt_point.rp.x_l8;
-			col = (CHSC5816_rpt_point.rp.y_h4 << 4) | CHSC5816_rpt_point.rp.y_l8;
+			row = (CHSC5816_rpt_point.rp.x_h4 << 8) | CHSC5816_rpt_point.rp.x_l8;
+			col = (CHSC5816_rpt_point.rp.y_h4 << 8) | CHSC5816_rpt_point.rp.y_l8;
 
 			input_report_abs(dev, INPUT_ABS_X, col, false, K_FOREVER);
 			input_report_abs(dev, INPUT_ABS_Y, row, false, K_FOREVER);
 			input_report_key(dev, INPUT_BTN_TOUCH, 1, true, K_FOREVER);
+
+			//LOG_INF("Touch at %d, %d", col, row);
 		}
 	}
 

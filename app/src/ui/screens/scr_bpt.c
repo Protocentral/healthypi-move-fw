@@ -42,10 +42,7 @@ static lv_obj_t *label_bp_val;
 static lv_obj_t *label_bp_dia_val;
 
 static bool bpt_meas_done_flag = false;
-static bool bpt_cal_done_flag = false;
 
-static int bpt_meas_last_progress = 0;
-static int bpt_meas_last_status = 0;
 bool bpt_meas_started = false;
 
 // Externs
@@ -63,10 +60,10 @@ static void scr_bpt_btn_measure_exit_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        bpt_meas_done_flag = false;
-        bpt_meas_last_progress = 0;
-        bpt_meas_last_status = 0;
-        bpt_meas_started = false;
+        //bpt_meas_done_flag = false;
+        //bpt_meas_last_progress = 0;
+        //bpt_meas_last_status = 0;
+        //bpt_meas_started = false;
 
         draw_scr_bpt_home(SCROLL_DOWN);
     }
@@ -120,8 +117,8 @@ static void scr_bpt_btn_measure_start_event_handler(lv_event_t *e)
         // lv_obj_add_flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
 
         bpt_meas_done_flag = false;
-        bpt_meas_last_progress = 0;
-        bpt_meas_last_status = 0;
+        // bpt_meas_last_progress = 0;
+        // bpt_meas_last_status = 0;
 
         lv_obj_add_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
@@ -148,7 +145,7 @@ void draw_scr_bpt_measure(void)
 
     // Create Chart 1 - ECG
     chart_bpt = lv_chart_create(scr_bpt_measure);
-    lv_obj_set_size(chart_bpt, 200, 75);
+    lv_obj_set_size(chart_bpt, 390, 150);
     lv_obj_set_style_bg_color(chart_bpt, lv_color_black(), LV_STATE_DEFAULT);
 
     lv_obj_set_style_size(chart_bpt, 0, LV_PART_INDICATOR);
@@ -235,15 +232,14 @@ void draw_scr_bpt_calibrate(void)
     draw_header_minimal(scr_bpt_calibrate);
 
     // Draw Blood Pressure label
-
     lv_obj_t *label_bp = lv_label_create(scr_bpt_calibrate);
     lv_label_set_text(label_bp, "BP Calibration");
-    lv_obj_align(label_bp, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_align(label_bp, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_add_style(label_bp, &style_lbl_white_14, 0);
 
     // Create Chart 1 - ECG
     chart_bpt = lv_chart_create(scr_bpt_calibrate);
-    lv_obj_set_size(chart_bpt, 200, 75);
+    lv_obj_set_size(chart_bpt, 390, 150);
     lv_obj_set_style_bg_color(chart_bpt, lv_color_black(), LV_STATE_DEFAULT);
 
     lv_obj_set_style_size(chart_bpt, 0, LV_PART_INDICATOR);
@@ -268,7 +264,7 @@ void draw_scr_bpt_calibrate(void)
     // Draw Progress bar
     bar_bpt_progress = lv_bar_create(scr_bpt_calibrate);
     lv_obj_set_size(bar_bpt_progress, 200, 5);
-    lv_obj_align_to(bar_bpt_progress, chart_bpt, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
+    lv_obj_align_to(bar_bpt_progress, chart_bpt, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
     lv_bar_set_value(bar_bpt_progress, 0, LV_ANIM_OFF);
 
     // Draw Progress bar label
@@ -281,8 +277,8 @@ void draw_scr_bpt_calibrate(void)
 
     btn_bpt_cal_start = lv_btn_create(scr_bpt_calibrate);
     lv_obj_add_event_cb(btn_bpt_cal_start, scr_bpt_btn_cal_start_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_cal_start, NULL, LV_ALIGN_BOTTOM_MID, -110, -200);
-    lv_obj_set_height(btn_bpt_cal_start, 55);
+    lv_obj_align_to(btn_bpt_cal_start, label_progress, LV_ALIGN_BOTTOM_MID, -110, 50);
+    lv_obj_set_height(btn_bpt_cal_start, 75);
     lv_obj_set_width(btn_bpt_cal_start, 240);
     lv_obj_set_style_bg_color(btn_bpt_cal_start, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN);
 
@@ -321,8 +317,8 @@ void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *btn_bpt_measure_start = lv_btn_create(scr_bpt_home);
     lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_measure_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_bpt_measure_start, LV_ALIGN_CENTER, 0, -40);
-    lv_obj_set_height(btn_bpt_measure_start, 50);
+    lv_obj_align(btn_bpt_measure_start, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_set_height(btn_bpt_measure_start, 80);
 
     lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_bpt_measure_start);
     lv_label_set_text(label_btn_bpt_measure, "Measure BP");
@@ -332,8 +328,8 @@ void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *btn_bpt_calibrate = lv_btn_create(scr_bpt_home);
     lv_obj_add_event_cb(btn_bpt_calibrate, scr_bpt_calib_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_bpt_calibrate, LV_ALIGN_CENTER, 0, 40);
-    lv_obj_set_height(btn_bpt_calibrate, 50);
+    lv_obj_align_to(btn_bpt_calibrate, btn_bpt_measure_start, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
+    lv_obj_set_height(btn_bpt_calibrate, 80);
 
     lv_obj_t *label_btn_bpt_calibrate = lv_label_create(btn_bpt_calibrate);
     lv_label_set_text(label_btn_bpt_calibrate, "Calibrate BP");

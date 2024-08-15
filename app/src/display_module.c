@@ -111,6 +111,11 @@ LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(logo_round_white);
 
+// BPT variables
+static bool bpt_cal_done_flag = false;
+static int bpt_meas_last_progress = 0;
+static int bpt_meas_last_status = 0;
+
 #define DISPLAY_DEFAULT_BRIGHTNESS 100
 
 void display_init_styles()
@@ -661,7 +666,7 @@ void display_screens_thread(void)
 
     display_blanking_off(display_dev);
 
-    // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
 
     //display_set_brightness(display_dev, 90);
 
@@ -795,12 +800,12 @@ void display_screens_thread(void)
             }
             */
 
-            /*if (curr_screen == SUBSCR_BPT_CALIBRATE)
+            if (curr_screen == SUBSCR_BPT_CALIBRATE)
             {
                 if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
                 {
-                    hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-                    if (bpt_cal_done_flag == false)
+                    //hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
+                    /*if (bpt_cal_done_flag == false)
                     {
                         if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
                         {
@@ -826,17 +831,17 @@ void display_screens_thread(void)
 
                             ppg_data_stop();
 
-                            lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-                            lv_obj_clear_flag(label_cal_done, LV_OBJ_FLAG_HIDDEN);
+                            //lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
+                            //lv_obj_clear_flag(label_cal_done, LV_OBJ_FLAG_HIDDEN);
 
-                            lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
-                            lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
+                            //lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
+                            //lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
                         }
                         hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
                         lv_disp_trig_activity(NULL);
-                    }
+                    }*/
                 }
-            }*/
+            }
             //}
         }
 

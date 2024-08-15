@@ -39,7 +39,7 @@ static int m_read_op_mode(const struct device *dev)
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    printk("Op mode = %x\n", rd_buf[1]);
+    //LOG_INF("Op mode = %x\n", rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -278,6 +278,11 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     printk("Version (decimal) = %d.%d.%d\n", rd_buf[1], rd_buf[2], rd_buf[3]);
 
+    if(rd_buf[1] == 0x00 && rd_buf[2] == 0x00 && rd_buf[3] == 0x00)
+    {
+        return -ENODEV;
+    }
+
     return 0;
 }
 
@@ -306,7 +311,14 @@ static int maxm86146_do_enter_app(const struct device *dev)
     m_read_op_mode(dev);
 
     uint8_t ver_buf[4] = {0};
-    maxm86146_get_ver(dev, ver_buf);
+    if(maxm86146_get_ver(dev, ver_buf)==0)
+    {
+        LOG_INF("MAXM86146 version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    } else
+    {
+        LOG_ERR("MAXM86146 not responding\n");
+        return -ENODEV;
+    }
 
     maxm86146_read_hub_status(dev);
     k_sleep(K_MSEC(200));
@@ -318,16 +330,16 @@ static int maxm86146_do_enter_app(const struct device *dev)
 static int maxm86146_sample_fetch(const struct device *dev,
                                   enum sensor_channel chan)
 {
-    
+    // Not implemented
 
-    return 0; // max32664_get_sample_fifo(dev);
+    return 0; 
 }
 
 static int maxm86146_channel_get(const struct device *dev,
                                  enum sensor_channel chan,
                                  struct sensor_value *val)
 {
-    
+    // Not implemented
 
     return 0;
 }
@@ -389,11 +401,9 @@ static int maxm86146_chip_init(const struct device *dev)
     }
 
     gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
+    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);    
 
-    maxm86146_do_enter_app(dev);
-
-    return 0;
+    return maxm86146_do_enter_app(dev);
 }
 
 #ifdef CONFIG_PM_DEVICE
