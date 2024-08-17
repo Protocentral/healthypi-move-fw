@@ -1,11 +1,11 @@
-//#include <zephyr/kernel.h>
+// #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/rtio/rtio.h>
 
 #include "max30001.h"
-//#include "max32664.h"
+#include "max32664.h"
 #include "maxm86146.h"
 #include "sampling_module.h"
 #include "display_module.h"
@@ -35,8 +35,8 @@ struct k_thread ppg_sampling_thread_data;
 
 k_tid_t global_ppg_sampling_thread_id;
 
-bool ppg_wrist_sampling_on=false;
-bool ppg_finger_sampling_on=false;
+bool ppg_wrist_sampling_on = false;
+bool ppg_finger_sampling_on = false;
 
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
                          32,  /* submission queue size */
@@ -54,8 +54,40 @@ RTIO_DEFINE_WITH_MEMPOOL(max32664d_read_rtio_ctx,
                          4    /* memory alignment */
 );
 
+static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
+                                                  uint32_t buf_len, void *userdata)
+{
+
+        // const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
+        const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buf;
+
+        struct hpi_ppg_sensor_data_t ppg_sensor_sample;
+        //printk("NS: %d ", edata->num_samples);
+        if (edata->num_samples > 0)
+        {
+                int n_samples = edata->num_samples;
+
+                for (int i = 0; i < n_samples; i++) // edata->num_samples; i++)
+                {
+                        ppg_sensor_sample.raw_red = edata->red_samples[i];
+                        ppg_sensor_sample.raw_ir = edata->ir_samples[i];
+                        // ppg_sensor_sample.raw_green = edata->green_samples[i];
+
+                        ppg_sensor_sample.hr = edata->hr;
+                        ppg_sensor_sample.spo2 = edata->spo2;
+
+                        ppg_sensor_sample.bp_sys = edata->bpt_sys;
+                        ppg_sensor_sample.bp_dia = edata->bpt_dia;
+                        ppg_sensor_sample.bpt_status = edata->bpt_status;
+                        ppg_sensor_sample.bpt_progress = edata->bpt_progress;
+
+                        k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
+                }
+                // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
+        }
+}
 static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
-                                       uint32_t buf_len, void *userdata)
+                                                 uint32_t buf_len, void *userdata)
 {
 
         // const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
@@ -81,30 +113,39 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
 
                         ppg_sensor_sample.steps_run = edata->steps_run;
                         ppg_sensor_sample.steps_walk = edata->steps_walk;
-                        
-                        //printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
-                        // ppg_sensor_sample.bp_sys = edata->bpt_sys;
-                        // ppg_sensor_sample.bp_dia = edata->bpt_dia;
-                        // ppg_sensor_sample.bpt_status = edata->bpt_status;
-                        // ppg_sensor_sample.bpt_progress = edata->bpt_progress;
+
+                        // printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
 
                         k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
                 }
-                // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
         }
 }
 
-void ppg_sampling_trigger_thread(void)
+void ppg_wrist_sampling_trigger_thread(void)
 {
         k_sem_take(&sem_sampling_start, K_FOREVER);
 
-        printk("PPG Sampling Trigger Thread starting\n");
+        printk("PPG Wrist Sampling Trigger Thread starting\n");
         for (;;)
         {
                 sensor_read(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
                 k_sleep(K_MSEC(40));
+        }
+}
+
+void ppg_finger_sampling_trigger_thread(void)
+{
+        k_sem_take(&sem_sampling_start, K_FOREVER);
+
+        printk("PPG Finger Sampling Trigger Thread starting\n");
+        for (;;)
+        {
+                sensor_read(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
+                sensor_processing_with_callback(&max32664d_read_rtio_ctx, sensor_ppg_finger_processing_callback);
+
+                k_sleep(K_MSEC(20));
         }
 }
 
@@ -160,7 +201,9 @@ void ecg_sampling_thread(void)
 #define ECG_SAMPLING_THREAD_STACKSIZE 2048
 #define ECG_SAMPLING_THREAD_PRIORITY 7
 
-K_THREAD_DEFINE(ppg_sampling_trigger_thread_id, 8192, ppg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
-//K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+// K_THREAD_DEFINE(ppg_sampling_trigger_thread_id, 8192, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+
+// K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 
 // K_THREAD_DEFINE(ppg_sampling_thread_id, SAMPLING_THREAD_STACKSIZE, ppg_sampling_thread, NULL, NULL, NULL, SAMPLING_THREAD_PRIORITY, 0, 1000);

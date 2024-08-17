@@ -34,6 +34,8 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_calibrate(void);
 void draw_scr_bpt_home(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_measure(void);
+void hpi_disp_bpt_draw_plotPPG(float data_ppg);
+void hpi_disp_bpt_update_progress(int progress);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);

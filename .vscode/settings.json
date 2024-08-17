@@ -10,7 +10,8 @@
         "time.h": "c",
         "nrfx_spim.h": "c",
         "max32664.h": "c",
-        "display_module.h": "c"
+        "display_module.h": "c",
+        "sampling_module.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build"

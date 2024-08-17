@@ -36,14 +36,14 @@
 	gpiokeys: gpio_keys {
 		compatible = "gpio-keys";
 		button_up: sw1 {
-			
+
 			label = "Button UP / SW1";
-			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW) >;
+			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_UP>;
 		};
 
 		button_down: sw3 {
-			
+
 			label = "Button DOWN / SW3";
 			gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_DOWN>;
@@ -59,22 +59,13 @@
 		};
 	};
 
-
-
 	aliases {
 		pwm-led0 = &pwm_led0;
-		//mcuboot-button0 = &button_up;
-
-		//watchdog0 = &wdt0;
-
-
 		max30001 = &max30001;
 		max32664d = &max32664d;
 		maxm86146 = &maxm86146;
-
 		rtc = &rtc_rv;
 	};
-
 };
 
 
@@ -208,10 +199,10 @@
 
 	max32664d: max32664d@55 {
 		compatible = "maxim,max32664";
-		reg=<0x55>;
+		reg = <0x55>;
 		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
-		status ="okay";
+		status = "okay";
 	};
 };
 
@@ -239,7 +230,7 @@
 		reg = <0x48>;
 	};
 
-	
+
 };
 
 &uart0 {
@@ -359,7 +350,7 @@
 		spi-max-frequency = <DT_FREQ_M(33)>;
 
 		reg = <0>;
-		
+
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 		//<&gpio0 29 GPIO_ACTIVE_HIGH>;
 		width = <390>;

@@ -65,6 +65,7 @@ lv_style_t style_lbl_white_small;
 lv_style_t style_lbl_orange;
 lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
+lv_style_t style_lbl_black_small;
 
 static lv_obj_t *roller_session_select;
 static lv_style_t style_scr_back;
@@ -115,6 +116,8 @@ LV_IMG_DECLARE(logo_round_white);
 static bool bpt_cal_done_flag = false;
 static int bpt_meas_last_progress = 0;
 static int bpt_meas_last_status = 0;
+static int bpt_cal_last_status = 0;
+static uint8_t bpt_cal_last_progress = 0;
 
 #define DISPLAY_DEFAULT_BRIGHTNESS 100
 
@@ -183,6 +186,11 @@ void display_init_styles()
     lv_style_set_text_color(&style_lbl_white_small, lv_color_white());
     lv_style_set_text_font(&style_lbl_white_small, &lv_font_montserrat_20);
 
+    // Label Black Small
+    lv_style_init(&style_lbl_white_small);
+    lv_style_set_text_color(&style_lbl_white_small, lv_color_white());
+    lv_style_set_text_font(&style_lbl_white_small, &lv_font_montserrat_20);
+
     // Label Red Small
     lv_style_init(&style_lbl_red_small);
     lv_style_set_text_color(&style_lbl_red_small, lv_palette_main(LV_PALETTE_RED));
@@ -197,6 +205,11 @@ void display_init_styles()
     lv_style_init(&style_lbl_white_14);
     lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
     lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_24);
+
+    // Label Black
+    lv_style_init(&style_lbl_black_small);
+    lv_style_set_text_color(&style_lbl_black_small, lv_color_black());
+    lv_style_set_text_font(&style_lbl_black_small, &lv_font_montserrat_34);
 
     // Screen background style
     lv_style_init(&style_scr_back);
@@ -298,6 +311,8 @@ void menu_roller_remove_event(void)
 void draw_header_minimal(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
+
+    lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *img_logo = lv_img_create(parent);
     lv_img_set_src(img_logo, &logo_round_white);
@@ -668,15 +683,15 @@ void display_screens_thread(void)
 
     display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
 
-    //display_set_brightness(display_dev, 90);
+    // display_set_brightness(display_dev, 90);
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 
     // draw_scr_home();
     // draw_scr_splash();
     // draw_scr_vitals_home();
-    //draw_scr_clockface(SCROLL_RIGHT);
-    //draw_scr_clock_small(SCROLL_RIGHT);
+    // draw_scr_clockface(SCROLL_RIGHT);
+    // draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
@@ -744,6 +759,41 @@ void display_screens_thread(void)
                     prev_rtor = ppg_sensor_sample.rtor;
                 }
             }
+            else if (curr_screen == SUBSCR_BPT_CALIBRATE)
+            {
+
+                hpi_disp_bpt_draw_plotPPG((float)(ppg_sensor_sample.raw_ir * 1.0000));
+                // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
+                if (bpt_cal_done_flag == false)
+                {
+                    if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
+                    {
+                        bpt_cal_last_status = ppg_sensor_sample.bpt_status;
+                        printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
+                    }
+                    if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
+                    {
+                        bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
+                        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                    }
+                    if (ppg_sensor_sample.bpt_progress == 100)
+                    {
+                        hw_bpt_stop();
+
+                        if (ppg_sensor_sample.bpt_status == 2)
+                        {
+                            printk("Calibration done");
+                        }
+                        bpt_cal_done_flag = true;
+
+                        hw_bpt_get_calib();
+
+                        // ppg_data_stop();
+                    }
+                    hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                    lv_disp_trig_activity(NULL);
+                }
+            }
 
             /*
             if (curr_screen == SUBSCR_BPT_MEASURE)
@@ -799,51 +849,8 @@ void display_screens_thread(void)
             }
             }
             */
-
-            if (curr_screen == SUBSCR_BPT_CALIBRATE)
-            {
-                if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
-                {
-                    //hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-                    /*if (bpt_cal_done_flag == false)
-                    {
-                        if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
-                        {
-                            bpt_cal_last_status = ppg_sensor_sample.bpt_status;
-                            printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-                        }
-                        if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
-                        {
-                            bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
-                            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                        }
-                        if (ppg_sensor_sample.bpt_progress == 100)
-                        {
-                            hw_bpt_stop();
-
-                            if (ppg_sensor_sample.bpt_status == 2)
-                            {
-                                printk("Calibration done");
-                            }
-                            bpt_cal_done_flag = true;
-
-                            hw_bpt_get_calib();
-
-                            ppg_data_stop();
-
-                            //lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-                            //lv_obj_clear_flag(label_cal_done, LV_OBJ_FLAG_HIDDEN);
-
-                            //lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
-                            //lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
-                        }
-                        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                        lv_disp_trig_activity(NULL);
-                    }*/
-                }
-            }
-            //}
         }
+        //}
 
         if (k_msgq_get(&q_plot_hrv, &hrv_sample, K_NO_WAIT) == 0)
         {
@@ -871,7 +878,7 @@ void display_screens_thread(void)
             }
         }
 
-        if (curr_screen == SCR_CLOCK|| curr_screen == SCR_CLOCK_SMALL)
+        if (curr_screen == SCR_CLOCK || curr_screen == SCR_CLOCK_SMALL)
         {
             if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
             {
@@ -947,14 +954,7 @@ void display_screens_thread(void)
                 if (m_disp_status_off == false)
                 {
                     printk("Display off");
-
-
-                    // display_set_brightness(display_dev, 0);
-
-                    //display_set_brightness(display_dev, 0);
-
-                    //   display_blanking_on(display_dev);
-
+                    display_set_brightness(display_dev, 0);
                     m_disp_status_off = true;
                 }
             }
@@ -963,12 +963,7 @@ void display_screens_thread(void)
                 if (m_disp_status_off == true)
                 {
                     printk("Display on");
-
-                    // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
-                    //    display_blanking_off(display_dev);
-
-                   // display_set_brightness(display_dev, 80);
-                    //   display_blanking_off(display_dev);
+                    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
                     m_disp_status_off = false;
                 }
             }

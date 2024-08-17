@@ -672,10 +672,12 @@ static int max32664_set_mode_bpt_cal(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set interrupt threshold
-	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x04, MAX32664_DEFAULT_CMD_DELAY);
+	k_sleep(K_MSEC(400));
 
 	// Enable AFE
 	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x01, MAX32664_DEFAULT_CMD_DELAY);
+	k_sleep(K_MSEC(100));
 
 	// Enable BPT algorithm in calibration mode
 	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x01, MAX32664_DEFAULT_CMD_DELAY);
