@@ -140,11 +140,13 @@
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
 				//regulator-boot-on;
-				//startup-delay-us = <100000>;
+				
+				startup-delay-us = <100000>;
 			};
 
 			npm_pmic_ldo2: LDO2 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				//regulator-boot-on;
 			};
 		};
 
