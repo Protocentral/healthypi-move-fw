@@ -13,9 +13,11 @@
 enum hpi_disp_screens
 {
     SCR_LIST_START,
+    SCR_CLOCK_ANALOG,
     SCR_CLOCK_SMALL,
     
     SCR_PLOT_PPG,
+    SCR_PLOT_BPT,
     SCR_PLOT_EDA,
     SCR_PLOT_ECG,
     SCR_PLOT_HRV,

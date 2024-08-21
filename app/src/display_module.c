@@ -119,7 +119,7 @@ static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
 
-#define DISPLAY_DEFAULT_BRIGHTNESS 100
+#define DISPLAY_DEFAULT_BRIGHTNESS 75
 
 void display_init_styles()
 {
@@ -308,7 +308,7 @@ void menu_roller_remove_event(void)
     lv_obj_remove_event_cb(roller_session_select, menu_roller_event_handler);
 }
 
-void draw_header_minimal(lv_obj_t *parent)
+void draw_header_minimal(lv_obj_t *parent, int top_offset)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
 
@@ -317,13 +317,13 @@ void draw_header_minimal(lv_obj_t *parent)
     lv_obj_t *img_logo = lv_img_create(parent);
     lv_img_set_src(img_logo, &logo_round_white);
     lv_obj_set_size(img_logo, 25, 25);
-    lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, -35, 5);
+    lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, -35, (top_offset+5));
 
     // Battery Level
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 15, -2);
+    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 15, (top_offset-2));
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
@@ -698,6 +698,7 @@ void display_screens_thread(void)
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     //draw_scr_bpt_home(SCROLL_RIGHT);
+    // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
@@ -955,7 +956,7 @@ void display_screens_thread(void)
                 if (m_disp_status_off == false)
                 {
                     printk("Display off");
-                    display_set_brightness(display_dev, 0);
+                    // display_set_brightness(display_dev, 0);
                     m_disp_status_off = true;
                 }
             }
@@ -964,7 +965,7 @@ void display_screens_thread(void)
                 if (m_disp_status_off == true)
                 {
                     printk("Display on");
-                    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+                    // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
                     m_disp_status_off = false;
                 }
             }

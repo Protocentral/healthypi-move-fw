@@ -39,7 +39,7 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
     scr_hrv_scatter = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_hrv_scatter, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     draw_bg(scr_hrv_scatter);
-    draw_header_minimal(scr_hrv_scatter);
+    draw_header_minimal(scr_hrv_scatter,10);
 
     // Create Chart 1 - HRV
     chart_hrv_scatter = lv_chart_create(scr_hrv_scatter);

@@ -51,8 +51,11 @@ void hpi_disp_hrv_scatter_draw_plot_rtor(float rtor, float prev_rtor);
 void hpi_disp_hrv_scatter_update_rtor(int rtor);
 void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
 
+// Settings screen functions
+void draw_scr_settings(enum scroll_dir m_scroll_dir);
+
 // Helper objects
-void draw_header_minimal(lv_obj_t *parent);
+void draw_header_minimal(lv_obj_t *parent, int top_offset);
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir);
 
 

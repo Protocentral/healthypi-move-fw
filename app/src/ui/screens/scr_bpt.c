@@ -142,7 +142,7 @@ static void scr_bpt_btn_measure_start_event_handler(lv_event_t *e)
 void draw_scr_bpt_measure(void)
 {
     scr_bpt_measure = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_measure);
+    draw_header_minimal(scr_bpt_measure,0);
 
     // Draw Blood Pressure label
 
@@ -237,7 +237,7 @@ void draw_scr_bpt_measure(void)
 void draw_scr_bpt_calibrate(void)
 {
     scr_bpt_calibrate = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_calibrate);
+    draw_header_minimal(scr_bpt_calibrate,0);
 
     draw_bg(scr_bpt_calibrate);
 
@@ -320,7 +320,7 @@ void draw_scr_bpt_calibrate(void)
 void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
 {
     scr_bpt_home = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_home);
+    draw_header_minimal(scr_bpt_home,0);
 
     // Draw button to measure BP
 

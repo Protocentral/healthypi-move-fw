@@ -49,7 +49,7 @@ void draw_scr_clockface(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_color(scr_clock, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(scr_clock, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    draw_header_minimal(scr_clock);
+    draw_header_minimal(scr_clock,0);
     draw_bg(scr_clock);
 
     ui_hour_group = lv_obj_create(scr_clock);

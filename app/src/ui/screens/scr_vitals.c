@@ -35,7 +35,7 @@ void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
 {
     scr_vitals_home = lv_obj_create(NULL);
 
-    draw_header_minimal(scr_vitals_home);
+    draw_header_minimal(scr_vitals_home,10);
 
     // HR Number label
     label_vitals_hr = lv_label_create(scr_vitals_home);

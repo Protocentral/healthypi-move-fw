@@ -45,7 +45,7 @@ extern int curr_screen;
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
     scr_ecg = lv_obj_create(NULL);
-    draw_header_minimal(scr_ecg);
+    draw_header_minimal(scr_ecg,10);
     draw_bg(scr_ecg);
 
     // Create Chart 1 - ECG

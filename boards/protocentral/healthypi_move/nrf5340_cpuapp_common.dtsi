@@ -55,8 +55,8 @@
 		sensor_dcdc_en: dcdc_en {
 			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
 			label = "Boost 5V converter enable";
-
 		};
+		
 	};
 
 	aliases {
@@ -298,7 +298,7 @@
 	pinctrl-0 = <&spi3_default>;
 	pinctrl-1 = <&spi3_sleep>;
 	pinctrl-names = "default", "sleep";
-	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
 
 	max30001: max30001@0 {
 		compatible = "maxim,max30001";
@@ -321,7 +321,9 @@
 	compatible = "nordic,nrf-spim";
 	status = "okay";
 
-	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
+	//cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
+
 	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
 	pinctrl-1 = <&spi4_sleep>;
@@ -348,11 +350,8 @@
 
 	sh8601: sh8601@0 {
 		compatible = "sitronix,sh8601";
-
 		spi-max-frequency = <DT_FREQ_M(33)>;
-
 		reg = <0>;
-
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 		//<&gpio0 29 GPIO_ACTIVE_HIGH>;
 		width = <390>;

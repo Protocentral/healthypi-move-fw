@@ -49,7 +49,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_opa(scr_clock_small, 1, LV_STATE_DEFAULT);
 
     draw_bg(scr_clock_small);
-    draw_header_minimal(scr_clock_small);
+    draw_header_minimal(scr_clock_small,0);
 
     ui_label_hour = lv_label_create(scr_clock_small);
     lv_obj_set_width(ui_label_hour, LV_SIZE_CONTENT);  /// 1
