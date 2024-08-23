@@ -148,19 +148,19 @@ uint8_t m_read_hub_status(const struct device *dev)
 static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
 	const struct max32664_config *config = dev->config;
-	uint8_t rd_buf[4] = {0x00, 0x00, 0x00, 0x00};
+
 	uint8_t wr_buf[2] = {0xFF, 0x03};
 
 	k_sleep(K_USEC(300));
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	i2c_read_dt(&config->i2c, ver_buf, 4);
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
-	printk("Version (decimal) = %d.%d.%d\n", rd_buf[1], rd_buf[2], rd_buf[3]);
+	//LOG_INF("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
-	if(rd_buf[1] == 0x00 && rd_buf[2] == 0x00 && rd_buf[3] == 0x00)
+	if(ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
 	{
 		return -ENODEV;
 	}
@@ -382,7 +382,7 @@ static int max32664_do_enter_app(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 
-	printk("MAX32664D entering app mode\n");
+	LOG_DBG("MAX32664D entering app mode\n");
 
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
@@ -816,9 +816,9 @@ static int max32664_channel_get(const struct device *dev,
 								enum sensor_channel chan,
 								struct sensor_value *val)
 {
-	struct max32664_data *data = dev->data;
+	//struct max32664_data *data = dev->data;
 
-	int fifo_chan;
+	/*int fifo_chan;
 
 	switch (chan)
 	{
@@ -888,7 +888,7 @@ static int max32664_channel_get(const struct device *dev,
 	default:
 		LOG_ERR("Unsupported sensor channel");
 		return -ENOTSUP;
-	}
+	}*/
 
 	return 0;
 }

@@ -229,8 +229,8 @@ static int sh8601_set_pixel_format(const struct device *dev,
 {
 	struct sh8601_data *data = dev->data;
 	uint8_t bytes_per_pixel = 3;
-	int r;
-	uint8_t tx_data;
+	//int r;
+	// uint8_t tx_data;
 
 	if (pixel_format == PIXEL_FORMAT_RGB_565)
 	{
@@ -249,10 +249,10 @@ static int sh8601_set_pixel_format(const struct device *dev,
 	}
 
 	// r = sh8601_transmit_cmd(dev, SH8601_W_COLOROPTION, &tx_data, 1U);
-	if (r < 0)
-	{
-		return r;
-	}
+	//if (r < 0)
+	//{
+	//	return r;
+	//}
 
 	data->pixel_format = pixel_format;
 	data->bytes_per_pixel = bytes_per_pixel;
@@ -306,8 +306,6 @@ static int sh8601_set_orientation(const struct device *dev,
 static int sh8601_set_brightness(const struct device *dev,
 								 const uint8_t brightness)
 {
-
-	const struct sh8601_config *config = dev->config;
 	uint8_t args[1] = {brightness};
 	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
@@ -494,13 +492,9 @@ static int sh8601_write(const struct device *dev, const uint16_t x,
 						const struct display_buffer_descriptor *desc,
 						const void *buf)
 {
-	const struct sh8601_config *config = dev->config;
-	int r;
-	struct spi_buf tx_buf;
-
 	// printk("Writing %dx%d (w,h) @ %dx%d (x,y)", desc->width, desc->height,
 	//		x, y);
-	r = sh8601_set_mem_area(dev, x, y, desc->width, desc->height);
+	int r = sh8601_set_mem_area(dev, x, y, desc->width, desc->height);
 	if (r < 0)
 	{
 		return r;

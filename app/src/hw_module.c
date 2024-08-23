@@ -29,7 +29,6 @@
 
 #include <nrfx_spim.h>
 
-
 #include "max30001.h"
 #include "max32664.h"
 
@@ -85,7 +84,6 @@ static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sens
 volatile bool max30001_device_present = false;
 volatile bool maxm86146_device_present = false;
 volatile bool max32664d_device_present = false;
-
 
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
@@ -476,7 +474,6 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
 #define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
 #define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
 
-
 void hw_bpt_start_cal(void)
 {
     printk("Starting BPT Calibration\n");
@@ -499,7 +496,7 @@ void hw_bpt_start_cal(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
     k_sleep(K_MSEC(100));
 
-    //ppg_data_start();
+    // ppg_data_start();
 }
 
 void hw_bpt_start_est(void)
@@ -607,18 +604,18 @@ void hw_thread(void)
 
     if (!device_is_ready(regulators))
     {
-        printk("Error: Regulator device is not ready\n");
+        LOG_ERR("Error: Regulator device is not ready\n");
         // return 0;
     }
 
     if (!device_is_ready(charger))
     {
-        printk("Charger device not ready.\n");
+        LOG_ERR("Charger device not ready.\n");
         // return 0;
     }
     if (npm_fuel_gauge_init(charger) < 0)
     {
-        printk("Could not initialise fuel gauge.\n");
+        LOG_ERR("Could not initialise fuel gauge.\n");
         // return 0;
     }
 
@@ -630,8 +627,8 @@ void hw_thread(void)
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
     {
-        //return;
-        printk("Error: Could not configure GPIO pin DC/DC 5v EN\n");
+        // return;
+        LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
@@ -654,35 +651,48 @@ void hw_thread(void)
 #endif
     */
 
-
     if (!device_is_ready(maxm86146_dev))
     {
-        LOG_ERR("MAXM86146 device not present!\n");
+        LOG_ERR("MAXM86146 device not present!");
     }
     else
     {
-        LOG_INF("MAXM86146 device present!\n");
+        LOG_INF("MAXM86146 device present!");
         // struct sensor_value mode_set;
         // mode_set.val1 = MAXM86146_OP_MODE_ALGO;
         // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
-    if(!device_is_ready(max32664d_dev))
+    if (!device_is_ready(max32664d_dev))
     {
-        LOG_ERR("MAX32664D device not present!\n");
+        LOG_ERR("MAX32664D device not present!");
         max32664d_device_present = false;
     }
     else
     {
-        LOG_INF("MAX32664D device present!\n");
+        LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
-        struct sensor_value mode_set;
-        mode_set.val1 = MAX32664_OP_MODE_BPT;
-        //sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+        // struct sensor_value mode_set;
+        // mode_set.val1 = MAX32664_OP_MODE_BPT;
+        // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
-    nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK,
-			       NRF_CLOCK_HFCLK_DIV_1);
+    // printk("Switching application core from 64 MHz and 128 MHz. \n");
+    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+    // printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
+
+    // printk("Switching application core from 128 MHz and 64 MHz. \n");
+    //  nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
+    //  printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
+
+    nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+
+    nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
+    nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
+
+#ifdef NRF_SPIM_HAS_32_MHZ_FREQ
+    printk("spi has 32MHz\n");
+#endif
 
     setup_pmic_callbacks();
 
@@ -707,7 +717,7 @@ void hw_thread(void)
     }
 
     rtc_get_time(rtc_dev, &curr_time);
-    printk("Current time: %d:%d:%d %d/%d/%d \n", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
+    LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
     // fs_module_init();
 
@@ -719,24 +729,9 @@ void hw_thread(void)
 
     // init_settings();
 
-    //printk("Switching application core from 64 MHz and 128 MHz. \n");
-    //nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
-    //printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
-
-    nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
-    nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
-
-#ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    printk("spi has 32MHz\n");
-#endif
-
-    //printk("Switching application core from 128 MHz and 64 MHz. \n");
-    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
-    // printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
-
     usb_init();
 
-    printk("HW Thread started\n");
+    LOG_INF("HW Thread started\n");
 
     // hw_msbl_load();
     //  printk("Initing...\n");
@@ -755,7 +750,7 @@ void hw_thread(void)
         npm_fuel_gauge_update(charger);
         rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
-        //printk("H ");
+        // printk("H ");
 
         k_sleep(K_MSEC(3000));
     }

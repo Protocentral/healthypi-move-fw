@@ -52,8 +52,7 @@ static lv_style_t style_temp;
 static lv_style_t style_scr_back;
 static lv_style_t style_batt_sym;
 static lv_style_t style_batt_percent;
-static lv_style_t style_h1;
-static lv_style_t style_h2;
+
 static lv_style_t style_info;
 static lv_style_t style_icon;
 static lv_style_t style_scr_black;
@@ -84,8 +83,6 @@ K_SEM_DEFINE(sem_disp_inited, 0, 1);
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 100, 1);
-
-static const struct device *touch_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(chsc6x));
 
 bool bpt_cal_started = false;
 int global_bp_sys = 0;
@@ -119,7 +116,7 @@ static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
 
-#define DISPLAY_DEFAULT_BRIGHTNESS 75
+#define DISPLAY_DEFAULT_BRIGHTNESS 90
 
 void display_init_styles()
 {
@@ -657,7 +654,7 @@ void display_screens_thread(void)
         // return;
     }
 
-    printk("Display device: %s", display_dev->name);
+    LOG_DBG("Display device: %s", display_dev->name);
 
     // Init all styles globally
     display_init_styles();
@@ -702,7 +699,7 @@ void display_screens_thread(void)
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
-    printk("Display screens inited\n");
+    LOG_INF("Display screens inited");
     // k_sem_take(&sem_hw_inited, K_FOREVER);
     k_sem_give(&sem_sampling_start);
 
