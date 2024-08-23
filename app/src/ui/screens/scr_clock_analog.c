@@ -12,13 +12,15 @@
 lv_obj_t *scr_clock_analog;
 
 static lv_obj_t *meter_clock;
+static lv_obj_t *home_ui_step_group;
 
 extern int curr_screen;
 
 static void set_value(void *indic, int32_t v)
 {
-    if(indic == NULL || meter_clock == NULL) return;
-    
+    if (indic == NULL || meter_clock == NULL)
+        return;
+
     lv_meter_set_indicator_end_value(meter_clock, indic, v);
 }
 
@@ -30,7 +32,15 @@ void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
     lv_obj_clear_flag(scr_clock_analog, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
     draw_bg(scr_clock_analog);
-    draw_header_minimal(scr_clock_analog, 75);
+    // draw_header_minimal(scr_clock_analog, 75);
+
+    home_ui_step_group = ui_steps_button_create(scr_clock_analog);
+    lv_obj_align_to(home_ui_step_group, NULL, LV_ALIGN_TOP_MID, -50, 90);
+    lv_obj_set_style_border_opa(home_ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_t *hr_display = ui_hr_button_create(scr_clock_analog);
+    lv_obj_align_to(hr_display, NULL, LV_ALIGN_TOP_MID, 50, 220);
+    lv_obj_set_style_border_opa(hr_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     meter_clock = lv_meter_create(scr_clock_analog);
     lv_obj_set_size(meter_clock, 400, 400);
@@ -78,10 +88,6 @@ void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
     lv_anim_set_values(&a, 0, 60);
     lv_anim_start(&a);
     */
-
-    lv_obj_t *hr_display = ui_hr_button_create(scr_clock_analog);
-    lv_obj_align_to(hr_display, NULL, LV_ALIGN_TOP_MID, 0,240);
-    lv_obj_set_style_border_opa(hr_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 
