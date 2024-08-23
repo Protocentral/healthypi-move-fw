@@ -78,6 +78,8 @@ uint8_t m_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3
 											  207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
 											  0, 3, 207, 0, 4, 0, 3, 176, 102, 3};
 
+static int max32664_do_enter_app(const struct device *dev);
+
 int m_read_op_mode(const struct device *dev)
 {
 	// struct max32664_data *data = dev->data;
@@ -157,6 +159,11 @@ static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
 	printk("Version (decimal) = %d.%d.%d\n", rd_buf[1], rd_buf[2], rd_buf[3]);
+
+	if(rd_buf[1] == 0x00 && rd_buf[2] == 0x00 && rd_buf[3] == 0x00)
+	{
+		return -ENODEV;
+	}
 
 	return 0;
 }
@@ -371,7 +378,7 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 	return 0;
 }
 
-void max32664_do_enter_app(const struct device *dev)
+static int max32664_do_enter_app(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 
@@ -395,7 +402,15 @@ void max32664_do_enter_app(const struct device *dev)
 	m_read_op_mode(dev);
 
 	uint8_t ver_buf[4] = {0};
-	m_get_ver(dev, ver_buf);
+	if(m_get_ver(dev, ver_buf)==0)
+	{
+		LOG_INF("MAX32664D Version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+	}
+	else
+	{
+		LOG_INF("MAX32664D not Found\n");
+		return -ENODEV;
+	}
 
 	m_read_hub_status(dev);
 	k_sleep(K_MSEC(200));
@@ -406,6 +421,8 @@ void max32664_do_enter_app(const struct device *dev)
 	//gpio_pin_set_dt(&config->mfio_gpio, 0);
 	//k_sleep(K_USEC(300));
 	//gpio_pin_set_dt(&config->reset_gpio, 0);
+
+	return 0;
 
 }
 
@@ -968,52 +985,7 @@ static int max32664_chip_init(const struct device *dev)
 	gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
-	/*
-	// Enter application mode
-	gpio_pin_set_dt(&config->mfio_gpio, 1);
-	k_sleep(K_MSEC(10));
-
-	
-
-	gpio_pin_set_dt(&config->reset_gpio, 1);
-	k_sleep(K_MSEC(1000));
-
-	// gpio_pin_set_dt(&config->mfio_gpio, 0);
-
-	// gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-
-	k_sleep(K_MSEC(10));
-	*/
-
-	/*int m_op_mode = m_read_op_mode(dev);
-
-	if (m_op_mode != 0)
-	{
-		printk("MAX32664D is in bootloader mode\n");
-	}
-	else
-	{	
-		/*uint8_t ver_buf[4];
-		m_get_ver(dev, ver_buf);
-		if (ver_buf[1] != 0x00)
-		{
-			printk("MAX32664 not found\n");
-			return -ENODEV;
-		}
-		printk("MAX32664D is in application mode\n");
-	}
-
-	m_read_hub_status(dev);
-	k_sleep(K_MSEC(200));
-	m_read_hub_status(dev);
-	*/
-
-	//gpio_pin_set_dt(&config->reset_gpio, 0);
-	//k_sleep(K_MSEC(20));
-
-	max32664_do_enter_app(dev);
-
-	return 0;
+	return max32664_do_enter_app(dev);
 }
 
 #ifdef CONFIG_PM_DEVICE
