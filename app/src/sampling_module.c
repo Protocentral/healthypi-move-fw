@@ -10,6 +10,8 @@
 #include "sampling_module.h"
 #include "display_module.h"
 
+LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
+
 extern const struct device *const max30001_dev;
 extern const struct device *const maxm86146_dev;
 extern const struct device *const max32664d_dev;
@@ -125,7 +127,7 @@ void ppg_wrist_sampling_trigger_thread(void)
 {
         k_sem_take(&sem_sampling_start, K_FOREVER);
 
-        printk("PPG Wrist Sampling Trigger Thread starting\n");
+        LOG_INF("PPG Wrist Sampling Trigger Thread starting\n");
         for (;;)
         {
                 sensor_read(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
@@ -139,7 +141,7 @@ void ppg_finger_sampling_trigger_thread(void)
 {
         k_sem_take(&sem_sampling_start, K_FOREVER);
 
-        printk("PPG Finger Sampling Trigger Thread starting\n");
+        LOG_INF("PPG Finger Sampling Trigger Thread starting");
         for (;;)
         {
                 sensor_read(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
@@ -161,7 +163,7 @@ void ppg_data_start(void)
 
 void ecg_sampling_thread(void)
 {
-        printk("ECG/ BioZ Sampling Thread starting\n");
+        LOG_INF("ECG/ BioZ Sampling Thread starting\n");
 
         for (;;)
         {

@@ -1,5 +1,5 @@
 #include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
+
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <stdio.h>
@@ -13,6 +13,10 @@
 #include "sampling_module.h"
 #include "fs_module.h"
 #include "ble_module.h"
+
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "algos.h"
 
@@ -195,7 +199,7 @@ float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
 
 void data_thread(void)
 {
-    printk("Data Thread starting\n");
+    
 
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
@@ -265,6 +269,8 @@ void data_thread(void)
     bool hrv_ready_flag = false;
 
     struct hpi_computed_hrv_t hrv_calculated;
+
+    LOG_INF("Data Thread starting\n");
 
     for (;;)
     {
