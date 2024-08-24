@@ -102,6 +102,6 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
 
     lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 
-    curr_screen = SCR_CLOCK_SMALL;
+    //curr_screen = SCR_CLOCK_SMALL;
     hpi_show_screen(scr_clock_small, m_scroll_dir);
 }

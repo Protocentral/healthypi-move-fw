@@ -116,7 +116,7 @@ static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
 
-#define DISPLAY_DEFAULT_BRIGHTNESS 90
+#define DISPLAY_DEFAULT_BRIGHTNESS 99
 
 void display_init_styles()
 {
@@ -591,9 +591,10 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
 {
     switch (m_screen)
     {
-    case SCR_CLOCK_SMALL:
+    /*case SCR_CLOCK_SMALL:
         draw_scr_clock_small(m_scroll_dir);
         break;
+        */
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
         break;
@@ -609,6 +610,12 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_PLOT_HRV_SCATTER:
         draw_scr_hrv_scatter(m_scroll_dir);
         break;
+    case SCR_CLOCK_ANALOG:
+        draw_scr_clock_analog(m_scroll_dir);
+        break;
+    case SCR_BPT_HOME:
+         draw_scr_bpt_home(m_scroll_dir);
+         break;
     /*
     case SCR_CLOCK:
         draw_scr_clockface(m_scroll_dir);
@@ -679,7 +686,7 @@ void display_screens_thread(void)
 
     display_blanking_off(display_dev);
 
-    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+    //display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
 
     // display_set_brightness(display_dev, 90);
 
@@ -690,11 +697,11 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     //draw_scr_clock_small(SCROLL_RIGHT);
-    draw_scr_clock_analog(SCROLL_RIGHT);
+    //draw_scr_clock_analog(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    // draw_scr_ecg(SCROLL_RIGHT);
+     draw_scr_ecg(SCROLL_RIGHT);
     //draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
@@ -724,7 +731,7 @@ void display_screens_thread(void)
                     scr_ppg_hr_spo2_refresh_counter++;
                 }
             }
-            else if ((curr_screen == SCR_CLOCK) || (curr_screen == SCR_CLOCK_SMALL))
+            else if ((curr_screen == SCR_CLOCK))// || (curr_screen == SCR_CLOCK_SMALL))
             {
                 if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
                 {
@@ -878,20 +885,20 @@ void display_screens_thread(void)
             }
         }
 
-        if (curr_screen == SCR_CLOCK || curr_screen == SCR_CLOCK_SMALL)
+        if (curr_screen == SCR_CLOCK)// || curr_screen == SCR_CLOCK_SMALL)
         {
             if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
             {
                 // TEST ONLY: time
-                if (curr_screen == SCR_CLOCK_SMALL)
-                {
-                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true);
-                    ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, global_system_time.tm_year + 1900);
-                }
-                else
-                {
+                //if (curr_screen == SCR_CLOCK_SMALL)
+                //{
+                //    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true);
+                //    ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, global_system_time.tm_year + 1900);
+                //}
+                //else
+                //{
                     ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                }
+                //}
                 time_refresh_counter = 0;
             }
             else

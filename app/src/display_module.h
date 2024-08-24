@@ -4,7 +4,7 @@
 
 
 #define SCREEN_TRANS_TIME 0
-#define DISP_THREAD_REFRESH_INT_MS 60
+#define DISP_THREAD_REFRESH_INT_MS 4
 
 #define DISP_SLEEP_TIME_MS 60000
 
@@ -14,10 +14,10 @@ enum hpi_disp_screens
 {
     SCR_LIST_START,
     SCR_CLOCK_ANALOG,
-    SCR_CLOCK_SMALL,
+    //SCR_CLOCK_SMALL,
     
     SCR_PLOT_PPG,
-    SCR_PLOT_BPT,
+    SCR_BPT_HOME,
     SCR_PLOT_EDA,
     SCR_PLOT_ECG,
     SCR_PLOT_HRV,

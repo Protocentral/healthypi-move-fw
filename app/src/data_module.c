@@ -278,21 +278,21 @@ void data_thread(void)
 
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
-            ecg_input = (float32_t)(ecg_bioz_sensor_sample.ecg_sample / 100000.0000);
-            ecg_output2 = iir_filt(ecg_input, &iir_filt_notch_inst);
-            ecg_output = iir_filt(ecg_output2, &iir_filt_low_inst);
+            //ecg_input = (float32_t)(ecg_bioz_sensor_sample.ecg_sample / 100000.0000);
+            //ecg_output2 = iir_filt(ecg_input, &iir_filt_notch_inst);
+            //ecg_output = iir_filt(ecg_output2, &iir_filt_low_inst);
 
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             int32_t ecg_output_int = (int32_t)(ecg_output * 1000); // ecg_input[0]*1000;
             // printk("ECG: %f, ECG_F: %f, ECGI: %d\n", ecg_input, ecg_output, ecg_output_int);
 
-            ecg_bioz_sensor_sample.ecg_sample = ecg_output_int;
+            //ecg_bioz_sensor_sample.ecg_sample = ecg_input;// ecg_output_int;
 
             if (settings_send_ble_enabled)
             {
 
-                ecg_sample_buffer[sample_buffer_count++] = ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
+                ecg_sample_buffer[sample_buffer_count++] = ecg_bioz_sensor_sample.ecg_sample; //ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
                 if (sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
                     ble_ecg_notify(ecg_sample_buffer, sample_buffer_count);

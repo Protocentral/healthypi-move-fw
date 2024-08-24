@@ -38,9 +38,10 @@ void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(home_ui_step_group, NULL, LV_ALIGN_TOP_MID, -50, 90);
     lv_obj_set_style_border_opa(home_ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_t *hr_display = ui_hr_button_create(scr_clock_analog);
+    /*lv_obj_t *hr_display = ui_hr_button_create(scr_clock_analog);
     lv_obj_align_to(hr_display, NULL, LV_ALIGN_TOP_MID, 50, 220);
     lv_obj_set_style_border_opa(hr_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    */
 
     meter_clock = lv_meter_create(scr_clock_analog);
     lv_obj_set_size(meter_clock, 400, 400);
@@ -71,14 +72,15 @@ void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
     lv_meter_indicator_t *indic_sec = lv_meter_add_needle_line(meter_clock, scale_min, 2, lv_palette_main(LV_PALETTE_RED), -20); // lv_meter_add_needle_img(meter_clock, scale_min, &img_hand, 5, 5);
 
     /*Create an animation to set the value*/
-    lv_anim_t a;
+    /*lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_exec_cb(&a, set_value);
     lv_anim_set_values(&a, 0, 60);
     lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_set_time(&a, 60000); /*2 sec for 1 turn of the minute hand (1 hour)*/
+    lv_anim_set_time(&a, 60000); //2 sec for 1 turn of the minute hand (1 hour)
     lv_anim_set_var(&a, indic_sec);
     lv_anim_start(&a);
+    */
 
     lv_meter_set_indicator_end_value(meter_clock, indic_hour, 2);
     lv_meter_set_indicator_end_value(meter_clock, indic_min, 50);
