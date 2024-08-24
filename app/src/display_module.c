@@ -116,8 +116,6 @@ static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
 
-#define DISPLAY_DEFAULT_BRIGHTNESS 175
-
 void display_init_styles()
 {
     // Subscript (Unit) label style
@@ -701,7 +699,7 @@ void display_screens_thread(void)
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-     draw_scr_ecg(SCROLL_RIGHT);
+    draw_scr_ecg(SCROLL_RIGHT);
     //draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
