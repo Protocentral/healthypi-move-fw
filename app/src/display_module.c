@@ -116,7 +116,7 @@ static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
 
-#define DISPLAY_DEFAULT_BRIGHTNESS 99
+#define DISPLAY_DEFAULT_BRIGHTNESS 175
 
 void display_init_styles()
 {
@@ -686,7 +686,7 @@ void display_screens_thread(void)
 
     display_blanking_off(display_dev);
 
-    //display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
 
     // display_set_brightness(display_dev, 90);
 
