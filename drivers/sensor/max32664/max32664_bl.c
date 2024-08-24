@@ -10,7 +10,7 @@
 
 #include "max32664.h"
 
-LOG_MODULE_REGISTER(MAX32664, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(MAX32664_BL, CONFIG_SENSOR_LOG_LEVEL);
 
 uint8_t max32664_fw_init_vector[11] = {0};
 uint8_t max32664_fw_auth_vector[16] = {0};

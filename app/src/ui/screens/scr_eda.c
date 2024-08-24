@@ -41,7 +41,7 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir)
 {
     scr_eda = lv_obj_create(NULL);
     draw_bg(scr_eda);
-    draw_header_minimal(scr_eda);
+    draw_header_minimal(scr_eda,10);
 
     // Create Chart 1 - ECG
     chart_eda = lv_chart_create(scr_eda);

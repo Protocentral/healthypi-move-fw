@@ -25,9 +25,16 @@
 #include <time.h>
 #include <zephyr/posix/time.h>
 
+#include <nrfx_clock.h>
+
+#include <nrfx_spim.h>
+
 #include "max30001.h"
-// #include "max32664.h"
+#include "max32664.h"
+
+#ifdef CONFIG_SENSOR_MAXM86146
 #include "maxm86146.h"
+#endif
 
 #include "hw_module.h"
 #include "fs_module.h"
@@ -55,8 +62,7 @@ extern struct k_msgq q_session_cmd_msg;
 // Peripheral Device Pointers
 // const struct device *fg_dev = DEVICE_DT_GET_ANY(maxim_max17048);
 const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
-const struct device *max32664_dev = DEVICE_DT_GET_ANY(maxim_max32664);
-
+const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 
 const struct device *acc_dev = DEVICE_DT_GET_ONE(st_lsm6dso);
@@ -72,6 +78,12 @@ static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_reg
 static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
+
+static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
+
+volatile bool max30001_device_present = false;
+volatile bool maxm86146_device_present = false;
+volatile bool max32664d_device_present = false;
 
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
@@ -125,7 +137,9 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             break;
         case INPUT_KEY_DOWN:
             // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
-            LOG_INF("DOWN Key Pressed");
+            printk("DOWN Key Pressed");
+            printk("Entering Ship Mode\n");
+            regulator_parent_ship_mode(regulators);
             // k_sem_give(&sem_start_cal);
             // sys_reboot(SYS_REBOOT_COLD);
             break;
@@ -460,7 +474,6 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
 #define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
 #define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
 
-/*
 void hw_bpt_start_cal(void)
 {
     printk("Starting BPT Calibration\n");
@@ -468,22 +481,22 @@ void hw_bpt_start_cal(void)
     struct sensor_value data_time_val;
     data_time_val.val1 = DEFAULT_DATE; // Date
     data_time_val.val2 = DEFAULT_TIME; // Time
-    sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
     k_sleep(K_MSEC(100));
 
     struct sensor_value bp_cal_val;
     bp_cal_val.val1 = 0x00787A7D; // Sys vals
     bp_cal_val.val2 = 0x00505152; // Dia vals
-    sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_BP_CAL, &bp_cal_val);
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_BP_CAL, &bp_cal_val);
     k_sleep(K_MSEC(100));
 
     // Start BPT Calibration
     struct sensor_value mode_val;
     mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_START;
-    sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
     k_sleep(K_MSEC(100));
 
-    ppg_data_start();
+    // ppg_data_start();
 }
 
 void hw_bpt_start_est(void)
@@ -495,12 +508,12 @@ void hw_bpt_start_est(void)
     struct sensor_value data_time_val;
     data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
     data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
-    sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
     k_sleep(K_MSEC(100));
 
     struct sensor_value mode_set;
     mode_set.val1 = MAX32664_OP_MODE_BPT;
-    sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
 
     k_sleep(K_MSEC(1000));
     ppg_data_start();
@@ -510,15 +523,15 @@ void hw_bpt_stop(void)
 {
     struct sensor_value mode_val;
     mode_val.val1 = MAX32664_ATTR_STOP_EST;
-    sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_STOP_EST, &mode_val);
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_STOP_EST, &mode_val);
 }
 
 void hw_bpt_get_calib(void)
 {
     struct sensor_value mode_val;
     mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_GET_VECTOR;
-    sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
-}*/
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
+}
 
 static volatile bool vbus_connected;
 
@@ -586,24 +599,24 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
 
 void hw_thread(void)
 {
-    // int ret = 0;
+    int ret = 0;
     static struct rtc_time curr_time;
 
     if (!device_is_ready(regulators))
     {
-        printk("Error: Regulator device is not ready\n");
+        LOG_ERR("Error: Regulator device is not ready\n");
         // return 0;
     }
 
     if (!device_is_ready(charger))
     {
-        printk("Charger device not ready.\n");
+        LOG_ERR("Charger device not ready.\n");
         // return 0;
     }
     if (npm_fuel_gauge_init(charger) < 0)
     {
-        printk("Could not initialise fuel gauge.\n");
-        return 0;
+        LOG_ERR("Could not initialise fuel gauge.\n");
+        // return 0;
     }
 
     // regulator_disable(sensor_brd_ldsw);
@@ -611,6 +624,16 @@ void hw_thread(void)
 
     regulator_enable(sensor_brd_ldsw);
 
+    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
+    if (ret < 0)
+    {
+        // return;
+        LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
+    }
+
+    gpio_pin_set_dt(&dcdc_5v_en, 1);
+
+    /*
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
@@ -621,22 +644,55 @@ void hw_thread(void)
     {
         struct sensor_value ecg_mode_set;
 
-        ecg_mode_set.val1 = 1;
-        sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-        sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
+        // ecg_mode_set.val1 = 1;
+        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
+        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
+    */
 
     if (!device_is_ready(maxm86146_dev))
     {
-        printk("MAXM86146 device not found!\n");
+        LOG_ERR("MAXM86146 device not present!");
     }
     else
     {
-        struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO_EXTENDED;
-        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        LOG_INF("MAXM86146 device present!");
+        // struct sensor_value mode_set;
+        // mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
+
+    if (!device_is_ready(max32664d_dev))
+    {
+        LOG_ERR("MAX32664D device not present!");
+        max32664d_device_present = false;
+    }
+    else
+    {
+        LOG_INF("MAX32664D device present!");
+        max32664d_device_present = true;
+        // struct sensor_value mode_set;
+        // mode_set.val1 = MAX32664_OP_MODE_BPT;
+        // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+    }
+
+    // printk("Switching application core from 64 MHz and 128 MHz. \n");
+    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+    // printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
+
+    // printk("Switching application core from 128 MHz and 64 MHz. \n");
+    //  nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
+    //  printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
+
+    nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+
+    nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
+    nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
+
+#ifdef NRF_SPIM_HAS_32_MHZ_FREQ
+    printk("spi has 32MHz\n");
+#endif
 
     setup_pmic_callbacks();
 
@@ -661,9 +717,9 @@ void hw_thread(void)
     }
 
     rtc_get_time(rtc_dev, &curr_time);
-    printk("Current time: %d:%d:%d %d/%d/%d \n", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
+    LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    fs_module_init();
+    // fs_module_init();
 
     // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
     /*struct sensor_value mode_set;
@@ -675,7 +731,7 @@ void hw_thread(void)
 
     usb_init();
 
-    printk("HW Thread started\n");
+    LOG_INF("HW Thread started\n");
 
     // hw_msbl_load();
     //  printk("Initing...\n");
@@ -693,7 +749,8 @@ void hw_thread(void)
 
         npm_fuel_gauge_update(charger);
         rtc_get_time(rtc_dev, &global_system_time);
-        send_usb_cdc("H ", 1);
+        // send_usb_cdc("H ", 1);
+        // printk("H ");
 
         k_sleep(K_MSEC(3000));
     }

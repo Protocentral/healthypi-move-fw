@@ -8,6 +8,8 @@ void draw_scr_clockface(enum scroll_dir m_scroll_dir);
 void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void hpi_disp_draw_plotEDA(float data_eda);
 
+// Analog Clock Screen functions
+void draw_scr_clock_analog(enum scroll_dir m_scroll_dir);
 
 
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
@@ -34,6 +36,8 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_calibrate(void);
 void draw_scr_bpt_home(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_measure(void);
+void hpi_disp_bpt_draw_plotPPG(float data_ppg);
+void hpi_disp_bpt_update_progress(int progress);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);
@@ -47,8 +51,11 @@ void hpi_disp_hrv_scatter_draw_plot_rtor(float rtor, float prev_rtor);
 void hpi_disp_hrv_scatter_update_rtor(int rtor);
 void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
 
+// Settings screen functions
+void draw_scr_settings(enum scroll_dir m_scroll_dir);
+
 // Helper objects
-void draw_header_minimal(lv_obj_t *parent);
+void draw_header_minimal(lv_obj_t *parent, int top_offset);
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir);
 
 
@@ -76,8 +83,8 @@ LV_IMG_DECLARE( ui_img_daily_mission_png);   // assets/daily_mission.png
 LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png
 
 
-LV_FONT_DECLARE( ui_font_H1);
+//LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE( ui_font_Number_big);
-LV_FONT_DECLARE( ui_font_Number_extra);
-LV_FONT_DECLARE( ui_font_Subtitle);
-LV_FONT_DECLARE( ui_font_Title);
+//LV_FONT_DECLARE( ui_font_Number_extra);
+//LV_FONT_DECLARE( ui_font_Subtitle);
+//LV_FONT_DECLARE( ui_font_Title);

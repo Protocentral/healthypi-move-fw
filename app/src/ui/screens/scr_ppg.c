@@ -49,13 +49,13 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     scr_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     draw_bg(scr_ppg);
-    draw_header_minimal(scr_ppg);
+    draw_header_minimal(scr_ppg,10);
 
     // Create Chart 1 - ECG
     chart_ppg = lv_chart_create(scr_ppg);
     lv_obj_set_size(chart_ppg, 200, 100);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(chart_ppg, 50, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
 
     lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);

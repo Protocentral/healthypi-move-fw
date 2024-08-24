@@ -2,8 +2,10 @@
 
 #include <lvgl.h>
 
-#define SCREEN_TRANS_TIME 100
-#define DISP_THREAD_REFRESH_INT_MS 10
+
+#define SCREEN_TRANS_TIME 0
+#define DISP_THREAD_REFRESH_INT_MS 4
+
 #define DISP_SLEEP_TIME_MS 60000
 
 #define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
@@ -11,9 +13,11 @@
 enum hpi_disp_screens
 {
     SCR_LIST_START,
-    SCR_CLOCK_SMALL,
+    SCR_CLOCK_ANALOG,
+    //SCR_CLOCK_SMALL,
     
     SCR_PLOT_PPG,
+    SCR_BPT_HOME,
     SCR_PLOT_EDA,
     SCR_PLOT_ECG,
     SCR_PLOT_HRV,

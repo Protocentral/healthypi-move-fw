@@ -33,6 +33,9 @@ static uint8_t buf[2048]; // 23 byte/sample * 32 samples = 736 bytes
 #define DEFAULT_SPO2_B -34.659664
 #define DEFAULT_SPO2_C 112.68987
 
+#define DEFAULT_DATE 0x5cc20200
+#define DEFAULT_TIME 0xe07f0200
+
 uint8_t m_date_time_vector[DATE_TIME_VECTOR_SIZE] = {0x50, 0x04, 0x04, 0x5c, 0xc2, 0x02, 0x00, 0xe0, 0x7f, 0x02, 0x00};
 
 uint8_t m_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3, 33, 75, 0, 0, 0, 0, 15, 198, 2, 100, 3, 32, 0, 0, 3, 207, 0, // calib vector sample
@@ -74,6 +77,8 @@ uint8_t m_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3
 											  4, 0, 3, 175, 170, 3, 33, 134, 0, 0, 0, 0, 15, 199, 2, 100, 3, 32, 0, 0, 3,
 											  207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
 											  0, 3, 207, 0, 4, 0, 3, 176, 102, 3};
+
+static int max32664_do_enter_app(const struct device *dev);
 
 int m_read_op_mode(const struct device *dev)
 {
@@ -143,17 +148,22 @@ uint8_t m_read_hub_status(const struct device *dev)
 static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
 	const struct max32664_config *config = dev->config;
-	uint8_t rd_buf[4] = {0x00, 0x00, 0x00, 0x00};
+
 	uint8_t wr_buf[2] = {0xFF, 0x03};
 
 	k_sleep(K_USEC(300));
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	i2c_read_dt(&config->i2c, ver_buf, 4);
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
-	printk("Version (decimal) = %d.%d.%d\n", rd_buf[1], rd_buf[2], rd_buf[3]);
+	//LOG_INF("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+
+	if(ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
+	{
+		return -ENODEV;
+	}
 
 	return 0;
 }
@@ -368,11 +378,11 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 	return 0;
 }
 
-void max32664_do_enter_app(const struct device *dev)
+static int max32664_do_enter_app(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 
-	printk("MAX32664D entering app mode\n");
+	LOG_DBG("MAX32664D entering app mode\n");
 
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
@@ -392,17 +402,27 @@ void max32664_do_enter_app(const struct device *dev)
 	m_read_op_mode(dev);
 
 	uint8_t ver_buf[4] = {0};
-	m_get_ver(dev, ver_buf);
+	if(m_get_ver(dev, ver_buf)==0)
+	{
+		LOG_INF("MAX32664D Version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+	}
+	else
+	{
+		LOG_INF("MAX32664D not Found\n");
+		return -ENODEV;
+	}
 
 	m_read_hub_status(dev);
 	k_sleep(K_MSEC(200));
 	m_read_hub_status(dev);
 
-	m_i2c_write_cmd_3(dev, 0x10, 0x03, 0x56, MAX32664_DEFAULT_CMD_DELAY);
+	//m_i2c_write_cmd_3(dev, 0x10, 0x03, 0x56, MAX32664_DEFAULT_CMD_DELAY);
 
-	gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_USEC(300));
-	gpio_pin_set_dt(&config->reset_gpio, 0);
+	//gpio_pin_set_dt(&config->mfio_gpio, 0);
+	//k_sleep(K_USEC(300));
+	//gpio_pin_set_dt(&config->reset_gpio, 0);
+
+	return 0;
 
 }
 
@@ -633,11 +653,11 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	// m_i2c_write_cmd_3(dev, 0x01, 0x00, 0x00);
 
 	// Load calib vector
-	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
-	// m_i2c_write(dev, m_bpt_cal_vector, sizeof(m_bpt_cal_vector));
+	//m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
+	m_i2c_write(dev, m_bpt_cal_vector, sizeof(m_bpt_cal_vector));
 
 	// Set date and time
-	// m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
+	m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
 
 	// Set SpO2 calibration coeffs (A, B, C)
 	m_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
@@ -669,10 +689,12 @@ static int max32664_set_mode_bpt_cal(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set interrupt threshold
-	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x04, MAX32664_DEFAULT_CMD_DELAY);
+	k_sleep(K_MSEC(400));
 
 	// Enable AFE
 	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x01, MAX32664_DEFAULT_CMD_DELAY);
+	k_sleep(K_MSEC(100));
 
 	// Enable BPT algorithm in calibration mode
 	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x01, MAX32664_DEFAULT_CMD_DELAY);
@@ -794,9 +816,9 @@ static int max32664_channel_get(const struct device *dev,
 								enum sensor_channel chan,
 								struct sensor_value *val)
 {
-	struct max32664_data *data = dev->data;
+	//struct max32664_data *data = dev->data;
 
-	int fifo_chan;
+	/*int fifo_chan;
 
 	switch (chan)
 	{
@@ -866,7 +888,7 @@ static int max32664_channel_get(const struct device *dev,
 	default:
 		LOG_ERR("Unsupported sensor channel");
 		return -ENOTSUP;
-	}
+	}*/
 
 	return 0;
 }
@@ -963,52 +985,7 @@ static int max32664_chip_init(const struct device *dev)
 	gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
-	/*
-	// Enter application mode
-	gpio_pin_set_dt(&config->mfio_gpio, 1);
-	k_sleep(K_MSEC(10));
-
-	
-
-	gpio_pin_set_dt(&config->reset_gpio, 1);
-	k_sleep(K_MSEC(1000));
-
-	// gpio_pin_set_dt(&config->mfio_gpio, 0);
-
-	// gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-
-	k_sleep(K_MSEC(10));
-	*/
-
-	/*int m_op_mode = m_read_op_mode(dev);
-
-	if (m_op_mode != 0)
-	{
-		printk("MAX32664D is in bootloader mode\n");
-	}
-	else
-	{	
-		/*uint8_t ver_buf[4];
-		m_get_ver(dev, ver_buf);
-		if (ver_buf[1] != 0x00)
-		{
-			printk("MAX32664 not found\n");
-			return -ENODEV;
-		}
-		printk("MAX32664D is in application mode\n");
-	}
-
-	m_read_hub_status(dev);
-	k_sleep(K_MSEC(200));
-	m_read_hub_status(dev);
-	*/
-
-	//gpio_pin_set_dt(&config->reset_gpio, 0);
-	//k_sleep(K_MSEC(20));
-
-	max32664_do_enter_app(dev);
-
-	return 0;
+	return max32664_do_enter_app(dev);
 }
 
 #ifdef CONFIG_PM_DEVICE

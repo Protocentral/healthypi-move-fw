@@ -1,5 +1,5 @@
 #include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
+
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <stdio.h>
@@ -13,6 +13,10 @@
 #include "sampling_module.h"
 #include "fs_module.h"
 #include "ble_module.h"
+
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "algos.h"
 
@@ -28,7 +32,7 @@ const char DataPacketFooter[2] = {0, CES_CMDIF_PKT_STOP};
 const char DataPacketHeader[5] = {CES_CMDIF_PKT_START_1, CES_CMDIF_PKT_START_2, DATA_LEN, 0, CES_CMDIF_TYPE_DATA};
 
 extern const struct device *const max30001_dev;
-extern const struct device *const max32664_dev;
+extern const struct device *const max32664d_dev;
 
 static bool settings_send_usb_enabled = false;
 static bool settings_send_ble_enabled = true;
@@ -195,7 +199,7 @@ float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
 
 void data_thread(void)
 {
-    printk("Data Thread starting\n");
+    
 
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
@@ -266,27 +270,29 @@ void data_thread(void)
 
     struct hpi_computed_hrv_t hrv_calculated;
 
+    LOG_INF("Data Thread starting\n");
+
     for (;;)
     {
         k_sleep(K_USEC(50));
 
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
-            ecg_input = (float32_t)(ecg_bioz_sensor_sample.ecg_sample / 100000.0000);
-            ecg_output2 = iir_filt(ecg_input, &iir_filt_notch_inst);
-            ecg_output = iir_filt(ecg_output2, &iir_filt_low_inst);
+            //ecg_input = (float32_t)(ecg_bioz_sensor_sample.ecg_sample / 100000.0000);
+            //ecg_output2 = iir_filt(ecg_input, &iir_filt_notch_inst);
+            //ecg_output = iir_filt(ecg_output2, &iir_filt_low_inst);
 
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             int32_t ecg_output_int = (int32_t)(ecg_output * 1000); // ecg_input[0]*1000;
             // printk("ECG: %f, ECG_F: %f, ECGI: %d\n", ecg_input, ecg_output, ecg_output_int);
 
-            ecg_bioz_sensor_sample.ecg_sample = ecg_output_int;
+            //ecg_bioz_sensor_sample.ecg_sample = ecg_input;// ecg_output_int;
 
             if (settings_send_ble_enabled)
             {
 
-                ecg_sample_buffer[sample_buffer_count++] = ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
+                ecg_sample_buffer[sample_buffer_count++] = ecg_bioz_sensor_sample.ecg_sample; //ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
                 if (sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
                     ble_ecg_notify(ecg_sample_buffer, sample_buffer_count);

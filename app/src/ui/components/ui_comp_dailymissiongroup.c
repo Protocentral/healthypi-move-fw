@@ -43,20 +43,21 @@ lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent)
 {
     lv_obj_t *cui_dailymissiongroup;
     cui_dailymissiongroup = lv_obj_create(comp_parent);
-    lv_obj_set_width(cui_dailymissiongroup, 240);
-    lv_obj_set_height(cui_dailymissiongroup, 240);
+    lv_obj_set_width(cui_dailymissiongroup, 390);
+    lv_obj_set_height(cui_dailymissiongroup, 390);
     lv_obj_set_align(cui_dailymissiongroup, LV_ALIGN_BOTTOM_LEFT);
     lv_obj_clear_flag(cui_dailymissiongroup, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_set_style_bg_color(cui_dailymissiongroup, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(cui_dailymissiongroup, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+    // Green arc
     cui_daily_mission_arc = lv_arc_create(cui_dailymissiongroup);
 
-    lv_obj_set_size(cui_daily_mission_arc, 230, 230);
+    lv_obj_set_size(cui_daily_mission_arc, 360, 360);
     lv_obj_set_align(cui_daily_mission_arc, LV_ALIGN_CENTER);
     lv_obj_add_flag(cui_daily_mission_arc, LV_OBJ_FLAG_ADV_HITTEST); /// Flags
     lv_arc_set_value(cui_daily_mission_arc, 25);
-    lv_arc_set_bg_angles(cui_daily_mission_arc, 135, 225);
+    lv_arc_set_bg_angles(cui_daily_mission_arc, 90, 180);
     lv_obj_set_style_arc_color(cui_daily_mission_arc, lv_color_hex(0x303030), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc, true, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -71,13 +72,14 @@ lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent)
     lv_obj_set_style_bg_color(cui_daily_mission_arc, lv_color_hex(0xFFFFFF), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(cui_daily_mission_arc, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
 
+    // Red arc
     cui_daily_mission_arc_2 = lv_arc_create(cui_dailymissiongroup);
 
-    lv_obj_set_size(cui_daily_mission_arc_2, 230, 230);
+    lv_obj_set_size(cui_daily_mission_arc_2, 360, 360);
     lv_obj_set_align(cui_daily_mission_arc_2, LV_ALIGN_CENTER);
     lv_obj_add_flag(cui_daily_mission_arc_2, LV_OBJ_FLAG_ADV_HITTEST); /// Flags
     lv_arc_set_value(cui_daily_mission_arc_2, 75);
-    lv_arc_set_bg_angles(cui_daily_mission_arc_2, 315, 45);
+    lv_arc_set_bg_angles(cui_daily_mission_arc_2, 270, 0);
     lv_obj_set_style_arc_color(cui_daily_mission_arc_2, lv_color_hex(0x303030), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc_2, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc_2, true, LV_PART_MAIN | LV_STATE_DEFAULT);

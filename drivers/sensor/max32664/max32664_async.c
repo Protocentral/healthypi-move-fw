@@ -25,7 +25,7 @@ static int max32664_async_calib_fetch(const struct device *dev, uint8_t calib_ve
     {
         calib_vector[i] = rd_buf[i + 2];
         data->calib_vector[i + 3] = calib_vector[i];
-        printk("%x ", calib_vector[i]);
+        //printk("%x ", calib_vector[i]);
     }
     printk("Calibration vector fetched\n");
 
@@ -49,7 +49,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
     {
         // printk("DRDY ");
         int fifo_count = max32664_get_fifo_count(dev);
-        // printk("F: %d | \n", fifo_count);
+        // /printk("F: %d | \n", fifo_count);
 
         if (fifo_count > 16)
         {
@@ -81,14 +81,13 @@ static int max32664_async_sample_fetch(const struct device *dev,
                 led_ir |= (uint32_t)buf[(sample_len * i) + 2] << 8;
                 led_ir |= (uint32_t)buf[(sample_len * i) + 3];
 
-                // samples[i].ir_sample = led_ir;
+                
                 ir_samples[i] = led_ir;
 
                 uint32_t led_red = (uint32_t)buf[(sample_len * i) + 4] << 16;
                 led_red |= (uint32_t)buf[(sample_len * i) + 5] << 8;
                 led_red |= (uint32_t)buf[(sample_len * i) + 6];
 
-                // samples[i].red_sample = led_red;
                 red_samples[i] = led_red;
 
                 // bytes 7,8,9, 10,11,12 are ignored

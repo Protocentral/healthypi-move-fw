@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2019-2020 Nordic Semiconductor ASA
  *
@@ -18,7 +19,8 @@
 		zephyr,bt-hci-ipc = &ipc0;
 		nordic,802154-spinel-ipc = &ipc0;
 		zephyr,ieee802154 = &ieee802154;
-		zephyr,display = &gc9a01; //&st7789v;
+		//zephyr,display = &gc9a01; //&st7789v;
+		zephyr,display= &sh8601;
 		nordic,pm-ext-flash = &w25q01jv;
 	};
 
@@ -34,43 +36,46 @@
 	gpiokeys: gpio_keys {
 		compatible = "gpio-keys";
 		button_up: sw1 {
-			
+
 			label = "Button UP / SW1";
-			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW) >;
+			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_UP>;
 		};
 
 		button_down: sw3 {
-			
+
 			label = "Button DOWN / SW3";
 			gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_DOWN>;
 		};
 	};
 
-	aliases {
-		pwm-led0 = &pwm_led0;
-		//mcuboot-button0 = &button_up;
-
-		watchdog0 = &wdt0;
-		esp-uart= &uart0;
-
-		max30001 = &max30001;
-		//max32664 = &max32664;
-		maxm86146 = &maxm86146;
-
-		rtc = &rtc_rv;
+	ctrlgpio: gpio_ctrl {
+		compatible = "gpio-leds";
+		sensor_dcdc_en: dcdc_en {
+			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+			label = "Boost 5V converter enable";
+		};
+		
 	};
 
+	aliases {
+		pwm-led0 = &pwm_led0;
+		max30001 = &max30001;
+		max32664d = &max32664d;
+		maxm86146 = &maxm86146;
+		rtc = &rtc_rv;
+	};
 };
+
 
 / {
 	lvgl_pointer_input: lvgl_pointer {
 		compatible = "zephyr,lvgl-pointer-input";
-		input = <&cst816s>;
-		invert-y;
-		//swap-xy;
-		invert-x;
+		input = <&chsc5816>; //<&cst816s>;
+		//invert-y;
+		swap-xy;
+		//invert-x;
 	};
 };
 
@@ -97,14 +102,6 @@
 	pinctrl-1 = <&i2c1_sleep>;
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
-
-	cst816s: cst816s@15 {
-		compatible = "hynitron,cst816s";
-		reg = <0x15>;
-		status = "okay";
-		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
-	};
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
@@ -143,11 +140,13 @@
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
 				//regulator-boot-on;
-				//startup-delay-us = <100000>;
+				
+				startup-delay-us = <100000>;
 			};
 
 			npm_pmic_ldo2: LDO2 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				//regulator-boot-on;
 			};
 		};
 
@@ -191,6 +190,22 @@
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 	};
+
+	chsc5816: chsc5816@2e {
+		status = "okay";
+		compatible = "chipsemi,chsc5816";
+		reg = <0x2e>;
+		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
+		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+	};
+
+	max32664d: max32664d@55 {
+		compatible = "maxim,max32664";
+		reg = <0x55>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
 };
 
 &i2c2 {
@@ -216,6 +231,8 @@
 		status = "okay";
 		reg = <0x48>;
 	};
+
+
 };
 
 &uart0 {
@@ -302,13 +319,19 @@
 
 &spi4 {
 	compatible = "nordic,nrf-spim";
-	status = "okay";
-	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
+	status = "okay"; 
+
+	//cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
+	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
+
+	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
 	pinctrl-1 = <&spi4_sleep>;
 	pinctrl-names = "default", "sleep";
+	clock-frequency = <DT_FREQ_M(32)>;
 
-	gc9a01: gc9a01@0 {
+
+	/*gc9a01: gc9a01@0 {
 		compatible = "waveshare,gc9a01a";
 		spi-max-frequency = <DT_FREQ_M(45)>;
 		reg = <0>;
@@ -320,6 +343,20 @@
 		width = <240>;
 		height = <240>;
 		pixel-format = <0>;//<GC9A01A_PIXEL_FORMAT_RGB565>;
+		display-inversion;
+		rotation = <0>;
+		status = "okay";
+	};*/
+
+	sh8601: sh8601@0 {
+		compatible = "sitronix,sh8601";
+		spi-max-frequency = <DT_FREQ_M(33)>;
+		reg = <0>;
+		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		//<&gpio0 29 GPIO_ACTIVE_HIGH>;
+		width = <390>;
+		height = <390>;
+		pixel-format = <1>;
 		display-inversion;
 		rotation = <0>;
 		status = "okay";

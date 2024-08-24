@@ -40,19 +40,19 @@ extern lv_style_t style_lbl_white_small;
 
 extern int curr_screen;
 
-#define DISP_WINDOW_SIZE_ECG 128
+#define DISP_WINDOW_SIZE_ECG 256
 
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
     scr_ecg = lv_obj_create(NULL);
-    draw_header_minimal(scr_ecg);
+    draw_header_minimal(scr_ecg,10);
     draw_bg(scr_ecg);
 
     // Create Chart 1 - ECG
     chart_ecg = lv_chart_create(scr_ecg);
-    lv_obj_set_size(chart_ecg, 200, 100);
+    lv_obj_set_size(chart_ecg, 390, 150);
     lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(chart_ecg, 50, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(chart_ecg, 0, LV_PART_MAIN);
 
     lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
