@@ -1,6 +1,4 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
@@ -344,7 +342,7 @@ void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_btn_bpt_calibrate, "Calibrate BP");
     lv_obj_center(label_btn_bpt_calibrate);
 
-    // curr_screen = SCR_BPT_HOME;
+    curr_screen = SCR_BPT_HOME;
     hpi_show_screen(scr_bpt_home, m_scroll_dir);
 
     // hw_bpt_stop();

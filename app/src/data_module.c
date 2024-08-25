@@ -284,7 +284,7 @@ void data_thread(void)
 
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
-            int32_t ecg_output_int = (int32_t)(ecg_output * 1000); // ecg_input[0]*1000;
+            //int32_t ecg_output_int = (int32_t)(ecg_output * 1000); // ecg_input[0]*1000;
             // printk("ECG: %f, ECG_F: %f, ECGI: %d\n", ecg_input, ecg_output, ecg_output_int);
 
             //ecg_bioz_sensor_sample.ecg_sample = ecg_input;// ecg_output_int;

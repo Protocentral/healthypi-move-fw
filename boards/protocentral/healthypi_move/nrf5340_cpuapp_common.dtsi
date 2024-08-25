@@ -356,7 +356,7 @@
 		//<&gpio0 29 GPIO_ACTIVE_HIGH>;
 		width = <390>;
 		height = <390>;
-		pixel-format = <1>;
+		pixel-format = <0>;
 		display-inversion;
 		rotation = <0>;
 		status = "okay";

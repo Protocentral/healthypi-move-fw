@@ -437,7 +437,7 @@ static int sh8601_init(const struct device *dev)
 	args[0] = 0x20;
 	r = sh8601_transmit_cmd(dev, SH8601_W_WCTRLD1, args, 1U);
 
-	args[0] = 0x77;
+	args[0] = 0x75;
 	r = sh8601_transmit_cmd(dev, SH8601_W_PIXFMT, args, 1U);
 
 	args2[0] = 0xFF;
