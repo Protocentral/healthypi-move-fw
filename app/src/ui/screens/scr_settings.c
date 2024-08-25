@@ -61,11 +61,11 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
     //lv_obj_set_style_bg_color(scr_settings, lv_color_black(), LV_STATE_DEFAULT);
     //lv_obj_set_style_bg_opa(scr_settings, 1, LV_STATE_DEFAULT);
 
-    //draw_bg(scr_settings);
+    draw_bg(scr_settings);
     //draw_header_minimal(scr_settings);
 
     lv_obj_t * cont = lv_obj_create(scr_settings);
-    lv_obj_set_size(cont, 300, 300);
+    lv_obj_set_size(cont, 390, 390);
     lv_obj_center(cont);
     lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_add_event_cb(cont, scroll_event_cb, LV_EVENT_SCROLL, NULL);
@@ -76,7 +76,7 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
     lv_obj_set_scrollbar_mode(cont, LV_SCROLLBAR_MODE_OFF);
 
     uint32_t i;
-    for(i = 0; i < 20; i++) {
+    for(i = 0; i < 6; i++) {
         lv_obj_t * btn = lv_btn_create(cont);
         lv_obj_set_width(btn, lv_pct(100));
 

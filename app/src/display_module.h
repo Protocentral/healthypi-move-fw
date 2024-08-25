@@ -2,8 +2,8 @@
 
 #include <lvgl.h>
 
-#define SCREEN_TRANS_TIME 0
-#define DISP_THREAD_REFRESH_INT_MS 2
+#define SCREEN_TRANS_TIME 300
+#define DISP_THREAD_REFRESH_INT_MS 4
 
 #define DISP_SLEEP_TIME_MS 60000
 

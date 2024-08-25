@@ -580,9 +580,9 @@ void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(parent, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
     if (m_scroll_dir == SCROLL_LEFT)
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
     else
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
 }
 
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
@@ -695,11 +695,11 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     //draw_scr_clock_small(SCROLL_RIGHT);
-    //draw_scr_clock_analog(SCROLL_RIGHT);
+    draw_scr_clock_analog(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    draw_scr_ecg(SCROLL_RIGHT);
+    //draw_scr_ecg(SCROLL_RIGHT);
     //draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
@@ -941,7 +941,7 @@ void display_screens_thread(void)
         {
             // if (curr_screen == SCR_CLOCK)
             //{
-            hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
+            //hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
             //}
             batt_refresh_counter = 0;
         }
