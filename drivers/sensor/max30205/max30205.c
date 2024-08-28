@@ -70,6 +70,28 @@ static int max30205_init(const struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_DEVICE
+
+static int max30205_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	switch (action)
+	{
+	case PM_DEVICE_ACTION_RESUME:
+		/* Enable sensor */
+		break;
+
+	case PM_DEVICE_ACTION_SUSPEND:
+		/* Disable sensor */
+		break;
+
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 #define MAX30205_DEFINE(inst)                                    \
 	static struct max30205_data max30205_data_##inst;            \
 	static const struct max30205_config max30205_config_##inst = \

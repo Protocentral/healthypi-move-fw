@@ -631,7 +631,7 @@ void hw_thread(void)
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
-    gpio_pin_set_dt(&dcdc_5v_en, 1);
+    //gpio_pin_set_dt(&dcdc_5v_en, 1);
 
     /*
 #ifdef CONFIG_SENSOR_MAX30001
@@ -685,10 +685,10 @@ void hw_thread(void)
     //  nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
     //  printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
 
-    nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+    //nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
 
-    nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
-    nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
+    //nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
+    //nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     printk("spi has 32MHz\n");
@@ -709,11 +709,11 @@ void hw_thread(void)
     }
     else
     {
-        if (set_sampling_freq(acc_dev) != 0)
+        /*if (set_sampling_freq(acc_dev) != 0)
         {
             // return;
             printk("Error setting sampling frequency\n");
-        }
+        }*/
     }
 
     rtc_get_time(rtc_dev, &curr_time);
@@ -748,7 +748,7 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         npm_fuel_gauge_update(charger);
-        rtc_get_time(rtc_dev, &global_system_time);
+        //rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
         // printk("H ");
 

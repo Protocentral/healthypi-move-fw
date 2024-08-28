@@ -959,7 +959,7 @@ void display_screens_thread(void)
                 if (m_disp_status_off == false)
                 {
                     printk("Display off");
-                    // display_set_brightness(display_dev, 0);
+                    display_set_brightness(display_dev, 0);
                     m_disp_status_off = true;
                 }
             }
@@ -968,7 +968,7 @@ void display_screens_thread(void)
                 if (m_disp_status_off == true)
                 {
                     printk("Display on");
-                    // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+                    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
                     m_disp_status_off = false;
                 }
             }

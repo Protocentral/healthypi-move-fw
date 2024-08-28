@@ -24,13 +24,13 @@
 		nordic,pm-ext-flash = &w25q01jv;
 	};
 
-	pwmleds {
+	/*pwmleds {
 		compatible = "pwm-leds";
 		pwm_led0: pwm_led_0 {
 			status = "okay";
 			pwms = <&sw_pwm 0 PWM_MSEC(10) PWM_POLARITY_NORMAL>;
 		};
-	};
+	};*/
 
 
 	gpiokeys: gpio_keys {
@@ -60,7 +60,7 @@
 	};
 
 	aliases {
-		pwm-led0 = &pwm_led0;
+		//pwm-led0 = &pwm_led0;
 		max30001 = &max30001;
 		max32664d = &max32664d;
 		maxm86146 = &maxm86146;
@@ -123,13 +123,13 @@
 			npm_pmic_buck1: BUCK1 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <3300000>;
+				regulator-init-microvolt = <3000000>;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <3300000>;
+				regulator-max-microvolt = <3000000>;
+				regulator-init-microvolt = <3000000>;
 				retention-microvolt = <2500000>;
 				//regulator-boot-on;
 				//enable-gpios = <&npm_pmic_gpio 1 GPIO_ACTIVE_LOW>;
@@ -251,10 +251,15 @@
 	pinctrl-names = "default", "sleep";
 };
 
-
+/*
 &sw_pwm {
 	status = "okay";
 	channel-gpios = <&gpio1 5 PWM_POLARITY_INVERTED>;
+};*/
+
+&uart1{
+
+    status="disabled";
 };
 
 

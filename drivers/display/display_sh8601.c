@@ -11,6 +11,9 @@
 #include <zephyr/logging/log.h>
 #include "display_sh8601.h"
 
+#include <zephyr/pm/policy.h>
+#include <zephyr/pm/device.h>
+
 LOG_MODULE_REGISTER(display_sh8601, CONFIG_DISPLAY_LOG_LEVEL);
 
 #define SH8601_PIXEL_FORMAT_RGB565 0U
@@ -229,8 +232,8 @@ static int sh8601_set_pixel_format(const struct device *dev,
 {
 	struct sh8601_data *data = dev->data;
 	uint8_t bytes_per_pixel = 3;
-	//int r;
-	// uint8_t tx_data;
+	// int r;
+	//  uint8_t tx_data;
 
 	if (pixel_format == PIXEL_FORMAT_RGB_565)
 	{
@@ -249,7 +252,7 @@ static int sh8601_set_pixel_format(const struct device *dev,
 	}
 
 	// r = sh8601_transmit_cmd(dev, SH8601_W_COLOROPTION, &tx_data, 1U);
-	//if (r < 0)
+	// if (r < 0)
 	//{
 	//	return r;
 	//}
@@ -450,6 +453,9 @@ static int sh8601_init(const struct device *dev)
 	k_msleep(25);
 	r = sh8601_send_cmd(dev, SH8601_C_DISPON);
 
+	// r = sh8601_send_cmd(dev, SH8601_C_SLPIN);
+	// k_msleep(SH8601_SLPIN_DELAY);
+
 	k_msleep(200);
 
 	return 0;
@@ -577,6 +583,31 @@ static const struct display_driver_api sh8601_api = {
 	.set_orientation = sh8601_set_orientation,
 };
 
+#ifdef CONFIG_PM_DEVICE
+
+static int sh8601_pm_action(const struct device *dev,
+							enum pm_device_action action)
+{
+	struct sh8601_data *data = dev->data;
+	const struct sh8601_config *config = dev->config;
+
+	switch (action)
+	{
+	case PM_DEVICE_ACTION_SUSPEND:
+		sh8601_send_cmd(dev, SH8601_C_SLPIN);
+		k_msleep(SH8601_SLPIN_DELAY);
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		sh8601_send_cmd(dev, SH8601_C_SLPOUT);
+		k_msleep(SH8601_SLPOUT_DELAY);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+}
+
+#endif /* CONFIG_PM_DEVICE */
+
 #define INST_DT_SH8601(n) DT_INST(n, sitronix_sh8601)
 
 #define SH8601_INIT(n, t)                                            \
@@ -593,6 +624,7 @@ static const struct display_driver_api sh8601_api = {
 		.inversion = DT_PROP(INST_DT_SH8601(n), display_inversion),  \
 	};                                                               \
 	static struct sh8601_data sh8601_data_##n;                       \
+	PM_DEVICE_DT_INST_DEFINE(id, sh8601_pm_action);                  \
 	DEVICE_DT_DEFINE(INST_DT_SH8601(n), sh8601_init,                 \
 					 NULL, &sh8601_data_##n,                         \
 					 &sh8601_config_##n, POST_KERNEL,                \
