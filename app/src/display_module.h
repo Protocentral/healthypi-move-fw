@@ -7,14 +7,14 @@
 
 #define DISP_SLEEP_TIME_MS 20000
 
-#define DISPLAY_DEFAULT_BRIGHTNESS 175
+#define DISPLAY_DEFAULT_BRIGHTNESS 150
 
 #define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
 #define HRV_DISP_WINDOW_SIZE 128
 enum hpi_disp_screens
 {
     SCR_LIST_START,
-    SCR_CLOCK_ANALOG,
+    SCR_HOME,
     // SCR_CLOCK_SMALL,
 
     SCR_PLOT_PPG,
@@ -43,7 +43,7 @@ enum scroll_dir
     SCROLL_DOWN,
     SCROLL_LEFT,
     SCROLL_RIGHT,
-    NO_SCROLL,
+    SCROLL_NONE,
 };
 
 void draw_scr_ppg(enum scroll_dir m_scroll_dir);

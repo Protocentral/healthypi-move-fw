@@ -313,12 +313,12 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_set_size(img_logo, 25, 25);
     lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, -35, (top_offset+5));
     */
-   
+
     // Battery Level
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset-2));
+    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset - 2));
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
@@ -579,9 +579,17 @@ void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(parent, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
     if (m_scroll_dir == SCROLL_LEFT)
+    {
         lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
-    else
+    }
+    else if (m_scroll_dir == SCROLL_RIGHT)
+    {
         lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
+    }
+    else
+    {
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
+    }
 }
 
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
@@ -592,6 +600,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
         draw_scr_clock_small(m_scroll_dir);
         break;
         */
+    case SCR_HOME:
+        draw_scr_home(SCROLL_NONE);
+        break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
         break;
@@ -607,12 +618,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_PLOT_HRV_SCATTER:
         draw_scr_hrv_scatter(m_scroll_dir);
         break;
-    case SCR_CLOCK_ANALOG:
-        draw_scr_home(m_scroll_dir);
-        break;
     case SCR_BPT_HOME:
-         draw_scr_bpt_home(m_scroll_dir);
-         break;
+        draw_scr_bpt_home(m_scroll_dir);
+        break;
     /*
     case SCR_CLOCK:
         draw_scr_clockface(m_scroll_dir);
@@ -693,13 +701,13 @@ void display_screens_thread(void)
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
-    //draw_scr_clock_small(SCROLL_RIGHT);
-    draw_scr_home(SCROLL_RIGHT);
+    // draw_scr_clock_small(SCROLL_RIGHT);
+    draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    //draw_scr_ecg(SCROLL_RIGHT);
-    //draw_scr_bpt_home(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
@@ -728,7 +736,7 @@ void display_screens_thread(void)
                     scr_ppg_hr_spo2_refresh_counter++;
                 }
             }
-            else if ((curr_screen == SCR_CLOCK))// || (curr_screen == SCR_CLOCK_SMALL))
+            else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
             {
                 if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
                 {
@@ -882,19 +890,20 @@ void display_screens_thread(void)
             }
         }
 
-        if (curr_screen == SCR_CLOCK)// || curr_screen == SCR_CLOCK_SMALL)
+        if (curr_screen == SCR_HOME) // || curr_screen == SCR_CLOCK_SMALL)
         {
             if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
             {
                 // TEST ONLY: time
-                //if (curr_screen == SCR_CLOCK_SMALL)
+                // if (curr_screen == SCR_CLOCK_SMALL)
                 //{
                 //    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true);
                 //    ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, global_system_time.tm_year + 1900);
                 //}
-                //else
+                // else
                 //{
-                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
+                //ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
+                scr_home_set_time(global_system_time);
                 //}
                 time_refresh_counter = 0;
             }
@@ -940,7 +949,7 @@ void display_screens_thread(void)
         {
             // if (curr_screen == SCR_CLOCK)
             //{
-            //hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
+            // hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
             //}
             batt_refresh_counter = 0;
         }

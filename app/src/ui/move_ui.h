@@ -10,7 +10,7 @@ void hpi_disp_draw_plotEDA(float data_eda);
 
 // Analog Clock Screen functions
 void draw_scr_home(enum scroll_dir m_scroll_dir);
-
+void scr_home_set_time(struct rtc_time time_to_set);
 
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
