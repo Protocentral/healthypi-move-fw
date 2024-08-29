@@ -9,10 +9,11 @@
 #include "display_module.h"
 #include "ui/move_ui.h"
 
-lv_obj_t *scr_clock_analog;
+lv_obj_t *scr_home;
 
 static lv_obj_t *meter_clock;
-static lv_obj_t *home_ui_step_group;
+static lv_obj_t *home_step_disp;
+static lv_obj_t *home_hr_disp;
 
 extern int curr_screen;
 
@@ -24,26 +25,25 @@ static void set_value(void *indic, int32_t v)
     lv_meter_set_indicator_end_value(meter_clock, indic, v);
 }
 
-void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
+void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
-    scr_clock_analog = lv_obj_create(NULL);
+    scr_home = lv_obj_create(NULL);
 
-    lv_obj_set_style_bg_color(scr_clock_analog, lv_color_black(), LV_STATE_DEFAULT);
-    lv_obj_clear_flag(scr_clock_analog, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    lv_obj_set_style_bg_color(scr_home, lv_color_black(), LV_STATE_DEFAULT);
+    lv_obj_clear_flag(scr_home, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
-    draw_bg(scr_clock_analog);
-    // draw_header_minimal(scr_clock_analog, 75);
+    draw_bg(scr_home);
+    draw_header_minimal(scr_home, 75);
 
-    home_ui_step_group = ui_steps_button_create(scr_clock_analog);
-    lv_obj_align_to(home_ui_step_group, NULL, LV_ALIGN_TOP_MID, -50, 90);
-    lv_obj_set_style_border_opa(home_ui_step_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    home_step_disp = ui_steps_button_create(scr_home);
+    lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -50, 90);
+    lv_obj_set_style_border_opa(home_step_disp, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    /*lv_obj_t *hr_display = ui_hr_button_create(scr_clock_analog);
-    lv_obj_align_to(hr_display, NULL, LV_ALIGN_TOP_MID, 50, 220);
-    lv_obj_set_style_border_opa(hr_display, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    */
+    home_hr_disp = ui_hr_button_create(scr_home);
+    lv_obj_align_to(home_hr_disp, NULL, LV_ALIGN_TOP_MID, 50, 220);
+    lv_obj_set_style_border_opa(home_hr_disp, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    meter_clock = lv_meter_create(scr_clock_analog);
+    meter_clock = lv_meter_create(scr_home);
     lv_obj_set_size(meter_clock, 400, 400);
     // lv_obj_set_style_opa(meter_clock, 50, LV_PART_MAIN);
     // lv_obj_set_style_bg_color(meter_clock, lv_color_black(), LV_PART_MAIN);
@@ -71,8 +71,8 @@ void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
     lv_meter_indicator_t *indic_hour = lv_meter_add_needle_line(meter_clock, scale_hour, 4, lv_color_white(), -60);              // lv_meter_add_needle_img(meter_clock, scale_min, &clock_long_hand, 5, 5);
     lv_meter_indicator_t *indic_sec = lv_meter_add_needle_line(meter_clock, scale_min, 2, lv_palette_main(LV_PALETTE_RED), -20); // lv_meter_add_needle_img(meter_clock, scale_min, &img_hand, 5, 5);
 
-    /*Create an animation to set the value*/
-    /*lv_anim_t a;
+    //Create an animation to set the value
+    lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_exec_cb(&a, set_value);
     lv_anim_set_values(&a, 0, 60);
@@ -80,8 +80,7 @@ void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
     lv_anim_set_time(&a, 60000); //2 sec for 1 turn of the minute hand (1 hour)
     lv_anim_set_var(&a, indic_sec);
     lv_anim_start(&a);
-    */
-
+    
     lv_meter_set_indicator_end_value(meter_clock, indic_hour, 2);
     lv_meter_set_indicator_end_value(meter_clock, indic_min, 50);
 
@@ -94,5 +93,5 @@ void draw_scr_clock_analog(enum scroll_dir m_scroll_dir)
     // lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 
     curr_screen = SCR_CLOCK_ANALOG;
-    hpi_show_screen(scr_clock_analog, m_scroll_dir);
+    hpi_show_screen(scr_home, m_scroll_dir);
 }

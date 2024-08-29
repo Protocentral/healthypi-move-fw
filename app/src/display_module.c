@@ -29,7 +29,6 @@ static lv_obj_t *label_temp;
 
 // LVGL Screens
 lv_obj_t *scr_splash;
-lv_obj_t *scr_home;
 lv_obj_t *scr_menu;
 
 lv_obj_t *ui_hour_group;
@@ -609,7 +608,7 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
         draw_scr_hrv_scatter(m_scroll_dir);
         break;
     case SCR_CLOCK_ANALOG:
-        draw_scr_clock_analog(m_scroll_dir);
+        draw_scr_home(m_scroll_dir);
         break;
     case SCR_BPT_HOME:
          draw_scr_bpt_home(m_scroll_dir);
@@ -695,7 +694,7 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     //draw_scr_clock_small(SCROLL_RIGHT);
-    draw_scr_clock_analog(SCROLL_RIGHT);
+    draw_scr_home(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);

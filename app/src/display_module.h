@@ -10,25 +10,25 @@
 #define DISPLAY_DEFAULT_BRIGHTNESS 175
 
 #define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
-#define HRV_DISP_WINDOW_SIZE 128 
+#define HRV_DISP_WINDOW_SIZE 128
 enum hpi_disp_screens
 {
     SCR_LIST_START,
     SCR_CLOCK_ANALOG,
-    //SCR_CLOCK_SMALL,
-    
+    // SCR_CLOCK_SMALL,
+
     SCR_PLOT_PPG,
     SCR_BPT_HOME,
     SCR_PLOT_EDA,
     SCR_PLOT_ECG,
     SCR_PLOT_HRV,
     SCR_PLOT_HRV_SCATTER,
-    
+
     SCR_LIST_END,
     // Should not go here
     SCR_CLOCK,
     SCR_VITALS,
-    //SCR_BPT_HOME,
+    // SCR_BPT_HOME,
 };
 
 enum hpi_disp_subscreens
@@ -43,6 +43,7 @@ enum scroll_dir
     SCROLL_DOWN,
     SCROLL_LEFT,
     SCROLL_RIGHT,
+    NO_SCROLL,
 };
 
 void draw_scr_ppg(enum scroll_dir m_scroll_dir);

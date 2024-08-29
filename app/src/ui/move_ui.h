@@ -9,7 +9,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void hpi_disp_draw_plotEDA(float data_eda);
 
 // Analog Clock Screen functions
-void draw_scr_clock_analog(enum scroll_dir m_scroll_dir);
+void draw_scr_home(enum scroll_dir m_scroll_dir);
 
 
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
