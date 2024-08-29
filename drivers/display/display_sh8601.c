@@ -210,8 +210,7 @@ static int sh8601_hw_reset(const struct device *dev)
 static int sh8601_display_blanking_off(const struct device *dev)
 {
 	LOG_DBG("Turning display blanking off");
-	// return sh8601_transmit(dev, SH8601_DISPON, NULL, 0);
-	return 0;
+	return sh8601_send_cmd(dev, SH8601_C_DISPON);
 }
 
 /**
@@ -221,8 +220,7 @@ static int sh8601_display_blanking_off(const struct device *dev)
 static int sh8601_display_blanking_on(const struct device *dev)
 {
 	LOG_DBG("Turning display blanking on");
-	// return sh8601_transmit(dev, SH8601_DISPOFF, NULL, 0);
-	return 0;
+	return sh8601_send_cmd(dev, SH8601_C_DISPOFF);
 }
 
 /**
@@ -314,7 +312,7 @@ static int sh8601_set_brightness(const struct device *dev,
 	uint8_t args[1] = {brightness};
 	struct sh8601_data *data = dev->data;
 
-	/*if (brightness == 0)
+	if (brightness == 0)
 	{
 		sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 		if (!data->device_in_sleep)
@@ -335,8 +333,8 @@ static int sh8601_set_brightness(const struct device *dev,
 			data->device_in_sleep = false;
 		}
 		sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
-	}*/
-	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+	}
+	//sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
 	return 0;
 }

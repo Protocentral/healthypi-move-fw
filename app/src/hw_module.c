@@ -619,7 +619,7 @@ void hw_thread(void)
         // return 0;
     }
 
-    // regulator_disable(sensor_brd_ldsw);
+    //regulator_disable(sensor_brd_ldsw);
     k_sleep(K_MSEC(100));
 
     regulator_enable(sensor_brd_ldsw);
