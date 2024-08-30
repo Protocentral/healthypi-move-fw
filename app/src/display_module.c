@@ -134,10 +134,11 @@ static void display_sleep_off(void)
     if (m_display_active == false)
     {
         printk("Display on");
-        display_blanking_off(display_dev);
 
         display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+        display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
+        display_blanking_off(display_dev);
         
         m_display_active = true;
     }
@@ -933,7 +934,7 @@ void display_screens_thread(void)
                     // else
                     //{
                     // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                    scr_home_set_time(global_system_time);
+                    //scr_home_set_time(global_system_time);
                     //}
                     time_refresh_counter = 0;
                 }

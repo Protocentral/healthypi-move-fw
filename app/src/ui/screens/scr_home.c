@@ -27,7 +27,7 @@ static void set_value(void *indic, int32_t v)
     if (indic == NULL || meter_clock == NULL || curr_screen != SCR_HOME)
         return;
 
-    lv_meter_set_indicator_end_value(meter_clock, indic, v);
+    //lv_meter_set_indicator_end_value(meter_clock, indic, v);
 }
 
 void scr_home_set_time(struct rtc_time time_to_set)
@@ -36,8 +36,8 @@ void scr_home_set_time(struct rtc_time time_to_set)
     if (meter_clock == NULL || curr_screen != SCR_HOME)
         return;
 
-    lv_meter_set_indicator_end_value(meter_clock, indic_hour, (time_to_set.tm_hour%12));
-    lv_meter_set_indicator_end_value(meter_clock, indic_min, time_to_set.tm_min);
+    //lv_meter_set_indicator_end_value(meter_clock, indic_hour, (time_to_set.tm_hour%12));
+    //lv_meter_set_indicator_end_value(meter_clock, indic_min, time_to_set.tm_min);
 }
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)
@@ -81,20 +81,19 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     // LV_IMG_DECLARE(img_hand)
     // LV_IMG_DECLARE(clock_long_hand)
 
-    /*Add a the hands from images*/
     indic_min = lv_meter_add_needle_line(meter_clock, scale_min, 4, lv_color_white(), -25);                // lv_meter_add_needle_img(meter_clock, scale_min, &clock_long_hand, 5, 5);
     indic_hour = lv_meter_add_needle_line(meter_clock, scale_hour, 4, lv_color_white(), -60);              // lv_meter_add_needle_img(meter_clock, scale_min, &clock_long_hand, 5, 5);
     indic_sec = lv_meter_add_needle_line(meter_clock, scale_min, 2, lv_palette_main(LV_PALETTE_RED), -20); // lv_meter_add_needle_img(meter_clock, scale_min, &img_hand, 5, 5);
 
     // Create an animation to set the value
-    lv_anim_t a;
+    /*lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_exec_cb(&a, set_value);
     lv_anim_set_values(&a, 0, 60);
     lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
     lv_anim_set_time(&a, 60000); // 2 sec for 1 turn of the minute hand (1 hour)
     lv_anim_set_var(&a, indic_sec);
-    lv_anim_start(&a);
+    lv_anim_start(&a);*/
 
     lv_meter_set_indicator_end_value(meter_clock, indic_hour, 2);
     lv_meter_set_indicator_end_value(meter_clock, indic_min, 50);
@@ -110,6 +109,6 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
 
     curr_screen = SCR_HOME;
     hpi_show_screen(scr_home, m_scroll_dir);
-    scr_home_set_time(global_system_time);
+    //scr_home_set_time(global_system_time);
 
 }

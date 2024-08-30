@@ -694,7 +694,7 @@ void hw_thread(void)
     printk("spi has 32MHz\n");
 #endif
 
-    setup_pmic_callbacks();
+    //setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
