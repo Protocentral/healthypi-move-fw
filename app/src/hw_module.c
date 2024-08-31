@@ -619,7 +619,7 @@ void hw_thread(void)
         // return 0;
     }
 
-    // regulator_disable(sensor_brd_ldsw);
+    //regulator_disable(sensor_brd_ldsw);
     k_sleep(K_MSEC(100));
 
     regulator_enable(sensor_brd_ldsw);
@@ -694,7 +694,7 @@ void hw_thread(void)
     printk("spi has 32MHz\n");
 #endif
 
-    setup_pmic_callbacks();
+    //setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
@@ -748,7 +748,7 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         npm_fuel_gauge_update(charger);
-        //rtc_get_time(rtc_dev, &global_system_time);
+        rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
         // printk("H ");
 

@@ -25,6 +25,8 @@ struct sh8601_data
 	uint8_t bytes_per_pixel;
 	enum display_pixel_format pixel_format;
 	enum display_orientation orientation;
+
+	bool device_in_sleep;
 };
 
 static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
@@ -208,8 +210,7 @@ static int sh8601_hw_reset(const struct device *dev)
 static int sh8601_display_blanking_off(const struct device *dev)
 {
 	LOG_DBG("Turning display blanking off");
-	// return sh8601_transmit(dev, SH8601_DISPON, NULL, 0);
-	return 0;
+	return sh8601_send_cmd(dev, SH8601_C_DISPON);
 }
 
 /**
@@ -219,8 +220,7 @@ static int sh8601_display_blanking_off(const struct device *dev)
 static int sh8601_display_blanking_on(const struct device *dev)
 {
 	LOG_DBG("Turning display blanking on");
-	// return sh8601_transmit(dev, SH8601_DISPOFF, NULL, 0);
-	return 0;
+	return sh8601_send_cmd(dev, SH8601_C_DISPOFF);
 }
 
 /**
@@ -310,7 +310,31 @@ static int sh8601_set_brightness(const struct device *dev,
 								 const uint8_t brightness)
 {
 	uint8_t args[1] = {brightness};
-	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+	struct sh8601_data *data = dev->data;
+
+	if (brightness == 0)
+	{
+		sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+		if (!data->device_in_sleep)
+		{
+			int r = sh8601_send_cmd(dev, SH8601_C_SLPIN);
+			k_msleep(SH8601_SLPIN_DELAY);
+			data->device_in_sleep = true;
+		}
+		//
+	}
+	else
+	{
+		if (data->device_in_sleep)
+		{
+
+			int r = sh8601_send_cmd(dev, SH8601_C_SLPOUT);
+			k_msleep(SH8601_SLPOUT_DELAY);
+			data->device_in_sleep = false;
+		}
+		sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+	}
+	//sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
 	return 0;
 }
@@ -376,6 +400,7 @@ static int sh8601_configure(const struct device *dev)
 static int sh8601_init(const struct device *dev)
 {
 	const struct sh8601_config *config = dev->config;
+	struct sh8601_data *data = dev->data;
 
 	int r;
 
@@ -453,8 +478,7 @@ static int sh8601_init(const struct device *dev)
 	k_msleep(25);
 	r = sh8601_send_cmd(dev, SH8601_C_DISPON);
 
-	// r = sh8601_send_cmd(dev, SH8601_C_SLPIN);
-	// k_msleep(SH8601_SLPIN_DELAY);
+	data->device_in_sleep = false;
 
 	k_msleep(200);
 
@@ -588,8 +612,6 @@ static const struct display_driver_api sh8601_api = {
 static int sh8601_pm_action(const struct device *dev,
 							enum pm_device_action action)
 {
-	struct sh8601_data *data = dev->data;
-	const struct sh8601_config *config = dev->config;
 
 	switch (action)
 	{

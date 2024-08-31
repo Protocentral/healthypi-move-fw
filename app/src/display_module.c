@@ -29,7 +29,6 @@ static lv_obj_t *label_temp;
 
 // LVGL Screens
 lv_obj_t *scr_splash;
-lv_obj_t *scr_home;
 lv_obj_t *scr_menu;
 
 lv_obj_t *ui_hour_group;
@@ -115,6 +114,35 @@ static int bpt_meas_last_progress = 0;
 static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
+
+static bool m_display_active = true;
+
+static void display_sleep_on(void)
+{
+    if (m_display_active == true)
+    {
+        printk("Display off");
+        display_blanking_on(display_dev);
+        display_set_brightness(display_dev, 0);
+ 
+        m_display_active = false;
+    }
+}
+
+static void display_sleep_off(void)
+{
+    if (m_display_active == false)
+    {
+        printk("Display on");
+
+        display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+        display_blanking_on(display_dev);
+        hpi_move_load_screen(curr_screen, SCROLL_NONE);
+        display_blanking_off(display_dev);
+        
+        m_display_active = true;
+    }
+}
 
 void display_init_styles()
 {
@@ -314,12 +342,12 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_set_size(img_logo, 25, 25);
     lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, -35, (top_offset+5));
     */
-   
+
     // Battery Level
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset-2));
+    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset - 2));
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
@@ -580,9 +608,17 @@ void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(parent, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
     if (m_scroll_dir == SCROLL_LEFT)
+    {
         lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
-    else
+    }
+    else if (m_scroll_dir == SCROLL_RIGHT)
+    {
         lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
+    }
+    else
+    {
+        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
+    }
 }
 
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
@@ -593,6 +629,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
         draw_scr_clock_small(m_scroll_dir);
         break;
         */
+    case SCR_HOME:
+        draw_scr_home(SCROLL_NONE);
+        break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
         break;
@@ -608,12 +647,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_PLOT_HRV_SCATTER:
         draw_scr_hrv_scatter(m_scroll_dir);
         break;
-    case SCR_CLOCK_ANALOG:
-        draw_scr_clock_analog(m_scroll_dir);
-        break;
     case SCR_BPT_HOME:
-         draw_scr_bpt_home(m_scroll_dir);
-         break;
+        draw_scr_bpt_home(m_scroll_dir);
+        break;
     /*
     case SCR_CLOCK:
         draw_scr_clockface(m_scroll_dir);
@@ -645,7 +681,6 @@ void display_screens_thread(void)
     int time_refresh_counter = 0;
 
     int m_disp_inact_refresh_counter = 0;
-    int m_disp_status_off = false;
 
     int scr_ppg_hr_spo2_refresh_counter = 0;
 
@@ -694,13 +729,13 @@ void display_screens_thread(void)
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
-    //draw_scr_clock_small(SCROLL_RIGHT);
-    draw_scr_clock_analog(SCROLL_RIGHT);
+    // draw_scr_clock_small(SCROLL_RIGHT);
+    draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    //draw_scr_ecg(SCROLL_RIGHT);
-    //draw_scr_bpt_home(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
@@ -711,243 +746,248 @@ void display_screens_thread(void)
 
     while (1)
     {
-        if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
+        if (m_display_active == true)
         {
-            if (curr_screen == SCR_PLOT_PPG)
+            if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
             {
 
-                hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
-                if (scr_ppg_hr_spo2_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                if (curr_screen == SCR_PLOT_PPG)
                 {
-                    hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
-                    hpi_ppg_disp_update_spo2(94); // ppg_sensor_sample.spo2);
 
-                    scr_ppg_hr_spo2_refresh_counter = 0;
+                    hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
+                    if (scr_ppg_hr_spo2_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                    {
+                        hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
+                        hpi_ppg_disp_update_spo2(94); // ppg_sensor_sample.spo2);
+
+                        scr_ppg_hr_spo2_refresh_counter = 0;
+                    }
+                    else
+                    {
+                        scr_ppg_hr_spo2_refresh_counter++;
+                    }
+                }
+                else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
+                {
+                    if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                    {
+                        // Fetch and update HR
+                        // ui_hr_button_update(ppg_sensor_sample.hr);
+                        // ui_spo2_button_update(ppg_sensor_sample.spo2);
+                        // ui_steps_button_update(ppg_sensor_sample.steps_walk);
+                        hr_refresh_counter = 0;
+                    }
+                    else
+                    {
+                        hr_refresh_counter++;
+                    }
+                }
+                else if (curr_screen == SCR_PLOT_HRV)
+                {
+                    if (ppg_sensor_sample.rtor != 0) // && ppg_sensor_sample.rtor != prev_rtor)
+                    {
+                        // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
+                        hpi_disp_hrv_draw_plot_rtor((float)((ppg_sensor_sample.rtor)));
+                        hpi_disp_hrv_update_rtor(ppg_sensor_sample.rtor);
+                        prev_rtor = ppg_sensor_sample.rtor;
+                    }
+                }
+                else if (curr_screen == SCR_PLOT_HRV_SCATTER)
+                {
+                    if (ppg_sensor_sample.rtor != 0) //&& ppg_sensor_sample.rtor != prev_rtor)
+                    {
+                        // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
+                        hpi_disp_hrv_scatter_draw_plot_rtor((float)((ppg_sensor_sample.rtor)), (float)prev_rtor);
+                        hpi_disp_hrv_scatter_update_rtor(ppg_sensor_sample.rtor);
+                        prev_rtor = ppg_sensor_sample.rtor;
+                    }
+                }
+                else if (curr_screen == SUBSCR_BPT_CALIBRATE)
+                {
+
+                    hpi_disp_bpt_draw_plotPPG((float)(ppg_sensor_sample.raw_ir * 1.0000));
+                    // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
+                    if (bpt_cal_done_flag == false)
+                    {
+                        if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
+                        {
+                            bpt_cal_last_status = ppg_sensor_sample.bpt_status;
+                            printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
+                        }
+                        if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
+                        {
+                            bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
+                            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                        }
+                        if (ppg_sensor_sample.bpt_progress == 100)
+                        {
+                            hw_bpt_stop();
+
+                            if (ppg_sensor_sample.bpt_status == 2)
+                            {
+                                printk("Calibration done");
+                            }
+                            bpt_cal_done_flag = true;
+
+                            hw_bpt_get_calib();
+
+                            // ppg_data_stop();
+                        }
+                        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                        lv_disp_trig_activity(NULL);
+                    }
+                }
+
+                /*
+                if (curr_screen == SUBSCR_BPT_MEASURE)
+                {
+                if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
+                {
+                    if (bpt_meas_started == true)
+                    {
+                        hpi_disp_draw_plotPPG((float)((ppg_sensor_sample.raw_red * 1.0000)));
+
+                        if (bpt_meas_done_flag == false)
+                        {
+                            if (bpt_meas_last_status != ppg_sensor_sample.bpt_status)
+                            {
+                                bpt_meas_last_status = ppg_sensor_sample.bpt_status;
+                                printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
+                            }
+                            if (bpt_meas_last_progress != ppg_sensor_sample.bpt_progress)
+                            {
+                                hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                                bpt_meas_last_progress = ppg_sensor_sample.bpt_progress;
+                            }
+                            if (bpt_meas_last_progress >= 100)
+                            {
+                                printk("BPT Meas progress 100");
+
+                                global_bp_dia = ppg_sensor_sample.bp_dia;
+                                global_bp_sys = ppg_sensor_sample.bp_sys;
+
+                                hw_bpt_stop();
+                                ppg_data_stop();
+
+                                printk("BPT Done: %d / %d", global_bp_sys, global_bp_dia);
+                                bpt_meas_done_flag = true;
+                                bpt_meas_started = false;
+                                hpi_disp_update_bp(global_bp_sys, global_bp_dia);
+
+                                if (curr_screen == SUBSCR_BPT_MEASURE)
+                                {
+                                    lv_obj_clear_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
+                                    lv_obj_clear_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
+                                    lv_obj_clear_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
+                                    lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
+
+                                    lv_obj_add_flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
+                                    lv_obj_clear_flag(btn_bpt_measure_exit, LV_OBJ_FLAG_HIDDEN);
+                                }
+                                hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+                            }
+                        }
+                        lv_disp_trig_activity(NULL);
+                    }
+                }
+                }
+                */
+            }
+            //}
+
+            if (k_msgq_get(&q_plot_hrv, &hrv_sample, K_NO_WAIT) == 0)
+            {
+                if (curr_screen == SCR_PLOT_HRV)
+                {
+                    hpi_disp_hrv_update_sdnn(hrv_sample.rmssd);
+                }
+                else if (curr_screen == SCR_PLOT_HRV_SCATTER)
+                {
+                    hpi_disp_hrv_scatter_update_sdnn(hrv_sample.rmssd);
+                }
+            }
+
+            if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+            {
+                if (curr_screen == SCR_PLOT_ECG)
+                {
+
+                    hpi_ecg_disp_draw_plotECG((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
+                    hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr_sample);
+                }
+                else if (curr_screen == SCR_PLOT_EDA)
+                {
+                    hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
+                }
+            }
+
+            if (curr_screen == SCR_HOME && m_display_active) // || curr_screen == SCR_CLOCK_SMALL)
+            {
+                if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                {
+                    // TEST ONLY: time
+                    // if (curr_screen == SCR_CLOCK_SMALL)
+                    //{
+                    //    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true);
+                    //    ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, global_system_time.tm_year + 1900);
+                    //}
+                    // else
+                    //{
+                    // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
+                    //scr_home_set_time(global_system_time);
+                    //}
+                    time_refresh_counter = 0;
                 }
                 else
                 {
-                    scr_ppg_hr_spo2_refresh_counter++;
+                    time_refresh_counter++;
                 }
             }
-            else if ((curr_screen == SCR_CLOCK))// || (curr_screen == SCR_CLOCK_SMALL))
+
+            /*(curr_screen == SCR_VITALS)
+            {
+                if (temp_disp_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS)) // Once a second
+                {
+                    // temp_val = read_temp();
+                    // hpi_disp_update_temp(temp_val);
+                    temp_disp_counter = 0;
+                }
+                else
+                {
+                    temp_disp_counter++;
+                }
+                // lv_task_handler();
+            }*/
+
+            /*if (curr_screen == SCR_CLOCK)
             {
                 if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
                 {
                     // Fetch and update HR
-                    // ui_hr_button_update(ppg_sensor_sample.hr);
-                    // ui_spo2_button_update(ppg_sensor_sample.spo2);
-                    // ui_steps_button_update(ppg_sensor_sample.steps_walk);
+                    // ui_hr_display_update(global_hr);
                     hr_refresh_counter = 0;
+
+                    // TEST ONLY: time
+                    // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min);
                 }
                 else
                 {
                     hr_refresh_counter++;
                 }
-            }
-            else if (curr_screen == SCR_PLOT_HRV)
+            }*/
+
+            if (batt_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
             {
-                if (ppg_sensor_sample.rtor != 0) // && ppg_sensor_sample.rtor != prev_rtor)
+                if (m_display_active)
                 {
-                    // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
-                    hpi_disp_hrv_draw_plot_rtor((float)((ppg_sensor_sample.rtor)));
-                    hpi_disp_hrv_update_rtor(ppg_sensor_sample.rtor);
-                    prev_rtor = ppg_sensor_sample.rtor;
+                    hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
                 }
-            }
-            else if (curr_screen == SCR_PLOT_HRV_SCATTER)
-            {
-                if (ppg_sensor_sample.rtor != 0) //&& ppg_sensor_sample.rtor != prev_rtor)
-                {
-                    // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
-                    hpi_disp_hrv_scatter_draw_plot_rtor((float)((ppg_sensor_sample.rtor)), (float)prev_rtor);
-                    hpi_disp_hrv_scatter_update_rtor(ppg_sensor_sample.rtor);
-                    prev_rtor = ppg_sensor_sample.rtor;
-                }
-            }
-            else if (curr_screen == SUBSCR_BPT_CALIBRATE)
-            {
-
-                hpi_disp_bpt_draw_plotPPG((float)(ppg_sensor_sample.raw_ir * 1.0000));
-                // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-                if (bpt_cal_done_flag == false)
-                {
-                    if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
-                    {
-                        bpt_cal_last_status = ppg_sensor_sample.bpt_status;
-                        printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-                    }
-                    if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
-                    {
-                        bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
-                        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                    }
-                    if (ppg_sensor_sample.bpt_progress == 100)
-                    {
-                        hw_bpt_stop();
-
-                        if (ppg_sensor_sample.bpt_status == 2)
-                        {
-                            printk("Calibration done");
-                        }
-                        bpt_cal_done_flag = true;
-
-                        hw_bpt_get_calib();
-
-                        // ppg_data_stop();
-                    }
-                    hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                    lv_disp_trig_activity(NULL);
-                }
-            }
-
-            /*
-            if (curr_screen == SUBSCR_BPT_MEASURE)
-            {
-            if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
-            {
-                if (bpt_meas_started == true)
-                {
-                    hpi_disp_draw_plotPPG((float)((ppg_sensor_sample.raw_red * 1.0000)));
-
-                    if (bpt_meas_done_flag == false)
-                    {
-                        if (bpt_meas_last_status != ppg_sensor_sample.bpt_status)
-                        {
-                            bpt_meas_last_status = ppg_sensor_sample.bpt_status;
-                            printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-                        }
-                        if (bpt_meas_last_progress != ppg_sensor_sample.bpt_progress)
-                        {
-                            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                            bpt_meas_last_progress = ppg_sensor_sample.bpt_progress;
-                        }
-                        if (bpt_meas_last_progress >= 100)
-                        {
-                            printk("BPT Meas progress 100");
-
-                            global_bp_dia = ppg_sensor_sample.bp_dia;
-                            global_bp_sys = ppg_sensor_sample.bp_sys;
-
-                            hw_bpt_stop();
-                            ppg_data_stop();
-
-                            printk("BPT Done: %d / %d", global_bp_sys, global_bp_dia);
-                            bpt_meas_done_flag = true;
-                            bpt_meas_started = false;
-                            hpi_disp_update_bp(global_bp_sys, global_bp_dia);
-
-                            if (curr_screen == SUBSCR_BPT_MEASURE)
-                            {
-                                lv_obj_clear_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
-                                lv_obj_clear_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-                                lv_obj_clear_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-                                lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-
-                                lv_obj_add_flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
-                                lv_obj_clear_flag(btn_bpt_measure_exit, LV_OBJ_FLAG_HIDDEN);
-                            }
-                            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                        }
-                    }
-                    lv_disp_trig_activity(NULL);
-                }
-            }
-            }
-            */
-        }
-        //}
-
-        if (k_msgq_get(&q_plot_hrv, &hrv_sample, K_NO_WAIT) == 0)
-        {
-            if (curr_screen == SCR_PLOT_HRV)
-            {
-                hpi_disp_hrv_update_sdnn(hrv_sample.rmssd);
-            }
-            else if (curr_screen == SCR_PLOT_HRV_SCATTER)
-            {
-                hpi_disp_hrv_scatter_update_sdnn(hrv_sample.rmssd);
-            }
-        }
-
-        if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
-        {
-            if (curr_screen == SCR_PLOT_ECG)
-            {
-
-                hpi_ecg_disp_draw_plotECG((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
-                hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr_sample);
-            }
-            else if (curr_screen == SCR_PLOT_EDA)
-            {
-                hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
-            }
-        }
-
-        if (curr_screen == SCR_CLOCK)// || curr_screen == SCR_CLOCK_SMALL)
-        {
-            if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
-            {
-                // TEST ONLY: time
-                //if (curr_screen == SCR_CLOCK_SMALL)
-                //{
-                //    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true);
-                //    ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, global_system_time.tm_year + 1900);
-                //}
-                //else
-                //{
-                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                //}
-                time_refresh_counter = 0;
+                batt_refresh_counter = 0;
             }
             else
             {
-                time_refresh_counter++;
+                batt_refresh_counter++;
             }
-        }
-
-        /*(curr_screen == SCR_VITALS)
-        {
-            if (temp_disp_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS)) // Once a second
-            {
-                // temp_val = read_temp();
-                // hpi_disp_update_temp(temp_val);
-                temp_disp_counter = 0;
-            }
-            else
-            {
-                temp_disp_counter++;
-            }
-            // lv_task_handler();
-        }*/
-
-        /*if (curr_screen == SCR_CLOCK)
-        {
-            if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
-            {
-                // Fetch and update HR
-                // ui_hr_display_update(global_hr);
-                hr_refresh_counter = 0;
-
-                // TEST ONLY: time
-                // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min);
-            }
-            else
-            {
-                hr_refresh_counter++;
-            }
-        }*/
-
-        if (batt_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
-        {
-            // if (curr_screen == SCR_CLOCK)
-            //{
-            //hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
-            //}
-            batt_refresh_counter = 0;
-        }
-        else
-        {
-            batt_refresh_counter++;
         }
 
         if (m_disp_inact_refresh_counter >= (3000 / DISP_THREAD_REFRESH_INT_MS))
@@ -956,21 +996,11 @@ void display_screens_thread(void)
             // printk("Inactivity time: %d", inactivity_time);
             if (inactivity_time > DISP_SLEEP_TIME_MS)
             {
-                if (m_disp_status_off == false)
-                {
-                    printk("Display off");
-                    display_set_brightness(display_dev, 0);
-                    m_disp_status_off = true;
-                }
+                display_sleep_on();
             }
             else
             {
-                if (m_disp_status_off == true)
-                {
-                    printk("Display on");
-                    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
-                    m_disp_status_off = false;
-                }
+                display_sleep_off();
             }
         }
         else
