@@ -56,7 +56,7 @@
 			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
 			label = "Boost 5V converter enable";
 		};
-		
+
 	};
 
 	aliases {
@@ -140,7 +140,7 @@
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
 				//regulator-boot-on;
-				
+
 				startup-delay-us = <100000>;
 			};
 
@@ -246,9 +246,6 @@
 
 &pwm0 {
 	status = "disabled";
-	pinctrl-0 = <&pwm0_default>;
-	pinctrl-1 = <&pwm0_sleep>;
-	pinctrl-names = "default", "sleep";
 };
 
 /*
@@ -257,9 +254,9 @@
 	channel-gpios = <&gpio1 5 PWM_POLARITY_INVERTED>;
 };*/
 
-&uart1{
+&uart1 {
 
-    status="disabled";
+	status = "disabled";
 };
 
 
@@ -309,24 +306,24 @@
 		compatible = "maxim,max30001";
 		status = "okay";
 		reg = <0x0>;
-		spi-max-frequency = <DT_FREQ_M(1)>;
+		spi-max-frequency = <DT_FREQ_M(4)>;
 		intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
-		rtor-enabled;
-		ecg-enabled;
-		bioz-enabled;
+		//rtor-enabled;
+		//ecg-enabled;
+		//bioz-enabled;
 		ecg-gain = <3>;
 		ecg-invert;
 		//ecg-dcloff-enable;
 		//ecg-dcloff-current = <1>; // 5 nA
-
+		zephyr,pm-device-runtime-auto;
 	};
 };
 
 &spi4 {
 	compatible = "nordic,nrf-spim";
-	status = "okay"; 
+	status = "okay";
 
-	//cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
+	//cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;    // For Device
 	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
 
 	//<&gpio1 4 GPIO_ACTIVE_LOW>;

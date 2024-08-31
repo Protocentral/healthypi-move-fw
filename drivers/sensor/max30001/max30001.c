@@ -426,6 +426,28 @@ static int max30001_load_settings_regs(const struct device *dev)
     return 0;
 }
 
+#ifdef CONFIG_PM_DEVICE
+
+static int max30001_pm_action(const struct device *dev, enum pm_device_action action)
+{
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_RESUME:
+        /* Enable sensor */
+        break;
+
+    case PM_DEVICE_ACTION_SUSPEND:
+        /* Disable sensor */
+        break;
+
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static int max30001_chip_init(const struct device *dev)
 {
     const struct max30001_config *config = dev->config;
@@ -459,7 +481,7 @@ static int max30001_chip_init(const struct device *dev)
     // Load settings from the device tree
 
     // General Configuration
-    data->chip_cfg.reg_cnfg_gen.bit.en_ulp_lon = 0;
+    data->chip_cfg.reg_cnfg_gen.bit.en_ulp_lon = 0x00;
     data->chip_cfg.reg_cnfg_gen.bit.fmstr = 0;
 
     // data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 0;
@@ -474,7 +496,7 @@ static int max30001_chip_init(const struct device *dev)
     // Gen Config enable/disable ECG
     if (config->ecg_enabled)
     {
-        data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 1;
+        //data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 1;
     }
     else
     {
@@ -484,7 +506,7 @@ static int max30001_chip_init(const struct device *dev)
     // Gen Config enable/disable BIOZ
     if (config->bioz_enabled)
     {
-        data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 1;
+        //data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 1;
     }
     else
     {
@@ -494,8 +516,8 @@ static int max30001_chip_init(const struct device *dev)
     // Gen Config enable/disable LOFF
     if (config->ecg_dcloff_enabled)
     {
-        data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 1;
-        data->chip_cfg.reg_cnfg_gen.bit.imag = config->ecg_dcloff_current;
+       // data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 1;
+        //data->chip_cfg.reg_cnfg_gen.bit.imag = config->ecg_dcloff_current;
     }
     else
     {
@@ -590,6 +612,9 @@ static int max30001_chip_init(const struct device *dev)
 
     LOG_DBG("\"%s\" OK", dev->name);
 
+    #ifdef CONFIG_PM_DEVICE
+    pm_device_driver_init(dev, max30001_pm_action );
+    #endif
     //pm_control_driver
     return 0;
 }
@@ -607,27 +632,7 @@ static const struct sensor_driver_api max30001_api_funcs = {
 
 #define MAX30001_SPI_OPERATION (SPI_WORD_SET(8) | SPI_TRANSFER_MSB)
 
-#ifdef CONFIG_PM_DEVICE
 
-static int max30001_pm_action(const struct device *dev, enum pm_device_action action)
-{
-    switch (action)
-    {
-    case PM_DEVICE_ACTION_RESUME:
-        /* Enable sensor */
-        break;
-
-    case PM_DEVICE_ACTION_SUSPEND:
-        /* Disable sensor */
-        break;
-
-    default:
-        return -ENOTSUP;
-    }
-
-    return 0;
-}
-#endif /* CONFIG_PM_DEVICE */
 /*
  * Main instantiation macro, which selects the correct bus-specific
  * instantiation macros for the instance.

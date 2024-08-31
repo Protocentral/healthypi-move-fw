@@ -56,20 +56,6 @@ static const struct sensor_driver_api max30205_driver_api = {
 	.channel_get = max30205_channel_get,
 };
 
-static int max30205_init(const struct device *dev)
-{
-	const struct max30205_config *config = dev->config;
-
-	/* Get the I2C device */
-	if (!device_is_ready(config->i2c.bus))
-	{
-		LOG_ERR("Bus device is not ready");
-		return -ENODEV;
-	}
-
-	return 0;
-}
-
 #ifdef CONFIG_PM_DEVICE
 
 static int max30205_pm_action(const struct device *dev, enum pm_device_action action)
@@ -91,6 +77,24 @@ static int max30205_pm_action(const struct device *dev, enum pm_device_action ac
 	return 0;
 }
 #endif /* CONFIG_PM_DEVICE */
+
+static int max30205_init(const struct device *dev)
+{
+	const struct max30205_config *config = dev->config;
+
+	/* Get the I2C device */
+	if (!device_is_ready(config->i2c.bus))
+	{
+		LOG_ERR("Bus device is not ready");
+		return -ENODEV;
+	}
+
+	 #ifdef CONFIG_PM_DEVICE
+    pm_device_driver_init(dev, max30205_pm_action );
+    #endif
+
+	return 0;
+}
 
 #define MAX30205_DEFINE(inst)                                    \
 	static struct max30205_data max30205_data_##inst;            \

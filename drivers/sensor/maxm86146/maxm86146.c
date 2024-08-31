@@ -389,22 +389,6 @@ static const struct sensor_driver_api maxm86146_driver_api = {
 #endif
 };
 
-static int maxm86146_chip_init(const struct device *dev)
-{
-    const struct maxm86146_config *config = dev->config;
-
-    if (!device_is_ready(config->i2c.bus))
-    {
-        LOG_ERR("I2C device is not ready");
-        return -ENODEV;
-    }
-
-    gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
-
-    return maxm86146_do_enter_app(dev);
-}
-
 #ifdef CONFIG_PM_DEVICE
 static int maxm86146_pm_action(const struct device *dev,
                                enum pm_device_action action)
@@ -428,6 +412,55 @@ static int maxm86146_pm_action(const struct device *dev,
     return ret;
 }
 #endif /* CONFIG_PM_DEVICE */
+
+static int maxm86146_chip_init(const struct device *dev)
+{
+    const struct maxm86146_config *config = dev->config;
+
+    if (!device_is_ready(config->i2c.bus))
+    {
+        LOG_ERR("I2C device is not ready");
+        return -ENODEV;
+    }
+
+    gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
+    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
+
+     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
+
+    // Enter APPLICATION mode
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+    k_sleep(K_MSEC(10));
+
+    gpio_pin_set_dt(&config->reset_gpio, 0);
+    k_sleep(K_MSEC(20));
+
+    gpio_pin_set_dt(&config->reset_gpio, 1);
+    k_sleep(K_MSEC(1000));
+    // End of APPLICATION mode
+
+    // gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
+    k_sleep(K_MSEC(10));
+
+    m_read_op_mode(dev);
+
+    uint8_t ver_buf[4] = {0};
+    if (maxm86146_get_ver(dev, ver_buf) == 0)
+    {
+        LOG_INF("MAXM86146 version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    }
+    else
+    {
+        LOG_ERR("MAXM86146 not responding\n");
+        return -ENODEV;
+    }
+
+    #ifdef CONFIG_PM_DEVICE
+	pm_device_driver_init(dev, maxm86146_pm_action);
+	#endif
+
+    return 0;
+}
 
 /*
  * Main instantiation macro, which selects the correct bus-specific
