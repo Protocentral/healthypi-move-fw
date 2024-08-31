@@ -48,7 +48,7 @@ static void bt_ready(void)
 		return;
 	}
 
-	printk("Advertising successfully started\n");
+	LOG_INF("Advertising successfully started\n");
 }
 
 int main(void)
@@ -60,9 +60,9 @@ int main(void)
 		return err;
 	}
 
-	bt_ready();
+	//bt_ready();
 	
-	printk("\nHealthyPi Move %d.%d.%d started!\n", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
+	LOG_INF("\nHealthyPi Move %d.%d.%d started!\n", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 	
 	return 0;	
 }

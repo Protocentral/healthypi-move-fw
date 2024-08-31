@@ -16,8 +16,8 @@ manifest:
       import:
         path-prefix: external
       clone-depth: 1
-    - name: max30001
-      repo-path: protocentral_max30001_zephyr_driver
-      remote: protocentral
-      revision: main
-      path: drivers/sensor/max30001
+#    - name: max30001
+#      repo-path: protocentral_max30001_zephyr_driver
+#      remote: protocentral
+#      revision: main
+#      path: drivers/sensor/max30001

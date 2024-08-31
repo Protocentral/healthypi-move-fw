@@ -747,12 +747,12 @@ void hw_thread(void)
 
         // fetch_and_display(acc_dev);
 
-        npm_fuel_gauge_update(charger);
-        rtc_get_time(rtc_dev, &global_system_time);
+        //npm_fuel_gauge_update(charger);
+        //rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
         // printk("H ");
 
-        k_sleep(K_MSEC(3000));
+        k_sleep(K_MSEC(10000));
     }
 }
 
