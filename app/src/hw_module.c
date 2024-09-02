@@ -620,8 +620,6 @@ void hw_thread(void)
     }
 
     //regulator_disable(sensor_brd_ldsw);
-    k_sleep(K_MSEC(100));
-
     regulator_enable(sensor_brd_ldsw);
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
