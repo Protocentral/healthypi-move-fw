@@ -19,7 +19,7 @@ void ui_battery_update(uint8_t percent);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
-void hpi_ecg_disp_draw_plotECG(float data_ecg, bool ecg_lead_off);
+void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
 void hpi_ecg_disp_update_hr(int hr);
 
 // PPG screen functions

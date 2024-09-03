@@ -16,7 +16,7 @@ LOG_MODULE_REGISTER(SENSOR_MAX30001, CONFIG_SENSOR_LOG_LEVEL);
 #warning "MAX30001 driver enabled without any devices"
 #endif
 
-static int _max30001RegWrite(const struct device *dev, uint8_t reg, uint32_t val)
+int _max30001RegWrite(const struct device *dev, uint8_t reg, uint32_t val)
 {
     const struct max30001_config *config = dev->config;
     uint8_t cmd[] = {((reg << 1) | WREG), (uint8_t)(val >> 16), (uint8_t)(val >> 8), (uint8_t)val};
@@ -572,7 +572,8 @@ static int max30001_chip_init(const struct device *dev)
     k_sleep(K_MSEC(100));
 
     //_max30001RegWrite(dev, MNGR_INT, 0x7B0000); // EFIT=16, BFIT=8
-    _max30001RegWrite(dev, MNGR_INT, 0x080000); // EFIT=2, BFIT=2
+    _max30001RegWrite(dev, MNGR_INT, 0x3B0000); // EFIT=8
+    //_max30001RegWrite(dev, MNGR_INT, 0x080000); // EFIT=2, BFIT=2
     //_max30001RegWrite(dev, MNGR_INT, 0x000000); // EFIT=1, BFIT=1
     k_sleep(K_MSEC(100));
 

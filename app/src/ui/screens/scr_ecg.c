@@ -40,12 +40,12 @@ extern lv_style_t style_lbl_white_small;
 
 extern int curr_screen;
 
-#define DISP_WINDOW_SIZE_ECG 256
+#define DISP_WINDOW_SIZE_ECG 390
 
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
     scr_ecg = lv_obj_create(NULL);
-    draw_header_minimal(scr_ecg,10);
+    draw_header_minimal(scr_ecg, 10);
     draw_bg(scr_ecg);
 
     // Create Chart 1 - ECG
@@ -146,31 +146,40 @@ void hpi_ecg_disp_add_samples(int num_samples)
     gx += num_samples;
 }
 
-void hpi_ecg_disp_draw_plotECG(float data_ecg, bool ecg_lead_off)
+void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
 {
     if (chart_ecg_update == true) // && ecg_lead_off == false)
     {
-        if (data_ecg < y_min_ecg)
+        for (int i = 0; i < num_samples; i++)
         {
-            y_min_ecg = data_ecg;
+            int32_t data_ecg_i = (data_ecg[i]/1000);
+
+            if (data_ecg_i < y_min_ecg)
+            {
+                y_min_ecg = data_ecg_i;
+            }
+
+            if (data_ecg_i > y_max_ecg)
+            {
+                y_max_ecg = data_ecg_i;
+            }
+
+            /*if (ecg_plot_hidden == true)
+            {
+                lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+                ecg_plot_hidden = false;
+            }*/
+
+            // printk("E");
+
+            lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg_i);
+            hpi_ecg_disp_add_samples(1);
+            hpi_ecg_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
         }
-
-        if (data_ecg > y_max_ecg)
-        {
-            y_max_ecg = data_ecg;
-        }
-
-        /*if (ecg_plot_hidden == true)
-        {
-            lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-            ecg_plot_hidden = false;
-        }*/
-
-        // printk("E");
-        lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg);
-        hpi_ecg_disp_add_samples(1);
-        hpi_ecg_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
+        // lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg);
+        // hpi_ecg_disp_add_samples(1);
+        // hpi_ecg_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
     }
     /*else if (ecg_lead_off == true)
     {
