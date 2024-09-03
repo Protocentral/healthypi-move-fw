@@ -914,7 +914,7 @@ void display_screens_thread(void)
 
                     //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
                     hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples , ecg_bioz_sensor_sample.ecg_lead_off);
-                    hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr_sample);
+                    hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
                 }
                 else if (curr_screen == SCR_PLOT_EDA)
                 {

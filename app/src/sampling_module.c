@@ -43,6 +43,8 @@ k_tid_t global_ppg_sampling_thread_id;
 bool ppg_wrist_sampling_on = false;
 bool ppg_finger_sampling_on = false;
 
+static lv_timer_t *ecg_sampling_timer;
+
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
                          32,  /* submission queue size */
                          32,  /* completion queue size */
@@ -70,8 +72,6 @@ RTIO_DEFINE_WITH_MEMPOOL(max30001_read_rtio_ctx,
 static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                                                   uint32_t buf_len, void *userdata)
 {
-
-        // const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
         const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buf;
 
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
@@ -102,11 +102,7 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
 static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
                                                  uint32_t buf_len, void *userdata)
 {
-
-        // const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
-
         const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
-
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
         // printk("NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
@@ -148,8 +144,9 @@ static void sensor_ecg_processing_callback(int result, uint8_t *buf,
                 for (int i = 0; i < edata->num_samples_ecg; i++)
                 {
                         ecg_bioz_sensor_sample.ecg_samples[i] = edata->ecg_samples[i];
-                       
                 }
+                ecg_bioz_sensor_sample.hr = edata->hr;
+
                 k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_MSEC(1));
         }
 }
@@ -166,6 +163,12 @@ void ppg_wrist_sampling_trigger_thread(void)
 
                 k_sleep(K_MSEC(40));
         }
+}
+
+static void ecg_sampling_timer_cb(lv_timer_t *timer)
+{
+        sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
+        sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_processing_callback);
 }
 
 void ecg_sampling_trigger_thread(void)
@@ -205,12 +208,17 @@ void ppg_data_start(void)
         k_thread_resume(global_ppg_sampling_thread_id);
 }
 
+void ecg_sampling_timer_start(void)
+{
+        ecg_sampling_timer = lv_timer_create(ecg_sampling_timer_cb, ECG_SAMPLING_INTERVAL_MS, NULL);
+}
+
 #define ECG_SAMPLING_THREAD_STACKSIZE 2048
 #define ECG_SAMPLING_THREAD_PRIORITY 7
 
 // K_THREAD_DEFINE(ppg_sampling_trigger_thread_id, 8192, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
-// K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+//K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 // K_THREAD_DEFINE(ppg_sampling_thread_id, SAMPLING_THREAD_STACKSIZE, ppg_sampling_thread, NULL, NULL, NULL, SAMPLING_THREAD_PRIORITY, 0, 1000);
 
 K_THREAD_DEFINE(ecg_sampling_trigger_thread_id, 2048, ecg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);

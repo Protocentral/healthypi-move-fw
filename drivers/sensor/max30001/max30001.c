@@ -566,7 +566,7 @@ static int max30001_chip_init(const struct device *dev)
     //_max30001RegWrite(dev, CNFG_BMUX, 0x000040);
     k_sleep(K_MSEC(100));
 
-    // max30001_enable_rtor(dev);
+    max30001_enable_rtor(dev);
 
     _max30001RegWrite(dev, CNFG_CAL, 0x702000); // Calibration sources disabled
     k_sleep(K_MSEC(100));

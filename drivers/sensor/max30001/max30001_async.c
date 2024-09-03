@@ -7,7 +7,7 @@ LOG_MODULE_REGISTER(MAX30001_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 static int max30001_async_sample_fetch(const struct device *dev,
                                        uint32_t *num_samples_ecg, uint32_t *num_samples_bioz, int32_t ecg_samples[32],
-                                       int32_t bioz_samples[32], uint16_t *rri, uint16_t hr,
+                                       int32_t bioz_samples[32], uint16_t *rri, uint16_t *hr,
                                        uint8_t ecg_lead_off, uint8_t bioz_lead_off)
 {
     struct max30001_data *data = dev->data;
@@ -97,6 +97,9 @@ static int max30001_async_sample_fetch(const struct device *dev,
         {
             data->lastRRI = (uint16_t)(max30001_rtor >> 10) * 8;
             data->lastHR = (uint16_t)(60 * 1000 / data->lastRRI);
+
+            *hr = data->lastHR;
+            *rri = data->lastRRI;
         }
     }
 
@@ -115,7 +118,6 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
     int ret = 0;
 
-    /* Get the buffer for the frame, it may be allocated dynamically by the rtio context */
     ret = rtio_sqe_rx_buf(iodev_sqe, m_min_buf_len, m_min_buf_len, &buf, &buf_len);
     if (ret != 0)
     {
