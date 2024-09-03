@@ -274,8 +274,8 @@ void data_thread(void)
 
     for (;;)
     {
-        k_sleep(K_USEC(50));
-        //k_sleep(K_MSEC(1));
+        //k_sleep(K_USEC(50));
+        k_sleep(K_MSEC(1));
 
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {

@@ -391,3 +391,8 @@ struct max30001_encoded_data
 
 int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max30001_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
+
+void max30001_synch(const struct device *dev);
+void max30001_fifo_reset(const struct device *dev);
+uint32_t max30001_read_reg(const struct device *dev, uint8_t reg);
+uint32_t max30001_read_status(const struct device *dev);

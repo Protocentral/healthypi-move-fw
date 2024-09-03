@@ -51,7 +51,7 @@ static int _max30001_read_chip_id(const struct device *dev, uint8_t *buf)
     return 0;
 }
 
-static uint32_t _max30001_read_status(const struct device *dev)
+uint32_t max30001_read_status(const struct device *dev)
 {
     const struct max30001_config *config = dev->config;
     uint8_t spiTxCommand = ((STATUS << 1) | RREG);
@@ -70,7 +70,7 @@ static uint32_t _max30001_read_status(const struct device *dev)
     return (uint32_t)(buf[0] << 16) | (buf[1] << 8) | buf[2];
 }
 
-static uint32_t _max30001_read_reg(const struct device *dev, uint8_t reg)
+uint32_t max30001_read_reg(const struct device *dev, uint8_t reg)
 {
     const struct max30001_config *config = dev->config;
     uint8_t spiTxCommand = ((reg << 1) | RREG);
@@ -94,12 +94,12 @@ static void _max30001SwReset(const struct device *dev)
     k_sleep(K_MSEC(100));
 }
 
-static void _max30001Synch(const struct device *dev)
+void max30001_synch(const struct device *dev)
 {
     _max30001RegWrite(dev, SYNCH, 0x000000);
 }
 
-static void _max30001FIFOReset(const struct device *dev)
+void max30001_fifo_reset(const struct device *dev)
 {
     _max30001RegWrite(dev, FIFO_RST, 0x000000);
 }
@@ -152,8 +152,8 @@ static int _max30001_read_ecg_fifo(const struct device *dev, int num_bytes)
         else if (ecg_etag == 0x07) // FIFO Overflow
         {
             LOG_DBG("EOVF ");
-            _max30001FIFOReset(dev);
-            _max30001Synch(dev);
+            max30001_fifo_reset(dev);
+            max30001_synch(dev);
         }
     }
 
@@ -209,8 +209,8 @@ static int _max30001_read_bioz_fifo(const struct device *dev, int num_bytes)
         }
         else if (ecg_etag == 0x07) // FIFO Overflow
         {
-            _max30001FIFOReset(dev);
-            _max30001Synch(dev);
+            max30001_fifo_reset(dev);
+            max30001_synch(dev);
         }
     }
     return 0;
@@ -290,7 +290,7 @@ static int max30001_sample_fetch(const struct device *dev,
     uint32_t max30001_rtor = 0;
     struct max30001_data *data = dev->data;
 
-    max30001_status = _max30001_read_status(dev);
+    max30001_status = max30001_read_status(dev);
     // printk("Status: %x\n", max30001_status);
 
     if ((max30001_status & MAX30001_STATUS_MASK_DCLOFF) == MAX30001_STATUS_MASK_DCLOFF)
@@ -307,7 +307,7 @@ static int max30001_sample_fetch(const struct device *dev,
 
     if ((max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
     {
-        max30001_mngr_int = _max30001_read_reg(dev, MNGR_INT);
+        max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
         e_fifo_num_bytes = ((((max30001_mngr_int & MAX30001_INT_MASK_EFIT) >> MAX30001_INT_SHIFT_EFIT) + 1) * 3);
         // printk("EFN %d ", e_fifo_num_bytes);
         _max30001_read_ecg_fifo(dev, e_fifo_num_bytes);
@@ -315,7 +315,7 @@ static int max30001_sample_fetch(const struct device *dev,
 
     if ((max30001_status & MAX30001_STATUS_MASK_BINT) == MAX30001_STATUS_MASK_BINT) // BIOZ FIFO is full
     {
-        max30001_mngr_int = _max30001_read_reg(dev, MNGR_INT);
+        max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
         b_fifo_num_bytes = (((max30001_mngr_int & MAX30001_INT_MASK_BFIT) >> MAX30001_INT_SHIFT_BFIT) + 1) * 3;
         // printk("BFN %d ", b_fifo_num_bytes);
         _max30001_read_bioz_fifo(dev, b_fifo_num_bytes);
@@ -323,7 +323,7 @@ static int max30001_sample_fetch(const struct device *dev,
 
     if ((max30001_status & MAX30001_STATUS_MASK_RRINT) == MAX30001_STATUS_MASK_RRINT)
     {
-        max30001_rtor = _max30001_read_reg(dev, RTOR);
+        max30001_rtor = max30001_read_reg(dev, RTOR);
         if (max30001_rtor > 0)
         {
             data->lastRRI = (uint16_t)(max30001_rtor >> 10) * 8;
@@ -333,7 +333,7 @@ static int max30001_sample_fetch(const struct device *dev,
 
     if (((max30001_status & MAX30001_STATUS_MASK_BOVF) == MAX30001_STATUS_MASK_BOVF) || ((max30001_status & MAX30001_STATUS_MASK_EOVF) == MAX30001_STATUS_MASK_EOVF))
     {
-        _max30001FIFOReset(dev);
+        max30001_fifo_reset(dev);
     }
 
     return 0;
@@ -586,7 +586,7 @@ static int max30001_chip_init(const struct device *dev)
         max30001_disable_rtor(dev);
     }
 
-    _max30001Synch(dev);
+    max30001_synch(dev);
     k_sleep(K_MSEC(100));
 
     LOG_DBG("\"%s\" OK", dev->name);

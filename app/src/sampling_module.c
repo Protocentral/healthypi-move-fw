@@ -205,46 +205,6 @@ void ppg_data_start(void)
         k_thread_resume(global_ppg_sampling_thread_id);
 }
 
-void ecg_sampling_thread(void)
-{
-        LOG_INF("ECG/ BioZ Sampling Thread starting\n");
-
-        for (;;)
-        {
-                k_sleep(K_MSEC(SAMPLING_INTERVAL_MS));
-
-                struct sensor_value ecg_sample;
-                struct sensor_value bioz_sample;
-                struct sensor_value rtor_sample;
-                struct sensor_value hr_sample;
-                struct sensor_value ecg_lead_off;
-
-#ifdef CONFIG_SENSOR_MAX30001
-                sensor_sample_fetch(max30001_dev);
-                sensor_channel_get(max30001_dev, SENSOR_CHAN_ECG_UV, &ecg_sample);
-                sensor_channel_get(max30001_dev, SENSOR_CHAN_BIOZ_UV, &bioz_sample);
-                sensor_channel_get(max30001_dev, SENSOR_CHAN_RTOR, &rtor_sample);
-                sensor_channel_get(max30001_dev, SENSOR_CHAN_HR, &hr_sample);
-                sensor_channel_get(max30001_dev, SENSOR_CHAN_LDOFF, &ecg_lead_off);
-
-#endif
-                struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
-
-                /*ecg_bioz_sensor_sample.ecg_sample = ecg_sample.val1;
-                ecg_bioz_sensor_sample.bioz_sample = bioz_sample.val1;
-
-                ecg_bioz_sensor_sample.rtor_sample = rtor_sample.val1;
-                ecg_bioz_sensor_sample.hr_sample = hr_sample.val1;
-
-                ecg_bioz_sensor_sample.ecg_lead_off = false; // ecg_lead_off.val1;
-
-                ecg_bioz_sensor_sample._bioZSkipSample = false;
-
-                k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT);
-                */
-        }
-}
-
 #define ECG_SAMPLING_THREAD_STACKSIZE 2048
 #define ECG_SAMPLING_THREAD_PRIORITY 7
 
@@ -253,4 +213,4 @@ K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling
 // K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 // K_THREAD_DEFINE(ppg_sampling_thread_id, SAMPLING_THREAD_STACKSIZE, ppg_sampling_thread, NULL, NULL, NULL, SAMPLING_THREAD_PRIORITY, 0, 1000);
 
-K_THREAD_DEFINE(ecg_sampling_trigger_thread_id, 8192, ecg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ecg_sampling_trigger_thread_id, 2048, ecg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
