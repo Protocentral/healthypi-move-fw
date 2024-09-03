@@ -299,7 +299,8 @@ static int sh8601_set_orientation(const struct device *dev,
 	if (r < 0)
 	{
 		return r;
-	}*/
+	}
+	*/
 
 	data->orientation = orientation;
 
@@ -474,6 +475,10 @@ static int sh8601_init(const struct device *dev)
 
 	args[0] = 0x08;
 	r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
+	k_msleep(25);
+
+	//args[0] = 0x40;
+	//r= sh8601_transmit_cmd(dev, SH8601_W_MADCTL, args, 1U);
 
 	k_msleep(25);
 	r = sh8601_send_cmd(dev, SH8601_C_DISPON);

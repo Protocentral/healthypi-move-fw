@@ -633,7 +633,7 @@ void hw_thread(void)
 
     //gpio_pin_set_dt(&dcdc_5v_en, 1);
 
-    /*
+    
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
@@ -644,12 +644,12 @@ void hw_thread(void)
     {
         struct sensor_value ecg_mode_set;
 
-        // ecg_mode_set.val1 = 1;
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
+        ecg_mode_set.val1 = 1;
+        sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
         // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
-    */
+    
 
     if (!device_is_ready(maxm86146_dev))
     {

@@ -75,7 +75,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     /*Create another scale for the hours. It's only visual and contains only major ticks*/
     lv_meter_scale_t *scale_hour = lv_meter_add_scale(meter_clock);
     lv_meter_set_scale_ticks(meter_clock, scale_hour, 12, 0, 0, lv_color_white());           /*12 ticks*/
-    lv_meter_set_scale_major_ticks(meter_clock, scale_hour, 1, 2, 20, lv_color_white(), 14); /*Every tick is major*/
+    lv_meter_set_scale_major_ticks(meter_clock, scale_hour, 1, 2, 14, lv_color_white(), 14); /*Every tick is major*/
     lv_meter_set_scale_range(meter_clock, scale_hour, 1, 12, 330, 300);                      /*[1..12] values in an almost full circle*/
 
     // LV_IMG_DECLARE(img_hand)
@@ -83,7 +83,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
 
     indic_min = lv_meter_add_needle_line(meter_clock, scale_min, 4, lv_color_white(), -25);                // lv_meter_add_needle_img(meter_clock, scale_min, &clock_long_hand, 5, 5);
     indic_hour = lv_meter_add_needle_line(meter_clock, scale_hour, 4, lv_color_white(), -60);              // lv_meter_add_needle_img(meter_clock, scale_min, &clock_long_hand, 5, 5);
-    indic_sec = lv_meter_add_needle_line(meter_clock, scale_min, 2, lv_palette_main(LV_PALETTE_RED), -20); // lv_meter_add_needle_img(meter_clock, scale_min, &img_hand, 5, 5);
+    indic_sec = lv_meter_add_needle_line(meter_clock, scale_min, 3, lv_palette_main(LV_PALETTE_RED), -20); // lv_meter_add_needle_img(meter_clock, scale_min, &img_hand, 5, 5);
 
     // Create an animation to set the value
     /*lv_anim_t a;
@@ -96,7 +96,8 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_anim_start(&a);*/
 
     lv_meter_set_indicator_end_value(meter_clock, indic_hour, 2);
-    lv_meter_set_indicator_end_value(meter_clock, indic_min, 50);
+    lv_meter_set_indicator_end_value(meter_clock, indic_min, 45);
+    lv_meter_set_indicator_end_value(meter_clock, indic_sec, 35);
 
     /*lv_anim_set_var(&a, indic_hour);
     lv_anim_set_time(&a, 120000); //24 sec for 1 turn of the hour hand

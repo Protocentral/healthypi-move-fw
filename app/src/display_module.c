@@ -725,16 +725,13 @@ void display_screens_thread(void)
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 
-    // draw_scr_home();
-    // draw_scr_splash();
-    // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
     draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    // draw_scr_ecg(SCROLL_RIGHT);
+    //draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
@@ -996,11 +993,11 @@ void display_screens_thread(void)
             // printk("Inactivity time: %d", inactivity_time);
             if (inactivity_time > DISP_SLEEP_TIME_MS)
             {
-                display_sleep_on();
+                //display_sleep_on();
             }
             else
             {
-                display_sleep_off();
+                //display_sleep_off();
             }
         }
         else

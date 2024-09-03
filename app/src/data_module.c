@@ -229,7 +229,7 @@ void data_thread(void)
     */
 
     // Initialize IIR filter (2nd order, 5 tap, 50 Hz Notch)
-    // arm_biquad_casd_df1_inst_f32 iir_filt_inst;
+    arm_biquad_casd_df1_inst_f32 iir_filt_inst;
     // arm_biquad_cascade_df2T_instance_f32 iir_filt_inst;
     // arm_biquad_cascade_df1_init_f32(&iir_filt_inst, 2, iir_coeff, iir_state);
     // arm_biquad_cascade_df2T_init_f32(&iir_filt_inst, 2, iir_coeff, iir_state);
@@ -274,8 +274,8 @@ void data_thread(void)
 
     for (;;)
     {
-        //k_sleep(K_USEC(50));
-        k_sleep(K_MSEC(1));
+        k_sleep(K_USEC(50));
+        //k_sleep(K_MSEC(1));
 
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
@@ -283,12 +283,12 @@ void data_thread(void)
             //ecg_output2 = iir_filt(ecg_input, &iir_filt_notch_inst);
             //ecg_output = iir_filt(ecg_output2, &iir_filt_low_inst);
 
-            // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
+             //arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
             //int32_t ecg_output_int = (int32_t)(ecg_output * 1000); // ecg_input[0]*1000;
             // printk("ECG: %f, ECG_F: %f, ECGI: %d\n", ecg_input, ecg_output, ecg_output_int);
 
-            //ecg_bioz_sensor_sample.ecg_sample = ecg_input;// ecg_output_int;
+            //ecg_bioz_sensor_sample.ecg_sample = ecg_output_int; //ecg_input;// 
 
             if (settings_send_ble_enabled)
             {
