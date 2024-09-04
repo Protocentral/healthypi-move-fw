@@ -90,6 +90,19 @@ static int max30001_async_sample_fetch(const struct device *dev,
         }
     }
 
+    if((max30001_status & MAX30001_STATUS_MASK_BINT)==MAX30001_STATUS_MASK_BINT)
+    {
+        max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
+        b_fifo_num_samples = ((max30001_mngr_int & MAX30001_INT_MASK_BFIT)>>MAX30001_INT_SHIFT_BFIT) +1;
+        b_fifo_num_bytes = (b_fifo_num_samples*3);
+        *num_samples_bioz = b_fifo_num_samples;
+
+        
+
+
+    }
+
+
     if ((max30001_status & MAX30001_STATUS_MASK_RRINT) == MAX30001_STATUS_MASK_RRINT)
     {
         max30001_rtor = max30001_read_reg(dev, RTOR);
