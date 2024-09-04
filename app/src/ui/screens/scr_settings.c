@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <zephyr/logging/log.h>
 
-#include "display_module.h"
 #include "ui/move_ui.h"
 
 lv_obj_t *scr_settings;

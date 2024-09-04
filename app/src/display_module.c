@@ -12,7 +12,6 @@
 #include <zephyr/drivers/rtc.h>
 
 #include "hw_module.h"
-#include "display_module.h"
 #include "sampling_module.h"
 #include "ui/move_ui.h"
 
@@ -997,11 +996,11 @@ void display_screens_thread(void)
             // printk("Inactivity time: %d", inactivity_time);
             if (inactivity_time > DISP_SLEEP_TIME_MS)
             {
-                display_sleep_on();
+                //display_sleep_on();
             }
             else
             {
-                display_sleep_off();
+                //display_sleep_off();
             }
         }
         else

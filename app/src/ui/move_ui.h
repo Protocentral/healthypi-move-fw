@@ -1,7 +1,57 @@
+#pragma once
+
 #include <lvgl.h>
+#include <zephyr/drivers/rtc.h>
+
+// Settings
 
 #define SAMPLE_RATE 125
 #define DISP_WINDOW_SIZE_EDA 250
+
+#define SCREEN_TRANS_TIME 300
+#define DISP_THREAD_REFRESH_INT_MS 2
+#define DISP_SLEEP_TIME_MS 20000
+#define DISPLAY_DEFAULT_BRIGHTNESS 150
+#define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
+#define HRV_DISP_WINDOW_SIZE 128
+
+enum scroll_dir
+{
+    SCROLL_UP,
+    SCROLL_DOWN,
+    SCROLL_LEFT,
+    SCROLL_RIGHT,
+    SCROLL_NONE,
+};
+
+enum hpi_disp_screens
+{
+    SCR_LIST_START,
+    SCR_HOME,
+    // SCR_CLOCK_SMALL,
+
+    SCR_PLOT_PPG,
+    SCR_BPT_HOME,
+    SCR_PLOT_EDA,
+    SCR_PLOT_ECG,
+    SCR_PLOT_HRV,
+    SCR_PLOT_HRV_SCATTER,
+
+    SCR_LIST_END,
+    // Should not go here
+    SCR_CLOCK,
+    SCR_VITALS,
+    // SCR_BPT_HOME,
+};
+
+enum hpi_disp_subscreens
+{
+    SUBSCR_BPT_CALIBRATE,
+    SUBSCR_BPT_MEASURE,
+};
+
+/******** UI Function Prototypes ********/
+
 
 //Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);
@@ -74,6 +124,16 @@ void ui_steps_button_update(uint16_t steps);
 
 void draw_bg(lv_obj_t *parent);
 
+void draw_scr_ppg(enum scroll_dir m_scroll_dir);
+
+void draw_scr_vitals_home(enum scroll_dir m_scroll_dir);
+
+void hpi_disp_update_batt_level(int batt_level, bool charging);
+void hpi_disp_update_temp(int temp);
+
+void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
+void disp_screen_event(lv_event_t *e);
+
 LV_IMG_DECLARE(heart);
 LV_IMG_DECLARE( ui_img_flash_png);
 LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png
@@ -88,3 +148,5 @@ LV_FONT_DECLARE( ui_font_Number_big);
 //LV_FONT_DECLARE( ui_font_Number_extra);
 //LV_FONT_DECLARE( ui_font_Subtitle);
 //LV_FONT_DECLARE( ui_font_Title);
+
+

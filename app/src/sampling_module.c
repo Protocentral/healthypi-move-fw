@@ -8,7 +8,6 @@
 #include "max32664.h"
 #include "maxm86146.h"
 #include "sampling_module.h"
-#include "display_module.h"
 
 LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -43,7 +42,7 @@ k_tid_t global_ppg_sampling_thread_id;
 bool ppg_wrist_sampling_on = false;
 bool ppg_finger_sampling_on = false;
 
-static lv_timer_t *ecg_sampling_timer;
+//static lv_timer_t *ecg_sampling_timer;
 
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
                          32,  /* submission queue size */
@@ -165,11 +164,11 @@ void ppg_wrist_sampling_trigger_thread(void)
         }
 }
 
-static void ecg_sampling_timer_cb(lv_timer_t *timer)
+/*static void ecg_sampling_timer_cb(lv_timer_t *timer)
 {
         sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
         sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_processing_callback);
-}
+}*/
 
 void ecg_sampling_trigger_thread(void)
 {
@@ -210,7 +209,7 @@ void ppg_data_start(void)
 
 void ecg_sampling_timer_start(void)
 {
-        ecg_sampling_timer = lv_timer_create(ecg_sampling_timer_cb, ECG_SAMPLING_INTERVAL_MS, NULL);
+       //ecg_sampling_timer = lv_timer_create(ecg_sampling_timer_cb, ECG_SAMPLING_INTERVAL_MS, NULL);
 }
 
 #define ECG_SAMPLING_THREAD_STACKSIZE 2048
