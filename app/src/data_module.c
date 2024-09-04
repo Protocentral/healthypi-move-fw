@@ -293,7 +293,7 @@ void data_thread(void)
             if (settings_send_ble_enabled)
             {
 
-                ecg_sample_buffer[sample_buffer_count++] = ecg_bioz_sensor_sample.ecg_sample; //ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
+                //ecg_sample_buffer[sample_buffer_count++] = ecg_bioz_sensor_sample.ecg_sample; //ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
                 if (sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
                     ble_ecg_notify(ecg_sample_buffer, sample_buffer_count);
@@ -334,9 +334,10 @@ void data_thread(void)
             {
                 if (settings_data_format == DATA_FMT_OPENVIEW)
                 {
-                    sendData(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample,
+                    /*sendData(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample,
                              ppg_sensor_sample.raw_red, ppg_sensor_sample.raw_ir,
                              0, ppg_sensor_sample.hr, ppg_sensor_sample.bpt_status, ppg_sensor_sample.spo2, ecg_bioz_sensor_sample._bioZSkipSample);
+                             */
                 }
                 /*else if (settings_data_format == DATA_FMT_PLAIN_TEXT)
                 {

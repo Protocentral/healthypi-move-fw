@@ -738,6 +738,8 @@ void hw_thread(void)
 
     k_sem_give(&sem_hw_inited);
 
+    //ecg_sampling_timer_start();
+
     for (;;)
     {
         /*if (k_sem_take(&sem_start_cal, K_NO_WAIT) == 0)
