@@ -38,7 +38,7 @@
 
 #include "hw_module.h"
 #include "fs_module.h"
-#include "display_module.h"
+#include "ui/move_ui.h"
 
 // #include "max32664c_msbl.h"
 

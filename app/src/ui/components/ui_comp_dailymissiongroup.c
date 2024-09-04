@@ -19,7 +19,6 @@
 #include <zephyr/drivers/rtc.h>
 
 #include "hw_module.h"
-#include "display_module.h"
 #include "sampling_module.h"
 #include "ui/move_ui.h"
 
