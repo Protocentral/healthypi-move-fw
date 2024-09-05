@@ -294,18 +294,20 @@ void data_thread(void)
             {
 
                 //ecg_sample_buffer[sample_buffer_count++] = ecg_bioz_sensor_sample.ecg_sample; //ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
-                if (sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
+                /*if (sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
                     ble_ecg_notify(ecg_sample_buffer, sample_buffer_count);
                     sample_buffer_count = 0;
-                }
+                }*/
 
-                resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
+                ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
+                //b_notify(ecg_bioz_sensor_sample.bioz_sample);
+                /*resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
                 if (resp_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
                     ble_resp_notify(resp_sample_buffer, resp_sample_buffer_count);
                     resp_sample_buffer_count = 0;
-                }
+                }*/
             }
             if (settings_plot_enabled)
             {
