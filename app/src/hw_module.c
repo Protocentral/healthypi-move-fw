@@ -132,12 +132,12 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             break;
         case INPUT_KEY_UP:
             // m_key_pressed = GPIO_KEYPAD_KEY_UP;
-            LOG_INF("UP Key Pressed");
-            // sys_reboot(SYS_REBOOT_COLD);
+            printk("DOWN Key Pressed");
+            sys_reboot(SYS_REBOOT_COLD);
             break;
         case INPUT_KEY_DOWN:
             // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
-            printk("DOWN Key Pressed");
+            LOG_INF("UP Key Pressed");
             printk("Entering Ship Mode\n");
             regulator_parent_ship_mode(regulators);
             // k_sem_give(&sem_start_cal);
@@ -619,7 +619,7 @@ void hw_thread(void)
         // return 0;
     }
 
-    //regulator_disable(sensor_brd_ldsw);
+    // regulator_disable(sensor_brd_ldsw);
     k_sleep(K_MSEC(100));
 
     regulator_enable(sensor_brd_ldsw);
@@ -631,7 +631,7 @@ void hw_thread(void)
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
-    //gpio_pin_set_dt(&dcdc_5v_en, 1);
+    // gpio_pin_set_dt(&dcdc_5v_en, 1);
 
     /*
 #ifdef CONFIG_SENSOR_MAX30001
@@ -685,16 +685,16 @@ void hw_thread(void)
     //  nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
     //  printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
 
-    //nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
 
-    //nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
-    //nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
+    // nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
+    // nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     printk("spi has 32MHz\n");
 #endif
 
-    //setup_pmic_callbacks();
+    // setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
@@ -738,7 +738,7 @@ void hw_thread(void)
 
     k_sem_give(&sem_hw_inited);
 
-    //ecg_sampling_timer_start();
+    // ecg_sampling_timer_start();
 
     for (;;)
     {

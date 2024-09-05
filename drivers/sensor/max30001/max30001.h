@@ -376,8 +376,8 @@ struct max30001_data
 struct max30001_encoded_data
 {
 	struct max30001_decoder_header header;
-	int32_t ecg_samples[128];
-	int32_t bioz_samples[128];
+	int32_t ecg_samples[32];
+	int32_t bioz_samples[32];
 	
 	uint32_t num_samples_ecg;
 	uint32_t num_samples_bioz;

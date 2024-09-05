@@ -304,13 +304,14 @@
 	pinctrl-1 = <&spi3_sleep>;
 	pinctrl-names = "default", "sleep";
 	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+	//clock-frequency = <DT_FREQ_M(4)>;
 
 	max30001: max30001@0 {
 		compatible = "maxim,max30001";
 		status = "okay";
 		reg = <0x0>;
-		spi-max-frequency = <DT_FREQ_M(1)>;
-		intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
+		spi-max-frequency = <DT_FREQ_M(2)>;
+		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
 		rtor-enabled;
 		ecg-enabled;
 		bioz-enabled;
@@ -326,8 +327,8 @@
 	compatible = "nordic,nrf-spim";
 	status = "okay"; 
 
-	//cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
-	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
+	//cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
 
 	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
