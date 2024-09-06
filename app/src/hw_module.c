@@ -81,6 +81,8 @@ static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
 
+
+
 volatile bool max30001_device_present = false;
 volatile bool maxm86146_device_present = false;
 volatile bool max32664d_device_present = false;
@@ -104,11 +106,15 @@ uint8_t m_key_pressed = GPIO_KEYPAD_KEY_NONE;
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
+K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
+
 #define MOVE_SAMPLING_DISABLED 0
 
 static float max_charge_current;
 static float term_charge_current;
 static int64_t ref_time;
+
+void ecg_sampling_trigger(void);
 
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
@@ -117,17 +123,21 @@ static const struct battery_model battery_model = {
 /* nPM1300 CHARGER.BCHGCHARGESTATUS.CONSTANTCURRENT register bitmask */
 #define NPM1300_CHG_STATUS_CC_MASK BIT_MASK(3)
 
+
+
 static void gpio_keys_cb_handler(struct input_event *evt)
 {
-    printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d\n",
-           evt->dev->name, evt->code, evt->value);
+    //printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d\n",
+    //       evt->dev->name, evt->code, evt->value);
     if (evt->value == 1)
     {
         switch (evt->code)
         {
-        case INPUT_KEY_BACK:
+        case INPUT_KEY_0:
             // m_key_pressed = GPIO_KEYPAD_KEY_OK;
-            LOG_INF("OK Key Pressed");
+            //LOG_INF("0 Int recd");
+            //ecg_sampling_trigger();
+            //k_sem_give(&sem_ecg_intb_recd);
             // k_sem_give(&sem_ok_key_pressed);
             break;
         case INPUT_KEY_UP:
@@ -135,9 +145,9 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             printk("DOWN Key Pressed");
             sys_reboot(SYS_REBOOT_COLD);
             break;
-        case INPUT_KEY_DOWN:
+        case INPUT_KEY_HOME:
             // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
-            LOG_INF("UP Key Pressed");
+            LOG_INF("HOME Key Pressed");
             printk("Entering Ship Mode\n");
             regulator_parent_ship_mode(regulators);
             // k_sem_give(&sem_start_cal);

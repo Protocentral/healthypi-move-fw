@@ -18,7 +18,7 @@ extern const struct device *const max32664d_dev;
 #define SAMPLING_INTERVAL_MS 8
 
 #define PPG_SAMPLING_INTERVAL_MS 1
-#define ECG_SAMPLING_INTERVAL_MS 62
+#define ECG_SAMPLING_INTERVAL_MS 60
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 256, 1);
@@ -43,6 +43,11 @@ bool ppg_wrist_sampling_on = false;
 bool ppg_finger_sampling_on = false;
 
 //static lv_timer_t *ecg_sampling_timer;
+
+extern struct k_sem sem_ecg_intb_recd;
+
+static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
+// static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
                          32,  /* submission queue size */
@@ -163,12 +168,11 @@ void ppg_wrist_sampling_trigger_thread(void)
                 k_sleep(K_MSEC(40));
         }
 }
-
-/*static void ecg_sampling_timer_cb(lv_timer_t *timer)
+void ecg_sampling_trigger(void)
 {
         sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
         sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_processing_callback);
-}*/
+}
 
 void ecg_sampling_trigger_thread(void)
 {
@@ -176,6 +180,8 @@ void ecg_sampling_trigger_thread(void)
 
         for (;;)
         {
+                //k_sem_take(&sem_ecg_intb_recd, K_FOREVER);
+
                 sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_processing_callback);
 
