@@ -18,6 +18,7 @@
         "ble_module.h": "c"
     },
     "nrf-connect.debugging.bindings": {
-        "${workspaceFolder}/app/build": "Launch build"
+        "${workspaceFolder}/app/build": "Launch build",
+        "${workspaceFolder}/app/build_min": "Launch build_min"
     }
 }

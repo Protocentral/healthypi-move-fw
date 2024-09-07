@@ -593,6 +593,14 @@ static int max32664_set_mode_raw(const struct device *dev)
 	return 0;
 }
 
+static int max32664c_set_mode_shutdown(const struct device *dev)
+{
+	m_i2c_write_cmd_3(dev, 0x01, 0x00, 0x01, MAX32664_DEFAULT_CMD_DELAY);
+	k_sleep(K_MSEC(150));
+
+	return 0;
+}
+
 static int max32664c_set_mode_raw(const struct device *dev)
 {
 	printk("MAX32664 Entering RAW mode...\n");
@@ -985,6 +993,8 @@ static int max32664_chip_init(const struct device *dev)
 	gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
+	// FOR POWER DEBUG Only
+	max32664c_set_mode_shutdown(dev);
 	return max32664_do_enter_app(dev);
 }
 

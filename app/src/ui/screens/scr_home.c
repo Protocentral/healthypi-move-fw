@@ -35,8 +35,9 @@ void scr_home_set_time(struct rtc_time time_to_set)
     if (meter_clock == NULL || curr_screen != SCR_HOME)
         return;
 
-    //lv_meter_set_indicator_end_value(meter_clock, indic_hour, (time_to_set.tm_hour%12));
-    //lv_meter_set_indicator_end_value(meter_clock, indic_min, time_to_set.tm_min);
+    lv_meter_set_indicator_end_value(meter_clock, indic_hour, (time_to_set.tm_hour%12));
+    lv_meter_set_indicator_end_value(meter_clock, indic_min, time_to_set.tm_min);
+    lv_meter_set_indicator_end_value(meter_clock, indic_sec, time_to_set.tm_sec);
 }
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)
@@ -105,9 +106,8 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
 
     // lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
     
-
     curr_screen = SCR_HOME;
     hpi_show_screen(scr_home, m_scroll_dir);
-    //scr_home_set_time(global_system_time);
+    scr_home_set_time(global_system_time);
 
 }

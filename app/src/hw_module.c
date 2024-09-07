@@ -75,7 +75,11 @@ const struct device *const gpio_keys_dev = DEVICE_DT_GET(DT_NODELABEL(gpiokeys))
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
+
 static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
+static const struct device *sensor_brd_1_8_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
+
+
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
@@ -629,10 +633,18 @@ void hw_thread(void)
         // return 0;
     }
 
-    // regulator_disable(sensor_brd_ldsw);
+    //regulator_disable(sensor_brd_ldsw);
     k_sleep(K_MSEC(100));
 
     regulator_enable(sensor_brd_ldsw);
+    k_sleep(K_MSEC(100));
+
+    regulator_enable(sensor_brd_1_8_ldsw);
+    k_sleep(K_MSEC(100));
+
+    //regulator_disable(sensor_brd_1_8_ldsw);
+    k_sleep(K_MSEC(100));
+    
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
@@ -641,7 +653,7 @@ void hw_thread(void)
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
-    // gpio_pin_set_dt(&dcdc_5v_en, 1);
+    gpio_pin_set_dt(&dcdc_5v_en, 0);
 
     /*
 #ifdef CONFIG_SENSOR_MAX30001
