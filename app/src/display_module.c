@@ -1017,4 +1017,5 @@ void display_screens_thread(void)
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
 
+// Power Cost - 80 uA
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

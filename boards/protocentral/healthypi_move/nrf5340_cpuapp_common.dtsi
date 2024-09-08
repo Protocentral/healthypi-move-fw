@@ -283,7 +283,7 @@
 		//writeoc = "pp2o";
 		//readoc = "read2o";
 		//quad-enable-requirements = "S2B1v5";
-		sck-frequency = <128000000>;
+		sck-frequency = <64000000>;
 		size = <DT_SIZE_M(128)>;
 		has-dpd;
 		t-enter-dpd = <3000>;

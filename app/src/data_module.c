@@ -382,4 +382,5 @@ void data_thread(void)
 #define DATA_THREAD_STACKSIZE 4096
 #define DATA_THREAD_PRIORITY 7
 
+// Power Cost: (155 uA) 815 to 970
 K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);
