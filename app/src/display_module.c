@@ -934,7 +934,7 @@ void display_screens_thread(void)
                     // else
                     //{
                     // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                    scr_home_set_time(global_system_time);
+                    //scr_home_set_time(global_system_time);
                     //}
                     time_refresh_counter = 0;
                 }
@@ -980,7 +980,7 @@ void display_screens_thread(void)
             {
                 if (m_display_active)
                 {
-                    hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
+                    //hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
                 }
                 batt_refresh_counter = 0;
             }
