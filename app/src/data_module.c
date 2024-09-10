@@ -268,7 +268,7 @@ void data_thread(void)
     for (;;)
     {
         //k_sleep(K_USEC(50));
-        k_sleep(K_MSEC(1));
+        k_sleep(K_MSEC(10 ));
 
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
@@ -291,7 +291,7 @@ void data_thread(void)
 
             if (settings_send_ble_enabled)
             {                
-                ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
+                //ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
                 
                 /*resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
                 if (resp_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
@@ -383,4 +383,4 @@ void data_thread(void)
 #define DATA_THREAD_PRIORITY 7
 
 // Power Cost: (155 uA) 815 to 970
-K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);
+//K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);

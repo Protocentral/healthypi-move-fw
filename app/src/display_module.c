@@ -116,7 +116,7 @@ static uint8_t bpt_cal_last_progress = 0;
 
 static bool m_display_active = true;
 
-static void display_sleep_on(void)
+void display_sleep_on(void)
 {
     if (m_display_active == true)
     {

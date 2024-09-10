@@ -20,6 +20,8 @@
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/services/hrs.h>
 
+#include "hw_module.h"
+
 //#include "tf/main_functions.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
@@ -61,6 +63,8 @@ int main(void)
 	}
 
 	bt_ready();
+
+	hw_init();
 	
 	printk("\nHealthyPi Move %d.%d.%d started!\n", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 	

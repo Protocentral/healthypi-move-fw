@@ -611,7 +611,7 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
     printk("RTC Set Time: %d\n", ret);
 }
 
-void hw_thread(void)
+void hw_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
@@ -741,7 +741,7 @@ void hw_thread(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    // fs_module_init();
+    fs_module_init();
 
     // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
     /*struct sensor_value mode_set;
@@ -749,16 +749,23 @@ void hw_thread(void)
     sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
     */
 
+    k_sem_give(&sem_hw_inited);
+
     // init_settings();
 
-    usb_init();
+    //usb_init();
 
+    //display_sleep_on();
+}
+
+void hw_thread(void)
+{
     LOG_INF("HW Thread started\n");
 
     // hw_msbl_load();
     //  printk("Initing...\n");
 
-    k_sem_give(&sem_hw_inited);
+   
 
     // ecg_sampling_timer_start();
 
@@ -772,7 +779,7 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         //npm_fuel_gauge_update(charger);
-        rtc_get_time(rtc_dev, &global_system_time);
+        //rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
         // printk("H ");
 
@@ -780,4 +787,4 @@ void hw_thread(void)
     }
 }
 
-K_THREAD_DEFINE(hw_thread_id, HW_THREAD_STACKSIZE, hw_thread, NULL, NULL, NULL, HW_THREAD_PRIORITY, 0, 0);
+//K_THREAD_DEFINE(hw_thread_id, HW_THREAD_STACKSIZE, hw_thread, NULL, NULL, NULL, HW_THREAD_PRIORITY, 0, 0);

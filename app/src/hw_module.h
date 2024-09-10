@@ -3,6 +3,8 @@
 
 uint32_t hw_keypad_get_key(void);
 
+void hw_init(void);
+
 void set_current(uint16_t current_uA);
 uint16_t read_voltage(int channel_no);
 
