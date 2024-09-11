@@ -779,7 +779,7 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         //npm_fuel_gauge_update(charger);
-        //rtc_get_time(rtc_dev, &global_system_time);
+        rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
         // printk("H ");
 
@@ -787,4 +787,4 @@ void hw_thread(void)
     }
 }
 
-//K_THREAD_DEFINE(hw_thread_id, HW_THREAD_STACKSIZE, hw_thread, NULL, NULL, NULL, HW_THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(hw_thread_id, HW_THREAD_STACKSIZE, hw_thread, NULL, NULL, NULL, HW_THREAD_PRIORITY, 0, 0);

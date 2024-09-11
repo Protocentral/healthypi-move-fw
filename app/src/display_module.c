@@ -629,7 +629,7 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
         break;
         */
     case SCR_HOME:
-        draw_scr_home(SCROLL_NONE);
+        draw_scr_home(m_scroll_dir);
         break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
@@ -934,7 +934,7 @@ void display_screens_thread(void)
                     // else
                     //{
                     // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                    //scr_home_set_time(global_system_time);
+                    scr_home_set_time(global_system_time);
                     //}
                     time_refresh_counter = 0;
                 }
