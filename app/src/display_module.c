@@ -10,6 +10,7 @@
 #include <time.h>
 #include <zephyr/posix/time.h>
 #include <zephyr/drivers/rtc.h>
+#include <zephyr/pm/device.h>
 
 #include "hw_module.h"
 #include "sampling_module.h"
@@ -123,6 +124,8 @@ void display_sleep_on(void)
         printk("Display off");
         display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
+
+        //pm_device_action_run(display_dev, PM_DEVICE_ACTION_SUSPEND);
  
         m_display_active = false;
     }
@@ -138,6 +141,9 @@ static void display_sleep_off(void)
         display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
         display_blanking_off(display_dev);
+
+        //pm_device_action_run(display_dev, PM_DEVICE_ACTION_RESUME);
+        
         
         m_display_active = true;
     }

@@ -334,7 +334,7 @@ static int sh8601_set_brightness(const struct device *dev,
 		}
 		sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 	}
-	//sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+	// sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
 	return 0;
 }
@@ -616,10 +616,12 @@ static int sh8601_pm_action(const struct device *dev,
 	switch (action)
 	{
 	case PM_DEVICE_ACTION_SUSPEND:
+		printk("Suspend device");
 		sh8601_send_cmd(dev, SH8601_C_SLPIN);
 		k_msleep(SH8601_SLPIN_DELAY);
 		break;
 	case PM_DEVICE_ACTION_RESUME:
+		printk("Resume device");
 		sh8601_send_cmd(dev, SH8601_C_SLPOUT);
 		k_msleep(SH8601_SLPOUT_DELAY);
 		break;
@@ -630,31 +632,23 @@ static int sh8601_pm_action(const struct device *dev,
 
 #endif /* CONFIG_PM_DEVICE */
 
-#define INST_DT_SH8601(n) DT_INST(n, sitronix_sh8601)
+// #define INST_DT_SH8601(n) DT_INST(n, sitronix_sh8601)
 
-#define SH8601_INIT(n, t)                                            \
-	static const struct sh8601_config sh8601_config_##n = {          \
-		.spi = SPI_DT_SPEC_GET(INST_DT_SH8601(n),                    \
-							   SPI_OP_MODE_MASTER | SPI_WORD_SET(8), \
-							   0),                                   \
-		.reset = GPIO_DT_SPEC_GET_OR(INST_DT_SH8601(n),              \
-									 reset_gpios, {0}),              \
-		.pixel_format = DT_PROP(INST_DT_SH8601(n), pixel_format),    \
-		.rotation = DT_PROP(INST_DT_SH8601(n), rotation),            \
-		.x_resolution = DT_PROP(INST_DT_SH8601(n), width),           \
-		.y_resolution = DT_PROP(INST_DT_SH8601(n), height),          \
-		.inversion = DT_PROP(INST_DT_SH8601(n), display_inversion),  \
-	};                                                               \
-	static struct sh8601_data sh8601_data_##n;                       \
-	PM_DEVICE_DT_INST_DEFINE(id, sh8601_pm_action);                  \
-	DEVICE_DT_DEFINE(INST_DT_SH8601(n), sh8601_init,                 \
-					 NULL, &sh8601_data_##n,                         \
-					 &sh8601_config_##n, POST_KERNEL,                \
-					 CONFIG_DISPLAY_INIT_PRIORITY, &sh8601_api)
+#define SH8601_INIT(inst)                                                      \
+	static const struct sh8601_config sh8601_config_##inst = {                 \
+		.spi = SPI_DT_SPEC_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0), \
+		.reset = GPIO_DT_SPEC_GET_OR(inst, reset_gpios, {0}),                  \
+		.pixel_format = DT_INST_PROP(inst, pixel_format),                      \
+		.rotation = DT_INST_PROP(inst, rotation),                              \
+		.x_resolution = DT_INST_PROP(inst, width),                             \
+		.y_resolution = DT_INST_PROP(inst, height),                            \
+		.inversion = DT_INST_PROP(inst, display_inversion),                    \
+	};                                                                         \
+	static struct sh8601_data sh8601_data_##inst;                              \
+	PM_DEVICE_DT_INST_DEFINE(inst, sh8601_pm_action);                          \
+	DEVICE_DT_INST_DEFINE(n, &sh8601_init,                                     \
+						  PM_DEVICE_DT_INST_GET(inst), &sh8601_data_##inst,    \
+						  &sh8601_config_##inst, POST_KERNEL,                  \
+						  CONFIG_DISPLAY_INIT_PRIORITY, &sh8601_api);
 
-#define DT_INST_FOREACH_SH8601_STATUS_OKAY \
-	LISTIFY(DT_NUM_INST_STATUS_OKAY(sitronix_sh8601), SH8601_INIT, (;))
-
-#ifdef CONFIG_SH8601
-DT_INST_FOREACH_SH8601_STATUS_OKAY;
-#endif
+DT_INST_FOREACH_STATUS_OKAY(SH8601_INIT)

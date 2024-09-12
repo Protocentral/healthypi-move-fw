@@ -91,10 +91,6 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(ui_label_9, lv_palette_main(LV_PALETTE_TEAL), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_label_9, &ui_font_Number_big, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-
-
-
-
     /*Create a scale for the minutes*/
     /*61 ticks in a 360 degrees range (the last and the first line overlaps)*/
     lv_meter_scale_t *scale_min = lv_meter_add_scale(meter_clock);
@@ -108,8 +104,8 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     //lv_meter_set_scale_range(meter_clock, scale_hour, 1, 12, 330, 300);                      //[1..12] values in an almost full circle
     
 
-    // LV_IMG_DECLARE(img_hand)
-    // LV_IMG_DECLARE(clock_long_hand)
+    //LV_IMG_DECLARE(img_hand)
+    //LV_IMG_DECLARE(clock_long_hand)
 
     indic_min = lv_meter_add_needle_line(meter_clock, scale_min, 4, lv_color_white(), -25);                // lv_meter_add_needle_img(meter_clock, scale_min, &clock_long_hand, 5, 5);
     indic_hour = lv_meter_add_needle_line(meter_clock, scale_min, 4, lv_palette_main(LV_PALETTE_BLUE), -60);              // lv_meter_add_needle_img(meter_clock, scale_min, &clock_long_hand, 5, 5);
@@ -137,6 +133,6 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     // lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 
     curr_screen = SCR_HOME;
-    hpi_show_screen(scr_home, m_scroll_dir);
+    hpi_show_screen(scr_home, m_scroll_dir); 
     scr_home_set_time(global_system_time);
 }
