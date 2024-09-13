@@ -125,8 +125,8 @@ void display_sleep_on(void)
         display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
 
-        //pm_device_action_run(display_dev, PM_DEVICE_ACTION_SUSPEND);
- 
+        // pm_device_action_run(display_dev, PM_DEVICE_ACTION_SUSPEND);
+
         m_display_active = false;
     }
 }
@@ -142,9 +142,8 @@ static void display_sleep_off(void)
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
         display_blanking_off(display_dev);
 
-        //pm_device_action_run(display_dev, PM_DEVICE_ACTION_RESUME);
-        
-        
+        // pm_device_action_run(display_dev, PM_DEVICE_ACTION_RESUME);
+
         m_display_active = true;
     }
 }
@@ -918,12 +917,12 @@ void display_screens_thread(void)
                 {
 
                     //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
-                    hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples , ecg_bioz_sensor_sample.ecg_lead_off);
+                    hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
                     hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
                 }
                 else if (curr_screen == SCR_PLOT_EDA)
                 {
-                    //hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
+                    // hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
                 }
             }
 
@@ -940,7 +939,7 @@ void display_screens_thread(void)
                     // else
                     //{
                     // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                    scr_home_set_time(global_system_time);
+                    // scr_home_set_time(global_system_time);
                     //}
                     time_refresh_counter = 0;
                 }
@@ -986,7 +985,7 @@ void display_screens_thread(void)
             {
                 if (m_display_active)
                 {
-                    //hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
+                    // hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
                 }
                 batt_refresh_counter = 0;
             }

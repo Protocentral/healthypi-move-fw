@@ -741,7 +741,7 @@ void hw_init(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    fs_module_init();
+    //fs_module_init();
 
     // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
     /*struct sensor_value mode_set;
@@ -779,7 +779,7 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         //npm_fuel_gauge_update(charger);
-        rtc_get_time(rtc_dev, &global_system_time);
+        //rtc_get_time(rtc_dev, &global_system_time);
         // send_usb_cdc("H ", 1);
         // printk("H ");
 

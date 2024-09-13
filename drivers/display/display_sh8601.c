@@ -618,12 +618,12 @@ static int sh8601_pm_action(const struct device *dev,
 	{
 	case PM_DEVICE_ACTION_SUSPEND:
 		printk("Suspend device");
-		sh8601_send_cmd(dev, SH8601_C_SLPIN);
+		// sh8601_send_cmd(dev, SH8601_C_SLPIN);
 		k_msleep(SH8601_SLPIN_DELAY);
 		break;
 	case PM_DEVICE_ACTION_RESUME:
 		printk("Resume device");
-		sh8601_send_cmd(dev, SH8601_C_SLPOUT);
+		// sh8601_send_cmd(dev, SH8601_C_SLPOUT);
 		k_msleep(SH8601_SLPOUT_DELAY);
 		break;
 	default:
@@ -636,7 +636,7 @@ static int sh8601_pm_action(const struct device *dev,
 #define SH8601_INIT(inst)                                                           \
 	static const struct sh8601_config sh8601_config_##inst = {                      \
 		.spi = SPI_DT_SPEC_INST_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0), \
-		.reset = GPIO_DT_SPEC_GET_OR(inst, reset_gpios, {0}),                       \
+		.reset = GPIO_DT_SPEC_INST_GET_OR(inst, reset_gpios, {0}),                  \
 		.pixel_format = DT_INST_PROP(inst, pixel_format),                           \
 		.rotation = DT_INST_PROP(inst, rotation),                                   \
 		.x_resolution = DT_INST_PROP(inst, width),                                  \
@@ -644,7 +644,9 @@ static int sh8601_pm_action(const struct device *dev,
 		.inversion = DT_INST_PROP(inst, display_inversion),                         \
 	};                                                                              \
 	static struct sh8601_data sh8601_data_##inst;                                   \
+                                                                                    \
 	PM_DEVICE_DT_INST_DEFINE(inst, sh8601_pm_action);                               \
+                                                                                    \
 	DEVICE_DT_INST_DEFINE(inst, &sh8601_init,                                       \
 						  PM_DEVICE_DT_INST_GET(inst), &sh8601_data_##inst,         \
 						  &sh8601_config_##inst, POST_KERNEL,                       \
