@@ -315,7 +315,7 @@ static int maxm86146_do_enter_app(const struct device *dev)
     }
     else
     {
-        LOG_ERR("MAXM86146 not responding\n");
+        //LOG_ERR("MAXM86146 not responding\n");
         return -ENODEV;
     }
 

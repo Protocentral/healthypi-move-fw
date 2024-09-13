@@ -23,6 +23,10 @@ static lv_indev_drv_t m_keypad_drv;
 static lv_indev_t *m_keypad_indev = NULL;
 
 const struct device *display_dev;
+
+static const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
+
+
 lv_indev_t *touch_indev;
 
 static lv_obj_t *label_temp;
@@ -117,15 +121,20 @@ static uint8_t bpt_cal_last_progress = 0;
 
 static bool m_display_active = true;
 
+
+
 void display_sleep_on(void)
 {
     if (m_display_active == true)
     {
         printk("Display off");
-        display_blanking_on(display_dev);
+        //display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
 
+        #ifdef CONFIG_PM_DEVICE
         pm_device_action_run(display_dev, PM_DEVICE_ACTION_SUSPEND);
+        pm_device_action_run(touch_dev, PM_DEVICE_ACTION_SUSPEND);
+        #endif
 
         m_display_active = false;
     }
@@ -138,11 +147,14 @@ static void display_sleep_off(void)
         printk("Display on");
 
         display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
-        display_blanking_on(display_dev);
+        //display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
-        display_blanking_off(display_dev);
+        //display_blanking_off(display_dev);
 
+        #ifdef CONFIG_PM_DEVICE
         pm_device_action_run(display_dev, PM_DEVICE_ACTION_RESUME);
+        pm_device_action_run(touch_dev, PM_DEVICE_ACTION_RESUME);
+        #endif
 
         m_display_active = true;
     }

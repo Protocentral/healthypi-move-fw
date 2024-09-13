@@ -26,24 +26,22 @@
 	gpiokeys: gpio_keys {
 		compatible = "gpio-keys";
 		button_up: sw1 {
-
-			label = "Button UP / SW1";
+			label = "Button Up / Extra Button";
 			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_UP>;
 		};
 
 		button_down: sw3 {
-
-			label = "Button DOWN / SW3";
+			label = "Home Button";
 			gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
-			zephyr,code = <INPUT_KEY_DOWN>;
+			zephyr,code = <INPUT_KEY_HOME>;
 		};
 
-		max30001_intb: max30001_intb {
+		/*max30001_intb: max30001_intb {
 			label = "MAX30001 INTB";
 			gpios = <&gpio1 9 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_0>;
-		};
+		};*/
 	};
 
 	ctrlgpio: gpio_ctrl {
@@ -96,11 +94,13 @@
 	pinctrl-1 = <&i2c1_sleep>;
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
+	zephyr,concat-buf-size = <128>;
+	zephyr,flash-buf-max-size = <128>;
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
-		host-int-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>;
-		pmic-int-pin = <2>;
+		//host-int-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>;
+		//pmic-int-pin = <2>;
 		reg = <0x6b>;
 
 		npm_pmic_gpio: gpio-controller {
@@ -159,14 +159,14 @@
 			charging-enable;
 		};
 
-		npm_pmic_buttons: buttons {
+		/*npm_pmic_buttons: buttons {
 			compatible = "gpio-keys";
 			pmic_button0: pmic_button_0 {
 				gpios = <&npm_pmic_gpio 0 GPIO_ACTIVE_LOW>;
 				label = "Pmic button switch 0";
 				zephyr,code = <INPUT_KEY_0>;
 			};
-		};
+		};*/
 
 		npm_pmic_leds: leds {
 			compatible = "nordic,npm1300-led";

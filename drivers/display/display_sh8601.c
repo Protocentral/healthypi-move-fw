@@ -313,28 +313,6 @@ static int sh8601_set_brightness(const struct device *dev,
 	uint8_t args[1] = {brightness};
 	struct sh8601_data *data = dev->data;
 
-	/*if (brightness == 0)
-	{
-		sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
-		if (!data->device_in_sleep)
-		{
-			int r = sh8601_send_cmd(dev, SH8601_C_SLPIN);
-			k_msleep(SH8601_SLPIN_DELAY);
-			data->device_in_sleep = true;
-		}
-		//
-	}
-	else
-	{
-		if (data->device_in_sleep)
-		{
-
-			int r = sh8601_send_cmd(dev, SH8601_C_SLPOUT);
-			k_msleep(SH8601_SLPOUT_DELAY);
-			data->device_in_sleep = false;
-		}
-		sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
-	}*/
 	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
 	return 0;

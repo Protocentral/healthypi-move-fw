@@ -70,22 +70,17 @@ const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 
-// GPIO Keys and LEDs Device
 const struct device *const gpio_keys_dev = DEVICE_DT_GET(DT_NODELABEL(gpiokeys));
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
-
 static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
 static const struct device *sensor_brd_1_8_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
-
-
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
+// LED Power DC/DC Enable
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
-
-
 
 volatile bool max30001_device_present = false;
 volatile bool maxm86146_device_present = false;
@@ -127,8 +122,6 @@ static const struct battery_model battery_model = {
 /* nPM1300 CHARGER.BCHGCHARGESTATUS.CONSTANTCURRENT register bitmask */
 #define NPM1300_CHG_STATUS_CC_MASK BIT_MASK(3)
 
-
-
 static void gpio_keys_cb_handler(struct input_event *evt)
 {
     //printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d\n",
@@ -145,13 +138,11 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             // k_sem_give(&sem_ok_key_pressed);
             break;
         case INPUT_KEY_UP:
-            // m_key_pressed = GPIO_KEYPAD_KEY_UP;
-            printk("DOWN Key Pressed");
+            printk("Extra Key Pressed");
             sys_reboot(SYS_REBOOT_COLD);
             break;
         case INPUT_KEY_HOME:
-            // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
-            LOG_INF("HOME Key Pressed");
+            LOG_INF("Side Key Pressed");
             printk("Entering Ship Mode\n");
             regulator_parent_ship_mode(regulators);
             // k_sem_give(&sem_start_cal);

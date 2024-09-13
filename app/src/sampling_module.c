@@ -46,7 +46,7 @@ bool ppg_finger_sampling_on = false;
 
 extern struct k_sem sem_ecg_intb_recd;
 
-static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
+//static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,

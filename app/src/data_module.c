@@ -261,7 +261,7 @@ void data_thread(void)
 	uint32_t start, end;
 
     /* Initialize the FIR filter */
-	arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
+	//arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
 
     LOG_INF("Data Thread starting\n");
 

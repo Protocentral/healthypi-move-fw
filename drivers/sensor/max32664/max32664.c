@@ -408,19 +408,13 @@ static int max32664_do_enter_app(const struct device *dev)
 	}
 	else
 	{
-		LOG_INF("MAX32664D not Found\n");
+		//LOG_INF("MAX32664D not Found");
 		return -ENODEV;
 	}
 
 	m_read_hub_status(dev);
 	k_sleep(K_MSEC(200));
 	m_read_hub_status(dev);
-
-	//m_i2c_write_cmd_3(dev, 0x10, 0x03, 0x56, MAX32664_DEFAULT_CMD_DELAY);
-
-	//gpio_pin_set_dt(&config->mfio_gpio, 0);
-	//k_sleep(K_USEC(300));
-	//gpio_pin_set_dt(&config->reset_gpio, 0);
 
 	return 0;
 
