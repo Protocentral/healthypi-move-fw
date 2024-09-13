@@ -6,12 +6,13 @@
  * SH8601 AMOLED display driver.
  */
 
+#define DT_DRV_COMPAT sitronix_sh8601
+
 #include <zephyr/drivers/display.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/logging/log.h>
 #include "display_sh8601.h"
 
-#include <zephyr/pm/policy.h>
 #include <zephyr/pm/device.h>
 
 LOG_MODULE_REGISTER(display_sh8601, CONFIG_DISPLAY_LOG_LEVEL);
@@ -632,23 +633,21 @@ static int sh8601_pm_action(const struct device *dev,
 
 #endif /* CONFIG_PM_DEVICE */
 
-// #define INST_DT_SH8601(n) DT_INST(n, sitronix_sh8601)
-
-#define SH8601_INIT(inst)                                                      \
-	static const struct sh8601_config sh8601_config_##inst = {                 \
-		.spi = SPI_DT_SPEC_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0), \
-		.reset = GPIO_DT_SPEC_GET_OR(inst, reset_gpios, {0}),                  \
-		.pixel_format = DT_INST_PROP(inst, pixel_format),                      \
-		.rotation = DT_INST_PROP(inst, rotation),                              \
-		.x_resolution = DT_INST_PROP(inst, width),                             \
-		.y_resolution = DT_INST_PROP(inst, height),                            \
-		.inversion = DT_INST_PROP(inst, display_inversion),                    \
-	};                                                                         \
-	static struct sh8601_data sh8601_data_##inst;                              \
-	PM_DEVICE_DT_INST_DEFINE(inst, sh8601_pm_action);                          \
-	DEVICE_DT_INST_DEFINE(n, &sh8601_init,                                     \
-						  PM_DEVICE_DT_INST_GET(inst), &sh8601_data_##inst,    \
-						  &sh8601_config_##inst, POST_KERNEL,                  \
+#define SH8601_INIT(inst)                                                           \
+	static const struct sh8601_config sh8601_config_##inst = {                      \
+		.spi = SPI_DT_SPEC_INST_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0), \
+		.reset = GPIO_DT_SPEC_GET_OR(inst, reset_gpios, {0}),                       \
+		.pixel_format = DT_INST_PROP(inst, pixel_format),                           \
+		.rotation = DT_INST_PROP(inst, rotation),                                   \
+		.x_resolution = DT_INST_PROP(inst, width),                                  \
+		.y_resolution = DT_INST_PROP(inst, height),                                 \
+		.inversion = DT_INST_PROP(inst, display_inversion),                         \
+	};                                                                              \
+	static struct sh8601_data sh8601_data_##inst;                                   \
+	PM_DEVICE_DT_INST_DEFINE(inst, sh8601_pm_action);                               \
+	DEVICE_DT_INST_DEFINE(inst, &sh8601_init,                                       \
+						  PM_DEVICE_DT_INST_GET(inst), &sh8601_data_##inst,         \
+						  &sh8601_config_##inst, POST_KERNEL,                       \
 						  CONFIG_DISPLAY_INIT_PRIORITY, &sh8601_api);
 
 DT_INST_FOREACH_STATUS_OKAY(SH8601_INIT)
