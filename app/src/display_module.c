@@ -125,7 +125,7 @@ void display_sleep_on(void)
         display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
 
-        // pm_device_action_run(display_dev, PM_DEVICE_ACTION_SUSPEND);
+        pm_device_action_run(display_dev, PM_DEVICE_ACTION_SUSPEND);
 
         m_display_active = false;
     }
@@ -142,7 +142,7 @@ static void display_sleep_off(void)
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
         display_blanking_off(display_dev);
 
-        // pm_device_action_run(display_dev, PM_DEVICE_ACTION_RESUME);
+        pm_device_action_run(display_dev, PM_DEVICE_ACTION_RESUME);
 
         m_display_active = true;
     }
@@ -351,7 +351,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset - 2));
+    lv_obj_align(label_batt_level, LV_ALIGN_BOTTOM_MID, 0, (top_offset - 2));
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
