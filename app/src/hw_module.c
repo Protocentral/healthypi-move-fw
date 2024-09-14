@@ -391,6 +391,7 @@ static inline float out_ev(struct sensor_value *val)
     return (val->val1 + (float)val->val2 / 1000000);
 }
 
+/*
 static void fetch_and_display(const struct device *dev)
 {
     struct sensor_value x, y, z;
@@ -416,6 +417,7 @@ static void fetch_and_display(const struct device *dev)
 
     // printf("trig_cnt:%d\n\n", trig_cnt);
 }
+*/
 
 static int set_sampling_freq(const struct device *dev)
 {
@@ -423,7 +425,7 @@ static int set_sampling_freq(const struct device *dev)
     struct sensor_value odr_attr;
 
     /* set accel/gyro sampling frequency to 12.5 Hz */
-    odr_attr.val1 = 12.5;
+    odr_attr.val1 = 0;
     odr_attr.val2 = 0;
 
     ret = sensor_attr_set(dev, SENSOR_CHAN_ACCEL_XYZ,
@@ -718,11 +720,11 @@ void hw_init(void)
     }
     else
     {
-        /*if (set_sampling_freq(acc_dev) != 0)
+        if (set_sampling_freq(acc_dev) != 0)
         {
             // return;
             printk("Error setting sampling frequency\n");
-        }*/
+        }
     }
     //pm_device_runtime_put(acc_dev);
 
@@ -768,12 +770,12 @@ void hw_thread(void)
 
         // fetch_and_display(acc_dev);
 
-        // npm_fuel_gauge_update(charger);
-        // rtc_get_time(rtc_dev, &global_system_time);
+        npm_fuel_gauge_update(charger);
+        rtc_get_time(rtc_dev, &global_system_time);
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
 
-        k_sleep(K_MSEC(3000));
+        k_sleep(K_MSEC(6000));
     }
 }
 

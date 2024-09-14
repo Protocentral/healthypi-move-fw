@@ -20,6 +20,8 @@
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/services/hrs.h>
 
+#include <zephyr/sys/poweroff.h>
+
 #include "hw_module.h"
 
 //#include "tf/main_functions.h"
@@ -67,6 +69,10 @@ int main(void)
 	hw_init();
 	
 	printk("\nHealthyPi Move %d.%d.%d started!\n", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
+
+	// For power profiling. Full poweroff
+	//sys_poweroff();
+
 	
 	return 0;	
 }

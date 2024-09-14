@@ -71,10 +71,6 @@
 	};
 };
 
-&adc {
-	status = "disabled";
-};
-
 &gpiote {
 	status = "okay";
 };
@@ -240,7 +236,6 @@
 	pinctrl-names = "default", "sleep";
 };
 
-
 &pwm0 {
 	status = "disabled";
 	pinctrl-0 = <&pwm0_default>;
@@ -248,17 +243,13 @@
 	pinctrl-names = "default", "sleep";
 };
 
-/*
-&sw_pwm {
-	status = "okay";
-	channel-gpios = <&gpio1 5 PWM_POLARITY_INVERTED>;
-};*/
-
 &uart1{
-
     status="disabled";
 };
 
+&adc {
+	status = "disabled";
+};
 
 &qspi {
 	status = "okay";

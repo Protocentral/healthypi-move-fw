@@ -17,12 +17,11 @@
 #include "sampling_module.h"
 #include "ui/move_ui.h"
 
-
 LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
 
 // LVGL Common Objects
-static lv_indev_drv_t m_keypad_drv;
-static lv_indev_t *m_keypad_indev = NULL;
+//static lv_indev_drv_t m_keypad_drv;
+//static lv_indev_t *m_keypad_indev = NULL;
 
 extern const struct device *display_dev;
 
@@ -111,14 +110,9 @@ LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(logo_round_white);
 
-// BPT variables
-static bool bpt_cal_done_flag = false;
-static int bpt_meas_last_progress = 0;
-static int bpt_meas_last_status = 0;
-static int bpt_cal_last_status = 0;
-static uint8_t bpt_cal_last_progress = 0;
-
 static bool m_display_active = true;
+
+uint16_t disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
 
 void hpi_display_sleep_on(void)
 {
@@ -128,6 +122,9 @@ void hpi_display_sleep_on(void)
         // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
         hpi_pwr_display_sleep();
+
+        // Slow down the display thread
+        disp_thread_refresh_int_ms = 1000;
 
         m_display_active = false;
     }
@@ -143,7 +140,10 @@ void hpi_display_sleep_off(void)
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
         // display_blanking_off(display_dev);
         hpi_pwr_display_wake();
-        
+
+        // Speed up the display thread
+        disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
+
         m_display_active = true;
     }
 }
@@ -710,7 +710,7 @@ void display_screens_thread(void)
                 {
 
                     hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
-                    if (scr_ppg_hr_spo2_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                    if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
                         hpi_ppg_disp_update_spo2(94); // ppg_sensor_sample.spo2);
@@ -724,7 +724,7 @@ void display_screens_thread(void)
                 }
                 else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
                 {
-                    if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                    if (hr_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         // Fetch and update HR
                         // ui_hr_button_update(ppg_sensor_sample.hr);
@@ -762,7 +762,7 @@ void display_screens_thread(void)
 
                     hpi_disp_bpt_draw_plotPPG((float)(ppg_sensor_sample.raw_ir * 1.0000));
                     // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-                    if (bpt_cal_done_flag == false)
+                    /*if (bpt_cal_done_flag == false)
                     {
                         if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
                         {
@@ -790,7 +790,7 @@ void display_screens_thread(void)
                         }
                         hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
                         lv_disp_trig_activity(NULL);
-                    }
+                    }*/
                 }
 
                 /*
@@ -877,9 +877,9 @@ void display_screens_thread(void)
                 }
             }
 
-            if (curr_screen == SCR_HOME && m_display_active) // || curr_screen == SCR_CLOCK_SMALL)
+            if (curr_screen == SCR_HOME) // || curr_screen == SCR_CLOCK_SMALL)
             {
-                if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
                     // TEST ONLY: time
                     // if (curr_screen == SCR_CLOCK_SMALL)
@@ -889,7 +889,7 @@ void display_screens_thread(void)
                     //}
                     // else
                     //{
-                    // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
+                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
                     // scr_home_set_time(global_system_time);
                     //}
                     time_refresh_counter = 0;
@@ -902,7 +902,7 @@ void display_screens_thread(void)
 
             /*(curr_screen == SCR_VITALS)
             {
-                if (temp_disp_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS)) // Once a second
+                if (temp_disp_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS)) // Once a second
                 {
                     // temp_val = read_temp();
                     // hpi_disp_update_temp(temp_val);
@@ -917,7 +917,7 @@ void display_screens_thread(void)
 
             /*if (curr_screen == SCR_CLOCK)
             {
-                if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                if (hr_refresh_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS))
                 {
                     // Fetch and update HR
                     // ui_hr_display_update(global_hr);
@@ -932,11 +932,11 @@ void display_screens_thread(void)
                 }
             }*/
 
-            if (batt_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+            if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
                 if (m_display_active)
                 {
-                    // hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
+                    hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
                 }
                 batt_refresh_counter = 0;
             }
@@ -946,8 +946,8 @@ void display_screens_thread(void)
             }
         }
 
-        if (m_disp_inact_refresh_counter >= (3000 / DISP_THREAD_REFRESH_INT_MS))
-        {
+       // if (m_disp_inact_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+        //{
             int inactivity_time = lv_disp_get_inactive_time(NULL);
             // printk("Inactivity time: %d", inactivity_time);
             if (inactivity_time > DISP_SLEEP_TIME_MS)
@@ -958,17 +958,15 @@ void display_screens_thread(void)
             {
                 hpi_display_sleep_off();
             }
-        }
-        else
-        {
-            m_disp_inact_refresh_counter++;
-        }
-
-        
+        //}
+        //else
+        //{
+        //    m_disp_inact_refresh_counter++;
+        //}
 
         lv_task_handler();
 
-        k_sleep(K_MSEC(DISP_THREAD_REFRESH_INT_MS));
+        k_sleep(K_MSEC(disp_thread_refresh_int_ms));
     }
 }
 
