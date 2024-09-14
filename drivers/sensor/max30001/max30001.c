@@ -577,6 +577,8 @@ static int max30001_chip_init(const struct device *dev)
     //_max30001RegWrite(dev, MNGR_INT, 0x000000); // EFIT=1, BFIT=1
     k_sleep(K_MSEC(100));
 
+    //_max30001RegWrite(dev, EN_INT, 0x800003); // Disable all interrupts
+
     if (config->rtor_enabled)
     {
         max30001_enable_rtor(dev);
@@ -588,6 +590,9 @@ static int max30001_chip_init(const struct device *dev)
 
     max30001_synch(dev);
     k_sleep(K_MSEC(100));
+
+    // For POWER DEBUG ONLY
+    //_max30001RegWrite(dev, CNFG_GEN, 0x400000);
 
     LOG_DBG("\"%s\" OK", dev->name);
     return 0;

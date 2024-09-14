@@ -6,12 +6,17 @@
 // Settings
 
 #define SAMPLE_RATE 125
-#define DISP_WINDOW_SIZE_EDA 250
+
 
 #define SCREEN_TRANS_TIME 300
-#define DISP_THREAD_REFRESH_INT_MS 2
+
+#define HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS 2
+
+
+
 #define DISP_SLEEP_TIME_MS 20000
 #define DISPLAY_DEFAULT_BRIGHTNESS 150
+#define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
 #define HRV_DISP_WINDOW_SIZE 128
 
@@ -133,6 +138,7 @@ void hpi_disp_update_temp(int temp);
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void disp_screen_event(lv_event_t *e);
+
 
 LV_IMG_DECLARE(heart);
 LV_IMG_DECLARE( ui_img_flash_png);

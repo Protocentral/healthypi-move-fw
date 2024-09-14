@@ -64,7 +64,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
     ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_main(LV_PALETTE_YELLOW), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_ecg, 3, LV_PART_ITEMS);
+    lv_obj_set_style_line_width(chart_ecg, 4, LV_PART_ITEMS);
 
     // HR Number label
     label_ecg_hr = lv_label_create(scr_ecg);

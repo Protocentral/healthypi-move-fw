@@ -14,6 +14,9 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/device_runtime.h>
+
 struct chsc5816_config
 {
 	struct i2c_dt_spec i2c;
@@ -99,6 +102,27 @@ static int chsc5816_write_reg4(const struct device *dev, uint32_t reg, uint8_t *
 	return 0;
 }
 
+static int chsc5816_sleep(const struct device *dev)
+{
+	const struct chsc5816_config *cfg = dev->config;
+	uint8_t wr_buf[20] = {0x20, 0x00, 0x00, 0x00, 0x20, 0x16, 0x02, 0x00, 0xDB,
+						  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xE9};
+
+	uint8_t wr_buf_deep[20] = {0x20, 0x00, 0x00, 0x00, 0xF8, 0x16, 0x05, 0x00, 0x00,
+							   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xE9};
+
+	int ret;
+
+	ret = i2c_burst_write_dt(&cfg->i2c, wr_buf_deep[0], (wr_buf_deep + 1), 19);
+	if (ret < 0)
+	{
+		LOG_ERR("Could not write data: %i", ret);
+		return -ENODATA;
+	}
+
+	return 0;
+}
+
 static int chsc5816_read_reg4(const struct device *dev, uint32_t reg, uint8_t *val, uint32_t val_len)
 {
 	const struct chsc5816_config *cfg = dev->config;
@@ -147,7 +171,7 @@ static int chsc5816_process(const struct device *dev)
 			input_report_abs(dev, INPUT_ABS_Y, row, false, K_FOREVER);
 			input_report_key(dev, INPUT_BTN_TOUCH, 1, true, K_FOREVER);
 
-			//LOG_INF("Touch at %d, %d", col, row);
+			// LOG_INF("Touch at %d, %d", col, row);
 		}
 	}
 
@@ -263,14 +287,38 @@ static int chsc5816_init(const struct device *dev)
 	return chsc5816_chip_init(dev);
 };
 
-#define CHSC5816_DEFINE(index)                                                               \
-	static const struct chsc5816_config chsc5816_config_##index = {                          \
-		.i2c = I2C_DT_SPEC_INST_GET(index),                                                  \
-		.int_gpio = GPIO_DT_SPEC_INST_GET(index, irq_gpios),                                 \
-	};                                                                                       \
-	static struct chsc5816_data chsc5816_data_##index;                                       \
-	DEVICE_DT_INST_DEFINE(index, chsc5816_init, NULL, &chsc5816_data_##index,                \
-						  &chsc5816_config_##index, POST_KERNEL, CONFIG_INPUT_INIT_PRIORITY, \
-						  NULL);
+#ifdef CONFIG_PM_DEVICE
+
+static int chsc5816_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	switch (action)
+	{
+	case PM_DEVICE_ACTION_RESUME:
+		printk("Resume touch");
+		// chsc5816_chip_init(dev);
+		break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		printk("Suspend touch");
+		chsc5816_sleep(dev);
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+#endif
+
+#define CHSC5816_DEFINE(index)                                                           \
+	static const struct chsc5816_config chsc5816_config_##index = {                      \
+		.i2c = I2C_DT_SPEC_INST_GET(index),                                              \
+		.int_gpio = GPIO_DT_SPEC_INST_GET(index, irq_gpios),                             \
+	};                                                                                   \
+	PM_DEVICE_DT_INST_DEFINE(index, chsc5816_pm_action);                                 \
+	static struct chsc5816_data chsc5816_data_##index;                                   \
+	DEVICE_DT_INST_DEFINE(index, chsc5816_init, PM_DEVICE_DT_INST_GET(index),            \
+						  &chsc5816_data_##index, &chsc5816_config_##index, POST_KERNEL, \
+						  CONFIG_INPUT_INIT_PRIORITY, NULL);
 
 DT_INST_FOREACH_STATUS_OKAY(CHSC5816_DEFINE)

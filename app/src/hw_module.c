@@ -46,6 +46,10 @@
 #include <zephyr/drivers/mfd/npm1300.h>
 #include <zephyr/drivers/regulator.h>
 
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/pm/device_runtime.h>
+
 #include "nrf_fuel_gauge.h"
 
 LOG_MODULE_REGISTER(hw_module);
@@ -60,7 +64,6 @@ extern struct k_msgq q_session_cmd_msg;
 #define HW_THREAD_PRIORITY 7
 
 // Peripheral Device Pointers
-// const struct device *fg_dev = DEVICE_DT_GET_ANY(maxim_max17048);
 const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
@@ -69,16 +72,20 @@ const struct device *acc_dev = DEVICE_DT_GET_ONE(st_lsm6dso);
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
-
-// GPIO Keys and LEDs Device
 const struct device *const gpio_keys_dev = DEVICE_DT_GET(DT_NODELABEL(gpiokeys));
+const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv));
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
 static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
+static const struct device *sensor_brd_1_8_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
+const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
+
+// LED Power DC/DC Enable
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
 
 volatile bool max30001_device_present = false;
@@ -104,11 +111,15 @@ uint8_t m_key_pressed = GPIO_KEYPAD_KEY_NONE;
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
+K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
+
 #define MOVE_SAMPLING_DISABLED 0
 
 static float max_charge_current;
 static float term_charge_current;
 static int64_t ref_time;
+
+void ecg_sampling_trigger(void);
 
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
@@ -119,29 +130,20 @@ static const struct battery_model battery_model = {
 
 static void gpio_keys_cb_handler(struct input_event *evt)
 {
-    printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d\n",
-           evt->dev->name, evt->code, evt->value);
+    // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d\n",
+    //        evt->dev->name, evt->code, evt->value);
     if (evt->value == 1)
     {
         switch (evt->code)
         {
-        case INPUT_KEY_BACK:
-            // m_key_pressed = GPIO_KEYPAD_KEY_OK;
-            LOG_INF("OK Key Pressed");
-            // k_sem_give(&sem_ok_key_pressed);
-            break;
         case INPUT_KEY_UP:
-            // m_key_pressed = GPIO_KEYPAD_KEY_UP;
-            LOG_INF("UP Key Pressed");
-            // sys_reboot(SYS_REBOOT_COLD);
-            break;
-        case INPUT_KEY_DOWN:
-            // m_key_pressed = GPIO_KEYPAD_KEY_DOWN;
-            printk("DOWN Key Pressed");
-            printk("Entering Ship Mode\n");
+            printk("Extra Key Pressed");
             regulator_parent_ship_mode(regulators);
-            // k_sem_give(&sem_start_cal);
-            // sys_reboot(SYS_REBOOT_COLD);
+            printk("Entering Ship Mode\n");
+            break;
+        case INPUT_KEY_HOME:
+            LOG_INF("Side Key Pressed");
+            lv_disp_trig_activity(NULL);
             break;
         default:
             break;
@@ -149,14 +151,14 @@ static void gpio_keys_cb_handler(struct input_event *evt)
     }
 }
 
-INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
-
 void send_usb_cdc(const char *buf, size_t len)
 {
     int rb_len;
     rb_len = ring_buf_put(&ringbuf_usb_cdc, buf, len);
     uart_irq_tx_enable(usb_cdc_uart_dev);
 }
+
+
 
 static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_data)
 {
@@ -389,6 +391,7 @@ static inline float out_ev(struct sensor_value *val)
     return (val->val1 + (float)val->val2 / 1000000);
 }
 
+/*
 static void fetch_and_display(const struct device *dev)
 {
     struct sensor_value x, y, z;
@@ -414,6 +417,7 @@ static void fetch_and_display(const struct device *dev)
 
     // printf("trig_cnt:%d\n\n", trig_cnt);
 }
+*/
 
 static int set_sampling_freq(const struct device *dev)
 {
@@ -421,7 +425,7 @@ static int set_sampling_freq(const struct device *dev)
     struct sensor_value odr_attr;
 
     /* set accel/gyro sampling frequency to 12.5 Hz */
-    odr_attr.val1 = 12.5;
+    odr_attr.val1 = 0;
     odr_attr.val2 = 0;
 
     ret = sensor_attr_set(dev, SENSOR_CHAN_ACCEL_XYZ,
@@ -597,7 +601,7 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
     printk("RTC Set Time: %d\n", ret);
 }
 
-void hw_thread(void)
+void hw_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
@@ -619,10 +623,17 @@ void hw_thread(void)
         // return 0;
     }
 
-    //regulator_disable(sensor_brd_ldsw);
+    // regulator_disable(sensor_brd_ldsw);
     k_sleep(K_MSEC(100));
 
     regulator_enable(sensor_brd_ldsw);
+    k_sleep(K_MSEC(100));
+
+    regulator_enable(sensor_brd_1_8_ldsw);
+    k_sleep(K_MSEC(100));
+
+    // regulator_disable(sensor_brd_1_8_ldsw);
+    k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
@@ -631,7 +642,7 @@ void hw_thread(void)
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
-    //gpio_pin_set_dt(&dcdc_5v_en, 1);
+    gpio_pin_set_dt(&dcdc_5v_en, 0);
 
     /*
 #ifdef CONFIG_SENSOR_MAX30001
@@ -685,16 +696,16 @@ void hw_thread(void)
     //  nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
     //  printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
 
-    //nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
+    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
 
-    //nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
-    //nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
+    // nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
+    // nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     printk("spi has 32MHz\n");
 #endif
 
-    //setup_pmic_callbacks();
+    // setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
@@ -709,12 +720,13 @@ void hw_thread(void)
     }
     else
     {
-        /*if (set_sampling_freq(acc_dev) != 0)
+        if (set_sampling_freq(acc_dev) != 0)
         {
             // return;
             printk("Error setting sampling frequency\n");
-        }*/
+        }
     }
+    //pm_device_runtime_put(acc_dev);
 
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
@@ -727,18 +739,27 @@ void hw_thread(void)
     sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
     */
 
+    pm_device_runtime_get(gpio_keys_dev);
+
+    INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
+
+    //pm_device_runtime_put(w25_flash_dev);
+ 
+    k_sem_give(&sem_hw_inited);
+
     // init_settings();
 
-    usb_init();
+    // usb_init();
+}
 
+void hw_thread(void)
+{
     LOG_INF("HW Thread started\n");
 
     // hw_msbl_load();
     //  printk("Initing...\n");
 
-    k_sem_give(&sem_hw_inited);
-
-    //ecg_sampling_timer_start();
+    // ecg_sampling_timer_start();
 
     for (;;)
     {
@@ -751,10 +772,10 @@ void hw_thread(void)
 
         npm_fuel_gauge_update(charger);
         rtc_get_time(rtc_dev, &global_system_time);
-        // send_usb_cdc("H ", 1);
-        // printk("H ");
+        //  send_usb_cdc("H ", 1);
+        //  printk("H ");
 
-        k_sleep(K_MSEC(3000));
+        k_sleep(K_MSEC(6000));
     }
 }
 

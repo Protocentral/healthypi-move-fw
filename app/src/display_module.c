@@ -10,18 +10,21 @@
 #include <time.h>
 #include <zephyr/posix/time.h>
 #include <zephyr/drivers/rtc.h>
+#include <zephyr/pm/device.h>
 
 #include "hw_module.h"
+#include "power_ctrl.h"
 #include "sampling_module.h"
 #include "ui/move_ui.h"
 
 LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
 
 // LVGL Common Objects
-static lv_indev_drv_t m_keypad_drv;
-static lv_indev_t *m_keypad_indev = NULL;
+//static lv_indev_drv_t m_keypad_drv;
+//static lv_indev_t *m_keypad_indev = NULL;
 
-const struct device *display_dev;
+extern const struct device *display_dev;
+
 lv_indev_t *touch_indev;
 
 static lv_obj_t *label_temp;
@@ -107,38 +110,40 @@ LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(logo_round_white);
 
-// BPT variables
-static bool bpt_cal_done_flag = false;
-static int bpt_meas_last_progress = 0;
-static int bpt_meas_last_status = 0;
-static int bpt_cal_last_status = 0;
-static uint8_t bpt_cal_last_progress = 0;
-
 static bool m_display_active = true;
 
-static void display_sleep_on(void)
+uint16_t disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
+
+void hpi_display_sleep_on(void)
 {
     if (m_display_active == true)
     {
         printk("Display off");
-        display_blanking_on(display_dev);
+        // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
- 
+        hpi_pwr_display_sleep();
+
+        // Slow down the display thread
+        disp_thread_refresh_int_ms = 1000;
+
         m_display_active = false;
     }
 }
 
-static void display_sleep_off(void)
+void hpi_display_sleep_off(void)
 {
     if (m_display_active == false)
     {
         printk("Display on");
-
         display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
-        display_blanking_on(display_dev);
+        // display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
-        display_blanking_off(display_dev);
-        
+        // display_blanking_off(display_dev);
+        hpi_pwr_display_wake();
+
+        // Speed up the display thread
+        disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
+
         m_display_active = true;
     }
 }
@@ -261,52 +266,6 @@ void display_init_styles()
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
 }
 
-static void keypad_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
-{
-    static int call_count = 0;
-
-    switch (m_key_pressed)
-    {
-    case GPIO_KEYPAD_KEY_OK:
-        printk("K OK");
-        data->key = LV_KEY_ENTER;
-        break;
-    case GPIO_KEYPAD_KEY_UP:
-        printk("K UP");
-        data->key = LV_KEY_UP;
-        break;
-    case GPIO_KEYPAD_KEY_DOWN:
-        printk("K DOWN");
-        data->key = LV_KEY_DOWN;
-        break;
-    default:
-        break;
-    }
-
-    /* key press */
-    if (m_key_pressed != GPIO_KEYPAD_KEY_NONE)
-    {
-        if (call_count == 0)
-        {
-            data->state = LV_INDEV_STATE_PR;
-            call_count = 1;
-        }
-        else if (call_count == 1)
-        {
-            call_count = 2;
-            data->state = LV_INDEV_STATE_REL;
-        }
-    }
-
-    /* reset the keys */
-    if ((m_key_pressed != GPIO_KEYPAD_KEY_NONE))
-    {
-        call_count = 0;
-        m_key_pressed = GPIO_KEYPAD_KEY_NONE;
-        // m_press_type = UNKNOWN;
-    }
-}
-
 void menu_roller_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -346,7 +305,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset - 2));
+    lv_obj_align(label_batt_level, LV_ALIGN_BOTTOM_MID, 0, (top_offset - 2));
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
@@ -629,7 +588,7 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
         break;
         */
     case SCR_HOME:
-        draw_scr_home(SCROLL_NONE);
+        draw_scr_home(m_scroll_dir);
         break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
@@ -687,10 +646,9 @@ void display_screens_thread(void)
 
     k_sem_take(&sem_hw_inited, K_FOREVER);
 
-    display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
     if (!device_is_ready(display_dev))
     {
-        LOG_ERR("Device not ready, aborting test");
+        LOG_ERR("Device not ready");
         // return;
     }
 
@@ -700,10 +658,10 @@ void display_screens_thread(void)
     display_init_styles();
 
     // Setup LVGL Input Device
-    lv_indev_drv_init(&m_keypad_drv);
+    /*lv_indev_drv_init(&m_keypad_drv);
     m_keypad_drv.type = LV_INDEV_TYPE_KEYPAD;
     m_keypad_drv.read_cb = keypad_read;
-    m_keypad_indev = lv_indev_drv_register(&m_keypad_drv);
+    m_keypad_indev = lv_indev_drv_register(&m_keypad_drv);*/
 
     touch_indev = lv_indev_get_next(NULL);
     while (touch_indev)
@@ -729,19 +687,17 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    //draw_scr_home(SCROLL_NONE);
+    draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     LOG_INF("Display screens inited");
-    // k_sem_take(&sem_hw_inited, K_FOREVER);
-    k_sem_give(&sem_sampling_start);
 
     while (1)
     {
@@ -754,7 +710,7 @@ void display_screens_thread(void)
                 {
 
                     hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
-                    if (scr_ppg_hr_spo2_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                    if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
                         hpi_ppg_disp_update_spo2(94); // ppg_sensor_sample.spo2);
@@ -768,7 +724,7 @@ void display_screens_thread(void)
                 }
                 else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
                 {
-                    if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                    if (hr_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         // Fetch and update HR
                         // ui_hr_button_update(ppg_sensor_sample.hr);
@@ -806,7 +762,7 @@ void display_screens_thread(void)
 
                     hpi_disp_bpt_draw_plotPPG((float)(ppg_sensor_sample.raw_ir * 1.0000));
                     // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-                    if (bpt_cal_done_flag == false)
+                    /*if (bpt_cal_done_flag == false)
                     {
                         if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
                         {
@@ -834,7 +790,7 @@ void display_screens_thread(void)
                         }
                         hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
                         lv_disp_trig_activity(NULL);
-                    }
+                    }*/
                 }
 
                 /*
@@ -912,18 +868,18 @@ void display_screens_thread(void)
                 {
 
                     //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
-                    hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples , ecg_bioz_sensor_sample.ecg_lead_off);
+                    hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
                     hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
                 }
                 else if (curr_screen == SCR_PLOT_EDA)
                 {
-                    //hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
+                    // hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
                 }
             }
 
-            if (curr_screen == SCR_HOME && m_display_active) // || curr_screen == SCR_CLOCK_SMALL)
+            if (curr_screen == SCR_HOME) // || curr_screen == SCR_CLOCK_SMALL)
             {
-                if (time_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
                     // TEST ONLY: time
                     // if (curr_screen == SCR_CLOCK_SMALL)
@@ -933,8 +889,8 @@ void display_screens_thread(void)
                     //}
                     // else
                     //{
-                    // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                    //scr_home_set_time(global_system_time);
+                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
+                    // scr_home_set_time(global_system_time);
                     //}
                     time_refresh_counter = 0;
                 }
@@ -946,7 +902,7 @@ void display_screens_thread(void)
 
             /*(curr_screen == SCR_VITALS)
             {
-                if (temp_disp_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS)) // Once a second
+                if (temp_disp_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS)) // Once a second
                 {
                     // temp_val = read_temp();
                     // hpi_disp_update_temp(temp_val);
@@ -961,7 +917,7 @@ void display_screens_thread(void)
 
             /*if (curr_screen == SCR_CLOCK)
             {
-                if (hr_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+                if (hr_refresh_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS))
                 {
                     // Fetch and update HR
                     // ui_hr_display_update(global_hr);
@@ -976,7 +932,7 @@ void display_screens_thread(void)
                 }
             }*/
 
-            if (batt_refresh_counter >= (1000 / DISP_THREAD_REFRESH_INT_MS))
+            if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
                 if (m_display_active)
                 {
@@ -990,31 +946,32 @@ void display_screens_thread(void)
             }
         }
 
-        if (m_disp_inact_refresh_counter >= (3000 / DISP_THREAD_REFRESH_INT_MS))
-        {
+       // if (m_disp_inact_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+        //{
             int inactivity_time = lv_disp_get_inactive_time(NULL);
             // printk("Inactivity time: %d", inactivity_time);
             if (inactivity_time > DISP_SLEEP_TIME_MS)
             {
-                //display_sleep_on();
+                hpi_display_sleep_on();
             }
             else
             {
-                //display_sleep_off();
+                hpi_display_sleep_off();
             }
-        }
-        else
-        {
-            m_disp_inact_refresh_counter++;
-        }
+        //}
+        //else
+        //{
+        //    m_disp_inact_refresh_counter++;
+        //}
 
         lv_task_handler();
 
-        k_sleep(K_MSEC(DISP_THREAD_REFRESH_INT_MS));
+        k_sleep(K_MSEC(disp_thread_refresh_int_ms));
     }
 }
 
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
 
+// Power Cost - 80 uA
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

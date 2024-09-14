@@ -199,19 +199,14 @@ float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
 
 void data_thread(void)
 {
-    
-
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_sensor_data_t ppg_sensor_sample;
-
-    int32_t ecg_sample_buffer[64];
-    int sample_buffer_count = 0;
 
     int16_t ppg_sample_buffer[64];
     int ppg_sample_buffer_count = 0;
 
-    int32_t resp_sample_buffer[64];
-    int resp_sample_buffer_count = 0;
+    //int32_t resp_sample_buffer[64];
+    //int resp_sample_buffer_count = 0;
 
     /* Filter coeffcients from Maxim AN6906
 
@@ -235,27 +230,6 @@ void data_thread(void)
     // arm_biquad_cascade_df2T_init_f32(&iir_filt_inst, 2, iir_coeff, iir_state);
     // record_init_session_log();
 
-    static struct iir_filter_t iir_filt_notch_inst;
-    static struct iir_filter_t iir_filt_low_inst;
-
-    for (int i = 0; i < IIR_FILT_TAPS; i++)
-    {
-        iir_filt_notch_inst.input_history[i] = 0;
-        iir_filt_notch_inst.output_history[i] = 0;
-        iir_filt_notch_inst.coeff_b[i] = filt_notch_b[i];
-        iir_filt_notch_inst.coeff_a[i] = filt_notch_a[i];
-    }
-    iir_filt_notch_inst.filter_cycle = 0;
-
-    for (int i = 0; i < IIR_FILT_TAPS; i++)
-    {
-        iir_filt_low_inst.input_history[i] = 0;
-        iir_filt_low_inst.output_history[i] = 0;
-        iir_filt_low_inst.coeff_b[i] = filt_low_b[i];
-        iir_filt_low_inst.coeff_a[i] = filt_low_a[i];
-    }
-    iir_filt_low_inst.filter_cycle = 0;
-
     float32_t ecg_input = 0;
     float32_t ecg_output = 0;
     float32_t ecg_output2 = 0;
@@ -270,43 +244,65 @@ void data_thread(void)
 
     struct hpi_computed_hrv_t hrv_calculated;
 
+    #define NUM_TAPS   10 /* Number of taps in the FIR filter (length of the moving average window) */
+    #define BLOCK_SIZE 8 /* Number of samples processed per block */
+
+    /*
+    * Filter coefficients are all equal for a moving average filter. Here, 1/NUM_TAPS = 0.1f.
+    */
+    //q31_t firCoeffs[NUM_TAPS] = {0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD,
+    //                0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD};
+
+    arm_fir_instance_f32 sFIR;
+    float32_t firState[NUM_TAPS + BLOCK_SIZE - 1];
+
+    float32_t input[BLOCK_SIZE];
+	float32_t output[BLOCK_SIZE];
+	uint32_t start, end;
+
+    /* Initialize the FIR filter */
+	//arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
+
     LOG_INF("Data Thread starting\n");
 
     for (;;)
     {
         //k_sleep(K_USEC(50));
-        k_sleep(K_MSEC(1));
+        k_sleep(K_MSEC(10 ));
 
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
-            //ecg_input = (float32_t)(ecg_bioz_sensor_sample.ecg_sample / 100000.0000);
-            //ecg_output2 = iir_filt(ecg_input, &iir_filt_notch_inst);
-            //ecg_output = iir_filt(ecg_output2, &iir_filt_low_inst);
+            /*
+            // Stage 1 50 Hz Notch filter
+            for(int i = 0; i < BLOCK_SIZE; i++)
+            {
+                input[i] = (ecg_bioz_sensor_sample.ecg_samples[i])/1000.00;
+            }
 
-            // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
-            // arm_biquad_cascade_df1_f32(&iir_filt_inst, ecg_input, ecg_output, 1);
-            //int32_t ecg_output_int = (int32_t)(ecg_output * 1000); // ecg_input[0]*1000;
-            // printk("ECG: %f, ECG_F: %f, ECGI: %d\n", ecg_input, ecg_output, ecg_output_int);
+            arm_fir_f32(&sFIR, input, output, BLOCK_SIZE);
 
-            //ecg_bioz_sensor_sample.ecg_sample = ecg_input;// ecg_output_int;
+            for(int i = 0; i < BLOCK_SIZE; i++)
+            {
+                ecg_bioz_sensor_sample.ecg_samples[i] = output[i]*1000.00;
+            }
+            // End of Stage 1
+            */
+
+
 
             if (settings_send_ble_enabled)
-            {
+            {                
 
-                //ecg_sample_buffer[sample_buffer_count++] = ecg_bioz_sensor_sample.ecg_sample; //ecg_output_int; // ecg_bioz_sensor_sample.ecg_sample;
-                /*if (sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
-                {
-                    ble_ecg_notify(ecg_sample_buffer, sample_buffer_count);
-                    sample_buffer_count = 0;
-                }*/
 
                 ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
                 //b_notify(ecg_bioz_sensor_sample.bioz_sample);
+
                 /*resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
                 if (resp_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
                     ble_resp_notify(resp_sample_buffer, resp_sample_buffer_count);
                     resp_sample_buffer_count = 0;
+
                 }*/
             }
             if (settings_plot_enabled)
@@ -390,4 +386,5 @@ void data_thread(void)
 #define DATA_THREAD_STACKSIZE 4096
 #define DATA_THREAD_PRIORITY 7
 
+// Power Cost: (155 uA) 815 to 970
 K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);

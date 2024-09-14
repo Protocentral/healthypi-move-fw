@@ -59,6 +59,13 @@ static float gx = 0;
 static bool chart_ppg_update = true;
 static void hpi_bpt_disp_do_set_scale(int disp_window_size);
 
+// BPT variables
+static bool bpt_cal_done_flag = false;
+static int bpt_meas_last_progress = 0;
+static int bpt_meas_last_status = 0;
+static int bpt_cal_last_status = 0;
+static uint8_t bpt_cal_last_progress = 0;
+
 static void scr_bpt_btn_measure_exit_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);

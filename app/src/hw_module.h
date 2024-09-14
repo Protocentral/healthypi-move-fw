@@ -3,6 +3,8 @@
 
 uint32_t hw_keypad_get_key(void);
 
+void hw_init(void);
+
 void set_current(uint16_t current_uA);
 uint16_t read_voltage(int channel_no);
 
@@ -14,7 +16,8 @@ void hw_bpt_start_est(void);
 void hw_bpt_stop(void);
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year);
 
-int readADC(void);
+void hpi_pwr_display_sleep(void);
+void hpi_pwr_display_wake(void);
 
 enum gpio_keypad_key
 {

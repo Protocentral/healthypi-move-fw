@@ -19,35 +19,29 @@
 		zephyr,bt-hci-ipc = &ipc0;
 		nordic,802154-spinel-ipc = &ipc0;
 		zephyr,ieee802154 = &ieee802154;
-		//zephyr,display = &gc9a01; //&st7789v;
 		zephyr,display= &sh8601;
 		nordic,pm-ext-flash = &w25q01jv;
 	};
 
-	/*pwmleds {
-		compatible = "pwm-leds";
-		pwm_led0: pwm_led_0 {
-			status = "okay";
-			pwms = <&sw_pwm 0 PWM_MSEC(10) PWM_POLARITY_NORMAL>;
-		};
-	};*/
-
-
 	gpiokeys: gpio_keys {
 		compatible = "gpio-keys";
 		button_up: sw1 {
-
-			label = "Button UP / SW1";
+			label = "Button Up / Extra Button";
 			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_UP>;
 		};
 
 		button_down: sw3 {
-
-			label = "Button DOWN / SW3";
+			label = "Home Button";
 			gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
-			zephyr,code = <INPUT_KEY_DOWN>;
+			zephyr,code = <INPUT_KEY_HOME>;
 		};
+
+		/*max30001_intb: max30001_intb {
+			label = "MAX30001 INTB";
+			gpios = <&gpio1 9 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_0>;
+		};*/
 	};
 
 	ctrlgpio: gpio_ctrl {
@@ -56,11 +50,9 @@
 			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
 			label = "Boost 5V converter enable";
 		};
-		
 	};
 
 	aliases {
-		//pwm-led0 = &pwm_led0;
 		max30001 = &max30001;
 		max32664d = &max32664d;
 		maxm86146 = &maxm86146;
@@ -72,15 +64,11 @@
 / {
 	lvgl_pointer_input: lvgl_pointer {
 		compatible = "zephyr,lvgl-pointer-input";
-		input = <&chsc5816>; //<&cst816s>;
+		input = <&chsc5816>; 
 		//invert-y;
 		swap-xy;
 		//invert-x;
 	};
-};
-
-&adc {
-	status = "disabled";
 };
 
 &gpiote {
@@ -102,11 +90,13 @@
 	pinctrl-1 = <&i2c1_sleep>;
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
+	zephyr,concat-buf-size = <128>;
+	zephyr,flash-buf-max-size = <128>;
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
-		host-int-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>;
-		pmic-int-pin = <2>;
+		//host-int-gpios = <&gpio0 7 GPIO_ACTIVE_LOW>;
+		//pmic-int-pin = <2>;
 		reg = <0x6b>;
 
 		npm_pmic_gpio: gpio-controller {
@@ -145,7 +135,10 @@
 			};
 
 			npm_pmic_ldo2: LDO2 {
-				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				regulator-initial-mode = <NPM1300_LDSW_MODE_LDO>;
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <2000000>;
+				regulator-init-microvolt = <1800000>;
 				//regulator-boot-on;
 			};
 		};
@@ -162,14 +155,14 @@
 			charging-enable;
 		};
 
-		npm_pmic_buttons: buttons {
+		/*npm_pmic_buttons: buttons {
 			compatible = "gpio-keys";
 			pmic_button0: pmic_button_0 {
 				gpios = <&npm_pmic_gpio 0 GPIO_ACTIVE_LOW>;
 				label = "Pmic button switch 0";
 				zephyr,code = <INPUT_KEY_0>;
 			};
-		};
+		};*/
 
 		npm_pmic_leds: leds {
 			compatible = "nordic,npm1300-led";
@@ -243,7 +236,6 @@
 	pinctrl-names = "default", "sleep";
 };
 
-
 &pwm0 {
 	status = "disabled";
 	pinctrl-0 = <&pwm0_default>;
@@ -251,17 +243,13 @@
 	pinctrl-names = "default", "sleep";
 };
 
-/*
-&sw_pwm {
-	status = "okay";
-	channel-gpios = <&gpio1 5 PWM_POLARITY_INVERTED>;
-};*/
-
 &uart1{
-
     status="disabled";
 };
 
+&adc {
+	status = "disabled";
+};
 
 &qspi {
 	status = "okay";
@@ -275,7 +263,7 @@
 		//writeoc = "pp2o";
 		//readoc = "read2o";
 		//quad-enable-requirements = "S2B1v5";
-		sck-frequency = <128000000>;
+		sck-frequency = <64000000>;
 		size = <DT_SIZE_M(128)>;
 		has-dpd;
 		t-enter-dpd = <3000>;
@@ -304,13 +292,14 @@
 	pinctrl-1 = <&spi3_sleep>;
 	pinctrl-names = "default", "sleep";
 	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+	clock-frequency = <DT_FREQ_M(4)>;
 
 	max30001: max30001@0 {
 		compatible = "maxim,max30001";
 		status = "okay";
 		reg = <0x0>;
-		spi-max-frequency = <DT_FREQ_M(1)>;
-		intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
+		spi-max-frequency = <DT_FREQ_M(4)>;
+		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
 		rtor-enabled;
 		ecg-enabled;
 		bioz-enabled;
@@ -339,7 +328,7 @@
 	/*gc9a01: gc9a01@0 {
 		compatible = "waveshare,gc9a01a";
 		spi-max-frequency = <DT_FREQ_M(45)>;
-		reg = <0>;
+		reg = <0>;	
 		cmd-data-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 		//bl-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;

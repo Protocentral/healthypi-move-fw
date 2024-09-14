@@ -15,9 +15,13 @@
         "stdio.h": "c",
         "move_ui.h": "c",
         "max30001.h": "c",
-        "ble_module.h": "c"
+        "ble_module.h": "c",
+        "npm1300.h": "c",
+        "hw_module.h": "c"
     },
     "nrf-connect.debugging.bindings": {
-        "${workspaceFolder}/app/build": "Launch build"
-    }
+        "${workspaceFolder}/app/build": "Launch build",
+        "${workspaceFolder}/app/build_min": "Launch build_min"
+    },
+    "C_Cpp.configurationWarnings": "disabled"
 }
