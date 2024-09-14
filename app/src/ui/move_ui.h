@@ -134,6 +134,7 @@ void hpi_disp_update_temp(int temp);
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void disp_screen_event(lv_event_t *e);
 
+
 LV_IMG_DECLARE(heart);
 LV_IMG_DECLARE( ui_img_flash_png);
 LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png

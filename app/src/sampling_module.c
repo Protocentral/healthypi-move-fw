@@ -23,8 +23,6 @@ extern const struct device *const max32664d_dev;
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 256, 1);
 
-K_SEM_DEFINE(sem_sampling_start, 0, 1);
-
 // ASync sensor RTIO defines
 
 SENSOR_DT_READ_IODEV(maxm86146_iodev, DT_ALIAS(maxm86146), SENSOR_CHAN_VOLTAGE);
@@ -157,7 +155,6 @@ static void sensor_ecg_processing_callback(int result, uint8_t *buf,
 
 void ppg_wrist_sampling_trigger_thread(void)
 {
-        k_sem_take(&sem_sampling_start, K_FOREVER);
 
         LOG_INF("PPG Wrist Sampling Trigger Thread starting\n");
         for (;;)
@@ -191,8 +188,6 @@ void ecg_sampling_trigger_thread(void)
 
 void ppg_finger_sampling_trigger_thread(void)
 {
-        k_sem_take(&sem_sampling_start, K_FOREVER);
-
         LOG_INF("PPG Finger Sampling Trigger Thread starting");
         for (;;)
         {

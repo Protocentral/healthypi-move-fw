@@ -13,8 +13,10 @@
 #include <zephyr/pm/device.h>
 
 #include "hw_module.h"
+#include "power_ctrl.h"
 #include "sampling_module.h"
 #include "ui/move_ui.h"
+
 
 LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
 
@@ -22,10 +24,7 @@ LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
 static lv_indev_drv_t m_keypad_drv;
 static lv_indev_t *m_keypad_indev = NULL;
 
-const struct device *display_dev;
-
-static const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
-
+extern const struct device *display_dev;
 
 lv_indev_t *touch_indev;
 
@@ -121,41 +120,30 @@ static uint8_t bpt_cal_last_progress = 0;
 
 static bool m_display_active = true;
 
-
-
-void display_sleep_on(void)
+void hpi_display_sleep_on(void)
 {
     if (m_display_active == true)
     {
         printk("Display off");
-        //display_blanking_on(display_dev);
+        // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
-
-        #ifdef CONFIG_PM_DEVICE
-        pm_device_action_run(display_dev, PM_DEVICE_ACTION_SUSPEND);
-        pm_device_action_run(touch_dev, PM_DEVICE_ACTION_SUSPEND);
-        #endif
+        hpi_pwr_display_sleep();
 
         m_display_active = false;
     }
 }
 
-static void display_sleep_off(void)
+void hpi_display_sleep_off(void)
 {
     if (m_display_active == false)
     {
         printk("Display on");
-
         display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
-        //display_blanking_on(display_dev);
+        // display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
-        //display_blanking_off(display_dev);
-
-        #ifdef CONFIG_PM_DEVICE
-        pm_device_action_run(display_dev, PM_DEVICE_ACTION_RESUME);
-        pm_device_action_run(touch_dev, PM_DEVICE_ACTION_RESUME);
-        #endif
-
+        // display_blanking_off(display_dev);
+        hpi_pwr_display_wake();
+        
         m_display_active = true;
     }
 }
@@ -276,52 +264,6 @@ void display_init_styles()
     lv_style_set_bg_opa(&style_scr_black, LV_OPA_COVER);
     lv_style_set_border_width(&style_scr_black, 0);
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
-}
-
-static void keypad_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
-{
-    static int call_count = 0;
-
-    switch (m_key_pressed)
-    {
-    case GPIO_KEYPAD_KEY_OK:
-        printk("K OK");
-        data->key = LV_KEY_ENTER;
-        break;
-    case GPIO_KEYPAD_KEY_UP:
-        printk("K UP");
-        data->key = LV_KEY_UP;
-        break;
-    case GPIO_KEYPAD_KEY_DOWN:
-        printk("K DOWN");
-        data->key = LV_KEY_DOWN;
-        break;
-    default:
-        break;
-    }
-
-    /* key press */
-    if (m_key_pressed != GPIO_KEYPAD_KEY_NONE)
-    {
-        if (call_count == 0)
-        {
-            data->state = LV_INDEV_STATE_PR;
-            call_count = 1;
-        }
-        else if (call_count == 1)
-        {
-            call_count = 2;
-            data->state = LV_INDEV_STATE_REL;
-        }
-    }
-
-    /* reset the keys */
-    if ((m_key_pressed != GPIO_KEYPAD_KEY_NONE))
-    {
-        call_count = 0;
-        m_key_pressed = GPIO_KEYPAD_KEY_NONE;
-        // m_press_type = UNKNOWN;
-    }
 }
 
 void menu_roller_event_handler(lv_event_t *e)
@@ -704,10 +646,9 @@ void display_screens_thread(void)
 
     k_sem_take(&sem_hw_inited, K_FOREVER);
 
-    display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
     if (!device_is_ready(display_dev))
     {
-        LOG_ERR("Device not ready, aborting test");
+        LOG_ERR("Device not ready");
         // return;
     }
 
@@ -717,10 +658,10 @@ void display_screens_thread(void)
     display_init_styles();
 
     // Setup LVGL Input Device
-    lv_indev_drv_init(&m_keypad_drv);
+    /*lv_indev_drv_init(&m_keypad_drv);
     m_keypad_drv.type = LV_INDEV_TYPE_KEYPAD;
     m_keypad_drv.read_cb = keypad_read;
-    m_keypad_indev = lv_indev_drv_register(&m_keypad_drv);
+    m_keypad_indev = lv_indev_drv_register(&m_keypad_drv);*/
 
     touch_indev = lv_indev_get_next(NULL);
     while (touch_indev)
@@ -750,15 +691,13 @@ void display_screens_thread(void)
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
     // draw_scr_ppg(SCROLL_RIGHT);
-    //draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     LOG_INF("Display screens inited");
-    // k_sem_take(&sem_hw_inited, K_FOREVER);
-    k_sem_give(&sem_sampling_start);
 
     while (1)
     {
@@ -1013,17 +952,19 @@ void display_screens_thread(void)
             // printk("Inactivity time: %d", inactivity_time);
             if (inactivity_time > DISP_SLEEP_TIME_MS)
             {
-                display_sleep_on();
+                hpi_display_sleep_on();
             }
             else
             {
-                display_sleep_off();
+                hpi_display_sleep_off();
             }
         }
         else
         {
             m_disp_inact_refresh_counter++;
         }
+
+        
 
         lv_task_handler();
 
