@@ -154,8 +154,6 @@ static void gpio_keys_cb_handler(struct input_event *evt)
     }
 }
 
-INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
-
 void send_usb_cdc(const char *buf, size_t len)
 {
     int rb_len;
@@ -739,6 +737,10 @@ void hw_init(void)
     //mode_set.val1 = 1;
     sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
     */
+
+   pm_device_runtime_get(gpio_keys_dev);
+
+   INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
 
     k_sem_give(&sem_hw_inited);
 
