@@ -20,8 +20,8 @@
 LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
 
 // LVGL Common Objects
-//static lv_indev_drv_t m_keypad_drv;
-//static lv_indev_t *m_keypad_indev = NULL;
+// static lv_indev_drv_t m_keypad_drv;
+// static lv_indev_t *m_keypad_indev = NULL;
 
 extern const struct device *display_dev;
 
@@ -157,11 +157,11 @@ void display_init_styles()
 
     lv_style_init(&style_batt_sym);
     lv_style_set_text_color(&style_batt_sym, lv_palette_main(LV_PALETTE_GREY));
-    lv_style_set_text_font(&style_batt_sym, &lv_font_montserrat_24);
+    lv_style_set_text_font(&style_batt_sym, &lv_font_montserrat_34);
 
     lv_style_init(&style_batt_percent);
     lv_style_set_text_color(&style_batt_percent, lv_color_white());
-    lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_16);
+    lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_24);
 
     // HR Number label style
     lv_style_init(&style_hr);
@@ -310,7 +310,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, -2, -2);
+    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, -12, -2);
 
     /*ui_battery_group = ui_battery(parent);
     lv_obj_set_x(ui_battery_group, 20);
@@ -386,40 +386,6 @@ void draw_header(lv_obj_t *parent, bool showFWVersion)
     lv_style_set_bg_grad(&style_bg, &grad);
     lv_obj_add_style(parent, &style_bg, 0);
     */
-}
-
-void ui_time_display_update(uint8_t hour, uint8_t min, bool small)
-{
-    if (ui_label_hour == NULL || ui_label_min == NULL)
-        return;
-
-    char buf[5];
-    if (small)
-    {
-        sprintf(buf, "%02d:", hour);
-    }
-    else
-    {
-        sprintf(buf, "%02d", hour);
-    }
-    lv_label_set_text(ui_label_hour, buf);
-
-    sprintf(buf, "%02d", min);
-    lv_label_set_text(ui_label_min, buf);
-}
-
-void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year)
-{
-    if (ui_label_date == NULL)
-        return;
-
-    char buf[20];
-
-    char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-
-    sprintf(buf, "%02d %s %04d", day, mon_strs[month], year);
-    lv_label_set_text(ui_label_date, buf);
 }
 
 void hpi_disp_update_temp(int temp)
@@ -877,21 +843,11 @@ void display_screens_thread(void)
                 }
             }
 
-            if (curr_screen == SCR_HOME) // || curr_screen == SCR_CLOCK_SMALL)
+            if (curr_screen == SCR_HOME) 
             {
                 if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
-                    // TEST ONLY: time
-                    // if (curr_screen == SCR_CLOCK_SMALL)
-                    //{
-                    //    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, true);
-                    //    ui_date_display_update(global_system_time.tm_mday, global_system_time.tm_mon, global_system_time.tm_year + 1900);
-                    //}
-                    // else
-                    //{
-                    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
-                    // scr_home_set_time(global_system_time);
-                    //}
+                    ui_home_time_display_update(global_system_time);
                     time_refresh_counter = 0;
                 }
                 else
@@ -946,20 +902,20 @@ void display_screens_thread(void)
             }
         }
 
-       // if (m_disp_inact_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+        // if (m_disp_inact_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
         //{
-            int inactivity_time = lv_disp_get_inactive_time(NULL);
-            // printk("Inactivity time: %d", inactivity_time);
-            if (inactivity_time > DISP_SLEEP_TIME_MS)
-            {
-                hpi_display_sleep_on();
-            }
-            else
-            {
-                hpi_display_sleep_off();
-            }
+        int inactivity_time = lv_disp_get_inactive_time(NULL);
+        // printk("Inactivity time: %d", inactivity_time);
+        if (inactivity_time > DISP_SLEEP_TIME_MS)
+        {
+            hpi_display_sleep_on();
+        }
+        else
+        {
+            hpi_display_sleep_off();
+        }
         //}
-        //else
+        // else
         //{
         //    m_disp_inact_refresh_counter++;
         //}

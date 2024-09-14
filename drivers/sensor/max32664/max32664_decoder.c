@@ -40,27 +40,10 @@ static int max32664_decoder_get_size_info(enum sensor_channel channel, size_t *b
 	}
 }
 
-static int max32664_convert_raw_to_q31(uint16_t reading, q31_t *out)
-{
-	/*int64_t intermediate = ((int64_t)reading 10) *
-			       ((int64_t)INT32_MAX + 1) /
-			       ((1 << AKM09918C_SHIFT) * INT64_C(1000000));
-	*/
-	int32_t intermediate = (int32_t)reading;
-	*out = CLAMP(intermediate, INT32_MIN, INT32_MAX);
-	return 0;
-}
-
 static int max32664_decoder_decode(const uint8_t *buffer, enum sensor_channel channel,
 								   size_t channel_idx, uint32_t *fit,
 								   uint16_t max_count, void *data_out)
 {
-	
-	if (*fit != 0)
-	{
-		return 0;
-	}
-
 
 	return 0;
 	
