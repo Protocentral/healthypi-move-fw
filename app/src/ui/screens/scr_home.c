@@ -54,7 +54,7 @@ void ui_home_time_display_update(struct rtc_time in_time)
     sprintf(buf, "%02d", in_time.tm_min);
     lv_label_set_text(ui_home_label_min, buf);
 
-    sprintf(date_buf, "%02d %s %04d", in_time.tm_mday, mon_strs[in_time.tm_mon], in_time.tm_year + 2000);
+    sprintf(date_buf, "%02d %s %04d", in_time.tm_mday, mon_strs[in_time.tm_mon], in_time.tm_year + 1900);
     lv_label_set_text(ui_home_label_date, date_buf);
 }
 

@@ -114,23 +114,20 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3000000>;
+				regulator-always-on;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <3000000>;
+				regulator-max-microvolt = <300000>;
 				regulator-init-microvolt = <3000000>;
-				retention-microvolt = <2500000>;
-				//regulator-boot-on;
-				//enable-gpios = <&npm_pmic_gpio 1 GPIO_ACTIVE_LOW>;
-				//retention-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_HIGH>;
-				//pwm-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
+				regulator-always-on;
+				//retention-microvolt = <2500000>;
 			};
 
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
 				//regulator-boot-on;
-				
 				startup-delay-us = <100000>;
 			};
 
@@ -266,7 +263,7 @@
 		sck-frequency = <64000000>;
 		size = <DT_SIZE_M(128)>;
 		has-dpd;
-		t-enter-dpd = <3000>;
+		t-enter-dpd = <30000>;
 		t-exit-dpd = <30000>;
 		jedec-id = [ ef 40 21  ];
 		status = "okay";

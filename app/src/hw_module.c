@@ -130,8 +130,9 @@ static const struct battery_model battery_model = {
 
 static void gpio_keys_cb_handler(struct input_event *evt)
 {
-    // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d\n",
-    //        evt->dev->name, evt->code, evt->value);
+    //printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d type=%d\n",
+    //       evt->dev->name, evt->code, evt->value, evt->type);
+
     if (evt->value == 1)
     {
         switch (evt->code)
@@ -157,8 +158,6 @@ void send_usb_cdc(const char *buf, size_t len)
     rb_len = ring_buf_put(&ringbuf_usb_cdc, buf, len);
     uart_irq_tx_enable(usb_cdc_uart_dev);
 }
-
-
 
 static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_data)
 {
@@ -726,12 +725,12 @@ void hw_init(void)
             printk("Error setting sampling frequency\n");
         }
     }
-    //pm_device_runtime_put(acc_dev);
+    // pm_device_runtime_put(acc_dev);
 
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    // fs_module_init();
+    fs_module_init();
 
     // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
     /*struct sensor_value mode_set;
@@ -743,8 +742,8 @@ void hw_init(void)
 
     INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
 
-    //pm_device_runtime_put(w25_flash_dev);
- 
+    // pm_device_runtime_put(w25_flash_dev);
+
     k_sem_give(&sem_hw_inited);
 
     // init_settings();

@@ -362,30 +362,6 @@ void draw_header(lv_obj_t *parent, bool showFWVersion)
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
     lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 45, 20);
-
-    /*label_batt_level_val = lv_label_create(parent);
-    lv_label_set_text(label_batt_level_val, "100%");
-    lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-    */
-
-    /*Make a gradient*/
-    /*lv_style_set_bg_opa(&style_bg, LV_OPA_COVER);
-    static lv_grad_dsc_t grad;
-    grad.dir = LV_GRAD_DIR_VER;
-    grad.stops_count = 2;
-    grad.stops[0].color = lv_color_hex(0x003a57); // lv_palette_lighten(LV_PALETTE_GREY, 1);
-    // grad.stops[0].opa = LV_OPA_COVER;
-    grad.stops[1].color = lv_color_black(); // lv_palette_main(LV_PALETTE_BLUE);
-    // grad.stops[1].opa = LV_OPA_COVER;
-
-
-    grad.stops[0].frac = 100;
-    grad.stops[1].frac = 140;
-
-    lv_style_set_bg_grad(&style_bg, &grad);
-    lv_obj_add_style(parent, &style_bg, 0);
-    */
 }
 
 void hpi_disp_update_temp(int temp)
@@ -469,7 +445,7 @@ void disp_screen_event(lv_event_t *e)
         }
     }
 
-    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_RIGHT)
+    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_RIGHT)
     {
         lv_indev_wait_release(lv_indev_get_act());
         printf("Right at %d\n", curr_screen);
@@ -485,6 +461,11 @@ void disp_screen_event(lv_event_t *e)
             hpi_move_load_screen(curr_screen - 1, SCROLL_RIGHT);
         }
     }
+    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printk("Down at %d\n", curr_screen);
+        }
 }
 
 void draw_scr_splash(void)
@@ -843,7 +824,7 @@ void display_screens_thread(void)
                 }
             }
 
-            if (curr_screen == SCR_HOME) 
+            if (curr_screen == SCR_HOME)
             {
                 if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
