@@ -51,7 +51,7 @@ static int m_read_bl_page_size(const struct device *dev, uint16_t *bl_page_size)
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
-	// printk("BL PS Read: %x %x\n", rd_buf[0], rd_buf[1]);
+	printk("BL PS Read: %x %x\n", rd_buf[0], rd_buf[1]);
 	*bl_page_size = (uint16_t)(rd_buf[1] << 8) | rd_buf[2];
 
 	return 0;
@@ -134,24 +134,24 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 	int msg_len = 1026;
 	int num_msgs = ((MAXM86146_FW_UPDATE_WRITE_SIZE) / msg_len);
 
-	struct i2c_msg maxm86146_i2c_msg[num_msgs];
+	struct i2c_msg maxm86146_i2c_msgs[9];
 
 	printk("Num Msgs: %d\n", num_msgs);
 
-	maxm86146_i2c_msg[0].buf = cmd_wr_buf; // fw_data_wr_buf[0];
-	maxm86146_i2c_msg[0].len = 2;
-	maxm86146_i2c_msg[0].flags = I2C_MSG_WRITE;
+	maxm86146_i2c_msgs[0].buf = cmd_wr_buf; // fw_data_wr_buf[0];
+	maxm86146_i2c_msgs[0].len = 2;
+	maxm86146_i2c_msgs[0].flags = I2C_MSG_WRITE;
 
 
 #if (MAXM86146_FW_BIN_INCLUDE == 1)
-	for (int i = 0; i < num_msgs; i++)
+	for (int i = 0; i < 8; i++)
 	{
 		memcpy(tmp_wr_buf[i], &maxm86146_msbl[(i * msg_len) + msbl_page_offset], msg_len);
 
-		maxm86146_i2c_msg[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
-		maxm86146_i2c_msg[i + 1].len = msg_len;
-		maxm86146_i2c_msg[i + 1].flags = I2C_MSG_WRITE;
-		printk("Msg %d: L %d\n", (i + 1), maxm86146_i2c_msg[i + 1].len);
+		maxm86146_i2c_msgs[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
+		maxm86146_i2c_msgs[i + 1].len = msg_len;
+		maxm86146_i2c_msgs[i + 1].flags = I2C_MSG_WRITE;
+		printk("Msg %d: L %d msg_len: %d\n", (i + 1), maxm86146_i2c_msgs[i + 1].len, msg_len);
 
 		// Dump maxm86146_i2c_msg[i + 1].buf
 		//for (int j = 0; j < maxm86146_i2c_msg[i + 1].len; j++)
@@ -163,13 +163,14 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 #endif
 
 
-	maxm86146_i2c_msg[(num_msgs)].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
+	maxm86146_i2c_msgs[8].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
 
-	int ret = i2c_transfer_dt(&config->i2c, maxm86146_i2c_msg, (num_msgs + 1));
+	int ret = i2c_transfer_dt(&config->i2c, maxm86146_i2c_msgs, 9);
+	printk("Num Msgs: %d\n", num_msgs);
 	printk("Transfer Ret: %d\n", ret);
 
 	// i2c_write_dt(&config->i2c, fw_data_wr_buf, 8192);
-	k_sleep(K_MSEC(2000));
+	k_sleep(K_MSEC(1600));
 
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
@@ -187,10 +188,10 @@ static int m_erase_app(const struct device *dev)
 
 	k_sleep(K_USEC(300));
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(2000));
+	k_sleep(K_MSEC(100));
 
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
+	k_sleep(K_MSEC(1500));
 
 	printk("Erase App : RSP: %x\n", rd_buf[0]);
 }
@@ -250,7 +251,7 @@ static int maxm86146_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 		printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
 		m_fw_write_page(dev, maxm86146_msbl, msbl_page_offset);
 
-		k_sleep(K_MSEC(500));
+		//k_sleep(K_MSEC(500));
 	}
 #endif
 

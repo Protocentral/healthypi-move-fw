@@ -143,8 +143,8 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         case INPUT_KEY_HOME:
             LOG_INF("Side Key Pressed");
             lv_disp_trig_activity(NULL);
-            printk("Entering Ship Mode\n");
-            regulator_parent_ship_mode(regulators);
+            //printk("Entering Ship Mode\n");
+            //regulator_parent_ship_mode(regulators);
             break;
         default:
             break;
@@ -675,7 +675,7 @@ void hw_init(void)
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {

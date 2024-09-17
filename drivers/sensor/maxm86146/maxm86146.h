@@ -12,7 +12,7 @@
 #define MAXM86146_I2C_ADDRESS 0x55
 #define MAXM86146_HUB_STAT_DRDY_MASK 0x08
 
-#define MAXM86146_DEFAULT_CMD_DELAY 10
+#define MAXM86146_DEFAULT_CMD_DELAY 50
 
 uint8_t maxm86146_read_hub_status(const struct device *dev);
 void maxm86146_do_enter_bl(const struct device *dev);

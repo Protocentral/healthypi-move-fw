@@ -22,7 +22,7 @@ LOG_MODULE_REGISTER(MAXM86146, CONFIG_SENSOR_LOG_LEVEL);
 #define DEFAULT_SPO2_B -34.659664
 #define DEFAULT_SPO2_C 112.68987
 
-#define MAXM86146_FW_BIN_INCLUDE 1
+#define MAXM86146_FW_BIN_INCLUDE 0
 
 static int m_read_op_mode(const struct device *dev)
 {
