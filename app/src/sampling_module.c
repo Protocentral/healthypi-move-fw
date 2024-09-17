@@ -222,4 +222,4 @@ void ecg_sampling_timer_start(void)
 
 //K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 
-//K_THREAD_DEFINE(ecg_sampling_trigger_thread_id, 2048, ecg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ecg_sampling_trigger_thread_id, 2048, ecg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);

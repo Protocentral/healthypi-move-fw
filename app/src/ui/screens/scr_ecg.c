@@ -86,7 +86,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     // Bottom signal label
     lv_obj_t *label_signal = lv_label_create(scr_ecg);
     lv_label_set_text(label_signal, "ECG");
-    lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
+    lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 5);
     lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     label_ecg_lead_off = lv_label_create(scr_ecg);

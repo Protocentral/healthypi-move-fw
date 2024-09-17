@@ -130,8 +130,8 @@ static const struct battery_model battery_model = {
 
 static void gpio_keys_cb_handler(struct input_event *evt)
 {
-    //printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d type=%d\n",
-    //       evt->dev->name, evt->code, evt->value, evt->type);
+    // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d type=%d\n",
+    //        evt->dev->name, evt->code, evt->value, evt->type);
 
     if (evt->value == 1)
     {
@@ -139,12 +139,12 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         {
         case INPUT_KEY_UP:
             printk("Extra Key Pressed");
-            regulator_parent_ship_mode(regulators);
-            printk("Entering Ship Mode\n");
             break;
         case INPUT_KEY_HOME:
             LOG_INF("Side Key Pressed");
             lv_disp_trig_activity(NULL);
+            printk("Entering Ship Mode\n");
+            regulator_parent_ship_mode(regulators);
             break;
         default:
             break;
@@ -623,7 +623,7 @@ void hw_init(void)
     }
 
     // regulator_disable(sensor_brd_ldsw);
-    k_sleep(K_MSEC(100));
+    // k_sleep(K_MSEC(100));
 
     regulator_enable(sensor_brd_ldsw);
     k_sleep(K_MSEC(100));
@@ -632,7 +632,7 @@ void hw_init(void)
     k_sleep(K_MSEC(100));
 
     // regulator_disable(sensor_brd_1_8_ldsw);
-    k_sleep(K_MSEC(100));
+    // k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
@@ -641,7 +641,7 @@ void hw_init(void)
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
-    gpio_pin_set_dt(&dcdc_5v_en, 0);
+    gpio_pin_set_dt(&dcdc_5v_en, 1);
 
     /*
 #ifdef CONFIG_SENSOR_MAX30001
@@ -668,10 +668,14 @@ void hw_init(void)
     else
     {
         LOG_INF("MAXM86146 device present!");
-        // struct sensor_value mode_set;
-        // mode_set.val1 = MAXM86146_OP_MODE_ALGO;
-        // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        //struct sensor_value mode_set;
+        //mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
+
+    struct sensor_value mode_set;
+    mode_set.val1 = 1;
+    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -733,10 +737,6 @@ void hw_init(void)
     fs_module_init();
 
     // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
-    /*struct sensor_value mode_set;
-    //mode_set.val1 = 1;
-    sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
-    */
 
     pm_device_runtime_get(gpio_keys_dev);
 

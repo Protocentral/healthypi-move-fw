@@ -22,6 +22,8 @@ LOG_MODULE_REGISTER(MAXM86146, CONFIG_SENSOR_LOG_LEVEL);
 #define DEFAULT_SPO2_B -34.659664
 #define DEFAULT_SPO2_C 112.68987
 
+#define MAXM86146_FW_BIN_INCLUDE 1
+
 static int m_read_op_mode(const struct device *dev)
 {
     // struct maxm86146_data *data = dev->data;
@@ -275,7 +277,7 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
     i2c_read_dt(&config->i2c, ver_buf, 4);
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
-    //LOG_INF("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    LOG_INF("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
@@ -284,7 +286,7 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
     return 0;
 }
 
-static int maxm86146_do_enter_app(const struct device *dev)
+int maxm86146_do_enter_app(const struct device *dev)
 {
     const struct maxm86146_config *config = dev->config;
 
@@ -369,6 +371,9 @@ static int maxm86146_attr_set(const struct device *dev,
             return -ENOTSUP;
         }
         break;
+    case MAXM86146_ATTR_ENTER_BOOTLOADER:
+		maxm86146_do_enter_bl(dev);
+		break;
     default:
         LOG_ERR("Unsupported sensor attribute");
         return -ENOTSUP;

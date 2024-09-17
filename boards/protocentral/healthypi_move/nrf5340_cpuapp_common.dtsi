@@ -119,7 +119,7 @@
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <300000>;
+				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3000000>;
 				regulator-always-on;
 				//retention-microvolt = <2500000>;
@@ -133,9 +133,9 @@
 
 			npm_pmic_ldo2: LDO2 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDO>;
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <2000000>;
-				regulator-init-microvolt = <1800000>;
+				regulator-min-microvolt = <1000000>;
+				regulator-max-microvolt = <3000000>;
+				regulator-init-microvolt = <2000000>;
 				//regulator-boot-on;
 			};
 		};

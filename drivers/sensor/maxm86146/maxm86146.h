@@ -15,6 +15,9 @@
 #define MAXM86146_DEFAULT_CMD_DELAY 10
 
 uint8_t maxm86146_read_hub_status(const struct device *dev);
+void maxm86146_do_enter_bl(const struct device *dev);
+//int m_read_op_mode(const struct device *dev);
+int maxm86146_do_enter_app(const struct device *dev);
 
 enum maxm86146_mode
 {
@@ -26,6 +29,7 @@ enum maxm86146_mode
 	MAXM86146_OP_MODE_RAW,
 	MAXM86146_OP_MODE_ALGO,
 	MAXM86146_OP_MODE_ALGO_EXTENDED,
+	
 };
 
 enum maxm86146_attribute
