@@ -40,12 +40,12 @@ k_tid_t global_ppg_sampling_thread_id;
 bool ppg_wrist_sampling_on = false;
 bool ppg_finger_sampling_on = false;
 
-//static lv_timer_t *ecg_sampling_timer;
+// static lv_timer_t *ecg_sampling_timer;
 
 extern struct k_sem sem_ecg_intb_recd;
 
-//static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
-// static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
+// static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
+//  static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
 RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
                          32,  /* submission queue size */
@@ -132,21 +132,30 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         }
 }
 
-static void sensor_ecg_processing_callback(int result, uint8_t *buf,
-                                           uint32_t buf_len, void *userdata)
+static void sensor_ecg_bioz_process_cb(int result, uint8_t *buf,
+                                       uint32_t buf_len, void *userdata)
 {
         const struct max30001_encoded_data *edata = (const struct max30001_encoded_data *)buf;
         struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
 
         // printk("ECG NS: %d ", edata->num_samples_ecg);
+        // printk("BioZ NS: %d ", edata->num_samples_bioz);
 
-        if (edata->num_samples_ecg > 0)
+        if ((edata->num_samples_ecg > 0) || (edata->num_samples_bioz > 0))
         {
                 ecg_bioz_sensor_sample.ecg_num_samples = edata->num_samples_ecg;
+                ecg_bioz_sensor_sample.bioz_num_samples = edata->num_samples_bioz;
+
                 for (int i = 0; i < edata->num_samples_ecg; i++)
                 {
                         ecg_bioz_sensor_sample.ecg_samples[i] = edata->ecg_samples[i];
                 }
+
+                for (int i = 0; i < edata->num_samples_bioz; i++)
+                {
+                        ecg_bioz_sensor_sample.bioz_sample[i] = edata->bioz_samples[i];
+                }
+
                 ecg_bioz_sensor_sample.hr = edata->hr;
 
                 k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_MSEC(1));
@@ -168,19 +177,19 @@ void ppg_wrist_sampling_trigger_thread(void)
 void ecg_sampling_trigger(void)
 {
         sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
-        sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_processing_callback);
+        sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_bioz_process_cb);
 }
 
-void ecg_sampling_trigger_thread(void)
+void ecg_bioz_sampling_trigger_thread(void)
 {
         LOG_INF("ECG/ BioZ Sampling Trigger Thread starting\n");
 
         for (;;)
         {
-                //k_sem_take(&sem_ecg_intb_recd, K_FOREVER);
+                // k_sem_take(&sem_ecg_intb_recd, K_FOREVER);
 
                 sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
-                sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_processing_callback);
+                sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_bioz_process_cb);
 
                 k_sleep(K_MSEC(ECG_SAMPLING_INTERVAL_MS));
         }
@@ -210,16 +219,16 @@ void ppg_data_start(void)
 
 void ecg_sampling_timer_start(void)
 {
-       //ecg_sampling_timer = lv_timer_create(ecg_sampling_timer_cb, ECG_SAMPLING_INTERVAL_MS, NULL);
+        // ecg_sampling_timer = lv_timer_create(ecg_sampling_timer_cb, ECG_SAMPLING_INTERVAL_MS, NULL);
 }
 
 #define ECG_SAMPLING_THREAD_STACKSIZE 2048
 #define ECG_SAMPLING_THREAD_PRIORITY 7
 
 // K_THREAD_DEFINE(ppg_sampling_trigger_thread_id, 8192, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
-//K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+// K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 // K_THREAD_DEFINE(ppg_sampling_thread_id, SAMPLING_THREAD_STACKSIZE, ppg_sampling_thread, NULL, NULL, NULL, SAMPLING_THREAD_PRIORITY, 0, 1000);
 
-//K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+// K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 
-//K_THREAD_DEFINE(ecg_sampling_trigger_thread_id, 2048, ecg_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, 2048, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
