@@ -22,9 +22,13 @@ static int max30001_async_sample_fetch(const struct device *dev,
     uint8_t buf[1024];
     int num_bytes = 0;
 
-    uint8_t spiTxCommand = ((ECG_FIFO_BURST << 1) | RREG);
-    const struct spi_buf tx_buf[1] = {{.buf = &spiTxCommand, .len = 1}};
-    const struct spi_buf_set tx = {.buffers = tx_buf, .count = 1};
+    uint8_t cmd_tx_ecg_fifo_burst = ((ECG_FIFO_BURST << 1) | RREG);
+    const struct spi_buf tx_buf_ecg[1] = {{.buf = &cmd_tx_ecg_fifo_burst, .len = 1}};
+    const struct spi_buf_set tx_ecg = {.buffers = tx_buf_ecg, .count = 1};
+
+    uint8_t cmd_tx_bioz_fifo_burst = ((BIOZ_FIFO_BURST << 1) | RREG);
+    const struct spi_buf tx_buf_bioz[1] = {{.buf = &cmd_tx_bioz_fifo_burst, .len = 1}};
+    const struct spi_buf_set tx_bioz = {.buffers = tx_buf_bioz, .count = 1};
 
     struct spi_buf rx_buf[2] = {{.buf = NULL, .len = 1}, {.buf = &buf, .len = num_bytes}}; // 24 bit register + 1 dummy byte
     const struct spi_buf_set rx = {.buffers = rx_buf, .count = 2};
@@ -57,16 +61,16 @@ static int max30001_async_sample_fetch(const struct device *dev,
         rx_buf[1].buf = &buf;
         rx_buf[1].len = e_fifo_num_bytes;
 
-        spi_transceive_dt(&config->spi, &tx, &rx);
+        spi_transceive_dt(&config->spi, &tx_ecg, &rx);
 
         // Read all the samples from the FIFO
         for (int i = 0; i < e_fifo_num_samples; i++)
         {
-            uint32_t ecg_etag = ((((unsigned char)buf[i * 3 + 2]) & 0x38) >> 3);
+            uint32_t etag = ((((unsigned char)buf[i * 3 + 2]) & 0x38) >> 3);
 
             // printk("E %x ", ecg_etag);
 
-            if ((ecg_etag == 0x00) || (ecg_etag == 0x02)) // Valid sample
+            if ((etag == 0x00) || (etag == 0x02)) // Valid sample
             {
                 uint32_t uecgtemp = (uint32_t)(((uint32_t)buf[i * 3] << 16 | (uint32_t)buf[i * 3 + 1] << 8) | (uint32_t)(buf[i * 3 + 2] & 0xC0));
                 uecgtemp = (uint32_t)(uecgtemp << 8);
@@ -77,11 +81,11 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
                 ecg_samples[i] = secgtemp;
             }
-            else if (ecg_etag == 0x06)
+            else if (etag == 0x06)
             {
                 break;
             }
-            else if (ecg_etag == 0x07) // FIFO Overflow
+            else if (etag == 0x07) // FIFO Overflow
             {
                 max30001_fifo_reset(dev);
                 max30001_synch(dev);
@@ -96,10 +100,41 @@ static int max30001_async_sample_fetch(const struct device *dev,
         b_fifo_num_samples = ((max30001_mngr_int & MAX30001_INT_MASK_BFIT)>>MAX30001_INT_SHIFT_BFIT) +1;
         b_fifo_num_bytes = (b_fifo_num_samples*3);
         *num_samples_bioz = b_fifo_num_samples;
-
         
+        rx_buf[1].buf = &buf;
+        rx_buf[1].len = b_fifo_num_bytes;
 
+        spi_transceive_dt(&config->spi, &tx_bioz, &rx);
 
+        // Read all the samples from the FIFO
+        for (int i = 0; i < b_fifo_num_samples; i++)
+        {
+            uint32_t btag = ((((unsigned char)buf[i * 3 + 2]) & 0x07));
+
+            // printk("E %x ", ecg_etag);
+
+            if ((btag == 0x00) || (btag == 0x02)) // Valid sample
+            {
+                uint32_t u_bioz_temp = (uint32_t)(((uint32_t)buf[i * 3] << 16 | (uint32_t)buf[i * 3 + 1] << 8) | (uint32_t)(buf[i * 3 + 2] & 0xF0));
+                u_bioz_temp = (uint32_t)(u_bioz_temp << 8);
+
+                int32_t s_bioz_temp = (int32_t)u_bioz_temp;
+                s_bioz_temp = (int32_t)s_bioz_temp >> 8;
+                // printf("%d ", secgtemp);
+
+                bioz_samples[i] = s_bioz_temp;
+            }
+            else if (btag == 0x06)
+            {
+                break;
+            }
+            else if (btag == 0x07) // FIFO Overflow
+            {
+                max30001_fifo_reset(dev);
+                max30001_synch(dev);
+                break;
+            }
+        }
     }
 
 
@@ -121,7 +156,6 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
 int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
-    struct max30001_data *data = dev->data;
     uint32_t m_min_buf_len = sizeof(struct max30001_encoded_data);
 
     uint8_t *buf;

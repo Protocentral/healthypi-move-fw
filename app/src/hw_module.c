@@ -675,7 +675,7 @@ void hw_init(void)
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -705,7 +705,7 @@ void hw_init(void)
     // nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    printk("spi has 32MHz\n");
+    LOG_INF("SPIM runs at 32MHz !\n");
 #endif
 
     // setup_pmic_callbacks();
