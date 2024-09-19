@@ -19,6 +19,7 @@ uint8_t maxm86146_fw_auth_vector[16] = {0};
 #define MAXM86146_FW_UPDATE_START_ADDR 0x4C
 
 #define MAXM86146_FW_BIN_INCLUDE 1
+#define MAXM86146_WR_SIM_ONLY 0
 
 static int m_read_bl_ver(const struct device *dev)
 {
@@ -117,9 +118,9 @@ static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
 	printk("Write Auth Vec : RSP: %x\n", rd_buf[0]);
 }
 
-//volatile uint8_t fw_data_wr_buf[MAXM86146_FW_UPDATE_WRITE_SIZE + 2];
+// volatile uint8_t fw_data_wr_buf[MAXM86146_FW_UPDATE_WRITE_SIZE + 2];
 
-volatile uint8_t tmp_wr_buf[8][1026];
+uint8_t tmp_wr_buf[8][1026];
 
 static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_t msbl_page_offset)
 {
@@ -142,7 +143,6 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 	maxm86146_i2c_msgs[0].len = 2;
 	maxm86146_i2c_msgs[0].flags = I2C_MSG_WRITE;
 
-
 #if (MAXM86146_FW_BIN_INCLUDE == 1)
 	for (int i = 0; i < 8; i++)
 	{
@@ -154,14 +154,13 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 		printk("Msg %d: L %d msg_len: %d\n", (i + 1), maxm86146_i2c_msgs[i + 1].len, msg_len);
 
 		// Dump maxm86146_i2c_msg[i + 1].buf
-		//for (int j = 0; j < maxm86146_i2c_msg[i + 1].len; j++)
+		// for (int j = 0; j < maxm86146_i2c_msg[i + 1].len; j++)
 		//{
 		//	printk("%x ", maxm86146_i2c_msg[i + 1].buf[j]);
 		//}
-		//printk("\n");
+		// printk("\n");
 	}
 #endif
-
 
 	maxm86146_i2c_msgs[8].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
 
@@ -170,7 +169,7 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 	printk("Transfer Ret: %d\n", ret);
 
 	// i2c_write_dt(&config->i2c, fw_data_wr_buf, 8192);
-	k_sleep(K_MSEC(1600));
+	k_sleep(K_MSEC(700));
 
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
@@ -188,10 +187,10 @@ static int m_erase_app(const struct device *dev)
 
 	k_sleep(K_USEC(300));
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(100));
+	k_sleep(K_MSEC(1500));
 
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-	k_sleep(K_MSEC(1500));
+	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
 	printk("Erase App : RSP: %x\n", rd_buf[0]);
 }
@@ -237,11 +236,10 @@ static int maxm86146_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 	memcpy(maxm86146_fw_auth_vector, &fw_bin_array[0x34], 16);
 	m_write_auth_vector(dev, maxm86146_fw_auth_vector);
 
+// Write MSBL
+#if (MAXM86146_WR_SIM_ONLY != 1)
 	m_erase_app(dev);
-	k_sleep(K_MSEC(2000));
-
-	// Write MSBL
-
+	
 	for (int i = 0; i < msbl_num_pages; i++)
 	{
 		printk("Writing Page: %d of %d\n", (i + 1), msbl_num_pages);
@@ -251,14 +249,14 @@ static int maxm86146_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 		printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
 		m_fw_write_page(dev, maxm86146_msbl, msbl_page_offset);
 
-		//k_sleep(K_MSEC(500));
+		// k_sleep(K_MSEC(500));
 	}
+	maxm86146_do_enter_app(dev);
 #endif
 
-	maxm86146_do_enter_app(dev);
+#endif
 
 	printk("End Load MSBL\n---\n");
-
 	return 0;
 }
 
