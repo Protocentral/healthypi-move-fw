@@ -643,7 +643,7 @@ void hw_init(void)
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
 
-    /*
+    
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
@@ -659,7 +659,7 @@ void hw_init(void)
         // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
-    */
+    
 
     if (!device_is_ready(maxm86146_dev))
     {
@@ -675,7 +675,7 @@ void hw_init(void)
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {

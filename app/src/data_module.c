@@ -295,12 +295,13 @@ void data_thread(void)
 
 
                 ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
+                ble_bioz_notify(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples);
                 //b_notify(ecg_bioz_sensor_sample.bioz_sample);
 
                 /*resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
                 if (resp_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
-                    ble_resp_notify(resp_sample_buffer, resp_sample_buffer_count);
+                    ble_bioz_notify(resp_sample_buffer, resp_sample_buffer_count);
                     resp_sample_buffer_count = 0;
 
                 }*/

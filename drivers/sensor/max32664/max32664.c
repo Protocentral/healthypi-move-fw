@@ -80,7 +80,7 @@ uint8_t m_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3
 
 static int max32664_do_enter_app(const struct device *dev);
 
-int m_read_op_mode(const struct device *dev)
+static int m_read_op_mode(const struct device *dev)
 {
 	// struct max32664_data *data = dev->data;
 	const struct max32664_config *config = dev->config;

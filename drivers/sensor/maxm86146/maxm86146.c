@@ -270,12 +270,15 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     uint8_t wr_buf[2] = {0xFF, 0x03};
 
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
     i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
     i2c_read_dt(&config->i2c, ver_buf, 4);
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
+
+     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
     LOG_INF("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 

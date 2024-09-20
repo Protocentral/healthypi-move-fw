@@ -554,16 +554,16 @@ static int max30001_chip_init(const struct device *dev)
 
     // max30001_enable_bioz(dev);
     LOG_INF("Enabling MAX30001 BioZ");
-    _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
-    //_max30001RegWrite(dev, CNFG_BIOZ, 0 x201433);
+    //_max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
+    _max30001RegWrite(dev, CNFG_BIOZ, 0x201433);
     k_sleep(K_MSEC(100));
 
     // Set MAX30001G specific BioZ LC
     _max30001RegWrite(dev, CNFG_BIOZ_LC, 0x800000); // Turn OFF low current mode
     k_sleep(K_MSEC(100));
 
-    _max30001RegWrite(dev, CNFG_BMUX, data->chip_cfg.reg_cnfg_bmux.all);
-    //_max30001RegWrite(dev, CNFG_BMUX, 0x000040);
+    //_max30001RegWrite(dev, CNFG_BMUX, data->chip_cfg.reg_cnfg_bmux.all);
+    _max30001RegWrite(dev, CNFG_BMUX, 0x000040);
     k_sleep(K_MSEC(100));
 
     max30001_enable_rtor(dev);

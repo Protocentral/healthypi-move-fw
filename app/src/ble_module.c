@@ -247,7 +247,7 @@ void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 	bt_gatt_notify(NULL, &hpi_ecg_resp_service.attrs[1], &out_data, len * 4);
 }
 
-void ble_resp_notify(int32_t *resp_data, uint8_t len)
+void ble_bioz_notify(int32_t *resp_data, uint8_t len)
 {
 	uint8_t out_data[128];
 
