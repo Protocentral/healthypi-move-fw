@@ -305,7 +305,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_BOTTOM_MID, 0, (top_offset - 2));
+    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset + 2));
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
@@ -634,10 +634,10 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    draw_scr_home(SCROLL_NONE);
+    //draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
-    // draw_scr_ppg(SCROLL_RIGHT);
+    draw_scr_ppg(SCROLL_RIGHT);
     //draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);

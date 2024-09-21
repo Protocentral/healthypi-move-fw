@@ -668,14 +668,14 @@ void hw_init(void)
     else
     {
         LOG_INF("MAXM86146 device present!");
-        //struct sensor_value mode_set;
-        //mode_set.val1 = MAXM86146_OP_MODE_ALGO;
-        //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        struct sensor_value mode_set;
+        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -686,9 +686,9 @@ void hw_init(void)
     {
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
-        // struct sensor_value mode_set;
-        // mode_set.val1 = MAX32664_OP_MODE_BPT;
-        // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+        struct sensor_value mode_set;
+        mode_set.val1 = MAX32664_OP_MODE_BPT;
+        sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
     // printk("Switching application core from 64 MHz and 128 MHz. \n");

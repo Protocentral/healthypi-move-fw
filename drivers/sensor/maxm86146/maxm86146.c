@@ -66,7 +66,7 @@ uint8_t maxm86146_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // printk("Stat %x | ", rd_buf[1]);
+    printk("Stat %x | ", rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -278,9 +278,9 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
     i2c_read_dt(&config->i2c, ver_buf, 4);
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
-     gpio_pin_set_dt(&config->mfio_gpio, 1);
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_INF("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {

@@ -42,9 +42,9 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
     uint8_t hub_stat = maxm86146_read_hub_status(dev);
     if (hub_stat & MAXM86146_HUB_STAT_DRDY_MASK)
     {
-        // printk("DRDY ");
+        printk("DRDY ");
         int fifo_count = maxm86146_get_fifo_count(dev);
-        // printk("F: %d | ", fifo_count);
+        printk("F: %d | ", fifo_count);
 
         if (fifo_count > 16)
         {

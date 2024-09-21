@@ -106,7 +106,7 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
 {
         const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
-        // printk("NS: %d ", edata->num_samples);
+        //printk("WR NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
         {
                 int n_samples = edata->num_samples;
@@ -225,10 +225,7 @@ void ecg_sampling_timer_start(void)
 #define ECG_SAMPLING_THREAD_STACKSIZE 2048
 #define ECG_SAMPLING_THREAD_PRIORITY 7
 
-// K_THREAD_DEFINE(ppg_sampling_trigger_thread_id, 8192, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
-// K_THREAD_DEFINE(ecg_sampling_thread_id, ECG_SAMPLING_THREAD_STACKSIZE, ecg_sampling_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
-// K_THREAD_DEFINE(ppg_sampling_thread_id, SAMPLING_THREAD_STACKSIZE, ppg_sampling_thread, NULL, NULL, NULL, SAMPLING_THREAD_PRIORITY, 0, 1000);
-
 // K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 
+K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, 2048, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, 2048, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
