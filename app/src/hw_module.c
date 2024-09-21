@@ -631,6 +631,9 @@ void hw_init(void)
     regulator_enable(sensor_brd_1_8_ldsw);
     k_sleep(K_MSEC(100));
 
+    // Start up time
+    k_sleep(K_MSEC(2000));
+
     // regulator_disable(sensor_brd_1_8_ldsw);
     // k_sleep(K_MSEC(100));
 
@@ -669,7 +672,7 @@ void hw_init(void)
     {
         LOG_INF("MAXM86146 device present!");
         struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        mode_set.val1 = MAXM86146_OP_MODE_RAW;
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
@@ -688,7 +691,7 @@ void hw_init(void)
         max32664d_device_present = true;
         struct sensor_value mode_set;
         mode_set.val1 = MAX32664_OP_MODE_BPT;
-        sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+        //sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
     // printk("Switching application core from 64 MHz and 128 MHz. \n");

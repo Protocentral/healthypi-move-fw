@@ -20,6 +20,8 @@ int maxm86146_get_fifo_count(const struct device *dev)
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
+    printk("FIFO: %d\n", rd_buf[1]);
+
     fifo_count = rd_buf[1];
     return (int)fifo_count;
 }
@@ -40,6 +42,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
 #define MAXM86146_ALGO_DATA_OFFSET 42
 
     uint8_t hub_stat = maxm86146_read_hub_status(dev);
+    int fifo_count = maxm86146_get_fifo_count(dev);
     if (hub_stat & MAXM86146_HUB_STAT_DRDY_MASK)
     {
         printk("DRDY ");
@@ -171,8 +174,8 @@ int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         return rc;
     }
 
-    // printk("Fetching samples...\n");
-    if ((data->op_mode == MAXM86146_OP_MODE_ALGO) || (data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED))
+    //printk("Fetch ");
+    if ((data->op_mode == MAXM86146_OP_MODE_ALGO) || (data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED || data->op_mode == MAXM86146_OP_MODE_RAW))
     {
         m_edata = (struct maxm86146_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());

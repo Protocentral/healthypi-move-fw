@@ -46,7 +46,6 @@ enum maxm86146_attribute
 
 };
 
-
 struct maxm86146_config
 {
 	struct i2c_dt_spec i2c;
