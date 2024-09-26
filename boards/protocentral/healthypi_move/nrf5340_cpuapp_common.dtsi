@@ -312,8 +312,8 @@
 	compatible = "nordic,nrf-spim";
 	status = "okay"; 
 
-	//cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
-	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
+	//cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
 
 	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;

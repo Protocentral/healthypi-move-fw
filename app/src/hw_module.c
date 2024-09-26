@@ -672,7 +672,7 @@ void hw_init(void)
     {
         LOG_INF("MAXM86146 device present!");
         struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_RAW;
+        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
