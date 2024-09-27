@@ -239,8 +239,6 @@ void display_init_styles()
     // Screen background style
     lv_style_init(&style_scr_back);
     // lv_style_set_radius(&style, 5);
-
-    /*Make a gradient*/
     lv_style_set_bg_opa(&style_scr_back, LV_OPA_COVER);
     lv_style_set_border_width(&style_scr_back, 0);
 
@@ -250,7 +248,7 @@ void display_init_styles()
     grad.stops[0].color = lv_color_hex(0x003a57); // lv_palette_lighten(LV_PALETTE_GREY, 1);
     grad.stops[1].color = lv_color_black();       // lv_palette_main(LV_PALETTE_BLUE);
 
-    /*Shift the gradient to the bottom*/
+    // Shift the gradient to the bottom
     grad.stops[0].frac = 128;
     grad.stops[1].frac = 192;
 
@@ -463,7 +461,7 @@ void disp_screen_event(lv_event_t *e)
     {
         lv_indev_wait_release(lv_indev_get_act());
         printk("Down at %d\n", curr_screen);
-        }
+    }
 }
 
 void draw_scr_splash(void)
@@ -599,6 +597,8 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
+    printk("Display thread starting...");
+
     // Init all styles globally
     display_init_styles();
 
@@ -627,22 +627,21 @@ void display_screens_thread(void)
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 
-    // draw_scr_home();
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    //draw_scr_home(SCROLL_NONE);
+    draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
-    draw_scr_ppg(SCROLL_RIGHT);
-    //draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_ppg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
-    LOG_INF("Display screens inited");
+    printk("Display screens inited");
 
     while (1)
     {
@@ -887,11 +886,11 @@ void display_screens_thread(void)
         // printk("Inactivity time: %d", inactivity_time);
         if (inactivity_time > DISP_SLEEP_TIME_MS)
         {
-            hpi_display_sleep_on();
+            // hpi_display_sleep_on();
         }
         else
         {
-            hpi_display_sleep_off();
+            // hpi_display_sleep_off();
         }
         //}
         // else

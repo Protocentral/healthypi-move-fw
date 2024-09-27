@@ -77,12 +77,12 @@ const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv))
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
-static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
+static const struct device *disp_unit_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
 static const struct device *sensor_brd_1_8_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
-const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); //DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
 
 // LED Power DC/DC Enable
@@ -623,14 +623,19 @@ void hw_init(void)
         // return 0;
     }
 
-    // regulator_disable(sensor_brd_ldsw);
+    // regulator_disable(disp_unit_ldsw);
     // k_sleep(K_MSEC(100));
 
-    regulator_enable(sensor_brd_ldsw);
-    k_sleep(K_MSEC(100));
+    //regulator_enable(disp_unit_ldsw);
+    //k_sleep(K_MSEC(1000));
 
-    regulator_enable(sensor_brd_1_8_ldsw);
-    k_sleep(K_MSEC(100));
+    //device_init(display_dev);
+    //k_sleep(K_MSEC(1000));
+
+    //device_init(touch_dev);
+
+    //regulator_enable(sensor_brd_1_8_ldsw);
+    //k_sleep(K_MSEC(100));
 
     // Start up time
     k_sleep(K_MSEC(2000));

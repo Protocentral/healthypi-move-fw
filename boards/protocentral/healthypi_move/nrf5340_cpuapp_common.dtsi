@@ -126,7 +126,7 @@
 
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
-				regulator-boot-on;
+				//regulator-boot-on;
 			};
 
 			npm_pmic_ldo2: LDO2 {
@@ -134,7 +134,7 @@
 				//regulator-min-microvolt = <1000000>;
 				//regulator-max-microvolt = <3300000>;
 				//regulator-init-microvolt = <1800000>;
-				regulator-boot-on;
+				//regulator-boot-on;
 			};
 		};
 
@@ -349,6 +349,7 @@
 		display-inversion;
 		rotation = <0>;
 		status = "okay";
+		//zephyr,deferred-init;
 	};
 };
 
