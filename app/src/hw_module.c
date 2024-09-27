@@ -138,11 +138,12 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         switch (evt->code)
         {
         case INPUT_KEY_UP:
-            printk("Extra Key Pressed");
+            LOG_INF("Crown Key Pressed");
+            lv_disp_trig_activity(NULL);
             break;
         case INPUT_KEY_HOME:
-            LOG_INF("Side Key Pressed");
-            lv_disp_trig_activity(NULL);
+            LOG_INF("Extra Key Pressed");
+            sys_reboot(SYS_REBOOT_COLD);
             //printk("Entering Ship Mode\n");
             //regulator_parent_ship_mode(regulators);
             break;
@@ -634,8 +635,8 @@ void hw_init(void)
     // Start up time
     k_sleep(K_MSEC(2000));
 
-    // regulator_disable(sensor_brd_1_8_ldsw);
-    // k_sleep(K_MSEC(100));
+    //regulator_disable(sensor_brd_1_8_ldsw);
+    k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)

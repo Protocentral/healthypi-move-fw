@@ -100,8 +100,6 @@ extern lv_obj_t *scr_clock;
 extern lv_obj_t *scr_ppg;
 extern lv_obj_t *scr_vitals;
 
-extern bool chart_ecg_update;
-
 extern uint8_t m_key_pressed;
 extern struct rtc_time global_system_time;
 
