@@ -96,7 +96,7 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    printk("CMD: %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
 
     k_sleep(K_MSEC(10));
 
@@ -124,7 +124,7 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    printk("CMD: %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
 
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
@@ -153,7 +153,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    printk("CMD: %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
 
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
@@ -183,7 +183,7 @@ static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t by
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    printk("CMD: %x %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], wr_buf[5], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], wr_buf[5], rd_buf[0]);
 
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
@@ -426,8 +426,8 @@ static int maxm86146_set_mode_algo(const struct device *dev)
     m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
 
     // Read  WHOAMI
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+    //m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+    //m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
 
     // Enable HR, SpO2 algo
     m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
