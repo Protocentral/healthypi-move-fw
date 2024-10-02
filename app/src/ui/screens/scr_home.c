@@ -60,12 +60,13 @@ void ui_home_time_display_update(struct rtc_time in_time)
 
 void hpi_home_hr_update(int hr)
 {
+    printk("HR Update : %d\n", hr);
     if (home_hr_disp == NULL)
         return;
 
     char buf[5];
     sprintf(buf, "%d", hr);
-    lv_label_set_text(home_hr_disp, buf);
+    //lv_label_set_text(home_hr_disp, buf);
 }
 
 void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
@@ -113,11 +114,11 @@ void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_opa(ui_home_label_date, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_home_label_date, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_home_time_display_update(global_system_time);
+    //ui_home_time_display_update(global_system_time);
 
     curr_screen = SCR_HOME;
     hpi_show_screen(scr_home, m_scroll_dir);
-    scr_home_set_time(global_system_time);
+    //scr_home_set_time(global_system_time);
 }
 
 void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
@@ -212,7 +213,7 @@ void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
 
     curr_screen = SCR_HOME;
     hpi_show_screen(scr_home, m_scroll_dir);
-    scr_home_set_time(global_system_time);
+    //scr_home_set_time(global_system_time);
 }
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)

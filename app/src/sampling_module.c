@@ -3,6 +3,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/rtio/rtio.h>
+#include <zephyr/zbus/zbus.h>
 
 #include "max30001.h"
 #include "max32664.h"
@@ -42,6 +43,9 @@ bool ppg_wrist_sampling_on = false;
 bool ppg_finger_sampling_on = false;
 
 // static lv_timer_t *ecg_sampling_timer;
+
+// *** Externs ***
+ZBUS_CHAN_DECLARE(hr_chan);
 
 extern struct k_sem sem_ecg_intb_recd;
 
@@ -107,7 +111,10 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
 {
         const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
-        //printk("WR NS: %d ", edata->num_samples);
+
+        static uint8_t prev_hr_val=0;
+        // uint8_t hr_chan_value=0;
+        // printk("WR NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
         {
                 int n_samples = edata->num_samples;
@@ -129,6 +136,12 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
                         // printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
 
                         k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
+
+                        struct hpi_hr_t hr_chan_value = {
+                            .hr = edata->hr,
+                            .hr_ready_flag = true,
+                        };
+                        zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
                 }
         }
 }

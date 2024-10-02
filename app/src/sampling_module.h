@@ -52,3 +52,8 @@ struct hpi_computed_hrv_t {
     bool hrv_ready_flag;
 };
 
+struct hpi_hr_t {
+    uint8_t hr;
+    bool hr_ready_flag;
+};
+

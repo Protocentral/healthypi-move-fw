@@ -58,6 +58,7 @@ char curr_string[40];
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
+ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 
 /****END EXTERNS****/
 
@@ -97,17 +98,11 @@ volatile bool max32664d_device_present = false;
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
 // uint8_t global_batt_level = 0;
-int32_t global_temp;
-bool global_batt_charging = false;
-struct rtc_time global_system_time;
+//int32_t global_temp;
+//bool global_batt_charging = false;
+//struct rtc_time global_system_time;
 
-ZBUS_CHAN_DEFINE(batt_chan,                 /* Name */
-                 struct batt_status, /* Message type */
-                 NULL,                                 /* Validator */
-                 NULL,                                 /* User Data */
-                 ZBUS_OBSERVERS_EMPTY, /* observers */
-                 ZBUS_MSG_INIT(0)                      /* Initial value {0} */
-);
+
 // USB CDC UART
 #define RING_BUF_SIZE 1024
 uint8_t ring_buffer[RING_BUF_SIZE];
@@ -365,8 +360,7 @@ int npm_fuel_gauge_update(const struct device *charger)
         .batt_charging = (chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0,
     };
 
-    zbus_chan_update(&batt_chan, &batt_s, K_SECONDS(1));
-
+    zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
     //global_batt_level = (int)soc;
 
     return 0;
@@ -690,7 +684,7 @@ void hw_init(void)
     {
         LOG_INF("MAXM86146 device present!");
         struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_RAW;
+        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
@@ -772,6 +766,8 @@ void hw_init(void)
     // usb_init();
 }
 
+
+
 void hw_thread(void)
 {
     LOG_INF("HW Thread started\n");
@@ -780,6 +776,8 @@ void hw_thread(void)
     //  printk("Initing...\n");
 
     // ecg_sampling_timer_start();
+    
+    struct rtc_time sys_time;
 
     for (;;)
     {
@@ -791,7 +789,10 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         npm_fuel_gauge_update(charger);
-        rtc_get_time(rtc_dev, &global_system_time);
+        
+        rtc_get_time(rtc_dev, &sys_time);
+        zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
+
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
 
