@@ -298,8 +298,10 @@
 		rtor-enabled;
 		ecg-enabled;
 		bioz-enabled;
-		ecg-gain = <3>;
-		ecg-invert;
+		
+		ecg-gain = <2>;
+		//ecg-invert;
+		//
 		//ecg-dcloff-enable;
 		//ecg-dcloff-current = <1>; // 5 nA
 

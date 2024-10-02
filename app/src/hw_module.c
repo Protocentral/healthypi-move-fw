@@ -77,8 +77,8 @@ const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv))
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
-static const struct device *disp_unit_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
-static const struct device *sensor_brd_1_8_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
+static const struct device *ldsw_disp_unit = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
+static const struct device *ldsw_sens_1_8 = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
@@ -623,24 +623,24 @@ void hw_init(void)
         // return 0;
     }
 
-    // regulator_disable(disp_unit_ldsw);
-    // k_sleep(K_MSEC(100));
+    regulator_disable(ldsw_disp_unit);
+    k_sleep(K_MSEC(100));
 
-    //regulator_enable(disp_unit_ldsw);
-    //k_sleep(K_MSEC(1000));
+    regulator_enable(ldsw_disp_unit);
+    k_sleep(K_MSEC(1000));
 
     //device_init(display_dev);
     //k_sleep(K_MSEC(1000));
 
     //device_init(touch_dev);
 
-    //regulator_enable(sensor_brd_1_8_ldsw);
+    //regulator_enable(ldsw_sens_1_8);
     //k_sleep(K_MSEC(100));
 
     // Start up time
     k_sleep(K_MSEC(2000));
 
-    //regulator_disable(sensor_brd_1_8_ldsw);
+    //regulator_disable(ldsw_sens_1_8);
     k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
@@ -679,7 +679,7 @@ void hw_init(void)
         LOG_INF("MAXM86146 device present!");
         struct sensor_value mode_set;
         mode_set.val1 = MAXM86146_OP_MODE_ALGO;
-        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
     struct sensor_value mode_set;

@@ -18,7 +18,7 @@ extern const struct device *const max32664d_dev;
 #define SAMPLING_INTERVAL_MS 8
 
 #define PPG_SAMPLING_INTERVAL_MS 40
-#define ECG_SAMPLING_INTERVAL_MS 60
+#define ECG_SAMPLING_INTERVAL_MS 65
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 256, 1);
@@ -222,5 +222,5 @@ void ecg_sampling_timer_start(void)
 
 // K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
 
-//K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, 8192, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
-//K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, 2048, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, 8192, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, 2048, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);

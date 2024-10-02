@@ -37,9 +37,7 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
-extern int curr_screen;
-
-#define DISP_WINDOW_SIZE_ECG 390
+extern int curr_screen; 
 
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
@@ -55,9 +53,9 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 
     lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart_ecg, DISP_WINDOW_SIZE_ECG);
+    lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
     // lv_chart_set_type(chart_ecg, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
+    lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -200, 250);
     // lv_chart_set_range(chart_ecg, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
@@ -151,7 +149,7 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
     {
         for (int i = 0; i < num_samples; i++)
         {
-            int32_t data_ecg_i = (data_ecg[i]/1000);
+            int32_t data_ecg_i = ((data_ecg[i]*1000)/5242880)*10;// in mV// (data_ecg[i]);
 
             if (data_ecg_i < y_min_ecg)
             {
@@ -173,8 +171,8 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
             // printk("E");
 
             lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg_i);
-            hpi_ecg_disp_add_samples(1);
-            hpi_ecg_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
+            //hpi_ecg_disp_add_samples(1);
+            //hpi_ecg_disp_do_set_scale(ECG_DISP_WINDOW_SIZE);
         }
         // lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg);
         // hpi_ecg_disp_add_samples(1);
