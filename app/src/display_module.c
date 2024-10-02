@@ -11,6 +11,7 @@
 #include <zephyr/posix/time.h>
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/pm/device.h>
+#include <zephyr/zbus/zbus.h>
 
 #include "hw_module.h"
 #include "power_ctrl.h"
@@ -631,15 +632,15 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    //draw_scr_home(SCROLL_NONE);
+    // draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
-    // draw_scr_ppg(SCROLL_RIGHT);
-    draw_scr_ecg(SCROLL_RIGHT);
-    // draw_scr_bpt_home(SCROLL_RIGHT);
-    // draw_scr_settings(SCROLL_RIGHT);
-    // draw_scr_eda();
-    // draw_scr_hrv_scatter(SCROLL_RIGHT);
+    draw_scr_ppg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    //  draw_scr_bpt_home(SCROLL_RIGHT);
+    //  draw_scr_settings(SCROLL_RIGHT);
+    //  draw_scr_eda();
+    //  draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     printk("Display screens inited");
 
@@ -649,10 +650,8 @@ void display_screens_thread(void)
         {
             if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
             {
-
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-
                     hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
@@ -898,14 +897,22 @@ void display_screens_thread(void)
         //    m_disp_inact_refresh_counter++;
         //}
 
-        lv_task_handler();
+        //lv_task_handler();
 
         k_sleep(K_MSEC(disp_thread_refresh_int_ms));
     }
 }
 
+static void batt_status_listener(const struct zbus_channel *chan)
+{
+	const struct batt_status *batt_s = zbus_chan_const_msg(chan);
+
+	LOG_INF("From listener -> batt level: %d, charging: %d", batt_s->batt_level, batt_s->batt_charging);
+}
+
+ZBUS_LISTENER_DEFINE(batt_lis, batt_status_listener);
+
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
-
 // Power Cost - 80 uA
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

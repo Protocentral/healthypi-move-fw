@@ -17,7 +17,8 @@ extern const struct device *const max32664d_dev;
 
 #define SAMPLING_INTERVAL_MS 8
 
-#define PPG_SAMPLING_INTERVAL_MS 40
+#define PPG_FINGER_SAMPLING_INTERVAL_MS 40
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 8
 #define ECG_SAMPLING_INTERVAL_MS 65
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
@@ -171,7 +172,7 @@ void ppg_wrist_sampling_trigger_thread(void)
                 sensor_read(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
-                k_sleep(K_MSEC(4));
+                k_sleep(K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
         }
 }
 
@@ -198,7 +199,7 @@ void ppg_finger_sampling_trigger_thread(void)
                 sensor_read(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max32664d_read_rtio_ctx, sensor_ppg_finger_processing_callback);
 
-                k_sleep(K_MSEC(PPG_SAMPLING_INTERVAL_MS));
+                k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
         }
 }
 

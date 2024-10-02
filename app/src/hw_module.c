@@ -21,6 +21,7 @@
 
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/zbus/zbus.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -82,7 +83,7 @@ static const struct device *ldsw_sens_1_8 = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
-const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); //DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); // DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
 
 // LED Power DC/DC Enable
@@ -95,11 +96,18 @@ volatile bool max32664d_device_present = false;
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-uint8_t global_batt_level = 0;
+// uint8_t global_batt_level = 0;
 int32_t global_temp;
 bool global_batt_charging = false;
 struct rtc_time global_system_time;
 
+ZBUS_CHAN_DEFINE(batt_chan,                 /* Name */
+                 struct batt_status, /* Message type */
+                 NULL,                                 /* Validator */
+                 NULL,                                 /* User Data */
+                 ZBUS_OBSERVERS_EMPTY, /* observers */
+                 ZBUS_MSG_INIT(0)                      /* Initial value {0} */
+);
 // USB CDC UART
 #define RING_BUF_SIZE 1024
 uint8_t ring_buffer[RING_BUF_SIZE];
@@ -144,8 +152,8 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         case INPUT_KEY_HOME:
             LOG_INF("Extra Key Pressed");
             sys_reboot(SYS_REBOOT_COLD);
-            //printk("Entering Ship Mode\n");
-            //regulator_parent_ship_mode(regulators);
+            // printk("Entering Ship Mode\n");
+            // regulator_parent_ship_mode(regulators);
             break;
         default:
             break;
@@ -352,8 +360,14 @@ int npm_fuel_gauge_update(const struct device *charger)
     // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
     // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
     // printk("Charge status: %d\n", chg_status);
+    struct batt_status batt_s = {
+        .batt_level = (uint8_t)soc,
+        .batt_charging = (chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0,
+    };
 
-    global_batt_level = (int)soc;
+    zbus_chan_update(&batt_chan, &batt_s, K_SECONDS(1));
+
+    //global_batt_level = (int)soc;
 
     return 0;
 }
@@ -629,18 +643,18 @@ void hw_init(void)
     regulator_enable(ldsw_disp_unit);
     k_sleep(K_MSEC(1000));
 
-    //device_init(display_dev);
-    //k_sleep(K_MSEC(1000));
+    // device_init(display_dev);
+    // k_sleep(K_MSEC(1000));
 
-    //device_init(touch_dev);
+    // device_init(touch_dev);
 
-    //regulator_enable(ldsw_sens_1_8);
-    //k_sleep(K_MSEC(100));
+    // regulator_enable(ldsw_sens_1_8);
+    // k_sleep(K_MSEC(100));
 
     // Start up time
     k_sleep(K_MSEC(2000));
 
-    //regulator_disable(ldsw_sens_1_8);
+    // regulator_disable(ldsw_sens_1_8);
     k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
@@ -652,7 +666,6 @@ void hw_init(void)
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
 
-    
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
@@ -668,7 +681,6 @@ void hw_init(void)
         // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
-    
 
     if (!device_is_ready(maxm86146_dev))
     {
@@ -678,13 +690,13 @@ void hw_init(void)
     {
         LOG_INF("MAXM86146 device present!");
         struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
-        //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        mode_set.val1 = MAXM86146_OP_MODE_RAW;
+        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -697,7 +709,7 @@ void hw_init(void)
         max32664d_device_present = true;
         struct sensor_value mode_set;
         mode_set.val1 = MAX32664_OP_MODE_BPT;
-        //sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+        // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
     // printk("Switching application core from 64 MHz and 128 MHz. \n");

@@ -58,6 +58,16 @@ void ui_home_time_display_update(struct rtc_time in_time)
     lv_label_set_text(ui_home_label_date, date_buf);
 }
 
+void hpi_home_hr_update(int hr)
+{
+    if (home_hr_disp == NULL)
+        return;
+
+    char buf[5];
+    sprintf(buf, "%d", hr);
+    lv_label_set_text(home_hr_disp, buf);
+}
+
 void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
 {
     scr_home = lv_obj_create(NULL);
