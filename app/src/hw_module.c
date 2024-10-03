@@ -645,11 +645,7 @@ void hw_init(void)
     // regulator_enable(ldsw_sens_1_8);
     // k_sleep(K_MSEC(100));
 
-    // Start up time
-    k_sleep(K_MSEC(2000));
-
     // regulator_disable(ldsw_sens_1_8);
-    k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)

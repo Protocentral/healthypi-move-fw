@@ -208,7 +208,7 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    printk("Write %d bytes | RSP: %d \n", wr_len, rd_buf[0]);
+    LOG_DBG("Write %d bytes | RSP: %d \n", wr_len, rd_buf[0]);
 
     k_sleep(K_MSEC(45));
 
@@ -273,7 +273,7 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    printk("CMD: %x %x %x | RSP: %x %x %x \n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
+    LOG_DBG("CMD: %x %x %x | RSP: %x %x %x \n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
 
     k_sleep(K_MSEC(10));
 

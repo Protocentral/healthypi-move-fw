@@ -848,23 +848,8 @@ void display_screens_thread(void)
                 }
                 // lv_task_handler();
             }*/
-
-            /*if (curr_screen == SCR_CLOCK)
-            {
-                if (hr_refresh_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS))
-                {
-                    // Fetch and update HR
-                    // ui_hr_display_update(global_hr);
-                    hr_refresh_counter = 0;
-
-                    // TEST ONLY: time
-                    // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min);
-                }
-                else
-                {
-                    hr_refresh_counter++;
-                }
-            }*/
+           
+            
 
             if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
