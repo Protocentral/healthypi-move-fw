@@ -18,7 +18,7 @@ extern const struct device *const max32664d_dev;
 #define SAMPLING_INTERVAL_MS 8
 
 #define PPG_SAMPLING_INTERVAL_MS 40
-#define ECG_SAMPLING_INTERVAL_MS 65
+#define ECG_SAMPLING_INTERVAL_MS 60
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
 K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 256, 1);
