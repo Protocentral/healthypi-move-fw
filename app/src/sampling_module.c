@@ -12,12 +12,7 @@
 
 LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 
-extern const struct device *const max30001_dev;
-extern const struct device *const maxm86146_dev;
-extern const struct device *const max32664d_dev;
-
 #define SAMPLING_INTERVAL_MS 8
-
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 40
 #define PPG_WRIST_SAMPLING_INTERVAL_MS 8
 #define ECG_SAMPLING_INTERVAL_MS 65
@@ -31,14 +26,6 @@ SENSOR_DT_READ_IODEV(maxm86146_iodev, DT_ALIAS(maxm86146), SENSOR_CHAN_VOLTAGE);
 SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), SENSOR_CHAN_VOLTAGE);
 SENSOR_DT_READ_IODEV(max30001_iodev, DT_ALIAS(max30001), SENSOR_CHAN_VOLTAGE);
 
-#define PPG_SAMPLING_THREAD_STACKSIZE 2048
-#define PPG_SAMPLING_THREAD_PRIORITY 7
-
-K_THREAD_STACK_DEFINE(ppg_sampling_stack_area, PPG_SAMPLING_THREAD_STACKSIZE);
-struct k_thread ppg_sampling_thread_data;
-
-k_tid_t global_ppg_sampling_thread_id;
-
 bool ppg_wrist_sampling_on = false;
 bool ppg_finger_sampling_on = false;
 
@@ -48,6 +35,14 @@ bool ppg_finger_sampling_on = false;
 ZBUS_CHAN_DECLARE(hr_chan);
 
 extern struct k_sem sem_ecg_intb_recd;
+
+extern const struct device *const max30001_dev;
+extern const struct device *const maxm86146_dev;
+extern const struct device *const max32664d_dev;
+
+extern struct k_sem sem_ppg_finger_thread_start;
+extern struct k_sem sem_ppg_wrist_thread_start;
+extern struct k_sem sem_ecg_bioz_thread_start;
 
 // static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
 //  static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
@@ -112,7 +107,7 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
 
-        static uint8_t prev_hr_val=0;
+        static uint8_t prev_hr_val = 0;
         // uint8_t hr_chan_value=0;
         // printk("WR NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
@@ -176,8 +171,23 @@ static void sensor_ecg_bioz_process_cb(int result, uint8_t *buf,
         }
 }
 
+void ppg_finger_sampling_trigger_thread(void)
+{
+        k_sem_take(&sem_ppg_finger_thread_start, K_FOREVER);
+
+        LOG_INF("PPG Finger Sampling Trigger Thread starting");
+        for (;;)
+        {
+                sensor_read(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
+                sensor_processing_with_callback(&max32664d_read_rtio_ctx, sensor_ppg_finger_processing_callback);
+
+                k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
+        }
+}
+
 void ppg_wrist_sampling_trigger_thread(void)
 {
+        k_sem_take(&sem_ppg_wrist_thread_start, K_FOREVER);
 
         LOG_INF("PPG Wrist Sampling Trigger Thread starting\n");
         for (;;)
@@ -191,12 +201,13 @@ void ppg_wrist_sampling_trigger_thread(void)
 
 void ecg_bioz_sampling_trigger_thread(void)
 {
+        // Wait until sem is received
+        k_sem_take(&sem_ecg_bioz_thread_start, K_FOREVER);
+
         LOG_INF("ECG/ BioZ Sampling Trigger Thread starting\n");
 
         for (;;)
         {
-                // k_sem_take(&sem_ecg_intb_recd, K_FOREVER);
-
                 sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_bioz_process_cb);
 
@@ -204,18 +215,7 @@ void ecg_bioz_sampling_trigger_thread(void)
         }
 }
 
-void ppg_finger_sampling_trigger_thread(void)
-{
-        LOG_INF("PPG Finger Sampling Trigger Thread starting");
-        for (;;)
-        {
-                sensor_read(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
-                sensor_processing_with_callback(&max32664d_read_rtio_ctx, sensor_ppg_finger_processing_callback);
-
-                k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
-        }
-}
-
+/*
 void ppg_data_stop(void)
 {
         k_thread_suspend(global_ppg_sampling_thread_id);
@@ -230,11 +230,17 @@ void ecg_sampling_timer_start(void)
 {
         // ecg_sampling_timer = lv_timer_create(ecg_sampling_timer_cb, ECG_SAMPLING_INTERVAL_MS, NULL);
 }
+*/
 
-#define ECG_SAMPLING_THREAD_STACKSIZE 2048
-#define ECG_SAMPLING_THREAD_PRIORITY 7
+#define PPG_FINGER_SAMPLING_THREAD_STACKSIZE 4096
+#define PPG_FINGER_SAMPLING_THREAD_PRIORITY 7
 
-// K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, 8192, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+#define PPG_WRIST_SAMPLING_THREAD_STACKSIZE 4096
+#define PPG_WRIST_SAMPLING_THREAD_PRIORITY 7
 
-K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, 8192, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_SAMPLING_THREAD_PRIORITY, 0, 1000);
-K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, 2048, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_SAMPLING_THREAD_PRIORITY, 0, 1000);
+#define ECG_BIOZ_SAMPLING_THREAD_STACKSIZE 2048
+#define ECG_BIOZ_SAMPLING_THREAD_PRIORITY 7
+
+K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, PPG_FINGER_SAMPLING_THREAD_STACKSIZE, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_FINGER_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, ECG_BIOZ_SAMPLING_THREAD_STACKSIZE, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_BIOZ_SAMPLING_THREAD_PRIORITY, 0, 1000);

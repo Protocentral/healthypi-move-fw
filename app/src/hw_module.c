@@ -98,10 +98,9 @@ volatile bool max32664d_device_present = false;
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
 // uint8_t global_batt_level = 0;
-//int32_t global_temp;
-//bool global_batt_charging = false;
-//struct rtc_time global_system_time;
-
+// int32_t global_temp;
+// bool global_batt_charging = false;
+// struct rtc_time global_system_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
@@ -115,6 +114,10 @@ K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
 K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
+
+K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
+K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
 
@@ -361,7 +364,7 @@ int npm_fuel_gauge_update(const struct device *charger)
     };
 
     zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
-    //global_batt_level = (int)soc;
+    // global_batt_level = (int)soc;
 
     return 0;
 }
@@ -528,7 +531,7 @@ void hw_bpt_start_est(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
 
     k_sleep(K_MSEC(1000));
-    ppg_data_start();
+    // ppg_data_start();
 }
 
 void hw_bpt_stop(void)
@@ -757,12 +760,27 @@ void hw_init(void)
 
     k_sem_give(&sem_hw_inited);
 
+    // Start sampling if devices are present
+
+    if (max30001_device_present)
+    {
+        k_sem_give(&sem_ecg_bioz_thread_start);
+    }
+
+    if (maxm86146_device_present)
+    {
+        k_sem_give(&sem_ppg_wrist_thread_start);
+    }
+
+    if (max32664d_device_present)
+    {
+        k_sem_give(&sem_ppg_finger_thread_start);
+    }
+
     // init_settings();
 
     // usb_init();
 }
-
-
 
 void hw_thread(void)
 {
@@ -772,7 +790,7 @@ void hw_thread(void)
     //  printk("Initing...\n");
 
     // ecg_sampling_timer_start();
-    
+
     struct rtc_time sys_time;
 
     for (;;)
@@ -785,7 +803,7 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         npm_fuel_gauge_update(charger);
-        
+
         rtc_get_time(rtc_dev, &sys_time);
         zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
 
