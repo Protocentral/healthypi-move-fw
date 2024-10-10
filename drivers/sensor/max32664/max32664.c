@@ -97,7 +97,7 @@ static int m_read_op_mode(const struct device *dev)
 	k_sleep(K_MSEC(45));
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	printk("Op mode = %x\n", rd_buf[1]);
+	LOG_DBG("Op mode = %x\n", rd_buf[1]);
 
 	return rd_buf[1];
 }
@@ -115,7 +115,7 @@ static int m_read_mcu_id(const struct device *dev)
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
-	printk("MCU ID = %x %x\n", rd_buf[0], rd_buf[1]);
+	LOG_DBG("MCU ID = %x %x\n", rd_buf[0], rd_buf[1]);
 
 	return 0;
 }
@@ -238,7 +238,7 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
 
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	printk("CMD: %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
+	LOG_DBG("CMD: %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
 
 	k_sleep(K_MSEC(45));
 
@@ -267,7 +267,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
 
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	printk("CMD: %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
+	LOG_DBG("CMD: %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
 
 	k_sleep(K_MSEC(45));
 
@@ -315,7 +315,7 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
 
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	printk("CMD: %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
+	LOG_DBG("CMD: %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
 
 	k_sleep(K_MSEC(10));
 
@@ -346,7 +346,7 @@ static int m_i2c_write_cmd_3_rsp_2(const struct device *dev, uint8_t byte1, uint
 
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	printk("CMD: %x %x %x | RSP: %x %x \n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1]);
+	LOG_DBG("CMD: %x %x %x | RSP: %x %x \n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1]);
 
 	k_sleep(K_MSEC(10));
 
@@ -371,7 +371,7 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	printk("Write %d bytes | RSP: %d \n", wr_len, rd_buf[0]);
+	LOG_DBG("Write %d bytes | RSP: %d \n", wr_len, rd_buf[0]);
 
 	k_sleep(K_MSEC(45));
 

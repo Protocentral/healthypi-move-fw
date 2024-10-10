@@ -634,8 +634,8 @@ void hw_init(void)
         // return 0;
     }
 
-    regulator_disable(ldsw_disp_unit);
-    k_sleep(K_MSEC(100));
+    //regulator_disable(ldsw_disp_unit);
+    //k_sleep(K_MSEC(100));
 
     regulator_enable(ldsw_disp_unit);
     k_sleep(K_MSEC(1000));
@@ -645,8 +645,8 @@ void hw_init(void)
 
     // device_init(touch_dev);
 
-    // regulator_enable(ldsw_sens_1_8);
-    // k_sleep(K_MSEC(100));
+    regulator_enable(ldsw_sens_1_8);
+    k_sleep(K_MSEC(100));
 
     // regulator_disable(ldsw_sens_1_8);
 
@@ -682,6 +682,8 @@ void hw_init(void)
     else
     {
         LOG_INF("MAXM86146 device present!");
+        maxm86146_device_present = true;
+
         struct sensor_value mode_set;
         mode_set.val1 = MAXM86146_OP_MODE_ALGO;
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
@@ -689,7 +691,7 @@ void hw_init(void)
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {

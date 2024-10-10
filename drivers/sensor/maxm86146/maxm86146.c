@@ -41,7 +41,7 @@ static int m_read_op_mode(const struct device *dev)
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_INF("Op mode = %x\n", rd_buf[1]);
+    LOG_DBG("Op mode = %x ", rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -96,7 +96,7 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("CMD: %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
 
     k_sleep(K_MSEC(10));
 
@@ -124,7 +124,7 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("CMD: %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
 
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
@@ -153,7 +153,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("CMD: %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
 
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
@@ -183,7 +183,7 @@ static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t by
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("CMD: %x %x %x %x %x %x | RSP: %x\n", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], wr_buf[5], rd_buf[0]);
+    LOG_DBG("CMD: %x %x %x %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], wr_buf[5], rd_buf[0]);
 
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
@@ -208,7 +208,7 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("Write %d bytes | RSP: %d \n", wr_len, rd_buf[0]);
+    LOG_DBG("Write %d bytes | RSP: %d ", wr_len, rd_buf[0]);
 
     k_sleep(K_MSEC(45));
 
@@ -273,7 +273,7 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("CMD: %x %x %x | RSP: %x %x %x \n", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
+    LOG_DBG("CMD: %x %x %x | RSP: %x %x %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
 
     k_sleep(K_MSEC(10));
 
@@ -404,26 +404,26 @@ static int maxm86146_set_mode_algo(const struct device *dev)
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
-    // Set continuous mode
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00,MAXM86146_DEFAULT_CMD_DELAY);
+    // Set continuous mode - only HR
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x02,MAXM86146_DEFAULT_CMD_DELAY);
 
     // Enable AEC
     m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
 
-    // Disable Auto PD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x00,MAXM86146_DEFAULT_CMD_DELAY);
+    // EN Auto PD
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
 
-    // Disable SCD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00,MAXM86146_DEFAULT_CMD_DELAY);
+    // EN SCD
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set AGC target PD current
     m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
 
-    m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
+    m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x30, 0x00);
 
-    m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
+    m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x73);
 
-    m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
+    m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x10, 0x20);
 
     // Read  WHOAMI
     //m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
@@ -452,7 +452,7 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    //LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
@@ -465,7 +465,7 @@ int maxm86146_do_enter_app(const struct device *dev)
 {
     const struct maxm86146_config *config = dev->config;
 
-    LOG_DBG("MAXM86146 entering application mode\n");
+    LOG_DBG("MAXM86146 entering application mode ");
 
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
@@ -582,7 +582,7 @@ static int maxm86146_chip_init(const struct device *dev)
     uint8_t ver_buf[4] = {0};
     if (maxm86146_get_ver(dev, ver_buf) == 0)
     {
-        LOG_INF("MAXM86146 version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+        LOG_DBG("MAXM86146 version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
     }
     else
     {
