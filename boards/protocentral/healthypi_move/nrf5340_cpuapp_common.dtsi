@@ -178,7 +178,10 @@
 		reg = <0x6a>;
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
 	};
+
+
 
 	chsc5816: chsc5816@2e {
 		status = "okay";
@@ -186,6 +189,7 @@
 		reg = <0x2e>;
 		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
 		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
 	};
 
 	max32664d: max32664d@55 {

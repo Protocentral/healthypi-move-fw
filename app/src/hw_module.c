@@ -643,10 +643,10 @@ void hw_init(void)
     // device_init(display_dev);
     // k_sleep(K_MSEC(1000));
 
-    // device_init(touch_dev);
+    device_init(touch_dev);
 
-    regulator_enable(ldsw_sens_1_8);
-    k_sleep(K_MSEC(100));
+    //regulator_enable(ldsw_sens_1_8);
+    //k_sleep(K_MSEC(100));
 
     // regulator_disable(ldsw_sens_1_8);
 
