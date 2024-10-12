@@ -643,6 +643,7 @@ void display_screens_thread(void)
     draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
+
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     //  draw_scr_bpt_home(SCROLL_RIGHT);
