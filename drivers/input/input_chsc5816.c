@@ -229,12 +229,15 @@ static int chsc5816_chip_init(const struct device *dev)
 	}
 
 	chsc5816_chip_reset(dev);
+	k_msleep(200);
 
 	uint8_t val[4] = {0x00, 0x00, 0x00, 0x00};
 	// chsc5816_write_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
 	//  Read FW version
 	chsc5816_read_reg4(dev, CHSC5816_REG_IMG_HEAD, val, 4);
 	LOG_INF("FW version: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);
+
+	k_msleep(50);
 
 	chsc5816_read_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
 	LOG_INF("Boot state: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);

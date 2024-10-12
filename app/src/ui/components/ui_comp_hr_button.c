@@ -30,10 +30,10 @@ lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent)
     lv_obj_set_style_outline_opa(btn_hr_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_width(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-    //lv_obj_set_style_shadow_color(btn_hr_disp, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
-    //lv_obj_set_style_shadow_opa(btn_hr_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED);
-    //lv_obj_set_style_shadow_width(btn_hr_disp, 50, LV_PART_MAIN | LV_STATE_PRESSED);
-    //lv_obj_set_style_shadow_spread(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_PRESSED);
+    // lv_obj_set_style_shadow_color(btn_hr_disp, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
+    // lv_obj_set_style_shadow_opa(btn_hr_disp, 255, LV_PART_MAIN | LV_STATE_PRESSED);
+    // lv_obj_set_style_shadow_width(btn_hr_disp, 50, LV_PART_MAIN | LV_STATE_PRESSED);
+    // lv_obj_set_style_shadow_spread(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_PRESSED);
 
     lv_obj_t *cui_heart;
     cui_heart = lv_img_create(btn_hr_disp);
@@ -72,6 +72,13 @@ void ui_hr_button_update(uint8_t hr_bpm)
         return;
 
     char buf[4];
-    sprintf(buf, "%d", hr_bpm);
+    if (hr_bpm > 0)
+    {
+        sprintf(buf, "%d", hr_bpm);
+    }
+    else
+    {
+        sprintf(buf, "--");
+    }
     lv_label_set_text(ui_hr_number, buf);
 }

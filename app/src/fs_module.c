@@ -10,14 +10,13 @@
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/settings/settings.h>
 
-
 #include "sampling_module.h"
+#include "fs_module.h"
+#include "ui/move_ui.h"
 
 LOG_MODULE_REGISTER(fs_module);
 
 K_SEM_DEFINE(sem_fs_module, 0, 1);
-
-const char fname_sessions[30] = "/lfs/sessions";
 
 #define PARTITION_NODE DT_NODELABEL(lfs1)
 
@@ -40,6 +39,8 @@ struct fs_mount_t *mp =
     &lfs_storage_mnt
 #endif
     ;
+
+static uint8_t hpi_settings_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
 /*
 static int littlefs_flash_erase(unsigned int id)
@@ -231,6 +232,34 @@ void record_wipe_all(void)
     fs_closedir(&dir);
 }
 
+static int hpi_settings_set(const char *name, size_t len,
+                            settings_read_cb read_cb, void *cb_arg)
+{
+    const char *next;
+    int rc;
+
+    if (settings_name_steq(name, "brightness", &next) && !next) {
+        if (len != sizeof(hpi_settings_brightness)) {
+            return -EINVAL;
+        }
+
+        rc = read_cb(cb_arg, &hpi_settings_brightness, sizeof(hpi_settings_brightness));
+        if (rc >= 0) {
+            return 0;
+        }
+
+        return rc;
+    }
+
+
+    return -ENOENT;
+}
+
+struct settings_handler hpi_settings_conf = {
+    .name = "hpi_set",
+    .h_set = hpi_settings_set
+};
+
 void fs_module_init(void)
 {
     int rc;
@@ -257,10 +286,24 @@ void fs_module_init(void)
            sbuf.f_bsize, sbuf.f_frsize,
            sbuf.f_blocks, sbuf.f_bfree);
     
-    rc = lsdir("/lfs/log");
+    rc = lsdir("/lfs");
     if (rc < 0)
     {
         LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         // goto out;
     }
+
+    //rc = settings_subsys_init();
+	if (rc) {
+		printk("settings subsys initialization: fail (err %d)\n", rc);
+		return;
+	}
+    //settings_register(&hpi_settings_conf);
+    //settings_load();
+
+    //hpi_settings_brightness++;
+    //settings_save_one("hpi_set/brightness", &hpi_settings_brightness, sizeof(hpi_settings_brightness));
+    printk("Brightness: %d\n", hpi_settings_brightness);
+
+	printk("settings subsys initialization: OK.\n");
 }

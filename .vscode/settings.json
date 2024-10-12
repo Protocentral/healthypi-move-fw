@@ -17,7 +17,8 @@
         "max30001.h": "c",
         "ble_module.h": "c",
         "npm1300.h": "c",
-        "hw_module.h": "c"
+        "hw_module.h": "c",
+        "device.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

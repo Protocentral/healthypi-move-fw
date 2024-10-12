@@ -6,19 +6,16 @@
 // Settings
 
 #define SAMPLE_RATE 125
-
-
 #define SCREEN_TRANS_TIME 300
-
 #define HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS 2
 
-
-
-#define DISP_SLEEP_TIME_MS 20000
+#define DISP_SLEEP_TIME_MS 90000
 #define DISPLAY_DEFAULT_BRIGHTNESS 150
+
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
 #define HRV_DISP_WINDOW_SIZE 128
+#define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 
 enum scroll_dir
 {
@@ -63,9 +60,13 @@ void draw_scr_clockface(enum scroll_dir m_scroll_dir);
 void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void hpi_disp_draw_plotEDA(float data_eda);
 
-// Analog Clock Screen functions
+// Home Screen functions
 void draw_scr_home(enum scroll_dir m_scroll_dir);
 void scr_home_set_time(struct rtc_time time_to_set);
+
+void ui_home_time_display_update(struct rtc_time in_time);
+
+void hpi_home_hr_update(int hr);
 
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);

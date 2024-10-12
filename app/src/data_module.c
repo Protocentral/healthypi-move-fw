@@ -205,8 +205,8 @@ void data_thread(void)
     int16_t ppg_sample_buffer[64];
     int ppg_sample_buffer_count = 0;
 
-    //int32_t resp_sample_buffer[64];
-    //int resp_sample_buffer_count = 0;
+    // int32_t resp_sample_buffer[64];
+    // int resp_sample_buffer_count = 0;
 
     /* Filter coeffcients from Maxim AN6906
 
@@ -244,32 +244,29 @@ void data_thread(void)
 
     struct hpi_computed_hrv_t hrv_calculated;
 
-    #define NUM_TAPS   10 /* Number of taps in the FIR filter (length of the moving average window) */
-    #define BLOCK_SIZE 8 /* Number of samples processed per block */
+#define NUM_TAPS 10  /* Number of taps in the FIR filter (length of the moving average window) */
+#define BLOCK_SIZE 8 /* Number of samples processed per block */
 
     /*
-    * Filter coefficients are all equal for a moving average filter. Here, 1/NUM_TAPS = 0.1f.
-    */
-    //q31_t firCoeffs[NUM_TAPS] = {0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD,
-    //                0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD};
+     * Filter coefficients are all equal for a moving average filter. Here, 1/NUM_TAPS = 0.1f.
+     */
+    // q31_t firCoeffs[NUM_TAPS] = {0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD,
+    //                 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD};
 
     arm_fir_instance_f32 sFIR;
     float32_t firState[NUM_TAPS + BLOCK_SIZE - 1];
 
     float32_t input[BLOCK_SIZE];
-	float32_t output[BLOCK_SIZE];
-	uint32_t start, end;
+    float32_t output[BLOCK_SIZE];
+    uint32_t start, end;
 
     /* Initialize the FIR filter */
-	//arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
+    // arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
 
     LOG_INF("Data Thread starting\n");
 
     for (;;)
     {
-        //k_sleep(K_USEC(50));
-        k_sleep(K_MSEC(10 ));
-
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
             /*
@@ -288,19 +285,17 @@ void data_thread(void)
             // End of Stage 1
             */
 
-
-
             if (settings_send_ble_enabled)
-            {                
-
+            {
 
                 ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
-                //b_notify(ecg_bioz_sensor_sample.bioz_sample);
+                ble_bioz_notify(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples);
+                // b_notify(ecg_bioz_sensor_sample.bioz_sample);
 
                 /*resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
                 if (resp_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
                 {
-                    ble_resp_notify(resp_sample_buffer, resp_sample_buffer_count);
+                    ble_bioz_notify(resp_sample_buffer, resp_sample_buffer_count);
                     resp_sample_buffer_count = 0;
 
                 }*/
@@ -380,6 +375,7 @@ void data_thread(void)
             //          sensor_sample.temp, 0, 0, 0, sensor_sample._bioZSkipSample);
             // record_session_add_point(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample);
         }
+        k_sleep(K_MSEC(1));
     }
 }
 

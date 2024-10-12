@@ -114,31 +114,27 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3000000>;
+				//regulator-always-on;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <3000000>;
-				regulator-init-microvolt = <3000000>;
-				retention-microvolt = <2500000>;
-				//regulator-boot-on;
-				//enable-gpios = <&npm_pmic_gpio 1 GPIO_ACTIVE_LOW>;
-				//retention-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_HIGH>;
-				//pwm-gpios = <&npm_pmic_gpio 2 GPIO_ACTIVE_LOW>;
+				regulator-max-microvolt = <3300000>;
+				regulator-init-microvolt = <1800000>;
+				
+				//regulator-always-on;
 			};
 
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
 				//regulator-boot-on;
-				
-				startup-delay-us = <100000>;
 			};
 
 			npm_pmic_ldo2: LDO2 {
-				regulator-initial-mode = <NPM1300_LDSW_MODE_LDO>;
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <2000000>;
-				regulator-init-microvolt = <1800000>;
+				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				//regulator-min-microvolt = <1000000>;
+				//regulator-max-microvolt = <3300000>;
+				//regulator-init-microvolt = <1800000>;
 				//regulator-boot-on;
 			};
 		};
@@ -182,7 +178,10 @@
 		reg = <0x6a>;
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
 	};
+
+
 
 	chsc5816: chsc5816@2e {
 		status = "okay";
@@ -190,6 +189,7 @@
 		reg = <0x2e>;
 		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
 		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
 	};
 
 	max32664d: max32664d@55 {
@@ -266,7 +266,7 @@
 		sck-frequency = <64000000>;
 		size = <DT_SIZE_M(128)>;
 		has-dpd;
-		t-enter-dpd = <3000>;
+		t-enter-dpd = <30000>;
 		t-exit-dpd = <30000>;
 		jedec-id = [ ef 40 21  ];
 		status = "okay";
@@ -303,8 +303,10 @@
 		rtor-enabled;
 		ecg-enabled;
 		bioz-enabled;
-		ecg-gain = <3>;
-		ecg-invert;
+		
+		ecg-gain = <2>;
+		//ecg-invert;
+		//
 		//ecg-dcloff-enable;
 		//ecg-dcloff-current = <1>; // 5 nA
 
@@ -315,8 +317,8 @@
 	compatible = "nordic,nrf-spim";
 	status = "okay"; 
 
-	//cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
-	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
+	//cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
 
 	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
@@ -354,6 +356,7 @@
 		display-inversion;
 		rotation = <0>;
 		status = "okay";
+		//zephyr,deferred-init;
 	};
 };
 

@@ -21,12 +21,12 @@
 
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/zbus/zbus.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
 
 #include <nrfx_clock.h>
-
 #include <nrfx_spim.h>
 
 #include "max30001.h"
@@ -57,11 +57,9 @@ char curr_string[40];
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
+ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 
 /****END EXTERNS****/
-
-#define HW_THREAD_STACKSIZE 4096
-#define HW_THREAD_PRIORITY 7
 
 // Peripheral Device Pointers
 const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
@@ -77,12 +75,12 @@ const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv))
 
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
-static const struct device *sensor_brd_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
-static const struct device *sensor_brd_1_8_ldsw = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
+static const struct device *ldsw_disp_unit = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
+static const struct device *ldsw_sens_1_8 = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
-const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); // DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
 
 // LED Power DC/DC Enable
@@ -95,10 +93,10 @@ volatile bool max32664d_device_present = false;
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-uint8_t global_batt_level = 0;
-int32_t global_temp;
-bool global_batt_charging = false;
-struct rtc_time global_system_time;
+// uint8_t global_batt_level = 0;
+// int32_t global_temp;
+// bool global_batt_charging = false;
+// struct rtc_time global_system_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
@@ -112,6 +110,10 @@ K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
 K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
+
+K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
+K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
 
@@ -130,20 +132,22 @@ static const struct battery_model battery_model = {
 
 static void gpio_keys_cb_handler(struct input_event *evt)
 {
-    // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d\n",
-    //        evt->dev->name, evt->code, evt->value);
+    // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d type=%d\n",
+    //        evt->dev->name, evt->code, evt->value, evt->type);
+
     if (evt->value == 1)
     {
         switch (evt->code)
         {
         case INPUT_KEY_UP:
-            printk("Extra Key Pressed");
-            regulator_parent_ship_mode(regulators);
-            printk("Entering Ship Mode\n");
+            LOG_INF("Crown Key Pressed");
+            lv_disp_trig_activity(NULL);
             break;
         case INPUT_KEY_HOME:
-            LOG_INF("Side Key Pressed");
-            lv_disp_trig_activity(NULL);
+            LOG_INF("Extra Key Pressed");
+            sys_reboot(SYS_REBOOT_COLD);
+            // printk("Entering Ship Mode\n");
+            // regulator_parent_ship_mode(regulators);
             break;
         default:
             break;
@@ -157,8 +161,6 @@ void send_usb_cdc(const char *buf, size_t len)
     rb_len = ring_buf_put(&ringbuf_usb_cdc, buf, len);
     uart_irq_tx_enable(usb_cdc_uart_dev);
 }
-
-
 
 static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_data)
 {
@@ -352,8 +354,13 @@ int npm_fuel_gauge_update(const struct device *charger)
     // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
     // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
     // printk("Charge status: %d\n", chg_status);
+    struct batt_status batt_s = {
+        .batt_level = (uint8_t)soc,
+        .batt_charging = (chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0,
+    };
 
-    global_batt_level = (int)soc;
+    zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
+    // global_batt_level = (int)soc;
 
     return 0;
 }
@@ -520,7 +527,7 @@ void hw_bpt_start_est(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
 
     k_sleep(K_MSEC(1000));
-    ppg_data_start();
+    // ppg_data_start();
 }
 
 void hw_bpt_stop(void)
@@ -537,69 +544,7 @@ void hw_bpt_get_calib(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
-static volatile bool vbus_connected;
 
-static void pmic_event_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-    printk("Event detected\n");
-
-    if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))
-    {
-        printk("Vbus connected\n");
-        vbus_connected = true;
-    }
-
-    if (pins & BIT(NPM1300_EVENT_VBUS_REMOVED))
-    {
-        printk("Vbus removed\n");
-        vbus_connected = false;
-    }
-}
-
-/* Setup callback for shiphold button press */
-static struct gpio_callback pmic_event_cb;
-
-void setup_pmic_callbacks(void)
-{
-    if (!device_is_ready(pmic))
-    {
-        printk("PMIC device not ready.\n");
-        return;
-    }
-
-    gpio_init_callback(&pmic_event_cb, pmic_event_handler,
-                       BIT(NPM1300_EVENT_SHIPHOLD_PRESS) | BIT(NPM1300_EVENT_SHIPHOLD_RELEASE) |
-                           BIT(NPM1300_EVENT_VBUS_DETECTED) |
-                           BIT(NPM1300_EVENT_VBUS_REMOVED));
-
-    mfd_npm1300_add_callback(pmic, &pmic_event_cb);
-
-    /* Initialise vbus detection status */
-    struct sensor_value val;
-    int ret = sensor_attr_get(charger, SENSOR_CHAN_CURRENT, SENSOR_ATTR_UPPER_THRESH, &val);
-
-    if (ret < 0)
-    {
-        return false;
-    }
-
-    vbus_connected = (val.val1 != 0) || (val.val2 != 0);
-}
-
-void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
-{
-    struct rtc_time time_set;
-
-    time_set.tm_sec = m_sec;
-    time_set.tm_min = m_min;
-    time_set.tm_hour = m_hour;
-    time_set.tm_mday = m_day;
-    time_set.tm_mon = (m_month - 1);
-    time_set.tm_year = (m_year + 100);
-
-    int ret = rtc_set_time(rtc_dev, &time_set);
-    printk("RTC Set Time: %d\n", ret);
-}
 
 void hw_init(void)
 {
@@ -623,17 +568,21 @@ void hw_init(void)
         // return 0;
     }
 
-    // regulator_disable(sensor_brd_ldsw);
-    k_sleep(K_MSEC(100));
+    // regulator_disable(ldsw_disp_unit);
+    // k_sleep(K_MSEC(100));
 
-    regulator_enable(sensor_brd_ldsw);
-    k_sleep(K_MSEC(100));
+    regulator_enable(ldsw_disp_unit);
+    k_sleep(K_MSEC(1000));
 
-    regulator_enable(sensor_brd_1_8_ldsw);
-    k_sleep(K_MSEC(100));
+    // device_init(display_dev);
+    // k_sleep(K_MSEC(1000));
 
-    // regulator_disable(sensor_brd_1_8_ldsw);
-    k_sleep(K_MSEC(100));
+    device_init(touch_dev);
+
+    // regulator_enable(ldsw_sens_1_8);
+    // k_sleep(K_MSEC(100));
+
+    // regulator_disable(ldsw_sens_1_8);
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
@@ -642,9 +591,8 @@ void hw_init(void)
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
-    gpio_pin_set_dt(&dcdc_5v_en, 0);
+    gpio_pin_set_dt(&dcdc_5v_en, 1);
 
-    /*
 #ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
@@ -660,7 +608,6 @@ void hw_init(void)
         // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
     }
 #endif
-    */
 
     if (!device_is_ready(maxm86146_dev))
     {
@@ -669,10 +616,16 @@ void hw_init(void)
     else
     {
         LOG_INF("MAXM86146 device present!");
-        // struct sensor_value mode_set;
-        // mode_set.val1 = MAXM86146_OP_MODE_ALGO;
-        // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        maxm86146_device_present = true;
+
+        struct sensor_value mode_set;
+        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
+
+    struct sensor_value mode_set;
+    mode_set.val1 = 1;
+    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -683,26 +636,13 @@ void hw_init(void)
     {
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
-        // struct sensor_value mode_set;
-        // mode_set.val1 = MAX32664_OP_MODE_BPT;
+        struct sensor_value mode_set;
+        mode_set.val1 = MAX32664_OP_MODE_BPT;
         // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
-    // printk("Switching application core from 64 MHz and 128 MHz. \n");
-    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
-    // printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
-
-    // printk("Switching application core from 128 MHz and 64 MHz. \n");
-    //  nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
-    //  printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
-
-    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
-
-    // nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
-    // nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
-
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    printk("spi has 32MHz\n");
+    LOG_INF("SPIM runs at 32MHz !\n");
 #endif
 
     // setup_pmic_callbacks();
@@ -726,26 +666,39 @@ void hw_init(void)
             printk("Error setting sampling frequency\n");
         }
     }
-    //pm_device_runtime_put(acc_dev);
+    // pm_device_runtime_put(acc_dev);
 
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    // fs_module_init();
+    fs_module_init();
 
     // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
-    /*struct sensor_value mode_set;
-    //mode_set.val1 = 1;
-    sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
-    */
 
     pm_device_runtime_get(gpio_keys_dev);
 
     INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
 
-    //pm_device_runtime_put(w25_flash_dev);
- 
+    // pm_device_runtime_put(w25_flash_dev);
+
     k_sem_give(&sem_hw_inited);
+
+    // Start sampling if devices are present
+
+    if (max30001_device_present)
+    {
+        k_sem_give(&sem_ecg_bioz_thread_start);
+    }
+
+    if (maxm86146_device_present)
+    {
+        k_sem_give(&sem_ppg_wrist_thread_start);
+    }
+
+    if (max32664d_device_present)
+    {
+        k_sem_give(&sem_ppg_finger_thread_start);
+    }
 
     // init_settings();
 
@@ -756,10 +709,7 @@ void hw_thread(void)
 {
     LOG_INF("HW Thread started\n");
 
-    // hw_msbl_load();
-    //  printk("Initing...\n");
-
-    // ecg_sampling_timer_start();
+    struct rtc_time sys_time;
 
     for (;;)
     {
@@ -771,12 +721,18 @@ void hw_thread(void)
         // fetch_and_display(acc_dev);
 
         npm_fuel_gauge_update(charger);
-        rtc_get_time(rtc_dev, &global_system_time);
+
+        rtc_get_time(rtc_dev, &sys_time);
+        zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
+
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
 
         k_sleep(K_MSEC(6000));
     }
 }
+
+#define HW_THREAD_STACKSIZE 4096
+#define HW_THREAD_PRIORITY 7
 
 K_THREAD_DEFINE(hw_thread_id, HW_THREAD_STACKSIZE, hw_thread, NULL, NULL, NULL, HW_THREAD_PRIORITY, 0, 0);

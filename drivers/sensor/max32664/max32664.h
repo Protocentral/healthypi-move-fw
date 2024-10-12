@@ -20,7 +20,6 @@ int _max32664_fifo_get_samples(const struct device *dev, uint8_t *buf, int len);
 int max32664_get_sample_fifo(const struct device *dev);
 
 void max32664_do_enter_bl(const struct device *dev);
-int m_read_op_mode(const struct device *dev);
 
 enum max32664_channel
 {

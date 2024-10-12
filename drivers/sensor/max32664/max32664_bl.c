@@ -36,6 +36,27 @@ static int m_read_bl_ver(const struct device *dev)
 	return 0;
 }
 
+static int m_read_op_mode(const struct device *dev)
+{ 
+    const struct max32664_config *config = dev->config;
+    uint8_t rd_buf[2] = {0x00, 0x00};
+
+    uint8_t wr_buf[2] = {0x02, 0x00};
+
+    k_sleep(K_USEC(300));
+    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    k_sleep(K_MSEC(45));
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    k_sleep(K_MSEC(45));
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    // LOG_INF("Op mode = %x\n", rd_buf[1]);
+
+    return rd_buf[1];
+}
+
 static int m_read_bl_page_size(const struct device *dev, uint16_t *bl_page_size)
 {
 	const struct max32664_config *config = dev->config;
@@ -140,7 +161,7 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 	max32664_i2c_msg[0].len = 2;
 	max32664_i2c_msg[0].flags = I2C_MSG_WRITE;
 
-/*
+
 #if (MAX32664_FW_BIN_INCLUDE == 1)
 	for (int i = 0; i < num_msgs; i++)
 	{
@@ -159,7 +180,7 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 		//printk("\n");
 	}
 #endif
-*/
+
 	max32664_i2c_msg[(num_msgs)].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
 
 	int ret = i2c_transfer_dt(&config->i2c, max32664_i2c_msg, (num_msgs + 1));

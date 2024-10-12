@@ -1,5 +1,4 @@
-#ifndef hw_module_h
-#define hw_module_h
+#pragma once
 
 uint32_t hw_keypad_get_key(void);
 
@@ -29,4 +28,8 @@ enum gpio_keypad_key
     GPIO_KEYPAD_KEY_RIGHT,
 };
 
-#endif
+struct batt_status
+{
+    uint8_t batt_level;
+    bool batt_charging;
+};
