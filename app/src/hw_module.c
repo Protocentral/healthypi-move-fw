@@ -27,7 +27,6 @@
 #include <zephyr/posix/time.h>
 
 #include <nrfx_clock.h>
-
 #include <nrfx_spim.h>
 
 #include "max30001.h"
@@ -61,9 +60,6 @@ extern struct k_msgq q_session_cmd_msg;
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 
 /****END EXTERNS****/
-
-#define HW_THREAD_STACKSIZE 4096
-#define HW_THREAD_PRIORITY 7
 
 // Peripheral Device Pointers
 const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
@@ -548,69 +544,7 @@ void hw_bpt_get_calib(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
-static volatile bool vbus_connected;
 
-static void pmic_event_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-{
-    printk("Event detected\n");
-
-    if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))
-    {
-        printk("Vbus connected\n");
-        vbus_connected = true;
-    }
-
-    if (pins & BIT(NPM1300_EVENT_VBUS_REMOVED))
-    {
-        printk("Vbus removed\n");
-        vbus_connected = false;
-    }
-}
-
-/* Setup callback for shiphold button press */
-static struct gpio_callback pmic_event_cb;
-
-void setup_pmic_callbacks(void)
-{
-    if (!device_is_ready(pmic))
-    {
-        printk("PMIC device not ready.\n");
-        return;
-    }
-
-    gpio_init_callback(&pmic_event_cb, pmic_event_handler,
-                       BIT(NPM1300_EVENT_SHIPHOLD_PRESS) | BIT(NPM1300_EVENT_SHIPHOLD_RELEASE) |
-                           BIT(NPM1300_EVENT_VBUS_DETECTED) |
-                           BIT(NPM1300_EVENT_VBUS_REMOVED));
-
-    mfd_npm1300_add_callback(pmic, &pmic_event_cb);
-
-    /* Initialise vbus detection status */
-    struct sensor_value val;
-    int ret = sensor_attr_get(charger, SENSOR_CHAN_CURRENT, SENSOR_ATTR_UPPER_THRESH, &val);
-
-    if (ret < 0)
-    {
-        return false;
-    }
-
-    vbus_connected = (val.val1 != 0) || (val.val2 != 0);
-}
-
-void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
-{
-    struct rtc_time time_set;
-
-    time_set.tm_sec = m_sec;
-    time_set.tm_min = m_min;
-    time_set.tm_hour = m_hour;
-    time_set.tm_mday = m_day;
-    time_set.tm_mon = (m_month - 1);
-    time_set.tm_year = (m_year + 100);
-
-    int ret = rtc_set_time(rtc_dev, &time_set);
-    printk("RTC Set Time: %d\n", ret);
-}
 
 void hw_init(void)
 {
@@ -634,8 +568,8 @@ void hw_init(void)
         // return 0;
     }
 
-    //regulator_disable(ldsw_disp_unit);
-    //k_sleep(K_MSEC(100));
+    // regulator_disable(ldsw_disp_unit);
+    // k_sleep(K_MSEC(100));
 
     regulator_enable(ldsw_disp_unit);
     k_sleep(K_MSEC(1000));
@@ -645,8 +579,8 @@ void hw_init(void)
 
     device_init(touch_dev);
 
-    //regulator_enable(ldsw_sens_1_8);
-    //k_sleep(K_MSEC(100));
+    // regulator_enable(ldsw_sens_1_8);
+    // k_sleep(K_MSEC(100));
 
     // regulator_disable(ldsw_sens_1_8);
 
@@ -691,7 +625,7 @@ void hw_init(void)
 
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -706,19 +640,6 @@ void hw_init(void)
         mode_set.val1 = MAX32664_OP_MODE_BPT;
         // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
-
-    // printk("Switching application core from 64 MHz and 128 MHz. \n");
-    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
-    // printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
-
-    // printk("Switching application core from 128 MHz and 64 MHz. \n");
-    //  nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_2);
-    //  printk("NRF_CLOCK_S.HFCLKCTRL:%d\n", NRF_CLOCK_S->HFCLKCTRL);
-
-    // nrfx_clock_divider_set(NRF_CLOCK_DOMAIN_HFCLK, NRF_CLOCK_HFCLK_DIV_1);
-
-    // nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
-    // nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     LOG_INF("SPIM runs at 32MHz !\n");
@@ -788,11 +709,6 @@ void hw_thread(void)
 {
     LOG_INF("HW Thread started\n");
 
-    // hw_msbl_load();
-    //  printk("Initing...\n");
-
-    // ecg_sampling_timer_start();
-
     struct rtc_time sys_time;
 
     for (;;)
@@ -815,5 +731,8 @@ void hw_thread(void)
         k_sleep(K_MSEC(6000));
     }
 }
+
+#define HW_THREAD_STACKSIZE 4096
+#define HW_THREAD_PRIORITY 7
 
 K_THREAD_DEFINE(hw_thread_id, HW_THREAD_STACKSIZE, hw_thread, NULL, NULL, NULL, HW_THREAD_PRIORITY, 0, 0);
