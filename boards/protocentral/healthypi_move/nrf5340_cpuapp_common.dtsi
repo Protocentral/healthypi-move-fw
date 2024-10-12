@@ -114,14 +114,15 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3000000>;
-				regulator-always-on;
+				//regulator-always-on;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <1800000>;	
-				regulator-always-on;
+				regulator-init-microvolt = <1800000>;
+				
+				//regulator-always-on;
 			};
 
 			npm_pmic_ldo1: LDO1 {
@@ -177,7 +178,10 @@
 		reg = <0x6a>;
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
 	};
+
+
 
 	chsc5816: chsc5816@2e {
 		status = "okay";
@@ -185,6 +189,7 @@
 		reg = <0x2e>;
 		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
 		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
 	};
 
 	max32664d: max32664d@55 {

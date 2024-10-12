@@ -11,6 +11,7 @@
 #include <zephyr/posix/time.h>
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/pm/device.h>
+#include <zephyr/zbus/zbus.h>
 
 #include "hw_module.h"
 #include "power_ctrl.h"
@@ -93,8 +94,8 @@ int global_hr = 0;
 // Externs
 extern struct k_sem sem_hw_inited;
 extern struct k_sem sem_sampling_start;
-extern uint8_t global_batt_level;
-extern bool global_batt_charging;
+// extern uint8_t global_batt_level;
+// extern bool global_batt_charging;
 
 extern lv_obj_t *scr_clock;
 extern lv_obj_t *scr_ppg;
@@ -566,6 +567,15 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     }
 }
 
+static uint8_t m_disp_batt_level = 0;
+static struct rtc_time m_disp_sys_time;
+static uint8_t m_disp_hr = 0;
+
+/*
+
+NOTE: All LVGL display updates should be called from the same display_screens_thread
+
+ */
 void display_screens_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
@@ -573,7 +583,6 @@ void display_screens_thread(void)
 
     struct hpi_computed_hrv_t hrv_sample;
 
-    // uint8_t batt_level;
     // int32_t temp_val;
 
     // int temp_disp_counter = 0;
@@ -631,15 +640,16 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    //draw_scr_home(SCROLL_NONE);
+    draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
-    draw_scr_ppg(SCROLL_RIGHT);
-   // draw_scr_ecg(SCROLL_RIGHT);
-    // draw_scr_bpt_home(SCROLL_RIGHT);
-    // draw_scr_settings(SCROLL_RIGHT);
-    // draw_scr_eda();
-    // draw_scr_hrv_scatter(SCROLL_RIGHT);
+
+    // draw_scr_ppg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    //  draw_scr_bpt_home(SCROLL_RIGHT);
+    //  draw_scr_settings(SCROLL_RIGHT);
+    //  draw_scr_eda();
+    //  draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     printk("Display screens inited");
 
@@ -649,10 +659,8 @@ void display_screens_thread(void)
         {
             if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
             {
-
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-
                     hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
@@ -668,18 +676,6 @@ void display_screens_thread(void)
                 }
                 else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
                 {
-                    if (hr_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
-                    {
-                        // Fetch and update HR
-                        // ui_hr_button_update(ppg_sensor_sample.hr);
-                        // ui_spo2_button_update(ppg_sensor_sample.spo2);
-                        // ui_steps_button_update(ppg_sensor_sample.steps_walk);
-                        hr_refresh_counter = 0;
-                    }
-                    else
-                    {
-                        hr_refresh_counter++;
-                    }
                 }
                 else if (curr_screen == SCR_PLOT_HRV)
                 {
@@ -823,9 +819,12 @@ void display_screens_thread(void)
 
             if (curr_screen == SCR_HOME)
             {
+                ui_hr_button_update(m_disp_hr);
+
                 if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
-                    ui_home_time_display_update(global_system_time);
+                    ui_home_time_display_update(m_disp_sys_time);
+                    //ui_hr_button_update(m_disp_hr);
                     time_refresh_counter = 0;
                 }
                 else
@@ -833,6 +832,8 @@ void display_screens_thread(void)
                     time_refresh_counter++;
                 }
             }
+
+            
 
             /*(curr_screen == SCR_VITALS)
             {
@@ -848,29 +849,14 @@ void display_screens_thread(void)
                 }
                 // lv_task_handler();
             }*/
-
-            /*if (curr_screen == SCR_CLOCK)
-            {
-                if (hr_refresh_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS))
-                {
-                    // Fetch and update HR
-                    // ui_hr_display_update(global_hr);
-                    hr_refresh_counter = 0;
-
-                    // TEST ONLY: time
-                    // ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min);
-                }
-                else
-                {
-                    hr_refresh_counter++;
-                }
-            }*/
+           
+            
 
             if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
                 if (m_display_active)
                 {
-                    hpi_disp_update_batt_level(global_batt_level, global_batt_charging);
+                    hpi_disp_update_batt_level(m_disp_batt_level, 0);
                 }
                 batt_refresh_counter = 0;
             }
@@ -886,11 +872,11 @@ void display_screens_thread(void)
         // printk("Inactivity time: %d", inactivity_time);
         if (inactivity_time > DISP_SLEEP_TIME_MS)
         {
-            // hpi_display_sleep_on();
+            hpi_display_sleep_on();
         }
         else
         {
-            // hpi_display_sleep_off();
+            hpi_display_sleep_off();
         }
         //}
         // else
@@ -898,14 +884,37 @@ void display_screens_thread(void)
         //    m_disp_inact_refresh_counter++;
         //}
 
-        lv_task_handler();
+        // lv_task_handler();
 
-        k_sleep(K_MSEC(disp_thread_refresh_int_ms));
+        k_msleep(lv_task_handler());
     }
 }
 
+static void disp_batt_status_listener(const struct zbus_channel *chan)
+{
+    const struct batt_status *batt_s = zbus_chan_const_msg(chan);
+
+    LOG_DBG("Ch Batt: %d, Charge: %d", batt_s->batt_level, batt_s->batt_charging);
+    m_disp_batt_level = batt_s->batt_level;
+}
+
+ZBUS_LISTENER_DEFINE(disp_batt_lis, disp_batt_status_listener);
+
+static void disp_sys_time_listener(const struct zbus_channel *chan)
+{
+    const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
+    m_disp_sys_time = *sys_time;
+}
+ZBUS_LISTENER_DEFINE(disp_sys_time_lis, disp_sys_time_listener);
+
+static void disp_hr_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
+    m_disp_hr = hpi_hr->hr;
+}
+ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
+
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
-
 // Power Cost - 80 uA
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

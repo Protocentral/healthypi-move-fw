@@ -66,6 +66,8 @@ void scr_home_set_time(struct rtc_time time_to_set);
 
 void ui_home_time_display_update(struct rtc_time in_time);
 
+void hpi_home_hr_update(int hr);
+
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
