@@ -1,7 +1,9 @@
 # Copyright (c) 2023 Trackunit Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-compatible: "bosch,bmi323_hpi"
+description: Bosch BMI323HPI Accelerometer
+
+compatible: "bosch,bmi323hpi"
 
 include: ["i2c-device.yaml", "sensor-device.yaml"]
 

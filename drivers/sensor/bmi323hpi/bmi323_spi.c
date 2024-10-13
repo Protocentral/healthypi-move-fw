@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "bmi323.h"
+#include "bmi323_hpi.h"
 #include <zephyr/device.h>
 #include <zephyr/drivers/spi.h>
 

@@ -7,7 +7,7 @@
 #ifndef ZEPHYR_DRIVERS_SENSOR_BMI323_BMI323_SPI_H_
 #define ZEPHYR_DRIVERS_SENSOR_BMI323_BMI323_SPI_H_
 
-#include "bmi323.h"
+#include "bmi323_hpi.h"
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/spi.h>
 

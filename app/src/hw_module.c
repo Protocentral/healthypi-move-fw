@@ -66,7 +66,7 @@ const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 
-const struct device *acc_dev = DEVICE_DT_GET_ONE(st_lsm6dso);
+const struct device *acc_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);

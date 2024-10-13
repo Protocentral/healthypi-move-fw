@@ -173,12 +173,20 @@
 		reg = <0x51>;
 	};
 
-	lsm6: lsm6dso@6a {
+	/*lsm6: lsm6dso@6a {
 		compatible = "st,lsm6dso";
 		reg = <0x6a>;
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 		zephyr,deferred-init;
+	};*/
+
+	bmi323: bmi323@68 {
+		compatible = "bosch,bmi323hpi";
+		reg = <0x68>;
+		status = "okay";
+		int-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+		//zephyr,deferred-init;
 	};
 
 
