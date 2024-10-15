@@ -57,6 +57,8 @@ struct bosch_bmi323_data
 	sensor_trigger_handler_t trigger_handler;
 	struct k_work callback_work;
 	const struct device *dev;
+
+	struct bmi323_chip_internal_cfg chip_cfg;
 };
 
 static int bmi323_reg_read_i2c(const struct device *dev, uint8_t start, uint8_t *data, uint16_t len)
@@ -133,6 +135,20 @@ static int bmi323_read_word_8(const struct device *dev, uint8_t offset, uint8_t 
 	return 0;
 }
 
+static int bmi323_write_reg_16(const struct device *dev, uint8_t addr, uint16_t data)
+{
+	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
+	uint8_t tmp_buff[2] = {data >> 8, data & 0xFF};
+
+	return i2c_burst_write_dt(&config->bus, addr, tmp_buff, 2);
+}
+
+static int bmi323_write_bytes(const struct device *dev, uint8_t addr, uint8_t *data, uint16_t len)
+{
+	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
+	return i2c_burst_write_dt(&config->bus, addr, data, len);
+}
+
 static int bmi323_read_word16(const struct device *dev, uint8_t offset, uint16_t *data, uint16_t len)
 {
 	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
@@ -162,46 +178,87 @@ static int bmi323_get_chip_id(const struct device *dev)
 	return 0;
 }
 
-static int bmi323_feature_enable_step_counter(const struct device *dev)
+static int bmi323_enable_feature_engine(const struct device *dev)
 {
+	int ret;
+	uint8_t data = 0;
+
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO2, 0x012C);
+	if (ret < 0)
+	{
+		LOG_ERR("Error enabling feature engine %d", ret);
+		return ret;
+	}
+
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO_STATUS, 0x0001);
+	if (ret < 0)
+	{
+		LOG_ERR("Error enabling feature engine %d", ret);
+		return ret;
+	}
+
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_CTRL, 0x0001);
+	if (ret < 0)
+	{
+		LOG_ERR("Error enabling feature engine %d", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
-/*!
- * @brief This internal API sets accelerometer configurations like ODR, accel mode,
- * bandwidth, average samples and range.
- */
-static int8_t set_accel_config(const struct device *dev, struct bmi3_accel_config *config)
+static int bmi323_enable_step_counter(const struct device *dev)
 {
-	/* Variable to store result of API */
-	int8_t rslt;
+	int ret;
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 
-	/* Variable to store data */
-	uint8_t reg_data[2] = {0};
+	// Enable Accel
 
-	uint16_t odr, range, bwp, avg_num, acc_mode;
+	data->chip_cfg.reg_acc_conf.bit.acc_mode = BMI3_ACC_MODE_NORMAL;
+	data->chip_cfg.reg_acc_conf.bit.acc_odr = BMI3_ACC_ODR_50HZ;
+	data->chip_cfg.reg_acc_conf.bit.acc_range = BMI3_ACC_RANGE_8G;
+	data->chip_cfg.reg_acc_conf.bit.acc_bw = BMI3_ACC_BW_ODR_HALF;
+	data->chip_cfg.reg_acc_conf.bit.acc_avg_num = BMI3_ACC_AVG1;
 
-	/* Set accelerometer ODR */
-	odr = BMI3_SET_BIT_POS0(reg_data[0], BMI3_ACC_ODR, config->odr);
+	ret = bmi323_write_reg_16(dev, BMI3_REG_ACC_CONF, data->chip_cfg.reg_acc_conf.all);
+	if (ret < 0)
+	{
+		LOG_ERR("Error writing acc config %d", ret);
+		// return ret;
+	}
 
-	/* Set accelerometer range */
-	range = BMI3_SET_BITS(reg_data[0], BMI3_ACC_RANGE, config->range);
+	// Enable Step counter watermark
 
-	/* Set accelerometer bandwidth */
-	bwp = BMI3_SET_BITS(reg_data[0], BMI3_ACC_BW, config->bwp);
-
-	/* Set accelerometer average number of samples */
-	avg_num = BMI3_SET_BITS(reg_data[1], BMI3_ACC_AVG_NUM, config->avg_num);
-
-	/* Set accelerometer accel mode */
-	acc_mode = BMI3_SET_BITS(reg_data[1], BMI3_ACC_MODE, config->acc_mode);
-
-	reg_data[0] = (uint8_t)(odr | range | bwp);
-	reg_data[1] = (uint8_t)((avg_num | acc_mode) >> 8);
-
-	/* Set configurations for accel */
-	rslt = bmi3_set_regs(BMI3_REG_ACC_CONF, reg_data, 2, dev);
-
-	return rslt;
+	uint8_t step_config[24] = {0};
+	/*
+			step_config[0] = (uint8_t)watermark1;
+			step_config[1] = (uint8_t)((watermark2 | reset_counter) >> 8);
+			step_config[2] = (uint8_t)env_min_dist_up1;
+			step_config[3] = (uint8_t)(env_min_dist_up2 >> 8);
+			step_config[4] = (uint8_t)env_coef_up1;
+			step_config[5] = (uint8_t)(env_coef_up2 >> 8);
+			step_config[6] = (uint8_t)env_min_dist_down1;
+			step_config[7] = (uint8_t)(env_min_dist_down2 >> 8);
+			step_config[8] = (uint8_t)env_coef_down1;
+			step_config[9] = (uint8_t)(env_coef_down2 >> 8);
+			step_config[10] = (uint8_t)mean_val_decay1;
+			step_config[11] = (uint8_t)(mean_val_decay2 >> 8);
+			step_config[12] = (uint8_t)mean_step_dur1;
+			step_config[13] = (uint8_t)(mean_step_dur2 >> 8);
+			step_config[14] = (uint8_t)(step_buffer_size | filter_cascade_enabled | step_counter_increment1);
+			step_config[15] = (uint8_t)(step_counter_increment2 >> 8);
+			step_config[16] = (uint8_t)peak_duration_min_walking;
+			step_config[17] = (uint8_t)(peak_duration_min_running >> 8);
+			step_config[18] = (uint8_t)(activity_detection_factor | activity_detection_threshold1);
+			step_config[19] = (uint8_t)(activity_detection_threshold2 >> 8);
+			step_config[20] = (uint8_t)step_duration_max;
+			step_config[21] = (uint8_t)(step_duration_window >> 8);
+			step_config[22] =
+				(uint8_t)(step_duration_pp_enabled | step_duration_threshold | mean_crossing_pp_enabled |
+						  mcr_threshold1);
+			step_config[23] = (uint8_t)((mcr_threshold2 | sc_12_res) >> 8);
+	*/
+	ret = bmi323_write_bytes(dev, BMI3_REG_FEATURE_DATA_TX, step_config, 24);
 }
 
 static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum sensor_channel chan,

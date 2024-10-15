@@ -668,6 +668,34 @@ struct bmi3_sens_config
 #define BMI3_ALT_GYRO                                UINT8_C(11)
 #define BMI3_ALT_AUTO_CONFIG                         UINT8_C(12)
 
+/******************************************************************************/
+/*!        Accelerometer Macro Definitions               */
+/******************************************************************************/
+/*!  Accelerometer Bandwidth parameters */
+#define BMI3_ACC_AVG1                                UINT8_C(0x00)
+#define BMI3_ACC_AVG2                                UINT8_C(0x01)
+#define BMI3_ACC_AVG4                                UINT8_C(0x02)
+#define BMI3_ACC_AVG8                                UINT8_C(0x03)
+#define BMI3_ACC_AVG16                               UINT8_C(0x04)
+#define BMI3_ACC_AVG32                               UINT8_C(0x05)
+#define BMI3_ACC_AVG64                               UINT8_C(0x06)
+
+/*! Accelerometer Output Data Rate */
+#define BMI3_ACC_ODR_0_78HZ                          UINT8_C(0x01)
+#define BMI3_ACC_ODR_1_56HZ                          UINT8_C(0x02)
+#define BMI3_ACC_ODR_3_125HZ                         UINT8_C(0x03)
+#define BMI3_ACC_ODR_6_25HZ                          UINT8_C(0x04)
+#define BMI3_ACC_ODR_12_5HZ                          UINT8_C(0x05)
+#define BMI3_ACC_ODR_25HZ                            UINT8_C(0x06)
+#define BMI3_ACC_ODR_50HZ                            UINT8_C(0x07)
+#define BMI3_ACC_ODR_100HZ                           UINT8_C(0x08)
+#define BMI3_ACC_ODR_200HZ                           UINT8_C(0x09)
+#define BMI3_ACC_ODR_400HZ                           UINT8_C(0x0A)
+#define BMI3_ACC_ODR_800HZ                           UINT8_C(0x0B)
+#define BMI3_ACC_ODR_1600HZ                          UINT8_C(0x0C)
+#define BMI3_ACC_ODR_3200HZ                          UINT8_C(0x0D)
+#define BMI3_ACC_ODR_6400HZ                          UINT8_C(0x0E)
+
 /*! Accelerometer G Range */
 #define BMI3_ACC_RANGE_2G                            UINT8_C(0x00)
 #define BMI3_ACC_RANGE_4G                            UINT8_C(0x01)
@@ -683,3 +711,24 @@ struct bmi3_sens_config
 /*! Accelerometer bandwidth */
 #define BMI3_ACC_BW_ODR_HALF                         UINT8_C(0)
 #define BMI3_ACC_BW_ODR_QUARTER                      UINT8_C(1)
+
+typedef union bmi323_acc_conf_reg
+{
+    uint16_t all;
+    struct 
+    {
+        uint16_t acc_odr: 4;
+        uint16_t acc_range: 3;
+        uint16_t acc_bw: 1;
+        uint16_t acc_avg_num:3;
+        uint16_t reserved1: 1;
+        uint16_t acc_mode: 3;
+        uint16_t reserved2: 1;
+    } bit;
+
+} bmi323_acc_conf_t;
+
+struct bmi323_chip_internal_cfg
+{
+    bmi323_acc_conf_t reg_acc_conf;
+};
