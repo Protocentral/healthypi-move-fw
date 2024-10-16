@@ -1,6 +1,7 @@
 #include <zephyr/drivers/sensor.h>
 
 #include <zephyr/logging/log.h>
+
 LOG_MODULE_REGISTER(MAX32664_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "max32664.h"

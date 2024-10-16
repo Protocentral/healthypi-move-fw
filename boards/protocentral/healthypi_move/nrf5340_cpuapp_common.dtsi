@@ -181,8 +181,6 @@
 		zephyr,deferred-init;
 	};
 
-
-
 	chsc5816: chsc5816@2e {
 		status = "okay";
 		compatible = "chipsemi,chsc5816";
@@ -198,6 +196,7 @@
 		reset-gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
 		status = "okay";
+		//zephyr,deferred-init;
 	};
 };
 
@@ -217,6 +216,7 @@
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
 		status = "okay";
+		//zephyr,deferred-init;
 	};
 
 	max30205: max30205@48 {
