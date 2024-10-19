@@ -311,12 +311,7 @@ void data_thread(void)
         {
             if (settings_send_ble_enabled)
             {
-                ppg_sample_buffer[ppg_sample_buffer_count++] = ppg_sensor_sample.raw_green;
-                if (ppg_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
-                {
-                    ble_ppg_notify(ppg_sample_buffer, ppg_sample_buffer_count);
-                    ppg_sample_buffer_count = 0;
-                }
+                ble_ppg_notify(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples);
             }
             if (settings_plot_enabled)
             {
@@ -340,7 +335,7 @@ void data_thread(void)
                 }*/
             }
 
-            if (ppg_sensor_sample.rtor != 0)
+            /*if (ppg_sensor_sample.rtor != 0)
             {
                 calculate_hrv(ppg_sensor_sample.rtor, &hrv_max, &hrv_min, &hrv_mean, &hrv_sdnn, &hrv_pnn, &hrv_rmssd, &hrv_ready_flag);
                 if (hrv_ready_flag == true)
@@ -356,7 +351,7 @@ void data_thread(void)
                     k_msgq_put(&q_plot_hrv, &hrv_calculated, K_NO_WAIT);
                     // printk("mean: %f, max: %d, min: %d, sdnn: %f, pnn: %f, rmssd:%f\n", hrv_calculated.mean, hrv_calculated.hrv_max, hrv_calculated.hrv_min, hrv_calculated.sdnn, hrv_calculated.pnn, hrv_calculated.rmssd);
                 }
-            }
+            }*/
         }
 
         // Data is now available in sensor_sample

@@ -640,11 +640,11 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    draw_scr_home(SCROLL_NONE);
+    //draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
 
-    // draw_scr_ppg(SCROLL_RIGHT);
+    draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     //  draw_scr_bpt_home(SCROLL_RIGHT);
     //  draw_scr_settings(SCROLL_RIGHT);
@@ -661,7 +661,7 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-                    hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
+                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
@@ -700,7 +700,7 @@ void display_screens_thread(void)
                 else if (curr_screen == SUBSCR_BPT_CALIBRATE)
                 {
 
-                    hpi_disp_bpt_draw_plotPPG((float)(ppg_sensor_sample.raw_ir * 1.0000));
+                    //hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
                     // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
                     /*if (bpt_cal_done_flag == false)
                     {
