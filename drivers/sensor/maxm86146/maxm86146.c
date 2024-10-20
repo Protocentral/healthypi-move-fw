@@ -329,7 +329,7 @@ static int maxm86146_set_mode_raw(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Enable accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00,MAXM86146_DEFAULT_CMD_DELAY);
@@ -399,7 +399,7 @@ static int maxm86146_set_mode_algo(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);

@@ -576,11 +576,10 @@ void hw_init(void)
     // k_sleep(K_MSEC(1000));
 
     regulator_enable(ldsw_sens_1_8);
+    //regulator_disable(ldsw_sens_1_8);
     k_sleep(K_MSEC(100));
 
     device_init(touch_dev);
-
-    // regulator_disable(ldsw_sens_1_8);
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
@@ -613,15 +612,16 @@ void hw_init(void)
     else
     {
         LOG_INF("MAXM86146 device present!");
+
         maxm86146_device_present = true;
 
         struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        mode_set.val1 = MAXM86146_OP_MODE_RAW;
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     k_msleep(1000);
 
@@ -637,7 +637,8 @@ void hw_init(void)
     {
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
-        // struct sensor_value mode_set;
+        
+        struct sensor_value mode_set;
         mode_set.val1 = MAX32664_OP_MODE_BPT;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
