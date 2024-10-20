@@ -311,7 +311,6 @@ static int sh8601_set_brightness(const struct device *dev,
 								 const uint8_t brightness)
 {
 	uint8_t args[1] = {brightness};
-	struct sh8601_data *data = dev->data;
 
 	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
@@ -374,6 +373,8 @@ static int sh8601_configure(const struct device *dev)
 			return r;
 		}
 	}
+
+	return 0;
 }
 
 static int sh8601_init(const struct device *dev)
@@ -608,6 +609,8 @@ static int sh8601_pm_action(const struct device *dev,
 	default:
 		return -ENOTSUP;
 	}
+
+	return 0;
 }
 
 #endif /* CONFIG_PM_DEVICE */

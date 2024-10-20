@@ -58,7 +58,7 @@ static int m_wr_cmd_enter_bl(const struct device *dev)
 static int m_read_bl_page_size(const struct device *dev, uint16_t *bl_page_size)
 {
 	const struct maxm86146_config *config = dev->config;
-	uint8_t rd_buf[2] = {0x00, 0x00};
+	uint8_t rd_buf[3] = {0x00, 0x00, 0x00};
 	uint8_t wr_buf[2] = {0x81, 0x01};
 
 	k_sleep(K_USEC(300));
@@ -86,7 +86,9 @@ static int m_write_set_num_pages(const struct device *dev, uint8_t num_pages)
 	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
-	printk("Write Num Pages RSP: %x %x\n", rd_buf[0]);
+	printk("Write Num Pages RSP: %x\n", rd_buf[0]);
+
+	return rd_buf[0];
 }
 
 static int m_write_init_vector(const struct device *dev, uint8_t *init_vector)
@@ -107,7 +109,9 @@ static int m_write_init_vector(const struct device *dev, uint8_t *init_vector)
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
-	printk("Write Init Vec RSP: %x\n", rd_buf[0]);
+	LOG_DBG("Write Init Vec RSP: %x\n", rd_buf[0]);
+
+	return rd_buf[0];
 }
 
 static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
@@ -126,7 +130,9 @@ static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
 
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
-	printk("Write Auth Vec : RSP: %x\n", rd_buf[0]);
+	LOG_DBG("Write Auth Vec : RSP: %x\n", rd_buf[0]);
+
+	return rd_buf[0];
 }
 
 //volatile uint8_t fw_data_wr_buf[MAXM86146_FW_UPDATE_WRITE_SIZE + 2];
@@ -224,7 +230,9 @@ static int m_erase_app(const struct device *dev)
 	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 	//	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	printk("Erase App : RSP: %x\n", rd_buf[0]);
+	LOG_DBG("Erase App : RSP: %x\n", rd_buf[0]);
+
+	return rd_buf[0];
 }
 
 static int m_read_mcu_id(const struct device *dev)

@@ -303,7 +303,7 @@ int npm_fuel_gauge_init(const struct device *charger)
     int32_t chg_status;
     int ret;
 
-    printk("nRF Fuel Gauge version: %s\n", nrf_fuel_gauge_version);
+    LOG_DBG("nRF Fuel Gauge version: %s", nrf_fuel_gauge_version);
 
     ret = npm_read_sensors(charger, &parameters.v0, &parameters.i0, &parameters.t0, &chg_status);
     if (ret < 0)
@@ -393,67 +393,6 @@ static int usb_init()
     return ret;
 }
 
-static inline float out_ev(struct sensor_value *val)
-{
-    return (val->val1 + (float)val->val2 / 1000000);
-}
-
-/*
-static void fetch_and_display(const struct device *dev)
-{
-    struct sensor_value x, y, z;
-    // static int trig_cnt;
-
-    // trig_cnt++;
-
-    sensor_sample_fetch_chan(dev, SENSOR_CHAN_ACCEL_XYZ);
-    sensor_channel_get(dev, SENSOR_CHAN_ACCEL_X, &x);
-    sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Y, &y);
-    sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Z, &z);
-
-    printf("accel x:%f ms/2 y:%f ms/2 z:%f ms/2\n",
-           (double)out_ev(&x), (double)out_ev(&y), (double)out_ev(&z));
-
-    sensor_sample_fetch_chan(dev, SENSOR_CHAN_GYRO_XYZ);
-    sensor_channel_get(dev, SENSOR_CHAN_GYRO_X, &x);
-    sensor_channel_get(dev, SENSOR_CHAN_GYRO_Y, &y);
-    sensor_channel_get(dev, SENSOR_CHAN_GYRO_Z, &z);
-
-    printf("gyro x:%f rad/s y:%f rad/s z:%f rad/s\n",
-           (double)out_ev(&x), (double)out_ev(&y), (double)out_ev(&z));
-
-    // printf("trig_cnt:%d\n\n", trig_cnt);
-}
-*/
-
-static int set_sampling_freq(const struct device *dev)
-{
-    int ret = 0;
-    struct sensor_value odr_attr;
-
-    /* set accel/gyro sampling frequency to 12.5 Hz */
-    odr_attr.val1 = 0;
-    odr_attr.val2 = 0;
-
-    ret = sensor_attr_set(dev, SENSOR_CHAN_ACCEL_XYZ,
-                          SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
-    if (ret != 0)
-    {
-        printf("Cannot set sampling frequency for accelerometer.\n");
-        return ret;
-    }
-
-    ret = sensor_attr_set(dev, SENSOR_CHAN_GYRO_XYZ,
-                          SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
-    if (ret != 0)
-    {
-        printf("Cannot set sampling frequency for gyro.\n");
-        return ret;
-    }
-
-    return 0;
-}
-
 int32_t read_temp(void)
 {
     sensor_sample_fetch(max30205_dev);
@@ -487,7 +426,7 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
 
 void hw_bpt_start_cal(void)
 {
-    printk("Starting BPT Calibration\n");
+    LOG_INF("Starting BPT Calibration\n");
 
     struct sensor_value data_time_val;
     data_time_val.val1 = DEFAULT_DATE; // Date
@@ -576,39 +515,40 @@ void hw_init(void)
     // k_sleep(K_MSEC(1000));
 
     regulator_enable(ldsw_sens_1_8);
+    //regulator_disable(ldsw_sens_1_8);
+
     k_sleep(K_MSEC(100));
 
     device_init(touch_dev);
 
-    // regulator_disable(ldsw_sens_1_8);
-
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
     {
-        // return;
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
 
-#ifdef CONFIG_SENSOR_MAX30001
     if (!device_is_ready(max30001_dev))
     {
-        printk("MAX30001 device not found!"); // Rebooting !");
-        // sys_reboot(SYS_REBOOT_COLD);
+        LOG_ERR("MAX30001 device not found!");
+        max30001_device_present = false;
     }
     else
     {
-        struct sensor_value ecg_mode_set;
+        LOG_INF("MAX30001 device found!");
+        max30001_device_present = true;
+        /*struct sensor_value ecg_mode_set;
         // ecg_mode_set.val1 = 1;
         // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
         // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
+        */
     }
-#endif
 
     if (!device_is_ready(maxm86146_dev))
     {
         LOG_ERR("MAXM86146 device not present!");
+        maxm86146_device_present = false;
     }
     else
     {
@@ -616,12 +556,12 @@ void hw_init(void)
         maxm86146_device_present = true;
 
         struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
+        mode_set.val1 = MAXM86146_OP_MODE_RAW;
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     k_msleep(1000);
 
@@ -637,44 +577,39 @@ void hw_init(void)
     {
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
-        // struct sensor_value mode_set;
+        
+        struct sensor_value mode_set;
+
+        //Set initial mode
         mode_set.val1 = MAX32664_OP_MODE_BPT;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    LOG_INF("SPIM runs at 32MHz !\n");
+    LOG_INF("SPIM runs at 32MHz !");
 #endif
 
     // setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
-        LOG_ERR("MAX30205 device not found!\n");
-        // return;
+        LOG_ERR("MAX30205 device not found!");
     }
 
     if (!device_is_ready(acc_dev))
     {
-        LOG_ERR("LSM6DSO device not ready!\n");
-        // return 0;
+        LOG_ERR("LSM6DSO device not found!");
     }
     else
     {
-        if (set_sampling_freq(acc_dev) != 0)
-        {
-            // return;
-            printk("Error setting sampling frequency\n");
-        }
+        //Set initial start-up mode
     }
     // pm_device_runtime_put(acc_dev);
 
     rtc_get_time(rtc_dev, &curr_time);
-    LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
+    LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    fs_module_init();
-
-    // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
+    //fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
 
@@ -684,7 +619,7 @@ void hw_init(void)
 
     k_sem_give(&sem_hw_inited);
 
-    // Start sampling if devices are present
+    // Start sampling only if devices are present
 
     if (max30001_device_present)
     {
@@ -708,19 +643,12 @@ void hw_init(void)
 
 void hw_thread(void)
 {
-    LOG_INF("HW Thread started\n");
+    LOG_INF("HW Thread starting");
 
     struct rtc_time sys_time;
 
     for (;;)
     {
-        /*if (k_sem_take(&sem_start_cal, K_NO_WAIT) == 0)
-        {
-            hw_bpt_start_cal();
-        }*/
-
-        // fetch_and_display(acc_dev);
-
         npm_fuel_gauge_update(charger);
 
         rtc_get_time(rtc_dev, &sys_time);

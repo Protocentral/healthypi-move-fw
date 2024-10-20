@@ -146,7 +146,7 @@ static void scr_bpt_btn_measure_start_event_handler(lv_event_t *e)
 void draw_scr_bpt_measure(void)
 {
     scr_bpt_measure = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_measure,0);
+    draw_header_minimal(scr_bpt_measure, 0);
 
     // Draw Blood Pressure label
 
@@ -241,7 +241,7 @@ void draw_scr_bpt_measure(void)
 void draw_scr_bpt_calibrate(void)
 {
     scr_bpt_calibrate = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_calibrate,0);
+    draw_header_minimal(scr_bpt_calibrate, 0);
 
     draw_bg(scr_bpt_calibrate);
 
@@ -324,7 +324,7 @@ void draw_scr_bpt_calibrate(void)
 void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
 {
     scr_bpt_home = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_home,0);
+    draw_header_minimal(scr_bpt_home, 0);
 
     // Draw button to measure BP
 
@@ -409,25 +409,28 @@ void hpi_disp_update_bp(int sys, int dia)
     lv_label_set_text(label_bp_val, buf);
 }
 
-void hpi_disp_bpt_draw_plotPPG(float data_ppg)
+void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples)
 {
     if (chart_ppg_update == true)
     {
-        if (data_ppg < y_min_ppg)
+        for (int i = 0; i < num_samples; i++)
         {
-            y_min_ppg = data_ppg;
+
+            if (data_ppg[i] < y_min_ppg)
+            {
+                y_min_ppg = data_ppg[i];
+            }
+
+            if (data_ppg[i] > y_max_ppg)
+            {
+                y_max_ppg = data_ppg[i];
+            }
+
+            lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg[i]);
         }
 
-        if (data_ppg > y_max_ppg)
-        {
-            y_max_ppg = data_ppg;
-        }
-
-        // printk("E");
-        lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg);
-
-        gx += 1;
-        hpi_bpt_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
+        hpi_ppg_disp_add_samples(1);
+        hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
     }
 }
 

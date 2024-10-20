@@ -14,12 +14,12 @@ LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 
 #define SAMPLING_INTERVAL_MS 8
 
-#define PPG_FINGER_SAMPLING_INTERVAL_MS 40
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 8
+#define PPG_FINGER_SAMPLING_INTERVAL_MS 1
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 #define ECG_SAMPLING_INTERVAL_MS 65
 
-K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
-K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 256, 1);
+K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 4);
+K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 4);
 
 // ASync sensor RTIO defines
 
@@ -31,6 +31,8 @@ bool ppg_wrist_sampling_on = false;
 bool ppg_finger_sampling_on = false;
 
 // static lv_timer_t *ecg_sampling_timer;
+
+K_SEM_DEFINE(sem_ppg_finger_sample_trigger, 0, 1);
 
 // *** Externs ***
 ZBUS_CHAN_DECLARE(hr_chan);
@@ -78,27 +80,27 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
         const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buf;
 
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
-        // printk("NS: %d ", edata->num_samples);
+        //printk("NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
         {
-                int n_samples = edata->num_samples;
+                ppg_sensor_sample.ppg_num_samples = edata->num_samples;
 
-                for (int i = 0; i < n_samples; i++) // edata->num_samples; i++)
+                for (int i = 0; i < edata->num_samples; i++)
                 {
-                        ppg_sensor_sample.raw_red = edata->red_samples[i];
-                        ppg_sensor_sample.raw_ir = edata->ir_samples[i];
-                        // ppg_sensor_sample.raw_green = edata->green_samples[i];
-
-                        ppg_sensor_sample.hr = edata->hr;
-                        ppg_sensor_sample.spo2 = edata->spo2;
-
-                        ppg_sensor_sample.bp_sys = edata->bpt_sys;
-                        ppg_sensor_sample.bp_dia = edata->bpt_dia;
-                        ppg_sensor_sample.bpt_status = edata->bpt_status;
-                        ppg_sensor_sample.bpt_progress = edata->bpt_progress;
-
-                        k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
+                        ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
+                        ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
                 }
+                ppg_sensor_sample.hr = edata->hr;
+                ppg_sensor_sample.spo2 = edata->spo2;
+
+                ppg_sensor_sample.bp_sys = edata->bpt_sys;
+                ppg_sensor_sample.bp_dia = edata->bpt_dia;
+                ppg_sensor_sample.bpt_status = edata->bpt_status;
+                ppg_sensor_sample.bpt_progress = edata->bpt_progress;
+
+                k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
+                //k_sem_give(&sem_ppg_finger_sample_trigger);
+
                 // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
         }
 }
@@ -110,35 +112,35 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
 
         static uint8_t prev_hr_val = 0;
         // uint8_t hr_chan_value=0;
-        // printk("WR NS: %d ", edata->num_samples);
+        //printk("WR NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
         {
-                int n_samples = edata->num_samples;
+                ppg_sensor_sample.ppg_num_samples = edata->num_samples;
 
-                for (int i = 0; i < n_samples; i++) // edata->num_samples; i++)
+                for (int i = 0; i < edata->num_samples; i++)
                 {
-                        ppg_sensor_sample.raw_red = edata->red_samples[i];
-                        ppg_sensor_sample.raw_ir = edata->ir_samples[i];
-                        ppg_sensor_sample.raw_green = edata->green_samples[i];
-
-                        ppg_sensor_sample.hr = edata->hr;
-                        ppg_sensor_sample.spo2 = edata->spo2;
-                        ppg_sensor_sample.rtor = edata->rtor;
-                        ppg_sensor_sample.scd_state = edata->scd_state;
-
-                        ppg_sensor_sample.steps_run = edata->steps_run;
-                        ppg_sensor_sample.steps_walk = edata->steps_walk;
-
-                        // printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
-
-                        k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
-
-                        struct hpi_hr_t hr_chan_value = {
-                            .hr = edata->hr,
-                            .hr_ready_flag = true,
-                        };
-                        zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                        ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
+                        ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
+                        ppg_sensor_sample.raw_green[i] = edata->green_samples[i];
                 }
+
+                ppg_sensor_sample.hr = edata->hr;
+                ppg_sensor_sample.spo2 = edata->spo2;
+                ppg_sensor_sample.rtor = edata->rtor;
+                ppg_sensor_sample.scd_state = edata->scd_state;
+
+                ppg_sensor_sample.steps_run = edata->steps_run;
+                ppg_sensor_sample.steps_walk = edata->steps_walk;
+
+                // printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
+
+                k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
+
+                struct hpi_hr_t hr_chan_value = {
+                    .hr = edata->hr,
+                    .hr_ready_flag = true,
+                };
+                zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
         }
 }
 
@@ -176,9 +178,13 @@ void ppg_finger_sampling_trigger_thread(void)
 {
         k_sem_take(&sem_ppg_finger_thread_start, K_FOREVER);
 
-        LOG_INF("PPG Finger Sampling Trigger Thread starting");
+        //k_sem_give(&sem_ppg_finger_sample_trigger);
+
+        LOG_INF("PPG Finger Sampling starting");
         for (;;)
         {
+                //k_sem_take(&sem_ppg_finger_sample_trigger, K_FOREVER);
+
                 sensor_read(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max32664d_read_rtio_ctx, sensor_ppg_finger_processing_callback);
 
@@ -190,7 +196,7 @@ void ppg_wrist_sampling_trigger_thread(void)
 {
         k_sem_take(&sem_ppg_wrist_thread_start, K_FOREVER);
 
-        LOG_INF("PPG Wrist Sampling Trigger Thread starting\n");
+        LOG_INF("PPG Wrist Sampling starting");
         for (;;)
         {
                 sensor_read(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
@@ -205,7 +211,7 @@ void ecg_bioz_sampling_trigger_thread(void)
         // Wait until sem is received
         k_sem_take(&sem_ecg_bioz_thread_start, K_FOREVER);
 
-        LOG_INF("ECG/ BioZ Sampling Trigger Thread starting\n");
+        LOG_INF("ECG/ BioZ Sampling starting");
 
         for (;;)
         {
@@ -242,6 +248,6 @@ void ecg_sampling_timer_start(void)
 #define ECG_BIOZ_SAMPLING_THREAD_STACKSIZE 2048
 #define ECG_BIOZ_SAMPLING_THREAD_PRIORITY 7
 
-K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, PPG_FINGER_SAMPLING_THREAD_STACKSIZE, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_FINGER_SAMPLING_THREAD_PRIORITY, 0, 1000);
-K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 1000);
-K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, ECG_BIOZ_SAMPLING_THREAD_STACKSIZE, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_BIOZ_SAMPLING_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, PPG_FINGER_SAMPLING_THREAD_STACKSIZE, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_FINGER_SAMPLING_THREAD_PRIORITY, 0, 500);
+K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 600);
+K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, ECG_BIOZ_SAMPLING_THREAD_STACKSIZE, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_BIOZ_SAMPLING_THREAD_PRIORITY, 0, 700);

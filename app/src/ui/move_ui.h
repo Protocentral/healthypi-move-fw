@@ -13,7 +13,7 @@
 #define DISPLAY_DEFAULT_BRIGHTNESS 150
 
 #define DISP_WINDOW_SIZE_EDA 250
-#define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
+#define PPG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 
@@ -79,10 +79,8 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 void hpi_ecg_disp_update_hr(int hr);
 
 // PPG screen functions
-void hpi_disp_ppg_draw_plotPPG(float data_ppg);
-void hpi_ppg_disp_do_set_scale(int disp_window_size);
+void hpi_disp_ppg_draw_plotPPG(int32_t *data_ppg, int num_samples);
 void hpi_ppg_disp_update_hr(int hr);
-void hpi_ppg_disp_add_samples(int num_samples);
 void hpi_ppg_disp_update_spo2(int spo2);
 
 // EDA screen functions
@@ -92,7 +90,7 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_calibrate(void);
 void draw_scr_bpt_home(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_measure(void);
-void hpi_disp_bpt_draw_plotPPG(float data_ppg);
+void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples);
 void hpi_disp_bpt_update_progress(int progress);
 
 // HRV screen functions
