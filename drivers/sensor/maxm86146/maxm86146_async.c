@@ -40,10 +40,10 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
 #define MAXM86146_ALGO_DATA_OFFSET 42
 
     uint8_t hub_stat = maxm86146_read_hub_status(dev);
-    //int fifo_count = maxm86146_get_fifo_count(dev);
+    // int fifo_count = maxm86146_get_fifo_count(dev);
     if (hub_stat & MAXM86146_HUB_STAT_DRDY_MASK)
     {
-        //printk("DRDY ");
+        // printk("DRDY ");
         int fifo_count = maxm86146_get_fifo_count(dev);
         printk("F: %d | ", fifo_count);
 
@@ -56,7 +56,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
 
         if (fifo_count > 0)
         {
-            if (data->op_mode == MAXM86146_OP_MODE_ALGO)
+            if (data->op_mode == MAXM86146_OP_MODE_ALGO_AGC || data->op_mode == MAXM86146_OP_MODE_ALGO_AEC)
             {
                 sample_len = 62; // 42 data + 20 algo
             }
@@ -93,7 +93,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
 
                 ir_samples[i] = led_ir;
 
-                if (data->op_mode == MAXM86146_OP_MODE_ALGO)
+                if (data->op_mode == MAXM86146_OP_MODE_ALGO_AEC || data->op_mode == MAXM86146_OP_MODE_ALGO_AGC)
                 {
 
                     uint16_t hr_val = (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 1 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
@@ -167,7 +167,8 @@ int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     }
 
     // printk("Fetch ");
-    if ((data->op_mode == MAXM86146_OP_MODE_ALGO) || (data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED || data->op_mode == MAXM86146_OP_MODE_RAW))
+    if (data->op_mode == MAXM86146_OP_MODE_ALGO_AGC || data->op_mode == MAXM86146_OP_MODE_ALGO_AEC ||
+        data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED || data->op_mode == MAXM86146_OP_MODE_RAW)
     {
         m_edata = (struct maxm86146_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());

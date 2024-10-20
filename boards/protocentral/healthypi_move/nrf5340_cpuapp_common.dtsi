@@ -205,7 +205,7 @@
 	status = "okay";
 	pinctrl-0 = <&i2c2_default>;
 	pinctrl-1 = <&i2c2_sleep>;
-	clock-frequency = <I2C_BITRATE_FAST>;
+	clock-frequency = <I2C_BITRATE_STANDARD>;
 	pinctrl-names = "default", "sleep";
 	zephyr,concat-buf-size = <8200>;
 	zephyr,flash-buf-max-size = <8200>;
