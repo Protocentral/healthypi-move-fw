@@ -180,7 +180,7 @@ void ppg_finger_sampling_trigger_thread(void)
 
         //k_sem_give(&sem_ppg_finger_sample_trigger);
 
-        LOG_INF("PPG Finger Sampling Trigger Thread starting");
+        LOG_INF("PPG Finger Sampling starting");
         for (;;)
         {
                 //k_sem_take(&sem_ppg_finger_sample_trigger, K_FOREVER);
@@ -196,7 +196,7 @@ void ppg_wrist_sampling_trigger_thread(void)
 {
         k_sem_take(&sem_ppg_wrist_thread_start, K_FOREVER);
 
-        LOG_INF("PPG Wrist Sampling Trigger Thread starting\n");
+        LOG_INF("PPG Wrist Sampling starting");
         for (;;)
         {
                 sensor_read(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
@@ -211,7 +211,7 @@ void ecg_bioz_sampling_trigger_thread(void)
         // Wait until sem is received
         k_sem_take(&sem_ecg_bioz_thread_start, K_FOREVER);
 
-        LOG_INF("ECG/ BioZ Sampling Trigger Thread starting\n");
+        LOG_INF("ECG/ BioZ Sampling starting");
 
         for (;;)
         {

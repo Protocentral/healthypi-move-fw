@@ -347,7 +347,7 @@ static void bt_ready(void)
 {
 	int err;
 
-	printk("Bluetooth initialized\n");
+	LOG_DBG("Bluetooth initialized");
 
 	if (IS_ENABLED(CONFIG_SETTINGS))
 	{
@@ -361,7 +361,7 @@ static void bt_ready(void)
 		return;
 	}
 
-	printk("Advertising successfully started\n");
+	LOG_DBG("Advertising successfully started");
 }
 
 static void auth_passkey_confirm(struct bt_conn *conn, unsigned int passkey)

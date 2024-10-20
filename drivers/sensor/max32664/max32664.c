@@ -97,7 +97,7 @@ static int m_read_op_mode(const struct device *dev)
 	k_sleep(K_MSEC(45));
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	LOG_DBG("Op mode = %x\n", rd_buf[1]);
+	LOG_DBG("Op mode %x", rd_buf[1]);
 
 	return rd_buf[1];
 }
@@ -382,7 +382,7 @@ static int max32664_do_enter_app(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 
-	LOG_DBG("MAX32664D entering app mode\n");
+	LOG_DBG("Entering app mode");
 
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
@@ -404,7 +404,7 @@ static int max32664_do_enter_app(const struct device *dev)
 	uint8_t ver_buf[4] = {0};
 	if (m_get_ver(dev, ver_buf) == 0)
 	{
-		LOG_INF("MAX32664D Version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+		LOG_INF("Hub version: %d.%d.%d", ver_buf[1], ver_buf[2], ver_buf[3]);
 	}
 	else
 	{
@@ -421,27 +421,30 @@ static int max32664_do_enter_app(const struct device *dev)
 
 static void bpt_time_to_byte_le(uint32_t time, uint8_t *byte_time)
 {
-	printk("MAX32664 Set Time: %d\n", time);
+	
 	byte_time[0] = (time & 0x000000FF);
 	byte_time[1] = (time & 0x0000FF00) >> 8;
 	byte_time[2] = (time & 0x00FF0000) >> 16;
 	byte_time[3] = (time & 0xFF000000) >> 24;
 
-	printk("Hex Time: %x %x %x %x\n", byte_time[0], byte_time[1], byte_time[2], byte_time[3]);
+	//printk("Hex Time: %x %x %x %x\n", byte_time[0], byte_time[1], byte_time[2], byte_time[3]);
 }
 
 static int m_set_date_time(const struct device *dev, uint32_t date, uint32_t time)
 {
 	uint8_t wr_buf[DATE_TIME_VECTOR_SIZE] = {0x50, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-	uint8_t byte_date[4];
+	LOG_DBG("MAX32664 Set date: %d", date);
 
+	uint8_t byte_date[4];
 	bpt_time_to_byte_le(date, byte_date);
 
 	wr_buf[3] = byte_date[0];
 	wr_buf[4] = byte_date[1];
 	wr_buf[5] = byte_date[2];
 	wr_buf[6] = byte_date[3];
+
+	LOG_DBG("MAX32664 Set time: %d", time);
 
 	uint8_t byte_time[4];
 	bpt_time_to_byte_le(time, byte_time);
@@ -510,7 +513,7 @@ static int m_set_spo2_coeffs(const struct device *dev, float a, float b, float c
 
 static int max32664_set_mode_raw(const struct device *dev)
 {
-	printk("Entering RAW mode...\n");
+	LOG_INF("MAX32664 Entering RAW mode...");
 	// Enter appl mode
 	m_i2c_write_cmd_3(dev, 0x01, 0x00, 0x00, MAX32664_DEFAULT_CMD_DELAY);
 
@@ -557,7 +560,7 @@ static int max32664_load_calib(const struct device *dev)
 
 static int max32664_set_mode_bpt_est(const struct device *dev)
 {
-	LOG_DBG("Entering BPT estimation mode...");
+	LOG_DBG("MAX32664 Entering BPT estimation mode...");
 
 	// Enter appl mode
 	// m_i2c_write_cmd_3(dev, 0x01, 0x00, 0x00);
@@ -595,7 +598,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 
 static int max32664_set_mode_bpt_cal(const struct device *dev)
 {
-	LOG_DBG("Starting BPT calibration...\n");
+	LOG_DBG("MAX32664 Starting BPT calibration...");
 
 	// Output mode sensor + algo data
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
@@ -616,7 +619,7 @@ static int max32664_set_mode_bpt_cal(const struct device *dev)
 
 static int max32664_stop_estimation(const struct device *dev)
 {
-	printk("Stopping BPT estimation...\n");
+	LOG_DBG("MAX32664 Stopping BPT estimation...");
 
 	// Disable AFE
 	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x00, MAX32664_DEFAULT_CMD_DELAY);

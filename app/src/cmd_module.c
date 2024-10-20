@@ -11,6 +11,8 @@
 // #include "tdcs3.h"
 
 //#define ESP_UART_DEVICE_NODE DT_ALIAS(esp_uart)
+
+LOG_MODULE_REGISTER(hpi_cmd_module);
 #define MAX_MSG_SIZE 32
 
 #define CMDIF_BLE_UART_MAX_PKT_SIZE 128 // Max Packet Size in bytes
@@ -35,27 +37,27 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 
     uint8_t cmd_cmd_id = in_pkt_buf[0];
 
-    printk("Recd Command: %X\n", cmd_cmd_id);
+    LOG_DBG("Recd Command: %X", cmd_cmd_id);
 
     switch (cmd_cmd_id)
     {
 
     case HPI_CMD_GET_DEVICE_STATUS:
-        printk("Recd Get Device Status Command\n");
+        LOG_DBG("Recd Get Device Status Command");
         //cmdif_send_ble_device_status_response();
         break;
      case HPI_CMD_SET_DEVICE_TIME:
-        printk("Recd Set Device Time Command\n");
+        LOG_DBG("Recd Set Device Time Command");
         hw_rtc_set_time(in_pkt_buf[1], in_pkt_buf[2], in_pkt_buf[3], in_pkt_buf[4], in_pkt_buf[5], in_pkt_buf[6]);
         break;
     case HPI_CMD_DEVICE_RESET:
-        printk("Recd Reset Command\n");
-        printk("Rebooting...\n");
+        LOG_DBG("Recd Reset Command");
+        LOG_DBG("Rebooting...");
         k_sleep(K_MSEC(1000));
         sys_reboot(SYS_REBOOT_COLD);
         break;
     default:
-        printk("Recd Unknown Command\n");
+        LOG_DBG("Recd Unknown Command");
         break;
     }
 }
@@ -95,7 +97,7 @@ void cmdif_send_ble_device_status_response(void)
 
 void cmdif_send_ble_command(uint8_t m_cmd)
 {
-    printk("Sending BLE Command: %X\n", m_cmd);
+    LOG_DBG("Sending BLE Command: %X", m_cmd);
     uint8_t cmd_pkt[8];
     cmd_pkt[0] = CES_CMDIF_PKT_START_1;
     cmd_pkt[1] = CES_CMDIF_PKT_START_2;
@@ -114,7 +116,7 @@ void cmdif_send_ble_command(uint8_t m_cmd)
 
 void cmd_thread(void)
 {
-    printk("CMD Thread Started\n");
+    LOG_DBG("CMD Thread starting");
 
     struct hpi_cmd_data_obj_t rx_cmd_data_obj;
 
@@ -122,7 +124,7 @@ void cmd_thread(void)
     {
         k_msgq_get(&q_cmd_msg, &rx_cmd_data_obj, K_FOREVER);
 
-        printk("Recd BLE Packet len: %d \n", rx_cmd_data_obj.data_len);
+        LOG_DBG("Recd BLE Packet len: %d", rx_cmd_data_obj.data_len);
         for (int i = 0; i < rx_cmd_data_obj.data_len; i++)
         {
             printk("%02X ", rx_cmd_data_obj.data[i]);

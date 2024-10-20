@@ -40,7 +40,7 @@ static int maxm86146_decoder_get_size_info(enum sensor_channel channel, size_t *
 	}
 }
 
-static int maxm86146_decoder_decode(const uint8_t *buffer, enum sensor_channel channel,
+static int maxm86146_decoder_decode(uint8_t *buffer, enum sensor_channel channel,
 								   size_t channel_idx, uint32_t *fit,
 								   uint16_t max_count, void *data_out)
 {
@@ -52,7 +52,7 @@ static int maxm86146_decoder_decode(const uint8_t *buffer, enum sensor_channel c
 		return 0;
 	}
 
-	
+	return 0;	
 }
 
 

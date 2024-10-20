@@ -101,7 +101,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
             else if (etag == 0x07) // FIFO Overflow
             {
-                printk("EOVF ");
+                //printk("EOVF ");
                 max30001_fifo_reset(dev);
                 // max30001_synch(dev);
                 break;
@@ -132,7 +132,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
             else if (btag == 0x07) // FIFO Overflow
             {
-                printk("BOVF ");
+                //printk("BOVF ");
                 max30001_fifo_reset(dev);
                 // max30001_synch(dev);
                 break;

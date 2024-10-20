@@ -606,7 +606,7 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
-    printk("Display thread starting...");
+    //printk("Display thread starting...");
 
     // Init all styles globally
     display_init_styles();
@@ -651,7 +651,7 @@ void display_screens_thread(void)
     //  draw_scr_eda();
     //  draw_scr_hrv_scatter(SCROLL_RIGHT);
 
-    printk("Display screens inited");
+    LOG_INF("Display screens inited");
 
     while (1)
     {

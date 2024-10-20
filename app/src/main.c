@@ -44,7 +44,7 @@ static void bt_ready(void)
 {
 	int err;
 
-	printk("Bluetooth initialized\n");
+	LOG_DBG("Bluetooth initialized");
 
 	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err) {
@@ -52,7 +52,7 @@ static void bt_ready(void)
 		return;
 	}
 
-	printk("Advertising successfully started\n");
+	LOG_DBG("Advertising successfully started");
 }
 
 int main(void)
@@ -60,7 +60,7 @@ int main(void)
 	int err=0;
 	err = bt_enable(NULL);
 	if (err) {
-		printk("Bluetooth init failed (err %d)\n", err);
+		LOG_ERR("Bluetooth init failed (err %d)\n", err);
 		return err;
 	}
 
@@ -68,7 +68,7 @@ int main(void)
 
 	hw_init();
 	
-	printk("\nHealthyPi Move %d.%d.%d started!\n", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
+	LOG_INF("HealthyPi Move %d.%d.%d started!", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 
 	// For power profiling. Full poweroff
 	//sys_poweroff();
