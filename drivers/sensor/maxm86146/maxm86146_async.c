@@ -45,7 +45,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
     {
         // printk("DRDY ");
         int fifo_count = maxm86146_get_fifo_count(dev);
-        printk("F: %d | ", fifo_count);
+        //printk("F: %d | ", fifo_count);
 
         if (fifo_count > 16)
         {

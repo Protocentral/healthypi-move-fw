@@ -160,7 +160,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
     return 0;
 }
 
-/*static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6)
+static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6)
 {
     const struct maxm86146_config *config = dev->config;
     uint8_t wr_buf[6];
@@ -188,7 +188,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
     return 0;
-}*/
+}
 
 static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_len)
 {
@@ -412,6 +412,10 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
 {
     maxm86146_do_enter_app(dev);
 
+    // Read  WHOAMI
+    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+
     maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
     // Output mode sensor + algo data
@@ -439,19 +443,13 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
         // EN SCD
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
-        // Set AGC target PD current
-        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
-        // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x30, 0x00);
-        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x73);
-        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x10, 0x20);
-
-        // Read  WHOAMI
-        // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-        // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
         // Enable HR, SpO2 algo
         m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
-        //k_sleep(K_MSEC(500));
+        // k_sleep(K_MSEC(500));
     }
     else if (mode == MAXM86146_OP_MODE_ALGO_AGC)
     {
@@ -476,13 +474,11 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
 
         // Enable HR, SpO2 algo
         m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
-        //k_sleep(K_MSEC(500));
+        // k_sleep(K_MSEC(500));
     }
 
     return 0;
 }
-
-
 
 int maxm86146_do_enter_app(const struct device *dev)
 {

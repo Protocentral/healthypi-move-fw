@@ -36,7 +36,7 @@ lv_obj_t *btn_bpt_measure_start;
 lv_obj_t *label_bp_sys_sub;
 lv_obj_t *label_bp_sys_cap;
 static lv_obj_t *label_bp_val;
-static lv_obj_t *label_bp_dia_val;
+//static lv_obj_t *label_bp_dia_val;
 
 static bool bpt_meas_done_flag = false;
 
@@ -57,14 +57,15 @@ static float y_min_ppg = 10000;
 static float gx = 0;
 
 static bool chart_ppg_update = true;
-static void hpi_bpt_disp_do_set_scale(int disp_window_size);
 
 // BPT variables
+/*
 static bool bpt_cal_done_flag = false;
 static int bpt_meas_last_progress = 0;
 static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
+*/
 
 static void scr_bpt_btn_measure_exit_event_handler(lv_event_t *e)
 {
@@ -409,6 +410,25 @@ void hpi_disp_update_bp(int sys, int dia)
     lv_label_set_text(label_bp_val, buf);
 }
 
+static void hpi_bpt_disp_do_set_scale(int disp_window_size)
+{
+    if (gx >= (disp_window_size))
+    {
+        if (chart_ppg_update == true)
+            lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
+
+        gx = 0;
+
+        y_max_ppg = -900000;
+        y_min_ppg = 900000;
+    }
+}
+
+static void hpi_bpt_disp_add_samples(int num_samples)
+{
+    gx += num_samples;
+}
+
 void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples)
 {
     if (chart_ppg_update == true)
@@ -429,21 +449,9 @@ void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples)
             lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg[i]);
         }
 
-        hpi_ppg_disp_add_samples(1);
-        hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
+        hpi_bpt_disp_add_samples(1);
+        hpi_bpt_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
     }
 }
 
-static void hpi_bpt_disp_do_set_scale(int disp_window_size)
-{
-    if (gx >= (disp_window_size))
-    {
-        if (chart_ppg_update == true)
-            lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
 
-        gx = 0;
-
-        y_max_ppg = -900000;
-        y_min_ppg = 900000;
-    }
-}
