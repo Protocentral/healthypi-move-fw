@@ -131,7 +131,6 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
     return 0;
 }
 
-/*
 static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5)
 {
     const struct maxm86146_config *config = dev->config;
@@ -159,9 +158,9 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
     return 0;
-}*/
+}
 
-/*static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6)
+static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6)
 {
     const struct maxm86146_config *config = dev->config;
     uint8_t wr_buf[6];
@@ -189,7 +188,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
     k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
 
     return 0;
-}*/
+}
 
 static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_len)
 {
@@ -384,52 +383,6 @@ static int maxm86146_set_mode_raw(const struct device *dev)
     return 0;
 }
 
-static int maxm86146_set_mode_algo(const struct device *dev)
-{
-    LOG_DBG("MAXM86146 entering ALGO mode...");
-
-    maxm86146_do_enter_app(dev);
-
-    maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
-
-    // Output mode sensor + algo data
-    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set continuous mode - only HR
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x02, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Enable AEC
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // EN Auto PD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // EN SCD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set AGC target PD current
-    // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
-    // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x30, 0x00);
-    // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x73);
-    // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x10, 0x20);
-
-    // Read  WHOAMI
-    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
-
-    // Enable HR, SpO2 algo
-    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
-    k_sleep(K_MSEC(500));
-
-    return 0;
-}
-
 static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
     const struct maxm86146_config *config = dev->config;
@@ -455,11 +408,83 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
     return 0;
 }
 
+static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode mode)
+{
+    maxm86146_do_enter_app(dev);
+
+    // Read  WHOAMI
+    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+
+    maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
+
+    // Output mode sensor + algo data
+    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set interrupt threshold
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set report period
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set continuous mode - only HR
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Enable AEC
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+    if (mode == MAXM86146_OP_MODE_ALGO_AEC)
+    {
+        LOG_DBG("MAXM86146 entering AEC ALGO mode...");
+
+        // EN Auto PD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+        // EN SCD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
+
+        // Enable HR, SpO2 algo
+        m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
+        // k_sleep(K_MSEC(500));
+    }
+    else if (mode == MAXM86146_OP_MODE_ALGO_AGC)
+    {
+        LOG_DBG("MAXM86146 entering AGC ALGO mode...");
+
+        // DIS Auto PD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
+
+        // DIS SCD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
+
+        // Set AGC target PD current
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
+
+        // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x30, 0x00);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x73);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x10, 0x20);
+
+        // Read  WHOAMI
+        // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+        // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+
+        // Enable HR, SpO2 algo
+        m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
+        // k_sleep(K_MSEC(500));
+    }
+
+    return 0;
+}
+
 int maxm86146_do_enter_app(const struct device *dev)
 {
     const struct maxm86146_config *config = dev->config;
 
-    LOG_DBG("MAXM86146 entering app mode ");
+    LOG_DBG("Set app mode");
 
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
@@ -471,7 +496,7 @@ int maxm86146_do_enter_app(const struct device *dev)
 
     gpio_pin_set_dt(&config->reset_gpio, 1);
     k_sleep(K_MSEC(1600));
-    
+
     // gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
     // k_sleep(K_MSEC(10));
 
@@ -507,10 +532,15 @@ static int maxm86146_attr_set(const struct device *dev,
     switch (attr)
     {
     case MAXM86146_ATTR_OP_MODE:
-        if (val->val1 == MAXM86146_OP_MODE_ALGO)
+        if (val->val1 == MAXM86146_OP_MODE_ALGO_AEC)
         {
-            maxm86146_set_mode_algo(dev);
-            data->op_mode = MAXM86146_OP_MODE_ALGO;
+            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AEC);
+            data->op_mode = MAXM86146_OP_MODE_ALGO_AEC;
+        }
+        else if (val->val1 == MAXM86146_OP_MODE_ALGO_AGC)
+        {
+            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AGC);
+            data->op_mode = MAXM86146_OP_MODE_ALGO_AGC;
         }
         else if (val->val1 == MAXM86146_OP_MODE_ALGO_EXTENDED)
         {

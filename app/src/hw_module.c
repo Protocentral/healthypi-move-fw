@@ -506,28 +506,18 @@ void hw_init(void)
     }
 
     // regulator_disable(ldsw_disp_unit);
-    // k_sleep(K_MSEC(100));
-
     regulator_enable(ldsw_disp_unit);
     k_sleep(K_MSEC(1000));
 
     // device_init(display_dev);
     // k_sleep(K_MSEC(1000));
 
-    regulator_enable(ldsw_sens_1_8);
-    //regulator_disable(ldsw_sens_1_8);
+    // regulator_enable(ldsw_sens_1_8);
+    regulator_disable(ldsw_sens_1_8);
 
     k_sleep(K_MSEC(100));
 
     device_init(touch_dev);
-
-    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
-    if (ret < 0)
-    {
-        LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
-    }
-
-    gpio_pin_set_dt(&dcdc_5v_en, 1);
 
     if (!device_is_ready(max30001_dev))
     {
@@ -556,17 +546,24 @@ void hw_init(void)
         maxm86146_device_present = true;
 
         struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_RAW;
+        mode_set.val1 = MAXM86146_OP_MODE_ALGO_AGC;
         sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
     }
+
     struct sensor_value mode_set;
     mode_set.val1 = 1;
-    //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
-    k_msleep(1000);
+    k_sleep(K_MSEC(1000));
+    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
+    if (ret < 0)
+    {
+        LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
+    }
 
-    //device_init(max32664d_dev);
-    //k_msleep(1000);
+    gpio_pin_set_dt(&dcdc_5v_en, 1);
+    
+    k_sleep(K_MSEC(1000));
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -577,10 +574,10 @@ void hw_init(void)
     {
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
-        
+
         struct sensor_value mode_set;
 
-        //Set initial mode
+        // Set initial mode
         mode_set.val1 = MAX32664_OP_MODE_BPT;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
@@ -602,14 +599,14 @@ void hw_init(void)
     }
     else
     {
-        //Set initial start-up mode
+        // Set initial start-up mode
     }
     // pm_device_runtime_put(acc_dev);
 
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    //fs_module_init();
+    // fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
 

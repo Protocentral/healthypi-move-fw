@@ -27,7 +27,7 @@ static bool chart_ecg_update = true;
 static float y_max_ecg = 0;
 static float y_min_ecg = 10000;
 
-static bool ecg_plot_hidden = false;
+//static bool ecg_plot_hidden = false;
 
 static float gx = 0;
 
