@@ -3,6 +3,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/display.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/sys/reboot.h>
 #include <lvgl.h>
 #include <stdio.h>
 #include <string.h>
@@ -75,4 +76,14 @@ int main(void)
 
 	
 	return 0;	
+}
+
+void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
+{
+    LOG_PANIC();
+
+    LOG_ERR("Fatal error: %u. Rebooting...", reason);
+    sys_reboot(SYS_REBOOT_COLD);
+
+    CODE_UNREACHABLE;
 }
