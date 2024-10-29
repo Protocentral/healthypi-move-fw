@@ -535,6 +535,15 @@ void hw_init(void)
         */
     }
 
+    k_sleep(K_MSEC(1000));
+    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
+    if (ret < 0)
+    {
+        LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
+    }
+
+    gpio_pin_set_dt(&dcdc_5v_en, 1);
+
     if (!device_is_ready(maxm86146_dev))
     {
         LOG_ERR("MAXM86146 device not present!");
@@ -554,15 +563,6 @@ void hw_init(void)
     mode_set.val1 = 1;
     // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
-    k_sleep(K_MSEC(1000));
-    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
-    if (ret < 0)
-    {
-        LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
-    }
-
-    gpio_pin_set_dt(&dcdc_5v_en, 1);
-    
     k_sleep(K_MSEC(1000));
 
     if (!device_is_ready(max32664d_dev))
