@@ -113,7 +113,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
                     *rtor = (rtor_val / 10);
 
                     *scd_state = buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 19 + MAXM86146_SENSOR_DATA_OFFSET];
-                }
+                }/*
                 else if (data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED)
                 {
                     uint16_t hr_val = (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 1 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
@@ -138,7 +138,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
                     uint32_t run_steps = (uint32_t)(buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 12 + MAXM86146_SENSOR_DATA_OFFSET] << 24 | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 13 + MAXM86146_SENSOR_DATA_OFFSET] << 16 | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 14 + MAXM86146_SENSOR_DATA_OFFSET] << 8 | buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 15 + MAXM86146_SENSOR_DATA_OFFSET]);
 
                     *steps_run = run_steps;
-                }
+                }*/
             }
         }
     }
