@@ -115,6 +115,8 @@ K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
 
+K_SEM_DEFINE(sem_display_on, 0, 1);
+
 #define MOVE_SAMPLING_DISABLED 0
 
 static float max_charge_current;
@@ -483,6 +485,12 @@ void hw_bpt_get_calib(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
+void hw_pwr_display_enable(void)
+{
+    regulator_enable(ldsw_disp_unit);
+    k_sem_give(&sem_display_on);
+}
+
 void hw_init(void)
 {
     int ret = 0;
@@ -506,8 +514,8 @@ void hw_init(void)
     }
 
     // regulator_disable(ldsw_disp_unit);
-    regulator_enable(ldsw_disp_unit);
-    k_sleep(K_MSEC(1000));
+    //regulator_enable(ldsw_disp_unit);
+    //k_sleep(K_MSEC(1000));
 
     // device_init(display_dev);
     // k_sleep(K_MSEC(1000));

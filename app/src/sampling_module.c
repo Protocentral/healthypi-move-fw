@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 #define SAMPLING_INTERVAL_MS 8
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 1
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 32
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 50
 #define ECG_SAMPLING_INTERVAL_MS 65
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 4);

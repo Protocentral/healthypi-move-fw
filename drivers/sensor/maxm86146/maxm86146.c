@@ -68,7 +68,7 @@ uint8_t maxm86146_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    //LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }

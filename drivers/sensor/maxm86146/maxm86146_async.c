@@ -21,6 +21,7 @@ int maxm86146_get_fifo_count(const struct device *dev)
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
     fifo_count = rd_buf[1];
+    //printk("FIFO Count: %d\n", fifo_count);
     return (int)fifo_count;
 }
 

@@ -92,7 +92,8 @@ int global_bp_dia = 0;
 int global_hr = 0;
 
 // Externs
-extern struct k_sem sem_hw_inited;
+//extern struct k_sem sem_hw_inited;
+extern struct k_sem sem_display_on;
 extern struct k_sem sem_sampling_start;
 // extern uint8_t global_batt_level;
 // extern bool global_batt_charging;
@@ -596,7 +597,7 @@ void display_screens_thread(void)
 
     static volatile uint16_t prev_rtor;
 
-    k_sem_take(&sem_hw_inited, K_FOREVER);
+    k_sem_take(&sem_display_on, K_FOREVER);
 
     if (!device_is_ready(display_dev))
     {
