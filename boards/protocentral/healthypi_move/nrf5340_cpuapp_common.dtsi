@@ -120,7 +120,7 @@
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <1800000>;
+				regulator-init-microvolt = <2000000>;
 				
 				//regulator-always-on;
 			};
