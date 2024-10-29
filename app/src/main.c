@@ -9,6 +9,7 @@
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/fatal.h>
+#include <zephyr/logging/log_ctrl.h>
 
 #include <zephyr/logging/log.h>
 
