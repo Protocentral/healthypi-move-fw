@@ -60,10 +60,6 @@ static void bt_ready(void)
 
 int main(void)
 {
-	hw_pwr_display_enable();
-	
-		
-
 	hw_init();
 
 	int err=0;

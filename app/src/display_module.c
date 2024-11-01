@@ -82,9 +82,9 @@ bool display_inited = false;
 int curr_screen = SCR_VITALS;
 
 K_SEM_DEFINE(sem_disp_inited, 0, 1);
-K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
-K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 100, 1);
-K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 100, 1);
+K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 
 bool bpt_cal_started = false;
 int global_bp_sys = 0;
@@ -641,12 +641,12 @@ void display_screens_thread(void)
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    draw_scr_home(SCROLL_NONE);
+    //draw_scr_home(SCROLL_NONE);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
 
     //draw_scr_ppg(SCROLL_RIGHT);
-    // draw_scr_ecg(SCROLL_RIGHT);
+    draw_scr_ecg(SCROLL_RIGHT);
     //  draw_scr_bpt_home(SCROLL_RIGHT);
     //  draw_scr_settings(SCROLL_RIGHT);
     //  draw_scr_eda();
@@ -662,7 +662,7 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
+                    //   hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
@@ -918,4 +918,5 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
 // Power Cost - 80 uA
+
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

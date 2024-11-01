@@ -18,8 +18,8 @@ LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 #define PPG_WRIST_SAMPLING_INTERVAL_MS 50
 #define ECG_SAMPLING_INTERVAL_MS 65
 
-K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 4);
-K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 4);
+K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
 
 // ASync sensor RTIO defines
 
@@ -112,7 +112,7 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
 
         static uint8_t prev_hr_val = 0;
         // uint8_t hr_chan_value=0;
-        //printk("WR NS: %d ", edata->num_samples);
+        printk("WR NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
         {
                 ppg_sensor_sample.ppg_num_samples = edata->num_samples;
@@ -124,23 +124,24 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
                         ppg_sensor_sample.raw_green[i] = edata->green_samples[i];
                 }
 
-                ppg_sensor_sample.hr = edata->hr;
-                ppg_sensor_sample.spo2 = edata->spo2;
-                ppg_sensor_sample.rtor = edata->rtor;
-                ppg_sensor_sample.scd_state = edata->scd_state;
+                //ppg_sensor_sample.hr = edata->hr;
+                //ppg_sensor_sample.spo2 = edata->spo2;
+                //ppg_sensor_sample.rtor = edata->rtor;
+                //ppg_sensor_sample.scd_state = edata->scd_state;
 
-                ppg_sensor_sample.steps_run = edata->steps_run;
-                ppg_sensor_sample.steps_walk = edata->steps_walk;
+                //ppg_sensor_sample.steps_run = edata->steps_run;
+                //ppg_sensor_sample.steps_walk = edata->steps_walk;
 
                 // printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
 
                 k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
 
-                struct hpi_hr_t hr_chan_value = {
+                /*struct hpi_hr_t hr_chan_value = {
                     .hr = edata->hr,
                     .hr_ready_flag = true,
                 };
                 zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                */
         }
 }
 
@@ -249,5 +250,5 @@ void ecg_sampling_timer_start(void)
 #define ECG_BIOZ_SAMPLING_THREAD_PRIORITY 7
 
 //K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, PPG_FINGER_SAMPLING_THREAD_STACKSIZE, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_FINGER_SAMPLING_THREAD_PRIORITY, 0, 500);
-K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 600);
+//K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 600);
 K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, ECG_BIOZ_SAMPLING_THREAD_STACKSIZE, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_BIOZ_SAMPLING_THREAD_PRIORITY, 0, 700);

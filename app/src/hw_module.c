@@ -488,7 +488,7 @@ void hw_bpt_get_calib(void)
 void hw_pwr_display_enable(void)
 {
     regulator_enable(ldsw_disp_unit);
-    k_sem_give(&sem_display_on);
+    
 }
 
 void hw_init(void)
@@ -519,6 +519,7 @@ void hw_init(void)
 
     // device_init(display_dev);
     // k_sleep(K_MSEC(1000));
+    hw_pwr_display_enable();
 
     // regulator_enable(ldsw_sens_1_8);
     regulator_disable(ldsw_sens_1_8);
@@ -623,6 +624,7 @@ void hw_init(void)
     // pm_device_runtime_put(w25_flash_dev);
 
     k_sem_give(&sem_hw_inited);
+    k_sem_give(&sem_display_on);
 
     // Start sampling only if devices are present
 

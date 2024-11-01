@@ -311,7 +311,7 @@ void data_thread(void)
         {
             if (settings_send_ble_enabled)
             {
-                ble_ppg_notify(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples);
+                //ble_ppg_notify(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples);
             }
             if (settings_plot_enabled)
             {
@@ -320,20 +320,9 @@ void data_thread(void)
 
             if (settings_send_usb_enabled)
             {
-                if (settings_data_format == DATA_FMT_OPENVIEW)
-                {
-                    /*sendData(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample,
-                             ppg_sensor_sample.raw_red, ppg_sensor_sample.raw_ir,
-                             0, ppg_sensor_sample.hr, ppg_sensor_sample.bpt_status, ppg_sensor_sample.spo2, ecg_bioz_sensor_sample._bioZSkipSample);
-                             */
-                }
-                /*else if (settings_data_format == DATA_FMT_PLAIN_TEXT)
-                {
-                    send_data_text(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.raw_red);
-                    // printk("ECG: %d, BIOZ: %d, RED: %d\n", sensor_sample.ecg_sample, sensor_sample.bioz_sample,
-                    //        sensor_sample.raw_red);
-                }*/
+               
             }
+            
 
             /*if (ppg_sensor_sample.rtor != 0)
             {
