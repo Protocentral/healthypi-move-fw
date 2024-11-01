@@ -79,6 +79,8 @@ lv_obj_t *cui_battery_percent;
 
 bool display_inited = false;
 
+uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
+
 int curr_screen = SCR_VITALS;
 
 K_SEM_DEFINE(sem_disp_inited, 0, 1);
@@ -306,7 +308,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset + 2));
 
     label_batt_level_val = lv_label_create(parent);
-    lv_label_set_text(label_batt_level_val, "--");
+    lv_label_set_text_fmt(label_batt_level_val, "%d %", hw_get_battery_level());
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
     lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, -12, -2);
 
@@ -586,15 +588,25 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     }
 }
 
+void hpi_disp_set_brightness(uint8_t brightness_percent)
+{
+    uint8_t brightness = (uint8_t)((brightness_percent * 255) / 100);
+    display_set_brightness(display_dev, brightness);
+    hpi_disp_curr_brightness = brightness_percent;
+}
+
+uint8_t hpi_disp_get_brightness(void)
+{
+    return hpi_disp_curr_brightness;
+}
+
 static uint8_t m_disp_batt_level = 0;
 static struct rtc_time m_disp_sys_time;
 static uint8_t m_disp_hr = 0;
 
-/*
-
-NOTE: All LVGL display updates should be called from the same display_screens_thread
-
+/* NOTE: All LVGL display updates should be called from the same display_screens_thread
  */
+
 void display_screens_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
@@ -625,16 +637,8 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
-    //printk("Display thread starting...");
-
     // Init all styles globally
     display_init_styles();
-
-    // Setup LVGL Input Device
-    /*lv_indev_drv_init(&m_keypad_drv);
-    m_keypad_drv.type = LV_INDEV_TYPE_KEYPAD;
-    m_keypad_drv.read_cb = keypad_read;
-    m_keypad_indev = lv_indev_drv_register(&m_keypad_drv);*/
 
     touch_indev = lv_indev_get_next(NULL);
     while (touch_indev)
@@ -649,7 +653,7 @@ void display_screens_thread(void)
 
     display_blanking_off(display_dev);
 
-    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+    hpi_disp_set_brightness(hpi_disp_curr_brightness);
 
     // display_set_brightness(display_dev, 90);
 
@@ -659,8 +663,7 @@ void display_screens_thread(void)
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
-    // draw_scr_clock_small(SCROLL_RIGHT);
-    
+    // draw_scr_clock_small(SCROLL_RIGHT);  
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
 
@@ -854,8 +857,6 @@ void display_screens_thread(void)
                 }
             }
 
-            
-
             /*(curr_screen == SCR_VITALS)
             {
                 if (temp_disp_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS)) // Once a second
@@ -870,8 +871,6 @@ void display_screens_thread(void)
                 }
                 // lv_task_handler();
             }*/
-           
-            
 
             if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
@@ -911,9 +910,13 @@ void display_screens_thread(void)
     }
 }
 
-void hpi_move_disp_set_curr_screen(int screen)
+K_MUTEX_DEFINE(mutex_curr_screen);
+
+void hpi_disp_set_curr_screen(int screen)
 {
+    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
     curr_screen = screen;
+    k_mutex_unlock(&mutex_curr_screen);
 }
 
 static void disp_batt_status_listener(const struct zbus_channel *chan)

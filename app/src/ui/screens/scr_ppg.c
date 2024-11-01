@@ -41,8 +41,6 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
-extern int curr_screen;
-
 void draw_scr_ppg(enum scroll_dir m_scroll_dir)
 {
     scr_ppg = lv_obj_create(NULL);
@@ -121,9 +119,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_set_size(img2, 22, 35);
     lv_obj_align_to(img2, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, 0);*/
 
-    curr_screen = SCR_PLOT_PPG;
-
-    // lv_obj_add_event_cb(scr_ppg, ppg_screen_event, LV_EVENT_GESTURE, NULL);
+    hpi_disp_set_curr_screen(SCR_PLOT_PPG);
     hpi_show_screen(scr_ppg, m_scroll_dir);
 }
 

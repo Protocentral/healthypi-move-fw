@@ -93,10 +93,10 @@ volatile bool max32664d_device_present = false;
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-// uint8_t global_batt_level = 0;
+static uint8_t global_batt_level = 0;
 // int32_t global_temp;
 // bool global_batt_charging = false;
-// struct rtc_time global_system_time;
+static struct rtc_time global_system_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
@@ -488,7 +488,20 @@ void hw_bpt_get_calib(void)
 void hw_pwr_display_enable(void)
 {
     regulator_enable(ldsw_disp_unit);
-    
+}
+
+K_MUTEX_DEFINE(mutex_batt_level);
+
+void hw_set_battery_level(uint8_t batt_level)
+{
+    k_mutex_lock(&mutex_batt_level, K_FOREVER);
+    global_batt_level = batt_level;
+    k_mutex_unlock(&mutex_batt_level);
+}
+
+uint8_t hw_get_battery_level(void)
+{
+    return global_batt_level;
 }
 
 void hw_init(void)
@@ -512,10 +525,6 @@ void hw_init(void)
         LOG_ERR("Could not initialise fuel gauge.\n");
         // return 0;
     }
-
-    // regulator_disable(ldsw_disp_unit);
-    //regulator_enable(ldsw_disp_unit);
-    //k_sleep(K_MSEC(1000));
 
     // device_init(display_dev);
     // k_sleep(K_MSEC(1000));
@@ -615,6 +624,7 @@ void hw_init(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
+    npm_fuel_gauge_update(charger);
     // fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
@@ -646,6 +656,12 @@ void hw_init(void)
     // init_settings();
 
     // usb_init();
+}
+
+struct rtc_time hw_get_current_time(void)
+{
+    rtc_get_time(rtc_dev, &global_system_time);
+    return global_system_time;
 }
 
 void hw_thread(void)

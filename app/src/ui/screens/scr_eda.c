@@ -24,8 +24,6 @@ static lv_chart_series_t *ser_eda;
 static float y_max_eda = 0;
 static float y_min_eda = 10000;
 
-
-
 static float gx = 0;
 
 // Externs
@@ -33,8 +31,6 @@ extern lv_style_t style_lbl_orange;
 extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
-
-extern int curr_screen;
 
 void draw_scr_eda(enum scroll_dir m_scroll_dir)
 {
@@ -63,8 +59,7 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir)
     lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
     lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
-    curr_screen = SCR_PLOT_EDA;
-
+    hpi_disp_set_curr_screen(SCR_PLOT_EDA);
     hpi_show_screen(scr_eda, m_scroll_dir);
 }
 

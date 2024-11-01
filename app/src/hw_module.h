@@ -19,6 +19,12 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
 void hpi_pwr_display_sleep(void);
 void hpi_pwr_display_wake(void);
 
+struct rtc_time hw_get_current_time(void);
+
+uint8_t hw_get_battery_level(void);
+void hw_set_battery_level(uint8_t batt_level);
+
+
 enum gpio_keypad_key
 {
     GPIO_KEYPAD_KEY_NONE = 0,

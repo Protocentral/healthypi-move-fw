@@ -10,7 +10,7 @@
 #define HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS 2
 
 #define DISP_SLEEP_TIME_MS 50000
-#define DISPLAY_DEFAULT_BRIGHTNESS 150
+#define DISPLAY_DEFAULT_BRIGHTNESS 50
 
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 128 // To be verified 
@@ -65,7 +65,6 @@ void hpi_disp_draw_plotEDA(float data_eda);
 
 // Home Screen functions
 void draw_scr_home(enum scroll_dir m_scroll_dir);
-void scr_home_set_time(struct rtc_time time_to_set);
 
 void ui_home_time_display_update(struct rtc_time in_time);
 
@@ -115,7 +114,10 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir);
 void draw_header_minimal(lv_obj_t *parent, int top_offset);
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir);
 void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir);
-void hpi_move_disp_set_curr_screen(int screen);
+void hpi_disp_set_curr_screen(int screen);
+
+void hpi_disp_set_brightness(uint8_t brightness_percent);
+uint8_t hpi_disp_get_brightness(void);
 
 //Component objects
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);
