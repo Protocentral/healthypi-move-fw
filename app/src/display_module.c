@@ -57,7 +57,7 @@ static lv_style_t style_batt_percent;
 
 static lv_style_t style_info;
 static lv_style_t style_icon;
-static lv_style_t style_scr_black;
+lv_style_t style_scr_black;
 
 lv_style_t style_lbl_red;
 lv_style_t style_lbl_red_small;
@@ -463,6 +463,18 @@ void disp_screen_event(lv_event_t *e)
     {
         lv_indev_wait_release(lv_indev_get_act());
         printk("Down at %d\n", curr_screen);
+
+        hpi_move_load_scr_settings(SCROLL_DOWN);
+    }
+    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printk("Up at %d\n", curr_screen);
+
+        if(curr_screen==SCR_SETTINGS)
+        {
+            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+        }    
     }
 }
 
@@ -524,6 +536,11 @@ void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
     }
 }
 
+void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir)
+{
+    draw_scr_settings(m_scroll_dir);
+}
+
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
 {
     switch (m_screen)
@@ -553,6 +570,7 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_BPT_HOME:
         draw_scr_bpt_home(m_scroll_dir);
         break;
+    
     /*
     case SCR_CLOCK:
         draw_scr_clockface(m_scroll_dir);
@@ -637,16 +655,18 @@ void display_screens_thread(void)
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 
+    // Unused screens
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
     // draw_scr_clock_small(SCROLL_RIGHT);
-    //draw_scr_home(SCROLL_NONE);
+    
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
 
+    draw_scr_home(SCROLL_NONE);
     //draw_scr_ppg(SCROLL_RIGHT);
-    draw_scr_ecg(SCROLL_RIGHT);
+    //draw_scr_ecg(SCROLL_RIGHT);
     //  draw_scr_bpt_home(SCROLL_RIGHT);
     //  draw_scr_settings(SCROLL_RIGHT);
     //  draw_scr_eda();
@@ -889,6 +909,11 @@ void display_screens_thread(void)
 
         k_msleep(lv_task_handler());
     }
+}
+
+void hpi_move_disp_set_curr_screen(int screen)
+{
+    curr_screen = screen;
 }
 
 static void disp_batt_status_listener(const struct zbus_channel *chan)

@@ -26,6 +26,8 @@ enum scroll_dir
     SCROLL_NONE,
 };
 
+#define SCR_SETTINGS 20
+
 enum hpi_disp_screens
 {
     SCR_LIST_START,
@@ -45,6 +47,7 @@ enum hpi_disp_screens
     SCR_VITALS,
     // SCR_BPT_HOME,
 };
+
 
 enum hpi_disp_subscreens
 {
@@ -111,7 +114,8 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir);
 // Helper objects
 void draw_header_minimal(lv_obj_t *parent, int top_offset);
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir);
-
+void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir);
+void hpi_move_disp_set_curr_screen(int screen);
 
 //Component objects
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);
