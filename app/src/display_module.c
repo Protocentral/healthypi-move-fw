@@ -149,9 +149,39 @@ void hpi_display_sleep_off(void)
         m_display_active = true;
     }
 }
+static lv_style_t style_btn;
+
+/*Will be called when the styles of the base theme are already added
+  to add new styles*/
+static void new_theme_apply_cb(lv_theme_t * th, lv_obj_t * obj)
+{
+    LV_UNUSED(th);
+
+    if(lv_obj_check_type(obj, &lv_btn_class)) {
+        lv_obj_add_style(obj, &style_btn, 0);
+    }
+}
 
 void display_init_styles()
 {
+     /*Initialize the styles*/
+    lv_style_init(&style_btn);
+    lv_style_set_bg_color(&style_btn, lv_palette_darken(LV_PALETTE_GREY, 4));
+    lv_style_set_border_color(&style_btn, lv_palette_darken(LV_PALETTE_RED, 3));
+    lv_style_set_border_width(&style_btn, 3);
+
+    /*Initialize the new theme from the current theme*/
+    lv_theme_t * th_act = lv_disp_get_theme(NULL);
+    static lv_theme_t th_new;
+    th_new = *th_act;
+
+    /*Set the parent theme and the style apply callback for the new theme*/
+    lv_theme_set_parent(&th_new, th_act);
+    lv_theme_set_apply_cb(&th_new, new_theme_apply_cb);
+
+    /*Assign the new theme to the current display*/
+    lv_disp_set_theme(NULL, &th_new);
+
     // Subscript (Unit) label style
     lv_style_init(&style_sub);
     lv_style_set_text_color(&style_sub, lv_color_white());
@@ -830,14 +860,13 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_ECG)
                 {
-
                     //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
                     hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
                     hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
                 }
                 else if (curr_screen == SCR_PLOT_EDA)
                 {
-                    // hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
+                    hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples,ecg_bioz_sensor_sample.bioz_lead_off);
                 }
             }
 

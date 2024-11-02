@@ -54,7 +54,7 @@ static void btn_shutdown_event_cb(lv_event_t *e)
         LOG_INF("Shutdown button clicked");
         static const char *btns[] = {"Yes", "No", ""};
 
-        mbox1 = lv_msgbox_create(NULL, "Shutdown", "Turn device OFF?", btns, true);
+        mbox1 = lv_msgbox_create(NULL, "", "Turn device OFF?", btns, false);
         lv_obj_add_event_cb(mbox1, mbox_off_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
         lv_obj_center(mbox1);
     }
@@ -97,7 +97,7 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(btn_shutdown, btn_shutdown_event_cb, LV_EVENT_ALL, NULL);
 
     lv_obj_t *lbl_btn_shutdown = lv_label_create(btn_shutdown);
-    lv_label_set_text(lbl_btn_shutdown, "Shutdown");
+    lv_label_set_text(lbl_btn_shutdown, LV_SYMBOL_POWER " Power Off");
     lv_obj_center(lbl_btn_shutdown);
 
     lv_obj_t *btn_test = lv_btn_create(cont_col);

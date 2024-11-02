@@ -61,11 +61,9 @@ enum hpi_disp_subscreens
 //Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);
 void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
-void hpi_disp_draw_plotEDA(float data_eda);
 
 // Home Screen functions
 void draw_scr_home(enum scroll_dir m_scroll_dir);
-
 void ui_home_time_display_update(struct rtc_time in_time);
 
 void hpi_home_hr_update(int hr);
@@ -73,7 +71,6 @@ void hpi_home_hr_update(int hr);
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
-
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -87,6 +84,7 @@ void hpi_ppg_disp_update_spo2(int spo2);
 
 // EDA screen functions
 void draw_scr_eda(enum scroll_dir m_scroll_dir);
+void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead_off);
 
 // BPT screen functions
 void draw_scr_bpt_calibrate(void);
