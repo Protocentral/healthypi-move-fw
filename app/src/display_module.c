@@ -94,7 +94,7 @@ int global_bp_dia = 0;
 int global_hr = 0;
 
 // Externs
-//extern struct k_sem sem_hw_inited;
+// extern struct k_sem sem_hw_inited;
 extern struct k_sem sem_display_on;
 extern struct k_sem sem_sampling_start;
 // extern uint8_t global_batt_level;
@@ -122,7 +122,9 @@ void hpi_display_sleep_on(void)
     {
         printk("Display off");
         // display_blanking_on(display_dev);
-        display_set_brightness(display_dev, 0);
+        // display_set_brightness(display_dev, 0);
+        hpi_disp_set_brightness(0);
+
         hpi_pwr_display_sleep();
 
         // Slow down the display thread
@@ -137,7 +139,9 @@ void hpi_display_sleep_off(void)
     if (m_display_active == false)
     {
         printk("Display on");
-        display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+        // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+        hpi_disp_set_brightness(hpi_disp_curr_brightness);
+
         // display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
         // display_blanking_off(display_dev);
@@ -153,25 +157,26 @@ static lv_style_t style_btn;
 
 /*Will be called when the styles of the base theme are already added
   to add new styles*/
-static void new_theme_apply_cb(lv_theme_t * th, lv_obj_t * obj)
+static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
 {
     LV_UNUSED(th);
 
-    if(lv_obj_check_type(obj, &lv_btn_class)) {
+    if (lv_obj_check_type(obj, &lv_btn_class))
+    {
         lv_obj_add_style(obj, &style_btn, 0);
     }
 }
 
 void display_init_styles()
 {
-     /*Initialize the styles*/
+    /*Initialize the styles*/
     lv_style_init(&style_btn);
     lv_style_set_bg_color(&style_btn, lv_palette_darken(LV_PALETTE_GREY, 4));
     lv_style_set_border_color(&style_btn, lv_palette_darken(LV_PALETTE_RED, 3));
     lv_style_set_border_width(&style_btn, 3);
 
     /*Initialize the new theme from the current theme*/
-    lv_theme_t * th_act = lv_disp_get_theme(NULL);
+    lv_theme_t *th_act = lv_disp_get_theme(NULL);
     static lv_theme_t th_new;
     th_new = *th_act;
 
@@ -503,10 +508,10 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printk("Up at %d\n", curr_screen);
 
-        if(curr_screen==SCR_SETTINGS)
+        if (curr_screen == SCR_SETTINGS)
         {
             hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
-        }    
+        }
     }
 }
 
@@ -602,7 +607,7 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_BPT_HOME:
         draw_scr_bpt_home(m_scroll_dir);
         break;
-    
+
     /*
     case SCR_CLOCK:
         draw_scr_clockface(m_scroll_dir);
@@ -693,17 +698,17 @@ void display_screens_thread(void)
     // draw_scr_splash();
     // draw_scr_vitals_home();
     // draw_scr_clockface(SCROLL_RIGHT);
-    // draw_scr_clock_small(SCROLL_RIGHT);  
+    // draw_scr_clock_small(SCROLL_RIGHT);
     // draw_scr_charts();
     // draw_scr_hrv(SCROLL_RIGHT);
 
     draw_scr_home(SCROLL_NONE);
-    //draw_scr_ppg(SCROLL_RIGHT);
-    //draw_scr_ecg(SCROLL_RIGHT);
-    //  draw_scr_bpt_home(SCROLL_RIGHT);
-    //  draw_scr_settings(SCROLL_RIGHT);
-    //  draw_scr_eda();
-    //  draw_scr_hrv_scatter(SCROLL_RIGHT);
+    // draw_scr_ppg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    //   draw_scr_bpt_home(SCROLL_RIGHT);
+    //   draw_scr_settings(SCROLL_RIGHT);
+    //   draw_scr_eda();
+    //   draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     LOG_INF("Display screens inited");
 
@@ -754,8 +759,8 @@ void display_screens_thread(void)
                 else if (curr_screen == SUBSCR_BPT_CALIBRATE)
                 {
 
-                    //hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
-                    // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
+                    // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
+                    //  hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
                     /*if (bpt_cal_done_flag == false)
                     {
                         if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
@@ -866,7 +871,7 @@ void display_screens_thread(void)
                 }
                 else if (curr_screen == SCR_PLOT_EDA)
                 {
-                    hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples,ecg_bioz_sensor_sample.bioz_lead_off);
+                    hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
                 }
             }
 
@@ -877,7 +882,7 @@ void display_screens_thread(void)
                 if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
                     ui_home_time_display_update(m_disp_sys_time);
-                    //ui_hr_button_update(m_disp_hr);
+                    // ui_hr_button_update(m_disp_hr);
                     time_refresh_counter = 0;
                 }
                 else

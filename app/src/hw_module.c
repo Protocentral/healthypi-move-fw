@@ -535,6 +535,8 @@ void hw_init(void)
 
     k_sleep(K_MSEC(100));
 
+    //device_init(display_dev);
+    //k_sleep(K_MSEC(100));
     device_init(touch_dev);
 
     if (!device_is_ready(max30001_dev))
