@@ -79,7 +79,7 @@ lv_obj_t *cui_battery_percent;
 
 bool display_inited = false;
 
-uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
+static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
 int curr_screen = SCR_VITALS;
 
@@ -122,8 +122,8 @@ void hpi_display_sleep_on(void)
     {
         printk("Display off");
         // display_blanking_on(display_dev);
-        // display_set_brightness(display_dev, 0);
-        hpi_disp_set_brightness(0);
+        display_set_brightness(display_dev, 0);
+        //hpi_disp_set_brightness(0);
 
         hpi_pwr_display_sleep();
 
@@ -140,7 +140,7 @@ void hpi_display_sleep_off(void)
     {
         printk("Display on");
         // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
-        hpi_disp_set_brightness(hpi_disp_curr_brightness);
+        hpi_disp_set_brightness(hpi_disp_get_brightness());
 
         // display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
@@ -688,7 +688,7 @@ void display_screens_thread(void)
 
     display_blanking_off(display_dev);
 
-    hpi_disp_set_brightness(hpi_disp_curr_brightness);
+    hpi_disp_set_brightness(hpi_disp_get_brightness());
 
     // display_set_brightness(display_dev, 90);
 
