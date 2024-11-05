@@ -110,6 +110,6 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
 
     // lv_obj_align_to(lbl_brightness_slider, slider, LV_ALIGN_OUT_TOP_MID, 0, -20);
 
-    hpi_disp_set_curr_screen(SCR_SETTINGS);
+    hpi_disp_set_curr_screen(SCR_SPL_SETTINGS);
     hpi_show_screen(scr_settings, m_scroll_dir);
 }

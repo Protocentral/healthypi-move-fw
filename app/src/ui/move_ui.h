@@ -26,7 +26,7 @@ enum scroll_dir
     SCROLL_NONE,
 };
 
-#define SCR_SETTINGS 20
+
 
 enum hpi_disp_screens
 {
@@ -48,6 +48,9 @@ enum hpi_disp_screens
     // SCR_BPT_HOME,
 };
 
+// Special screens
+#define SCR_SPL_SETTINGS 20
+#define SCR_SPL_BOOT 21
 
 enum hpi_disp_subscreens
 {
@@ -57,6 +60,7 @@ enum hpi_disp_subscreens
 
 /******** UI Function Prototypes ********/
 
+void draw_scr_boot(void);
 
 //Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);

@@ -93,10 +93,20 @@ int global_bp_sys = 0;
 int global_bp_dia = 0;
 int global_hr = 0;
 
+// LV_IMG_DECLARE(pc_logo_bg3);
+LV_IMG_DECLARE(pc_move_bg_200);
+// LV_IMG_DECLARE(pc_logo_bg3);
+LV_IMG_DECLARE(logo_round_white);
+
+static bool m_display_active = true;
+
+uint16_t disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
+
 // Externs
 // extern struct k_sem sem_hw_inited;
 extern struct k_sem sem_display_on;
 extern struct k_sem sem_sampling_start;
+extern struct k_sem sem_disp_boot_complete;
 // extern uint8_t global_batt_level;
 // extern bool global_batt_charging;
 
@@ -107,15 +117,6 @@ extern lv_obj_t *scr_vitals;
 extern uint8_t m_key_pressed;
 extern struct rtc_time global_system_time;
 
-// LV_IMG_DECLARE(pc_logo_bg3);
-LV_IMG_DECLARE(pc_move_bg_200);
-// LV_IMG_DECLARE(pc_logo_bg3);
-LV_IMG_DECLARE(logo_round_white);
-
-static bool m_display_active = true;
-
-uint16_t disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
-
 void hpi_display_sleep_on(void)
 {
     if (m_display_active == true)
@@ -123,7 +124,7 @@ void hpi_display_sleep_on(void)
         printk("Display off");
         // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
-        //hpi_disp_set_brightness(0);
+        // hpi_disp_set_brightness(0);
 
         hpi_pwr_display_sleep();
 
@@ -299,6 +300,8 @@ void display_init_styles()
     lv_style_set_bg_opa(&style_scr_black, LV_OPA_COVER);
     lv_style_set_border_width(&style_scr_black, 0);
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
+
+    lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
 void menu_roller_event_handler(lv_event_t *e)
@@ -508,7 +511,7 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printk("Up at %d\n", curr_screen);
 
-        if (curr_screen == SCR_SETTINGS)
+        if (curr_screen == SCR_SPL_SETTINGS)
         {
             hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
         }
@@ -655,14 +658,14 @@ void display_screens_thread(void)
     int batt_refresh_counter = 0;
     int hr_refresh_counter = 0;
     int time_refresh_counter = 0;
-
     int m_disp_inact_refresh_counter = 0;
-
     int scr_ppg_hr_spo2_refresh_counter = 0;
 
     static volatile uint16_t prev_rtor;
 
     k_sem_take(&sem_display_on, K_FOREVER);
+
+    printk("Disp ON");
 
     if (!device_is_ready(display_dev))
     {
@@ -672,6 +675,7 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
+    draw_scr_boot();
     // Init all styles globally
     display_init_styles();
 
@@ -687,28 +691,19 @@ void display_screens_thread(void)
     }
 
     display_blanking_off(display_dev);
+    hpi_disp_set_brightness(50);
+    
+    k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
-    hpi_disp_set_brightness(hpi_disp_get_brightness());
-
-    // display_set_brightness(display_dev, 90);
-
-    lv_disp_set_bg_color(NULL, lv_color_black());
-
-    // Unused screens
-    // draw_scr_splash();
-    // draw_scr_vitals_home();
-    // draw_scr_clockface(SCROLL_RIGHT);
-    // draw_scr_clock_small(SCROLL_RIGHT);
-    // draw_scr_charts();
-    // draw_scr_hrv(SCROLL_RIGHT);
+    printk("Display boot complete");
 
     draw_scr_home(SCROLL_NONE);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
-    //   draw_scr_bpt_home(SCROLL_RIGHT);
-    //   draw_scr_settings(SCROLL_RIGHT);
-    //   draw_scr_eda();
-    //   draw_scr_hrv_scatter(SCROLL_RIGHT);
+    // draw_scr_bpt_home(SCROLL_RIGHT);
+    // draw_scr_settings(SCROLL_RIGHT);
+    // draw_scr_eda();
+    // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     LOG_INF("Display screens inited");
 

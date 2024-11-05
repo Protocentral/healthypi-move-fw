@@ -116,6 +116,7 @@ K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_display_on, 0, 1);
+K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
 
@@ -509,6 +510,8 @@ void hw_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
+    k_sem_give(&sem_display_on);
+
     if (!device_is_ready(regulators))
     {
         LOG_ERR("Error: Regulator device is not ready\n");
@@ -526,9 +529,9 @@ void hw_init(void)
         // return 0;
     }
 
-    // device_init(display_dev);
+    //device_init(display_dev);
     // k_sleep(K_MSEC(1000));
-    hw_pwr_display_enable();
+    //hw_pwr_display_enable();
 
     // regulator_enable(ldsw_sens_1_8);
     regulator_disable(ldsw_sens_1_8);
@@ -636,7 +639,7 @@ void hw_init(void)
     // pm_device_runtime_put(w25_flash_dev);
 
     k_sem_give(&sem_hw_inited);
-    k_sem_give(&sem_display_on);
+    
 
     // Start sampling only if devices are present
 
@@ -654,6 +657,8 @@ void hw_init(void)
     {
         k_sem_give(&sem_ppg_finger_thread_start);
     }
+
+    k_sem_give(&sem_disp_boot_complete);
 
     // init_settings();
 

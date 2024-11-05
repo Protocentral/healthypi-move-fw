@@ -127,7 +127,7 @@
 
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
-				//regulator-boot-on;
+				regulator-boot-on;
 			};
 
 			npm_pmic_ldo2: LDO2 {
