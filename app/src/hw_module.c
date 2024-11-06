@@ -529,17 +529,17 @@ void hw_init(void)
         // return 0;
     }
 
-    //device_init(display_dev);
-    // k_sleep(K_MSEC(1000));
-    //hw_pwr_display_enable();
+    // device_init(display_dev);
+    //  k_sleep(K_MSEC(1000));
+    // hw_pwr_display_enable();
 
     // regulator_enable(ldsw_sens_1_8);
     regulator_disable(ldsw_sens_1_8);
 
     k_sleep(K_MSEC(100));
 
-    //device_init(display_dev);
-    //k_sleep(K_MSEC(100));
+    // device_init(display_dev);
+    // k_sleep(K_MSEC(100));
     device_init(touch_dev);
 
     if (!device_is_ready(max30001_dev))
@@ -577,14 +577,23 @@ void hw_init(void)
         LOG_INF("MAXM86146 device present!");
         maxm86146_device_present = true;
 
-        struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO_AGC;
-        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        struct sensor_value mode_get;
+        sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_IS_APP_PRESENT, &mode_get);
+        LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
+        if (mode_get.val1 == 8)
+        {
+            LOG_INF("MAXM86146 App not present. Starting bootloader mode");
+            struct sensor_value mode_set;
+            mode_set.val1 = 1;
+            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+        }
+        else
+        {
+            struct sensor_value mode_set;
+            mode_set.val1 = MAXM86146_OP_MODE_ALGO_AGC;
+            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        }
     }
-
-    struct sensor_value mode_set;
-    mode_set.val1 = 1;
-    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     k_sleep(K_MSEC(1000));
 
@@ -639,7 +648,6 @@ void hw_init(void)
     // pm_device_runtime_put(w25_flash_dev);
 
     k_sem_give(&sem_hw_inited);
-    
 
     // Start sampling only if devices are present
 

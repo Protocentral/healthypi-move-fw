@@ -68,7 +68,7 @@ uint8_t maxm86146_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    //LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -403,6 +403,7 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
+        LOG_ERR("MAXM86146 not found");
         return -ENODEV;
     }
     return 0;
@@ -570,8 +571,54 @@ static int maxm86146_attr_set(const struct device *dev,
     return 0;
 }
 
+static int maxm86146_check_app_present(const struct device *dev)
+{
+    LOG_DBG("Checking MAXM86146 app present...");
+
+    struct maxm86146_data *data = dev->data;
+
+    if (data->hub_ver[1] == 0x08 && data->hub_ver[2] == 0x00 && data->hub_ver[3] == 0x00)
+    {
+        LOG_ERR("App not present !!\n");
+        return 8;
+    }
+    else
+    {
+        LOG_DBG("App present !!\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int maxm86146_attr_get(const struct device *dev,
+                              enum sensor_channel chan,
+                              enum sensor_attribute attr,
+                              struct sensor_value *val)
+{
+    struct maxm86146_data *data = dev->data;
+
+    switch (attr)
+    {
+    case MAXM86146_ATTR_OP_MODE:
+        val->val1 = data->op_mode;
+        val->val2 = 0;
+        break;
+    case MAXM86146_ATTR_IS_APP_PRESENT:
+        val->val1 = maxm86146_check_app_present(dev);
+        val->val2 = 0;
+        break;
+    default:
+        LOG_ERR("Unsupported sensor attribute");
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+
 static const struct sensor_driver_api maxm86146_driver_api = {
     .attr_set = maxm86146_attr_set,
+    .attr_get = maxm86146_attr_get,
 
     .sample_fetch = maxm86146_sample_fetch,
     .channel_get = maxm86146_channel_get,
@@ -585,6 +632,7 @@ static const struct sensor_driver_api maxm86146_driver_api = {
 static int maxm86146_chip_init(const struct device *dev)
 {
     const struct maxm86146_config *config = dev->config;
+    struct maxm86146_data *data = dev->data;
 
     if (!device_is_ready(config->i2c.bus))
     {
@@ -597,10 +645,10 @@ static int maxm86146_chip_init(const struct device *dev)
 
     maxm86146_do_enter_app(dev);
 
-    uint8_t ver_buf[4] = {0};
-    if (maxm86146_get_ver(dev, ver_buf) == 0)
+    //uint8_t ver_buf[4] = {0};
+    if (maxm86146_get_ver(dev, data->hub_ver) == 0)
     {
-        LOG_DBG("Hub Version: %d.%d.%d", ver_buf[1], ver_buf[2], ver_buf[3]);
+        LOG_DBG("Hub Version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);
     }
     else
     {
