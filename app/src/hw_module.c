@@ -104,8 +104,6 @@ uint8_t ring_buffer[RING_BUF_SIZE];
 struct ring_buf ringbuf_usb_cdc;
 static bool rx_throttled;
 
-uint8_t m_key_pressed = GPIO_KEYPAD_KEY_NONE;
-
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
@@ -117,6 +115,8 @@ K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_display_on, 0, 1);
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
+
+K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
 
@@ -144,7 +144,7 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         {
         case INPUT_KEY_UP:
             LOG_INF("Crown Key Pressed");
-            lv_disp_trig_activity(NULL);
+            k_sem_give(&sem_crown_key_pressed);
             break;
         case INPUT_KEY_HOME:
             LOG_INF("Extra Key Pressed");
@@ -363,7 +363,7 @@ int npm_fuel_gauge_update(const struct device *charger)
     };
 
     zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
-    // global_batt_level = (int)soc;
+    hw_set_battery_level((uint8_t)soc);
 
     return 0;
 }

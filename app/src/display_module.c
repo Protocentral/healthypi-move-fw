@@ -68,6 +68,8 @@ lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
 
+static lv_style_t style_btn;
+
 static lv_obj_t *roller_session_select;
 static lv_style_t style_scr_back;
 
@@ -107,6 +109,8 @@ uint16_t disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
 extern struct k_sem sem_display_on;
 extern struct k_sem sem_sampling_start;
 extern struct k_sem sem_disp_boot_complete;
+extern struct k_sem sem_crown_key_pressed;
+
 // extern uint8_t global_batt_level;
 // extern bool global_batt_charging;
 
@@ -114,7 +118,6 @@ extern lv_obj_t *scr_clock;
 extern lv_obj_t *scr_ppg;
 extern lv_obj_t *scr_vitals;
 
-extern uint8_t m_key_pressed;
 extern struct rtc_time global_system_time;
 
 void hpi_display_sleep_on(void)
@@ -124,7 +127,6 @@ void hpi_display_sleep_on(void)
         printk("Display off");
         // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
-        // hpi_disp_set_brightness(0);
 
         hpi_pwr_display_sleep();
 
@@ -140,7 +142,6 @@ void hpi_display_sleep_off(void)
     if (m_display_active == false)
     {
         printk("Display on");
-        // display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
         hpi_disp_set_brightness(hpi_disp_get_brightness());
 
         // display_blanking_on(display_dev);
@@ -154,10 +155,8 @@ void hpi_display_sleep_off(void)
         m_display_active = true;
     }
 }
-static lv_style_t style_btn;
 
-/*Will be called when the styles of the base theme are already added
-  to add new styles*/
+/*Will be called when the styles of the base theme are already added to add new styles*/
 static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
 {
     LV_UNUSED(th);
@@ -348,12 +347,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text_fmt(label_batt_level_val, "%d %", hw_get_battery_level());
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, -12, -2);
-
-    /*ui_battery_group = ui_battery(parent);
-    lv_obj_set_x(ui_battery_group, 20);
-    lv_obj_set_y(ui_battery_group, 5);
-    lv_obj_set_style_border_opa(ui_battery_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);*/
+    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, 0, -2);
 }
 
 void draw_bg(lv_obj_t *parent)
@@ -366,40 +360,6 @@ void draw_bg(lv_obj_t *parent)
     lv_obj_add_flag(logo_bg, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
     lv_obj_clear_flag(logo_bg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_add_style(parent, &style_scr_black, 0);
-}
-
-void draw_header(lv_obj_t *parent, bool showFWVersion)
-{
-    lbl_time = lv_label_create(parent);
-    lv_label_set_text(lbl_time, "12:00");
-    lv_obj_align(lbl_time, LV_ALIGN_TOP_MID, -45, 23);
-
-    // lbl_date = lv_label_create(scr_vitals_home);
-    // lv_label_set_text(lbl_date, "16/Mar/2024");
-    // lv_obj_align(lbl_date, LV_ALIGN_TOP_MID, 0, 20);
-
-    // ProtoCentral logo
-    LV_IMG_DECLARE(logo_oneline);
-    lv_obj_t *img1 = lv_img_create(parent);
-    lv_img_set_src(img1, &logo_oneline);
-    lv_obj_align(img1, LV_ALIGN_TOP_MID, 0, 10);
-    lv_obj_set_size(img1, 104, 10);
-
-    LV_IMG_DECLARE(logo_round_white);
-    lv_obj_t *img_logo = lv_img_create(parent);
-    lv_img_set_src(img_logo, &logo_round_white);
-    lv_obj_set_size(img_logo, 25, 25);
-    lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, 0, 30);
-
-    static lv_style_t style_bg;
-    lv_style_init(&style_bg);
-    lv_style_set_radius(&style_bg, 5);
-
-    // Battery Level
-    label_batt_level = lv_label_create(parent);
-    lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
-    lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 45, 20);
 }
 
 void hpi_disp_update_temp(int temp)
@@ -692,7 +652,7 @@ void display_screens_thread(void)
 
     display_blanking_off(display_dev);
     hpi_disp_set_brightness(50);
-    
+
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
     printk("Display boot complete");
@@ -915,10 +875,27 @@ void display_screens_thread(void)
             }
         }
 
-        // if (m_disp_inact_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
-        //{
+        // Add button handlers
+        if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
+        {
+            if (m_display_active == false)
+            {
+                lv_disp_trig_activity(NULL);
+            }
+            else
+            {
+                if (curr_screen == SCR_HOME)
+                {
+                    hpi_display_sleep_on();
+                }
+                else
+                {
+                    hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+                }
+            }
+        }
+
         int inactivity_time = lv_disp_get_inactive_time(NULL);
-        // printk("Inactivity time: %d", inactivity_time);
         if (inactivity_time > DISP_SLEEP_TIME_MS)
         {
             hpi_display_sleep_on();
@@ -927,13 +904,6 @@ void display_screens_thread(void)
         {
             hpi_display_sleep_off();
         }
-        //}
-        // else
-        //{
-        //    m_disp_inact_refresh_counter++;
-        //}
-
-        // lv_task_handler();
 
         k_msleep(lv_task_handler());
     }
