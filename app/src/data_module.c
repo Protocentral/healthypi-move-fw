@@ -265,6 +265,8 @@ void data_thread(void)
 
     LOG_INF("Data Thread starting");
 
+    printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
+
     for (;;)
     {
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
