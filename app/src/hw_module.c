@@ -590,7 +590,7 @@ void hw_init(void)
         else
         {
             struct sensor_value mode_set;
-            mode_set.val1 = MAXM86146_OP_MODE_ALGO_AGC;
+            mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
             sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
         }
     }
