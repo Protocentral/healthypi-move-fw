@@ -60,6 +60,8 @@ static void bt_ready(void)
 
 int main(void)
 {
+	hw_init();
+
 	int err=0;
 	err = bt_enable(NULL);
 	if (err) {
@@ -68,8 +70,6 @@ int main(void)
 	}
 
 	bt_ready();
-
-	hw_init();
 	
 	LOG_INF("HealthyPi Move %d.%d.%d started!", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 

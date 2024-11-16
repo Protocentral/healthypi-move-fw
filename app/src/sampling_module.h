@@ -42,9 +42,6 @@ struct hpi_ppg_sensor_data_t
 
     uint16_t rtor;
     uint8_t scd_state;
-
-    uint32_t steps_run;
-    uint32_t steps_walk;
 };
 
 struct hpi_computed_hrv_t

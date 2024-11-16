@@ -45,6 +45,8 @@ enum maxm86146_attribute
 	MAXM86146_ATTR_ENTER_BOOTLOADER = 0x08,
 	MAXM86146_ATTR_DO_FW_UPDATE = 0x09,
 
+	MAXM86146_ATTR_IS_APP_PRESENT = 0x10,
+
 };
 
 struct maxm86146_config
@@ -58,6 +60,8 @@ struct maxm86146_data
 {
     uint8_t num_channels;
     uint8_t num_samples;
+
+	uint8_t hub_ver[4];
 
     uint32_t samples_led_ir[128];
     uint32_t samples_led_red[128];

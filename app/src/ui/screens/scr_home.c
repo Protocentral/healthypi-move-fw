@@ -7,6 +7,7 @@
 #include <zephyr/drivers/rtc.h>
 
 #include "ui/move_ui.h"
+#include "hw_module.h"
 
 lv_obj_t *scr_home;
 
@@ -24,18 +25,6 @@ static lv_obj_t *ui_home_label_date;
 
 extern int curr_screen;
 extern struct rtc_time global_system_time;
-
-void scr_home_set_time(struct rtc_time time_to_set)
-{
-    if (meter_clock == NULL || curr_screen != SCR_HOME)
-        return;
-
-    // printk("Setting time to %d:%d:%d\n", time_to_set.tm_hour, time_to_set.tm_min, time_to_set.tm_sec);
-
-    // lv_meter_set_indicator_end_value(meter_clock, indic_hour, (((time_to_set.tm_hour % 12) * 5))); // % 12));
-    // lv_meter_set_indicator_end_value(meter_clock, indic_min, time_to_set.tm_min);
-    // lv_meter_set_indicator_end_value(meter_clock, indic_sec, time_to_set.tm_sec);
-}
 
 void ui_home_time_display_update(struct rtc_time in_time)
 {
@@ -66,7 +55,7 @@ void hpi_home_hr_update(int hr)
 
     char buf[5];
     sprintf(buf, "%d", hr);
-    //lv_label_set_text(home_hr_disp, buf);
+    // lv_label_set_text(home_hr_disp, buf);
 }
 
 void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
@@ -77,7 +66,7 @@ void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
     lv_obj_clear_flag(scr_home, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
     draw_bg(scr_home);
-    draw_header_minimal(scr_home, -45);
+    draw_header_minimal(scr_home, 320);
 
     home_step_disp = ui_steps_button_create(scr_home);
     lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -100, 210);
@@ -114,11 +103,10 @@ void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_opa(ui_home_label_date, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_home_label_date, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    //ui_home_time_display_update(global_system_time);
+    ui_home_time_display_update(hw_get_current_time());
 
-    curr_screen = SCR_HOME;
+    hpi_disp_set_curr_screen(SCR_HOME);
     hpi_show_screen(scr_home, m_scroll_dir);
-    //scr_home_set_time(global_system_time);
 }
 
 void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
@@ -211,9 +199,9 @@ void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
 
     // lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 
-    curr_screen = SCR_HOME;
+    hpi_disp_set_curr_screen(SCR_HOME);
     hpi_show_screen(scr_home, m_scroll_dir);
-    //scr_home_set_time(global_system_time);
+    // scr_home_set_time(global_system_time);
 }
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)

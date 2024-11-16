@@ -98,7 +98,6 @@ static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-
         draw_scr_bpt_measure();
     }
 }
@@ -237,6 +236,9 @@ void draw_scr_bpt_measure(void)
     curr_screen = SUBSCR_BPT_MEASURE;
 
     lv_scr_load_anim(scr_bpt_measure, LV_SCR_LOAD_ANIM_MOVE_BOTTOM, SCREEN_TRANS_TIME, 0, true);
+
+    hpi_disp_set_curr_screen(SUBSCR_BPT_MEASURE);
+    hpi_show_screen(scr_bpt_measure, SCROLL_UP);
 }
 
 void draw_scr_bpt_calibrate(void)

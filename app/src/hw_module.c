@@ -93,18 +93,16 @@ volatile bool max32664d_device_present = false;
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-// uint8_t global_batt_level = 0;
+static uint8_t global_batt_level = 0;
 // int32_t global_temp;
 // bool global_batt_charging = false;
-// struct rtc_time global_system_time;
+static struct rtc_time global_system_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
 uint8_t ring_buffer[RING_BUF_SIZE];
 struct ring_buf ringbuf_usb_cdc;
 static bool rx_throttled;
-
-uint8_t m_key_pressed = GPIO_KEYPAD_KEY_NONE;
 
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
@@ -114,6 +112,11 @@ K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
+
+K_SEM_DEFINE(sem_display_on, 0, 1);
+K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
+
+K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
 
@@ -141,7 +144,7 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         {
         case INPUT_KEY_UP:
             LOG_INF("Crown Key Pressed");
-            lv_disp_trig_activity(NULL);
+            k_sem_give(&sem_crown_key_pressed);
             break;
         case INPUT_KEY_HOME:
             LOG_INF("Extra Key Pressed");
@@ -360,7 +363,7 @@ int npm_fuel_gauge_update(const struct device *charger)
     };
 
     zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
-    // global_batt_level = (int)soc;
+    hw_set_battery_level((uint8_t)soc);
 
     return 0;
 }
@@ -483,10 +486,31 @@ void hw_bpt_get_calib(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
+void hw_pwr_display_enable(void)
+{
+    regulator_enable(ldsw_disp_unit);
+}
+
+K_MUTEX_DEFINE(mutex_batt_level);
+
+void hw_set_battery_level(uint8_t batt_level)
+{
+    k_mutex_lock(&mutex_batt_level, K_FOREVER);
+    global_batt_level = batt_level;
+    k_mutex_unlock(&mutex_batt_level);
+}
+
+uint8_t hw_get_battery_level(void)
+{
+    return global_batt_level;
+}
+
 void hw_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
+
+    k_sem_give(&sem_display_on);
 
     if (!device_is_ready(regulators))
     {
@@ -505,18 +529,17 @@ void hw_init(void)
         // return 0;
     }
 
-    // regulator_disable(ldsw_disp_unit);
-    regulator_enable(ldsw_disp_unit);
-    k_sleep(K_MSEC(1000));
-
     // device_init(display_dev);
-    // k_sleep(K_MSEC(1000));
+    //  k_sleep(K_MSEC(1000));
+    // hw_pwr_display_enable();
 
     // regulator_enable(ldsw_sens_1_8);
     regulator_disable(ldsw_sens_1_8);
 
     k_sleep(K_MSEC(100));
 
+    // device_init(display_dev);
+    // k_sleep(K_MSEC(100));
     device_init(touch_dev);
 
     if (!device_is_ready(max30001_dev))
@@ -554,14 +577,23 @@ void hw_init(void)
         LOG_INF("MAXM86146 device present!");
         maxm86146_device_present = true;
 
-        struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO_AGC;
-        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        struct sensor_value mode_get;
+        sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_IS_APP_PRESENT, &mode_get);
+        LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
+        if (mode_get.val1 == 8)
+        {
+            LOG_INF("MAXM86146 App not present. Starting bootloader mode");
+            struct sensor_value mode_set;
+            mode_set.val1 = 1;
+            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+        }
+        else
+        {
+            struct sensor_value mode_set;
+            mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
+            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        }
     }
-
-    struct sensor_value mode_set;
-    mode_set.val1 = 1;
-    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
 
     k_sleep(K_MSEC(1000));
 
@@ -606,6 +638,7 @@ void hw_init(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
+    npm_fuel_gauge_update(charger);
     // fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
@@ -633,9 +666,17 @@ void hw_init(void)
         k_sem_give(&sem_ppg_finger_thread_start);
     }
 
+    k_sem_give(&sem_disp_boot_complete);
+
     // init_settings();
 
     // usb_init();
+}
+
+struct rtc_time hw_get_current_time(void)
+{
+    rtc_get_time(rtc_dev, &global_system_time);
+    return global_system_time;
 }
 
 void hw_thread(void)
