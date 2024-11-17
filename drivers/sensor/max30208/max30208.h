@@ -7,25 +7,30 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/i2c.h>
 
-#define MAX30208_ADDRESS1 0x51 // 8bit address converted to 7bit
+#define MAX30208_ADDRESS1 0x51 // Default I2C address
 
-// Registers
-#define MAX30208_TEMPERATURE 0x00   //  get temperature ,Read only
-#define MAX30208_CONFIGURATION 0x01 //
-#define MAX30208_THYST 0x02         //
-#define MAX30208_TOS 0x03           //
+#define MAX30208_CHIP_ID 0x30
 
-typedef enum
-{                // For configuration registers
-  SHUTDOWN,      // shutdwon mode to reduce power consumption <3.5uA
-  COMPARATOR,    // Bit 0 = operate OS in comparator mode, 1= INTERRUPT MODE
-  OS_POLARITY,   // Polarity bit ;Bit 0 = Active low output, Bit 1 = Active high
-  FAULT_QUEUE_0, // Fault indication bits
-  FAULT_QUEUE_1, // Fault indication bits
-  DATA_FORMAT,   // Data Format
-  TIME_OUT,      // Time out
-  ONE_SHOT       // 1= One shot, 0 = Continuos
-} configuration;
+#define MAX30208_ALARM_HIGH_MSB 0x10
+#define MAX30208_ALARM_HIGH_LSB 0x11
+#define MAX30208_ALARM_LOW_MSB 0x12
+#define MAX30208_ALARM_LOW_LSB 0x13
+#define MAX30208_TEMP_SENSOR_SETUP 0x14
+
+#define MAX30208_FIFO_WRITE_POINTER 0x04
+#define MAX30208_FIFO_READ_POINTER 0x05
+#define MAX30208_FIFO_OVERFLOW_COUNTER 0x06
+#define MAX30208_FIFO_DATA_COUNTER 0x07
+#define MAX30208_FIFO_DATA 0x08
+#define MAX30208_FIFO_CONFIGURATION1 0x09
+#define MAX30208_FIFO_CONFIGURATION2 0x0A
+
+#define MAX30208_INTERRUPT_STATUS 0x00
+#define MAX30208_INTERRUPT_ENABLE 0x01
+#define MAX30208_INT_STATUS_AFULL 0x80
+#define MAX30208_INT_STATUS_TEMP_LOW 0x04
+#define MAX30208_INT_STATUS_TEMP_HIGH 0x02
+#define MAX30208_INT_STATUS_TEMP_RDY 0x01
 
 struct max30208_config
 {

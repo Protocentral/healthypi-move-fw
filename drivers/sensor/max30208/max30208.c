@@ -14,13 +14,48 @@
 
 LOG_MODULE_REGISTER(MAX30208, CONFIG_SENSOR_LOG_LEVEL);
 
-uint8_t m_read_reg_2(const struct device *dev, uint8_t reg, uint8_t *read_buf)
+uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
 {
 	const struct max30208_config *config = dev->config;
-	i2c_write_read_dt(&config->i2c, &reg, sizeof(reg), read_buf, sizeof(read_buf));
+	int ret = i2c_write_read_dt(&config->i2c, &reg, sizeof(reg), read_buf, sizeof(read_buf));
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to read register: %d", ret);
+	}
 	return 0;
 }
 
+
+static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t* read_buf)
+{
+	const struct max30208_config *config = dev->config;
+	
+	int ret = i2c_reg_read_byte_dt(&config->i2c, reg, read_buf);
+	if(ret<0)
+	{
+		LOG_ERR("Failed to read register: %d", ret);
+	}
+	return read_buf[0];
+}
+
+static int max30208_get_chip_id(const struct device *dev)
+{
+	uint8_t read_buf[1] = {0};
+	max30208_read_reg(dev, MAX30208_CHIP_ID, read_buf);
+	LOG_DBG("MAX30208 Chip ID: %x\n", read_buf[0]);
+	return 0;
+}
+
+static int max30208_get_int_status(const struct device *dev)
+{
+	uint8_t read_buf[1] = {0};
+	//max30208_read_reg(dev, MAX30208_INTERRUPT_STATUS, read_buf);
+	m_read_reg(dev, MAX30208_INTERRUPT_STATUS, read_buf);
+	LOG_DBG("MAX30208 Interrupt Status: %x\n", read_buf[0]);
+	return 0;
+}
+
+/*
 static int max30208_get_fifo_avail(const struct device *dev)
 {
 	uint8_t read_buf[2] = {0, 0};
@@ -28,7 +63,7 @@ static int max30208_get_fifo_avail(const struct device *dev)
 	int16_t raw = read_buf[0] << 8 | read_buf[1];
 	//return readRegister8(MAX30208_FIFO_DATA_COUNTER);
 	return raw;
-}
+}*/
 
 static int max30208_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
@@ -69,11 +104,20 @@ static int max30208_init(const struct device *dev)
 {
 	const struct max30208_config *config = dev->config;
 
+	int ret=0;
+
 	/* Get the I2C device */
 	if (!device_is_ready(config->i2c.bus))
 	{
 		LOG_ERR("Bus device is not ready");
 		return -ENODEV;
+	}
+
+	ret = max30208_get_int_status(dev);
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to get chip id");
+		return ret;
 	}
 
 	return 0;
