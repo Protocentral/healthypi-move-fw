@@ -36,7 +36,7 @@ lv_obj_t *btn_bpt_measure_start;
 lv_obj_t *label_bp_sys_sub;
 lv_obj_t *label_bp_sys_cap;
 static lv_obj_t *label_bp_val;
-static lv_obj_t *label_bp_dia_val;
+//static lv_obj_t *label_bp_dia_val;
 
 static bool bpt_meas_done_flag = false;
 
@@ -57,14 +57,15 @@ static float y_min_ppg = 10000;
 static float gx = 0;
 
 static bool chart_ppg_update = true;
-static void hpi_bpt_disp_do_set_scale(int disp_window_size);
 
 // BPT variables
+/*
 static bool bpt_cal_done_flag = false;
 static int bpt_meas_last_progress = 0;
 static int bpt_meas_last_status = 0;
 static int bpt_cal_last_status = 0;
 static uint8_t bpt_cal_last_progress = 0;
+*/
 
 static void scr_bpt_btn_measure_exit_event_handler(lv_event_t *e)
 {
@@ -97,7 +98,6 @@ static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-
         draw_scr_bpt_measure();
     }
 }
@@ -146,7 +146,7 @@ static void scr_bpt_btn_measure_start_event_handler(lv_event_t *e)
 void draw_scr_bpt_measure(void)
 {
     scr_bpt_measure = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_measure,0);
+    draw_header_minimal(scr_bpt_measure, 0);
 
     // Draw Blood Pressure label
 
@@ -236,12 +236,15 @@ void draw_scr_bpt_measure(void)
     curr_screen = SUBSCR_BPT_MEASURE;
 
     lv_scr_load_anim(scr_bpt_measure, LV_SCR_LOAD_ANIM_MOVE_BOTTOM, SCREEN_TRANS_TIME, 0, true);
+
+    hpi_disp_set_curr_screen(SUBSCR_BPT_MEASURE);
+    hpi_show_screen(scr_bpt_measure, SCROLL_UP);
 }
 
 void draw_scr_bpt_calibrate(void)
 {
     scr_bpt_calibrate = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_calibrate,0);
+    draw_header_minimal(scr_bpt_calibrate, 0);
 
     draw_bg(scr_bpt_calibrate);
 
@@ -324,7 +327,7 @@ void draw_scr_bpt_calibrate(void)
 void draw_scr_bpt_home(enum scroll_dir m_scroll_dir)
 {
     scr_bpt_home = lv_obj_create(NULL);
-    draw_header_minimal(scr_bpt_home,0);
+    draw_header_minimal(scr_bpt_home, 0);
 
     // Draw button to measure BP
 
@@ -409,28 +412,6 @@ void hpi_disp_update_bp(int sys, int dia)
     lv_label_set_text(label_bp_val, buf);
 }
 
-void hpi_disp_bpt_draw_plotPPG(float data_ppg)
-{
-    if (chart_ppg_update == true)
-    {
-        if (data_ppg < y_min_ppg)
-        {
-            y_min_ppg = data_ppg;
-        }
-
-        if (data_ppg > y_max_ppg)
-        {
-            y_max_ppg = data_ppg;
-        }
-
-        // printk("E");
-        lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg);
-
-        gx += 1;
-        hpi_bpt_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
-    }
-}
-
 static void hpi_bpt_disp_do_set_scale(int disp_window_size)
 {
     if (gx >= (disp_window_size))
@@ -444,3 +425,35 @@ static void hpi_bpt_disp_do_set_scale(int disp_window_size)
         y_min_ppg = 900000;
     }
 }
+
+static void hpi_bpt_disp_add_samples(int num_samples)
+{
+    gx += num_samples;
+}
+
+void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples)
+{
+    if (chart_ppg_update == true)
+    {
+        for (int i = 0; i < num_samples; i++)
+        {
+
+            if (data_ppg[i] < y_min_ppg)
+            {
+                y_min_ppg = data_ppg[i];
+            }
+
+            if (data_ppg[i] > y_max_ppg)
+            {
+                y_max_ppg = data_ppg[i];
+            }
+
+            lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg[i]);
+        }
+
+        hpi_bpt_disp_add_samples(1);
+        hpi_bpt_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
+    }
+}
+
+

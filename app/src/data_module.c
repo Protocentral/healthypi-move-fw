@@ -263,7 +263,9 @@ void data_thread(void)
     /* Initialize the FIR filter */
     // arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
 
-    LOG_INF("Data Thread starting\n");
+    LOG_INF("Data Thread starting");
+
+    printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
 
     for (;;)
     {
@@ -311,12 +313,7 @@ void data_thread(void)
         {
             if (settings_send_ble_enabled)
             {
-                ppg_sample_buffer[ppg_sample_buffer_count++] = ppg_sensor_sample.raw_green;
-                if (ppg_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
-                {
-                    ble_ppg_notify(ppg_sample_buffer, ppg_sample_buffer_count);
-                    ppg_sample_buffer_count = 0;
-                }
+                //ble_ppg_notify(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples);
             }
             if (settings_plot_enabled)
             {
@@ -325,22 +322,11 @@ void data_thread(void)
 
             if (settings_send_usb_enabled)
             {
-                if (settings_data_format == DATA_FMT_OPENVIEW)
-                {
-                    /*sendData(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample,
-                             ppg_sensor_sample.raw_red, ppg_sensor_sample.raw_ir,
-                             0, ppg_sensor_sample.hr, ppg_sensor_sample.bpt_status, ppg_sensor_sample.spo2, ecg_bioz_sensor_sample._bioZSkipSample);
-                             */
-                }
-                /*else if (settings_data_format == DATA_FMT_PLAIN_TEXT)
-                {
-                    send_data_text(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.raw_red);
-                    // printk("ECG: %d, BIOZ: %d, RED: %d\n", sensor_sample.ecg_sample, sensor_sample.bioz_sample,
-                    //        sensor_sample.raw_red);
-                }*/
+               
             }
+            
 
-            if (ppg_sensor_sample.rtor != 0)
+            /*if (ppg_sensor_sample.rtor != 0)
             {
                 calculate_hrv(ppg_sensor_sample.rtor, &hrv_max, &hrv_min, &hrv_mean, &hrv_sdnn, &hrv_pnn, &hrv_rmssd, &hrv_ready_flag);
                 if (hrv_ready_flag == true)
@@ -356,7 +342,7 @@ void data_thread(void)
                     k_msgq_put(&q_plot_hrv, &hrv_calculated, K_NO_WAIT);
                     // printk("mean: %f, max: %d, min: %d, sdnn: %f, pnn: %f, rmssd:%f\n", hrv_calculated.mean, hrv_calculated.hrv_max, hrv_calculated.hrv_min, hrv_calculated.sdnn, hrv_calculated.pnn, hrv_calculated.rmssd);
                 }
-            }
+            }*/
         }
 
         // Data is now available in sensor_sample

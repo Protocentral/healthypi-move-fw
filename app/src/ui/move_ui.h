@@ -9,11 +9,11 @@
 #define SCREEN_TRANS_TIME 300
 #define HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS 2
 
-#define DISP_SLEEP_TIME_MS 5000
-#define DISPLAY_DEFAULT_BRIGHTNESS 150
+#define DISP_SLEEP_TIME_MS 50000
+#define DISPLAY_DEFAULT_BRIGHTNESS 50
 
 #define DISP_WINDOW_SIZE_EDA 250
-#define PPG_DISP_WINDOW_SIZE 128 // SAMPLE_RATE * 4
+#define PPG_DISP_WINDOW_SIZE 128 // To be verified 
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 
@@ -25,6 +25,8 @@ enum scroll_dir
     SCROLL_RIGHT,
     SCROLL_NONE,
 };
+
+
 
 enum hpi_disp_screens
 {
@@ -46,6 +48,10 @@ enum hpi_disp_screens
     // SCR_BPT_HOME,
 };
 
+// Special screens
+#define SCR_SPL_SETTINGS 20
+#define SCR_SPL_BOOT 21
+
 enum hpi_disp_subscreens
 {
     SUBSCR_BPT_CALIBRATE,
@@ -54,16 +60,14 @@ enum hpi_disp_subscreens
 
 /******** UI Function Prototypes ********/
 
+void draw_scr_boot(void);
 
 //Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);
 void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
-void hpi_disp_draw_plotEDA(float data_eda);
 
 // Home Screen functions
 void draw_scr_home(enum scroll_dir m_scroll_dir);
-void scr_home_set_time(struct rtc_time time_to_set);
-
 void ui_home_time_display_update(struct rtc_time in_time);
 
 void hpi_home_hr_update(int hr);
@@ -72,27 +76,25 @@ void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
 
-
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
 void hpi_ecg_disp_update_hr(int hr);
 
 // PPG screen functions
-void hpi_disp_ppg_draw_plotPPG(float data_ppg);
-void hpi_ppg_disp_do_set_scale(int disp_window_size);
+void hpi_disp_ppg_draw_plotPPG(int32_t *data_ppg, int num_samples);
 void hpi_ppg_disp_update_hr(int hr);
-void hpi_ppg_disp_add_samples(int num_samples);
 void hpi_ppg_disp_update_spo2(int spo2);
 
 // EDA screen functions
 void draw_scr_eda(enum scroll_dir m_scroll_dir);
+void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead_off);
 
 // BPT screen functions
 void draw_scr_bpt_calibrate(void);
 void draw_scr_bpt_home(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_measure(void);
-void hpi_disp_bpt_draw_plotPPG(float data_ppg);
+void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples);
 void hpi_disp_bpt_update_progress(int progress);
 
 // HRV screen functions
@@ -113,7 +115,11 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir);
 // Helper objects
 void draw_header_minimal(lv_obj_t *parent, int top_offset);
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir);
+void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir);
+void hpi_disp_set_curr_screen(int screen);
 
+void hpi_disp_set_brightness(uint8_t brightness_percent);
+uint8_t hpi_disp_get_brightness(void);
 
 //Component objects
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);

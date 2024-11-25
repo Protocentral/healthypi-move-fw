@@ -68,7 +68,7 @@ uint8_t maxm86146_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -217,12 +217,9 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 
 static int maxm86146_set_spo2_coeffs(const struct device *dev, float a, float b, float c)
 {
-    const struct maxm86146_config *config = dev->config;
-
     uint8_t wr_buf[15] = {0x50, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xD7, 0xFB, 0xDD, 0x00, 0xAB, 0x61, 0xFE};
-    uint8_t rd_buf[1] = {0x00};
 
-    int32_t a_int = (int32_t)(a * 100000);
+    // int32_t a_int = (int32_t)(a * 100000);
 
     /*wr_buf[3] = (a_int & 0xff000000) >> 24;
     wr_buf[4] = (a_int & 0x00ff0000) >> 16;
@@ -282,7 +279,7 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
 static int maxm86146_set_mode_extended_algo(const struct device *dev)
 {
-    LOG_DBG("MAXM86146 entering extended ALGO mode...\n");
+    LOG_DBG("MAXM86146 entering extended ALGO mode...");
 
     maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
@@ -296,16 +293,16 @@ static int maxm86146_set_mode_extended_algo(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set continuous mode
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00,MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Enable AEC
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Disable Auto PD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Disable SCD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set AGC target PD current
     // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
@@ -319,7 +316,7 @@ static int maxm86146_set_mode_extended_algo(const struct device *dev)
 
 static int maxm86146_set_mode_raw(const struct device *dev)
 {
-    LOG_INF("MAXM86146 entering RAW mode...\n");
+    LOG_INF("MAXM86146 entering RAW mode...");
 
     const struct maxm86146_config *config = dev->config;
 
@@ -329,10 +326,10 @@ static int maxm86146_set_mode_raw(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Enable accel
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00,MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Enable AFE
     m_i2c_write_cmd_3(dev, 0x44, 0x00, 0x01, 500);
@@ -353,10 +350,9 @@ static int maxm86146_set_mode_raw(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-        // Read  WHOAMI
+    // Read  WHOAMI
     m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
     m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
-
 
     // Enabled AFE Sample rate 100
     m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x00, 50);
@@ -387,52 +383,6 @@ static int maxm86146_set_mode_raw(const struct device *dev)
     return 0;
 }
 
-static int maxm86146_set_mode_algo(const struct device *dev)
-{
-    LOG_DBG("MAXM86146 entering ALGO mode...\n");
-
-    maxm86146_do_enter_app(dev);
-
-    maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
-
-    // Output mode sensor + algo data
-    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set continuous mode - only HR
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x02,MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Enable AEC
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
-
-    // EN Auto PD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
-
-    // EN SCD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01,MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Set AGC target PD current
-    //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
-    //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x30, 0x00);
-    //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x73);
-    //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x10, 0x20);
-
-    // Read  WHOAMI
-    //m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    //m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
-
-    // Enable HR, SpO2 algo
-    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
-    k_sleep(K_MSEC(500));
-
-    return 0;
-}
-
 static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
     const struct maxm86146_config *config = dev->config;
@@ -449,12 +399,89 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    //LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    // LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
+        LOG_ERR("MAXM86146 not found");
         return -ENODEV;
     }
+    return 0;
+}
+
+static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode mode)
+{
+    maxm86146_do_enter_app(dev);
+
+    // Read  WHOAMI
+    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+
+    maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
+
+    // Output mode sensor + algo data
+    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set interrupt threshold
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set report period
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set continuous mode - only HR
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Enable AEC
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+    if (mode == MAXM86146_OP_MODE_ALGO_AEC)
+    {
+        LOG_DBG("MAXM86146 entering AEC ALGO mode...");
+
+        // EN Auto PD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+        // EN SCD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+        //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
+        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
+
+         m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
+
+        // Enable HR, SpO2 algo
+        m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
+        // k_sleep(K_MSEC(500));
+    }
+    else if (mode == MAXM86146_OP_MODE_ALGO_AGC)
+    {
+        LOG_DBG("MAXM86146 entering AGC ALGO mode...");
+
+        // DIS Auto PD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
+
+        // DIS SCD
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
+
+        // Set AGC target PD current
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
+
+        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
+
+        // Read  WHOAMI
+        // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+        // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+
+        // Enable HR, SpO2 algo
+        m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
+        // k_sleep(K_MSEC(500));
+    }
+
     return 0;
 }
 
@@ -462,11 +489,10 @@ int maxm86146_do_enter_app(const struct device *dev)
 {
     const struct maxm86146_config *config = dev->config;
 
-    LOG_DBG("MAXM86146 entering application mode ");
+    LOG_DBG("Set app mode");
 
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
-    // Enter APPLICATION mode
     gpio_pin_set_dt(&config->mfio_gpio, 1);
     k_sleep(K_MSEC(10));
 
@@ -475,16 +501,11 @@ int maxm86146_do_enter_app(const struct device *dev)
 
     gpio_pin_set_dt(&config->reset_gpio, 1);
     k_sleep(K_MSEC(1600));
-    // End of APPLICATION mode
 
     // gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
     // k_sleep(K_MSEC(10));
 
     m_read_op_mode(dev);
-
-    // maxm86146_read_hub_status(dev);
-    // k_sleep(K_MSEC(200));
-    // maxm86146_read_hub_status(dev);
 
     return 0;
 }
@@ -516,17 +537,22 @@ static int maxm86146_attr_set(const struct device *dev,
     switch (attr)
     {
     case MAXM86146_ATTR_OP_MODE:
-        if (val->val1 == MAXM86146_OP_MODE_ALGO)
+        if (val->val1 == MAXM86146_OP_MODE_ALGO_AEC)
         {
-            maxm86146_set_mode_algo(dev);
-            data->op_mode = MAXM86146_OP_MODE_ALGO;
+            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AEC);
+            data->op_mode = MAXM86146_OP_MODE_ALGO_AEC;
+        }
+        else if (val->val1 == MAXM86146_OP_MODE_ALGO_AGC)
+        {
+            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AGC);
+            data->op_mode = MAXM86146_OP_MODE_ALGO_AGC;
         }
         else if (val->val1 == MAXM86146_OP_MODE_ALGO_EXTENDED)
         {
             maxm86146_set_mode_extended_algo(dev);
             data->op_mode = MAXM86146_OP_MODE_ALGO_EXTENDED;
         }
-        else if(val->val1 == MAXM86146_OP_MODE_RAW)
+        else if (val->val1 == MAXM86146_OP_MODE_RAW)
         {
             maxm86146_set_mode_raw(dev);
             data->op_mode = MAXM86146_OP_MODE_RAW;
@@ -549,8 +575,54 @@ static int maxm86146_attr_set(const struct device *dev,
     return 0;
 }
 
+static int maxm86146_check_app_present(const struct device *dev)
+{
+    LOG_DBG("Checking MAXM86146 app present...");
+
+    struct maxm86146_data *data = dev->data;
+
+    if (data->hub_ver[1] == 0x08 && data->hub_ver[2] == 0x00 && data->hub_ver[3] == 0x00)
+    {
+        LOG_ERR("App not present !!\n");
+        return 8;
+    }
+    else
+    {
+        LOG_DBG("App present !!\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int maxm86146_attr_get(const struct device *dev,
+                              enum sensor_channel chan,
+                              enum sensor_attribute attr,
+                              struct sensor_value *val)
+{
+    struct maxm86146_data *data = dev->data;
+
+    switch (attr)
+    {
+    case MAXM86146_ATTR_OP_MODE:
+        val->val1 = data->op_mode;
+        val->val2 = 0;
+        break;
+    case MAXM86146_ATTR_IS_APP_PRESENT:
+        val->val1 = maxm86146_check_app_present(dev);
+        val->val2 = 0;
+        break;
+    default:
+        LOG_ERR("Unsupported sensor attribute");
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+
 static const struct sensor_driver_api maxm86146_driver_api = {
     .attr_set = maxm86146_attr_set,
+    .attr_get = maxm86146_attr_get,
 
     .sample_fetch = maxm86146_sample_fetch,
     .channel_get = maxm86146_channel_get,
@@ -564,10 +636,11 @@ static const struct sensor_driver_api maxm86146_driver_api = {
 static int maxm86146_chip_init(const struct device *dev)
 {
     const struct maxm86146_config *config = dev->config;
+    struct maxm86146_data *data = dev->data;
 
     if (!device_is_ready(config->i2c.bus))
     {
-        LOG_ERR("I2C device is not ready");
+        LOG_ERR("I2C not ready");
         return -ENODEV;
     }
 
@@ -576,10 +649,10 @@ static int maxm86146_chip_init(const struct device *dev)
 
     maxm86146_do_enter_app(dev);
 
-    uint8_t ver_buf[4] = {0};
-    if (maxm86146_get_ver(dev, ver_buf) == 0)
+    //uint8_t ver_buf[4] = {0};
+    if (maxm86146_get_ver(dev, data->hub_ver) == 0)
     {
-        LOG_DBG("MAXM86146 version: %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+        LOG_DBG("Hub Version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);
     }
     else
     {

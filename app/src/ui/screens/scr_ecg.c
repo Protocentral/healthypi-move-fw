@@ -27,7 +27,7 @@ static bool chart_ecg_update = true;
 static float y_max_ecg = 0;
 static float y_min_ecg = 10000;
 
-static bool ecg_plot_hidden = false;
+//static bool ecg_plot_hidden = false;
 
 static float gx = 0;
 
@@ -36,8 +36,6 @@ extern lv_style_t style_lbl_orange;
 extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
-
-extern int curr_screen; 
 
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
@@ -100,7 +98,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_set_size(img1, 35, 33);
     lv_obj_align_to(img1, label_hr, LV_ALIGN_OUT_LEFT_MID, 0, 0);*/
 
-    curr_screen = SCR_PLOT_ECG;
+    hpi_disp_set_curr_screen(SCR_PLOT_ECG);
     hpi_show_screen(scr_ecg, m_scroll_dir);
 }
 

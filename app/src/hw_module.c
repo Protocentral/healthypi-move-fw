@@ -93,18 +93,16 @@ volatile bool max32664d_device_present = false;
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-// uint8_t global_batt_level = 0;
+static uint8_t global_batt_level = 0;
 // int32_t global_temp;
 // bool global_batt_charging = false;
-// struct rtc_time global_system_time;
+static struct rtc_time global_system_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
 uint8_t ring_buffer[RING_BUF_SIZE];
 struct ring_buf ringbuf_usb_cdc;
 static bool rx_throttled;
-
-uint8_t m_key_pressed = GPIO_KEYPAD_KEY_NONE;
 
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
@@ -114,6 +112,11 @@ K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
+
+K_SEM_DEFINE(sem_display_on, 0, 1);
+K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
+
+K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
 
@@ -141,7 +144,7 @@ static void gpio_keys_cb_handler(struct input_event *evt)
         {
         case INPUT_KEY_UP:
             LOG_INF("Crown Key Pressed");
-            lv_disp_trig_activity(NULL);
+            k_sem_give(&sem_crown_key_pressed);
             break;
         case INPUT_KEY_HOME:
             LOG_INF("Extra Key Pressed");
@@ -303,7 +306,7 @@ int npm_fuel_gauge_init(const struct device *charger)
     int32_t chg_status;
     int ret;
 
-    printk("nRF Fuel Gauge version: %s\n", nrf_fuel_gauge_version);
+    LOG_DBG("nRF Fuel Gauge version: %s", nrf_fuel_gauge_version);
 
     ret = npm_read_sensors(charger, &parameters.v0, &parameters.i0, &parameters.t0, &chg_status);
     if (ret < 0)
@@ -360,7 +363,7 @@ int npm_fuel_gauge_update(const struct device *charger)
     };
 
     zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
-    // global_batt_level = (int)soc;
+    hw_set_battery_level((uint8_t)soc);
 
     return 0;
 }
@@ -426,7 +429,7 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
 
 void hw_bpt_start_cal(void)
 {
-    printk("Starting BPT Calibration\n");
+    LOG_INF("Starting BPT Calibration\n");
 
     struct sensor_value data_time_val;
     data_time_val.val1 = DEFAULT_DATE; // Date
@@ -483,12 +486,31 @@ void hw_bpt_get_calib(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
+void hw_pwr_display_enable(void)
+{
+    regulator_enable(ldsw_disp_unit);
+}
 
+K_MUTEX_DEFINE(mutex_batt_level);
+
+void hw_set_battery_level(uint8_t batt_level)
+{
+    k_mutex_lock(&mutex_batt_level, K_FOREVER);
+    global_batt_level = batt_level;
+    k_mutex_unlock(&mutex_batt_level);
+}
+
+uint8_t hw_get_battery_level(void)
+{
+    return global_batt_level;
+}
 
 void hw_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
+
+    k_sem_give(&sem_display_on);
 
     if (!device_is_ready(regulators))
     {
@@ -507,67 +529,73 @@ void hw_init(void)
         // return 0;
     }
 
-
-    //regulator_disable(ldsw_disp_unit);
-    //k_sleep(K_MSEC(100));
-
-
-    regulator_enable(ldsw_disp_unit);
-    k_sleep(K_MSEC(1000));
-
     // device_init(display_dev);
-    // k_sleep(K_MSEC(1000));
+    //  k_sleep(K_MSEC(1000));
+    // hw_pwr_display_enable();
 
+    // regulator_enable(ldsw_sens_1_8);
+    regulator_disable(ldsw_sens_1_8);
 
-    regulator_enable(ldsw_sens_1_8);
     k_sleep(K_MSEC(100));
 
+    // device_init(display_dev);
+    // k_sleep(K_MSEC(100));
     device_init(touch_dev);
 
-    // regulator_disable(ldsw_sens_1_8);
+    if (!device_is_ready(max30001_dev))
+    {
+        LOG_ERR("MAX30001 device not found!");
+        max30001_device_present = false;
+    }
+    else
+    {
+        LOG_INF("MAX30001 device found!");
+        max30001_device_present = true;
+        /*struct sensor_value ecg_mode_set;
+        // ecg_mode_set.val1 = 1;
+        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
+        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
+        */
+    }
 
+    k_sleep(K_MSEC(1000));
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
     {
-        // return;
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
 
-#ifdef CONFIG_SENSOR_MAX30001
-    if (!device_is_ready(max30001_dev))
-    {
-        printk("MAX30001 device not found!"); // Rebooting !");
-        // sys_reboot(SYS_REBOOT_COLD);
-    }
-    else
-    {
-        struct sensor_value ecg_mode_set;
-
-        // ecg_mode_set.val1 = 1;
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
-    }
-#endif
-
     if (!device_is_ready(maxm86146_dev))
     {
         LOG_ERR("MAXM86146 device not present!");
+        maxm86146_device_present = false;
     }
     else
     {
         LOG_INF("MAXM86146 device present!");
         maxm86146_device_present = true;
 
-        struct sensor_value mode_set;
-        mode_set.val1 = MAXM86146_OP_MODE_ALGO;
-        sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        struct sensor_value mode_get;
+        sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_IS_APP_PRESENT, &mode_get);
+        LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
+        if (mode_get.val1 == 8)
+        {
+            LOG_INF("MAXM86146 App not present. Starting bootloader mode");
+            struct sensor_value mode_set;
+            mode_set.val1 = 1;
+            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+        }
+        else
+        {
+            struct sensor_value mode_set;
+            mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
+            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+        }
     }
 
-    struct sensor_value mode_set;
-    mode_set.val1 = 1;
-    // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+    k_sleep(K_MSEC(1000));
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -578,29 +606,30 @@ void hw_init(void)
     {
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
+
         struct sensor_value mode_set;
+
+        // Set initial mode
         mode_set.val1 = MAX32664_OP_MODE_BPT;
-        // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+        sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
     }
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    LOG_INF("SPIM runs at 32MHz !\n");
+    LOG_INF("SPIM runs at 32MHz !");
 #endif
 
     // setup_pmic_callbacks();
 
     if (!device_is_ready(max30205_dev))
     {
-        LOG_ERR("MAX30205 device not found!\n");
-        // return;
+        LOG_ERR("MAX30205 device not found!");
     }
 
     rtc_get_time(rtc_dev, &curr_time);
-    LOG_INF("Current time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
+    LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    fs_module_init();
-
-    // TODO: If MAXM86146 is present without application firmware, enter bootloader mode
+    npm_fuel_gauge_update(charger);
+    // fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
 
@@ -610,7 +639,7 @@ void hw_init(void)
 
     k_sem_give(&sem_hw_inited);
 
-    // Start sampling if devices are present
+    // Start sampling only if devices are present
 
     if (max30001_device_present)
     {
@@ -627,26 +656,27 @@ void hw_init(void)
         k_sem_give(&sem_ppg_finger_thread_start);
     }
 
+    k_sem_give(&sem_disp_boot_complete);
+
     // init_settings();
 
     // usb_init();
 }
 
+struct rtc_time hw_get_current_time(void)
+{
+    rtc_get_time(rtc_dev, &global_system_time);
+    return global_system_time;
+}
+
 void hw_thread(void)
 {
-    LOG_INF("HW Thread started\n");
+    LOG_INF("HW Thread starting");
 
     struct rtc_time sys_time;
 
     for (;;)
     {
-        /*if (k_sem_take(&sem_start_cal, K_NO_WAIT) == 0)
-        {
-            hw_bpt_start_cal();
-        }*/
-
-        // fetch_and_display(acc_dev);
-
         npm_fuel_gauge_update(charger);
 
         rtc_get_time(rtc_dev, &sys_time);

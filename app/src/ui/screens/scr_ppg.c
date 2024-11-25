@@ -41,14 +41,12 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
-extern int curr_screen;
-
 void draw_scr_ppg(enum scroll_dir m_scroll_dir)
 {
     scr_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     draw_bg(scr_ppg);
-    draw_header_minimal(scr_ppg,10);
+    draw_header_minimal(scr_ppg, 10);
 
     // Create Chart 1 - ECG
     chart_ppg = lv_chart_create(scr_ppg);
@@ -60,7 +58,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ppg, PPG_DISP_WINDOW_SIZE);
     // lv_chart_set_type(chart_ppg, LV_CHART_TYPE_LINE);
-    lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
+    // lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
     // lv_chart_set_range(chart_ppg, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
@@ -121,9 +119,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_set_size(img2, 22, 35);
     lv_obj_align_to(img2, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, 0);*/
 
-    curr_screen = SCR_PLOT_PPG;
-
-    // lv_obj_add_event_cb(scr_ppg, ppg_screen_event, LV_EVENT_GESTURE, NULL);
+    hpi_disp_set_curr_screen(SCR_PLOT_PPG);
     hpi_show_screen(scr_ppg, m_scroll_dir);
 }
 
@@ -163,29 +159,12 @@ void hpi_ppg_disp_update_spo2(int spo2)
     lv_label_set_text(label_ppg_spo2, buf);
 }
 
-void hpi_disp_ppg_draw_plotPPG(float data_ppg)
+static void hpi_ppg_disp_add_samples(int num_samples)
 {
-    if (chart_ppg_update == true)
-    {
-        if (data_ppg < y_min_ppg)
-        {
-            y_min_ppg = data_ppg;
-        }
-
-        if (data_ppg > y_max_ppg)
-        {
-            y_max_ppg = data_ppg;
-        }
-
-        // printk("E");
-        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg);
-
-        gx += 1;
-        hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
-    }
+    gx += num_samples;
 }
 
-void hpi_ppg_disp_do_set_scale(int disp_window_size)
+static void hpi_ppg_disp_do_set_scale(int disp_window_size)
 {
     if (gx >= (disp_window_size))
     {
@@ -196,5 +175,30 @@ void hpi_ppg_disp_do_set_scale(int disp_window_size)
 
         y_max_ppg = -900000;
         y_min_ppg = 900000;
+    }
+}
+
+void hpi_disp_ppg_draw_plotPPG(int32_t *data_ppg, int num_samples)
+{
+    if (chart_ppg_update == true)
+    {
+        for (int i = 0; i < num_samples; i++)
+        {
+
+            if (data_ppg[i] < y_min_ppg)
+            {
+                y_min_ppg = data_ppg[i];
+            }
+
+            if (data_ppg[i] > y_max_ppg)
+            {
+                y_max_ppg = data_ppg[i];
+            }
+
+            lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
+
+            hpi_ppg_disp_add_samples(1);
+            hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
+        }
     }
 }

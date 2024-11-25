@@ -57,7 +57,7 @@ static lv_style_t style_batt_percent;
 
 static lv_style_t style_info;
 static lv_style_t style_icon;
-static lv_style_t style_scr_black;
+lv_style_t style_scr_black;
 
 lv_style_t style_lbl_red;
 lv_style_t style_lbl_red_small;
@@ -67,6 +67,8 @@ lv_style_t style_lbl_orange;
 lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
+
+static lv_style_t style_btn;
 
 static lv_obj_t *roller_session_select;
 static lv_style_t style_scr_back;
@@ -79,30 +81,19 @@ lv_obj_t *cui_battery_percent;
 
 bool display_inited = false;
 
+static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
+
 int curr_screen = SCR_VITALS;
 
 K_SEM_DEFINE(sem_disp_inited, 0, 1);
-K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 100, 1);
-K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 100, 1);
-K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 100, 1);
+K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 
 bool bpt_cal_started = false;
 int global_bp_sys = 0;
 int global_bp_dia = 0;
 int global_hr = 0;
-
-// Externs
-extern struct k_sem sem_hw_inited;
-extern struct k_sem sem_sampling_start;
-// extern uint8_t global_batt_level;
-// extern bool global_batt_charging;
-
-extern lv_obj_t *scr_clock;
-extern lv_obj_t *scr_ppg;
-extern lv_obj_t *scr_vitals;
-
-extern uint8_t m_key_pressed;
-extern struct rtc_time global_system_time;
 
 // LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(pc_move_bg_200);
@@ -113,6 +104,22 @@ static bool m_display_active = true;
 
 uint16_t disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
 
+// Externs
+// extern struct k_sem sem_hw_inited;
+extern struct k_sem sem_display_on;
+extern struct k_sem sem_sampling_start;
+extern struct k_sem sem_disp_boot_complete;
+extern struct k_sem sem_crown_key_pressed;
+
+// extern uint8_t global_batt_level;
+// extern bool global_batt_charging;
+
+extern lv_obj_t *scr_clock;
+extern lv_obj_t *scr_ppg;
+extern lv_obj_t *scr_vitals;
+
+extern struct rtc_time global_system_time;
+
 void hpi_display_sleep_on(void)
 {
     if (m_display_active == true)
@@ -120,6 +127,7 @@ void hpi_display_sleep_on(void)
         printk("Display off");
         // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
+
         hpi_pwr_display_sleep();
 
         // Slow down the display thread
@@ -134,7 +142,8 @@ void hpi_display_sleep_off(void)
     if (m_display_active == false)
     {
         printk("Display on");
-        display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+        hpi_disp_set_brightness(hpi_disp_get_brightness());
+
         // display_blanking_on(display_dev);
         hpi_move_load_screen(curr_screen, SCROLL_NONE);
         // display_blanking_off(display_dev);
@@ -147,8 +156,37 @@ void hpi_display_sleep_off(void)
     }
 }
 
+/*Will be called when the styles of the base theme are already added to add new styles*/
+static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
+{
+    LV_UNUSED(th);
+
+    if (lv_obj_check_type(obj, &lv_btn_class))
+    {
+        lv_obj_add_style(obj, &style_btn, 0);
+    }
+}
+
 void display_init_styles()
 {
+    /*Initialize the styles*/
+    lv_style_init(&style_btn);
+    lv_style_set_bg_color(&style_btn, lv_palette_darken(LV_PALETTE_GREY, 4));
+    lv_style_set_border_color(&style_btn, lv_palette_darken(LV_PALETTE_RED, 3));
+    lv_style_set_border_width(&style_btn, 3);
+
+    /*Initialize the new theme from the current theme*/
+    lv_theme_t *th_act = lv_disp_get_theme(NULL);
+    static lv_theme_t th_new;
+    th_new = *th_act;
+
+    /*Set the parent theme and the style apply callback for the new theme*/
+    lv_theme_set_parent(&th_new, th_act);
+    lv_theme_set_apply_cb(&th_new, new_theme_apply_cb);
+
+    /*Assign the new theme to the current display*/
+    lv_disp_set_theme(NULL, &th_new);
+
     // Subscript (Unit) label style
     lv_style_init(&style_sub);
     lv_style_set_text_color(&style_sub, lv_color_white());
@@ -261,6 +299,8 @@ void display_init_styles()
     lv_style_set_bg_opa(&style_scr_black, LV_OPA_COVER);
     lv_style_set_border_width(&style_scr_black, 0);
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
+
+    lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
 void menu_roller_event_handler(lv_event_t *e)
@@ -305,14 +345,9 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset + 2));
 
     label_batt_level_val = lv_label_create(parent);
-    lv_label_set_text(label_batt_level_val, "--");
+    lv_label_set_text_fmt(label_batt_level_val, "%d %", hw_get_battery_level());
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, -12, -2);
-
-    /*ui_battery_group = ui_battery(parent);
-    lv_obj_set_x(ui_battery_group, 20);
-    lv_obj_set_y(ui_battery_group, 5);
-    lv_obj_set_style_border_opa(ui_battery_group, 0, LV_PART_MAIN | LV_STATE_DEFAULT);*/
+    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, 0, -2);
 }
 
 void draw_bg(lv_obj_t *parent)
@@ -325,40 +360,6 @@ void draw_bg(lv_obj_t *parent)
     lv_obj_add_flag(logo_bg, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
     lv_obj_clear_flag(logo_bg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_add_style(parent, &style_scr_black, 0);
-}
-
-void draw_header(lv_obj_t *parent, bool showFWVersion)
-{
-    lbl_time = lv_label_create(parent);
-    lv_label_set_text(lbl_time, "12:00");
-    lv_obj_align(lbl_time, LV_ALIGN_TOP_MID, -45, 23);
-
-    // lbl_date = lv_label_create(scr_vitals_home);
-    // lv_label_set_text(lbl_date, "16/Mar/2024");
-    // lv_obj_align(lbl_date, LV_ALIGN_TOP_MID, 0, 20);
-
-    // ProtoCentral logo
-    LV_IMG_DECLARE(logo_oneline);
-    lv_obj_t *img1 = lv_img_create(parent);
-    lv_img_set_src(img1, &logo_oneline);
-    lv_obj_align(img1, LV_ALIGN_TOP_MID, 0, 10);
-    lv_obj_set_size(img1, 104, 10);
-
-    LV_IMG_DECLARE(logo_round_white);
-    lv_obj_t *img_logo = lv_img_create(parent);
-    lv_img_set_src(img_logo, &logo_round_white);
-    lv_obj_set_size(img_logo, 25, 25);
-    lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, 0, 30);
-
-    static lv_style_t style_bg;
-    lv_style_init(&style_bg);
-    lv_style_set_radius(&style_bg, 5);
-
-    // Battery Level
-    label_batt_level = lv_label_create(parent);
-    lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
-    lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 45, 20);
 }
 
 void hpi_disp_update_temp(int temp)
@@ -462,6 +463,18 @@ void disp_screen_event(lv_event_t *e)
     {
         lv_indev_wait_release(lv_indev_get_act());
         printk("Down at %d\n", curr_screen);
+
+        hpi_move_load_scr_settings(SCROLL_DOWN);
+    }
+    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printk("Up at %d\n", curr_screen);
+
+        if (curr_screen == SCR_SPL_SETTINGS)
+        {
+            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+        }
     }
 }
 
@@ -523,6 +536,11 @@ void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
     }
 }
 
+void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir)
+{
+    draw_scr_settings(m_scroll_dir);
+}
+
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
 {
     switch (m_screen)
@@ -552,6 +570,7 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_BPT_HOME:
         draw_scr_bpt_home(m_scroll_dir);
         break;
+
     /*
     case SCR_CLOCK:
         draw_scr_clockface(m_scroll_dir);
@@ -567,15 +586,25 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     }
 }
 
+void hpi_disp_set_brightness(uint8_t brightness_percent)
+{
+    uint8_t brightness = (uint8_t)((brightness_percent * 255) / 100);
+    display_set_brightness(display_dev, brightness);
+    hpi_disp_curr_brightness = brightness_percent;
+}
+
+uint8_t hpi_disp_get_brightness(void)
+{
+    return hpi_disp_curr_brightness;
+}
+
 static uint8_t m_disp_batt_level = 0;
 static struct rtc_time m_disp_sys_time;
 static uint8_t m_disp_hr = 0;
 
-/*
-
-NOTE: All LVGL display updates should be called from the same display_screens_thread
-
+/* NOTE: All LVGL display updates should be called from the same display_screens_thread
  */
+
 void display_screens_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
@@ -589,14 +618,14 @@ void display_screens_thread(void)
     int batt_refresh_counter = 0;
     int hr_refresh_counter = 0;
     int time_refresh_counter = 0;
-
     int m_disp_inact_refresh_counter = 0;
-
     int scr_ppg_hr_spo2_refresh_counter = 0;
 
     static volatile uint16_t prev_rtor;
 
-    k_sem_take(&sem_hw_inited, K_FOREVER);
+    k_sem_take(&sem_display_on, K_FOREVER);
+
+    printk("Disp ON");
 
     if (!device_is_ready(display_dev))
     {
@@ -606,16 +635,9 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
-    printk("Display thread starting...");
-
+    draw_scr_boot();
     // Init all styles globally
     display_init_styles();
-
-    // Setup LVGL Input Device
-    /*lv_indev_drv_init(&m_keypad_drv);
-    m_keypad_drv.type = LV_INDEV_TYPE_KEYPAD;
-    m_keypad_drv.read_cb = keypad_read;
-    m_keypad_indev = lv_indev_drv_register(&m_keypad_drv);*/
 
     touch_indev = lv_indev_get_next(NULL);
     while (touch_indev)
@@ -629,29 +651,21 @@ void display_screens_thread(void)
     }
 
     display_blanking_off(display_dev);
+    hpi_disp_set_brightness(50);
 
-    display_set_brightness(display_dev, DISPLAY_DEFAULT_BRIGHTNESS);
+    k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
-    // display_set_brightness(display_dev, 90);
+    printk("Display boot complete");
 
-    lv_disp_set_bg_color(NULL, lv_color_black());
-
-    // draw_scr_splash();
-    // draw_scr_vitals_home();
-    // draw_scr_clockface(SCROLL_RIGHT);
-    // draw_scr_clock_small(SCROLL_RIGHT);
     draw_scr_home(SCROLL_NONE);
-    // draw_scr_charts();
-    // draw_scr_hrv(SCROLL_RIGHT);
-
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
-    //  draw_scr_bpt_home(SCROLL_RIGHT);
-    //  draw_scr_settings(SCROLL_RIGHT);
-    //  draw_scr_eda();
-    //  draw_scr_hrv_scatter(SCROLL_RIGHT);
+    // draw_scr_bpt_home(SCROLL_RIGHT);
+    // draw_scr_settings(SCROLL_RIGHT);
+    // draw_scr_eda();
+    // draw_scr_hrv_scatter(SCROLL_RIGHT);
 
-    printk("Display screens inited");
+    LOG_INF("Display screens inited");
 
     while (1)
     {
@@ -661,7 +675,7 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-                    hpi_disp_ppg_draw_plotPPG((float)((ppg_sensor_sample.raw_green * -1.0000)));
+                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
@@ -700,8 +714,8 @@ void display_screens_thread(void)
                 else if (curr_screen == SUBSCR_BPT_CALIBRATE)
                 {
 
-                    hpi_disp_bpt_draw_plotPPG((float)(ppg_sensor_sample.raw_ir * 1.0000));
-                    // hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
+                    // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
+                    //  hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
                     /*if (bpt_cal_done_flag == false)
                     {
                         if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
@@ -806,14 +820,13 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_ECG)
                 {
-
                     //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
                     hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
                     hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
                 }
                 else if (curr_screen == SCR_PLOT_EDA)
                 {
-                    // hpi_disp_draw_plotEDA((float)((ecg_bioz_sensor_sample.bioz_sample / 1000.0000)));
+                    hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
                 }
             }
 
@@ -824,7 +837,7 @@ void display_screens_thread(void)
                 if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
                     ui_home_time_display_update(m_disp_sys_time);
-                    //ui_hr_button_update(m_disp_hr);
+                    // ui_hr_button_update(m_disp_hr);
                     time_refresh_counter = 0;
                 }
                 else
@@ -832,8 +845,6 @@ void display_screens_thread(void)
                     time_refresh_counter++;
                 }
             }
-
-            
 
             /*(curr_screen == SCR_VITALS)
             {
@@ -849,8 +860,6 @@ void display_screens_thread(void)
                 }
                 // lv_task_handler();
             }*/
-           
-            
 
             if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
@@ -866,10 +875,27 @@ void display_screens_thread(void)
             }
         }
 
-        // if (m_disp_inact_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
-        //{
+        // Add button handlers
+        if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
+        {
+            if (m_display_active == false)
+            {
+                lv_disp_trig_activity(NULL);
+            }
+            else
+            {
+                if (curr_screen == SCR_HOME)
+                {
+                    hpi_display_sleep_on();
+                }
+                else
+                {
+                    hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+                }
+            }
+        }
+
         int inactivity_time = lv_disp_get_inactive_time(NULL);
-        // printk("Inactivity time: %d", inactivity_time);
         if (inactivity_time > DISP_SLEEP_TIME_MS)
         {
             hpi_display_sleep_on();
@@ -878,16 +904,18 @@ void display_screens_thread(void)
         {
             hpi_display_sleep_off();
         }
-        //}
-        // else
-        //{
-        //    m_disp_inact_refresh_counter++;
-        //}
-
-        // lv_task_handler();
 
         k_msleep(lv_task_handler());
     }
+}
+
+K_MUTEX_DEFINE(mutex_curr_screen);
+
+void hpi_disp_set_curr_screen(int screen)
+{
+    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
+    curr_screen = screen;
+    k_mutex_unlock(&mutex_curr_screen);
 }
 
 static void disp_batt_status_listener(const struct zbus_channel *chan)
@@ -917,4 +945,5 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
 // Power Cost - 80 uA
+
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

@@ -45,7 +45,7 @@ static int max30001_decoder_decode(const uint8_t *buffer, enum sensor_channel ch
 								   size_t channel_idx, uint32_t *fit,
 								   uint16_t max_count, void *data_out)
 {
-	const struct max30001_encoded_data *edata = (const struct max32664_encoded_data *)buffer;
+	const struct max30001_encoded_data *edata = (const struct max30001_encoded_data *)buffer;
 	const struct max30001_decoder_header *header = &edata->header;
 
 	if (*fit != 0)

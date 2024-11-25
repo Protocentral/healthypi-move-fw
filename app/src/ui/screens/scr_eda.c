@@ -24,8 +24,6 @@ static lv_chart_series_t *ser_eda;
 static float y_max_eda = 0;
 static float y_min_eda = 10000;
 
-
-
 static float gx = 0;
 
 // Externs
@@ -34,17 +32,14 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
-extern int curr_screen;
-
 void draw_scr_eda(enum scroll_dir m_scroll_dir)
 {
     scr_eda = lv_obj_create(NULL);
     draw_bg(scr_eda);
-    draw_header_minimal(scr_eda,10);
+    draw_header_minimal(scr_eda, 10);
 
-    // Create Chart 1 - ECG
     chart_eda = lv_chart_create(scr_eda);
-    lv_obj_set_size(chart_eda, 200, 100);
+    lv_obj_set_size(chart_eda, 390, 150);
     lv_obj_set_style_bg_color(chart_eda, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_eda, 50, LV_PART_MAIN);
     lv_obj_set_style_size(chart_eda, 0, LV_PART_INDICATOR);
@@ -63,8 +58,7 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir)
     lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
     lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
-    curr_screen = SCR_PLOT_EDA;
-
+    hpi_disp_set_curr_screen(SCR_PLOT_EDA);
     hpi_show_screen(scr_eda, m_scroll_dir);
 }
 
@@ -87,25 +81,27 @@ static void hpi_eda_disp_add_samples(int num_samples)
     gx += num_samples;
 }
 
-void hpi_disp_draw_plotEDA(float data_eda)
+void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead_off)
 {
     if (chart_eda_update == true)
     {
-        if (data_eda < y_min_eda)
+        for (int i = 0; i < num_samples; i++)
         {
-            y_min_eda = data_eda;
-        }
+            int32_t data_eda_i = ((data_eda[i] / 1000));
 
-        if (data_eda > y_max_eda)
-        {
-            y_max_eda = data_eda;
-        }
+            if (data_eda_i < y_min_eda)
+            {
+                y_min_eda = data_eda_i;
+            }
 
-        lv_chart_set_next_value(chart_eda, ser_eda, data_eda);
-        hpi_eda_disp_add_samples(1);
-        hpi_eda_disp_do_set_scale(DISP_WINDOW_SIZE_EDA);
+            if (data_eda_i > y_max_eda)
+            {
+                y_max_eda = data_eda_i;
+            }
+
+            lv_chart_set_next_value(chart_eda, ser_eda, data_eda_i);
+            hpi_eda_disp_add_samples(1);
+            hpi_eda_disp_do_set_scale(DISP_WINDOW_SIZE_EDA);
+        }
     }
 }
-
-
-

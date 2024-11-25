@@ -46,7 +46,7 @@ static int _max30001_read_chip_id(const struct device *dev, uint8_t *buf)
 
     spi_transceive_dt(&config->spi, &tx, &rx); // regRxBuffer 0 contains NULL (for sent command), so read from 1 onwards
 
-    printk("MAX30001 ID: %x %x %x\n", (uint8_t)buf[0], (uint8_t)buf[1], (uint8_t)buf[2]);
+    LOG_DBG("Chip ID: %x %x %x", (uint8_t)buf[0], (uint8_t)buf[1], (uint8_t)buf[2]);
 
     return 0;
 }
