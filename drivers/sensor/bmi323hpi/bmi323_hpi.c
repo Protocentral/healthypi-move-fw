@@ -59,108 +59,50 @@ struct bosch_bmi323_data
 	const struct device *dev;
 
 	struct bmi323_chip_internal_cfg chip_cfg;
+
+	uint32_t step_counter;
 };
 
-static int bmi323_reg_read_i2c(const struct device *dev, uint8_t start, uint8_t *data, uint16_t len)
+static int bmi323_read_reg_16(const struct device *dev, uint8_t addr, uint16_t *data)
 {
 	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	return i2c_burst_read_dt(&config->bus, start, data, len);
-}
 
-static int bmi323_reg_write_i2c(const struct device *dev, uint8_t start, const uint8_t *data, uint16_t len)
-{
-	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	return i2c_burst_write_dt(&config->bus, start, data, len);
-}
-
-static int bmi323_read_word_16(const struct device *dev, uint8_t offset, uint16_t *words,
-							   uint16_t words_count)
-{
-	return bmi323_reg_read_i2c(dev, offset, (uint8_t *)words, words_count * 2);
-	// return bus->api->read_words(bus->context, offset, words, words_count);
-}
-
-static int bosch_bmi323_bus_write_words(const struct device *dev, uint8_t offset, uint16_t *words,
-										uint16_t words_count)
-{
-	return bmi323_reg_write_i2c(dev, offset, (uint8_t *)words, words_count * 2);
-	// return bus->api->write_words(bus->context, offset, words, words_count);
-}
-
-static int32_t bosch_bmi323_lsb_from_fullscale(int64_t fullscale)
-{
-	return (fullscale * 1000) / INT16_MAX;
-}
-
-/* lsb is the value of one 1/1000000 LSB */
-static int64_t bosch_bmi323_value_to_micro(int16_t value, int32_t lsb)
-{
-	return ((int64_t)value) * lsb;
-}
-
-/* lsb is the value of one 1/1000000 LSB */
-static void bosch_bmi323_value_to_sensor_value(struct sensor_value *result, int16_t value,
-											   int32_t lsb)
-{
-	int64_t ll_value = (int64_t)value * lsb;
-	int32_t int_part = (int32_t)(ll_value / 1000000);
-	int32_t frac_part = (int32_t)(ll_value % 1000000);
-
-	result->val1 = int_part;
-	result->val2 = frac_part;
-}
-
-static void bosch_bmi323_sensor_value_from_micro(struct sensor_value *result, int64_t micro)
-{
-	int32_t int_part = (int32_t)(micro / 1000000);
-	int32_t frac_part = (int32_t)(micro % 1000000);
-
-	result->val1 = int_part;
-	result->val2 = frac_part;
-}
-
-static int bmi323_read_word_8(const struct device *dev, uint8_t offset, uint8_t *data)
-{
-	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	uint8_t tmp_buff[3];
+	uint8_t wr_buf[1] = {addr};
+	uint8_t rd_buf[4] = {0x00};
 	int ret;
-	ret = i2c_burst_read_dt(&config->bus, offset, tmp_buff, 3);
+
+	ret = i2c_write_read_dt(&config->bus, wr_buf, sizeof(wr_buf), rd_buf, sizeof(rd_buf));
+
 	if (ret < 0)
 	{
 		LOG_ERR("Error reading ID %d", ret);
 		return ret;
 	}
 
-	*data = tmp_buff[2];
+	//LOG_INF("Reg Read: %x | %x %x %x %x", addr, rd_buf[0], rd_buf[1], rd_buf[2], rd_buf[3]);
+
+	*data = (rd_buf[2] | rd_buf[3] << 8);
 	return 0;
 }
 
 static int bmi323_write_reg_16(const struct device *dev, uint8_t addr, uint16_t data)
 {
 	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	uint8_t tmp_buff[2] = {data >> 8, data & 0xFF};
+	uint8_t wr_buf[3] = {addr, data & 0xFF, data >> 8};
 
-	return i2c_burst_write_dt(&config->bus, addr, tmp_buff, 2);
-}
+	//LOG_INF("Reg Write: %x | %x %x", addr, wr_buf[1], wr_buf[2]);
 
-static int bmi323_write_bytes(const struct device *dev, uint8_t addr, uint8_t *data, uint16_t len)
-{
-	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	return i2c_burst_write_dt(&config->bus, addr, data, len);
-}
-
-static int bmi323_read_word16(const struct device *dev, uint8_t offset, uint16_t *data, uint16_t len)
-{
-	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	return i2c_burst_read_dt(&config->bus, offset, (uint8_t *)data, len);
+	return i2c_write_dt(&config->bus, wr_buf, sizeof(wr_buf));
 }
 
 static int bmi323_get_chip_id(const struct device *dev)
 {
-	uint8_t chip_id;
+	uint16_t chip_id;
 	int ret;
 
-	ret = bmi323_read_word_8(dev, BMI3_REG_CHIP_ID, &chip_id);
+	ret = bmi323_read_reg_16(dev, BMI3_REG_CHIP_ID, &chip_id);
+
+	chip_id = (chip_id & 0xFF);
 
 	if (ret < 0)
 	{
@@ -171,9 +113,54 @@ static int bmi323_get_chip_id(const struct device *dev)
 	LOG_INF("Chip ID: 0x%x", chip_id);
 	if ((chip_id & 0xFF) != 0x43)
 	{
-		LOG_ERR("Invalid chip ID 0x%x", chip_id);
+		LOG_ERR("Invalid chip ID 0x%", chip_id);
 		return -ENODEV;
 	}
+
+	return 0;
+}
+
+static int bmi323_get_status(const struct device *dev)
+{
+	uint16_t status;
+	int ret;
+
+	ret = bmi323_read_reg_16(dev, BMI3_REG_STATUS, &status);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Error reading status %d", ret);
+		return ret;
+	}
+
+	LOG_INF("Status: 0x%x", status);
+
+	return 0;
+}
+
+static int bmi323_set_feature_io0(const struct device *dev, uint16_t val)
+{
+	int ret;
+	uint16_t reset = 0;
+	// uint16_t feature_io0_step_counter_en = 0x0200;
+
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, reset);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Error clearing feature IO0 %d", ret);
+		return ret;
+	}
+
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, val);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Error setting feature IO0 %d", ret);
+		return ret;
+	}
+
+	LOG_INF("Feature IO-0 set: 0x%x", val);
 
 	return 0;
 }
@@ -181,7 +168,7 @@ static int bmi323_get_chip_id(const struct device *dev)
 static int bmi323_enable_feature_engine(const struct device *dev)
 {
 	int ret;
-	uint8_t data = 0;
+	uint16_t tmp_data = 0;
 
 	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO2, 0x012C);
 	if (ret < 0)
@@ -204,7 +191,16 @@ static int bmi323_enable_feature_engine(const struct device *dev)
 		return ret;
 	}
 
+	ret = bmi323_read_reg_16(dev, BMI3_REG_FEATURE_CTRL, &tmp_data);
+	if (ret < 0)
+	{
+		LOG_ERR("Error enabling feature engine %d", ret);
+		return ret;
+	}
+
 	LOG_INF("Feature engine enabled");
+
+	// bmi323_set_feature_io0(dev);
 
 	return 0;
 }
@@ -215,7 +211,6 @@ static int bmi323_enable_step_counter(const struct device *dev)
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 
 	// Enable Accel
-
 	data->chip_cfg.reg_acc_conf.bit.acc_mode = BMI3_ACC_MODE_NORMAL;
 	data->chip_cfg.reg_acc_conf.bit.acc_odr = BMI3_ACC_ODR_50HZ;
 	data->chip_cfg.reg_acc_conf.bit.acc_range = BMI3_ACC_RANGE_8G;
@@ -229,38 +224,34 @@ static int bmi323_enable_step_counter(const struct device *dev)
 		// return ret;
 	}
 
-	// Enable Step counter watermark
+	// Enable Step Counter
+	ret = bmi323_set_feature_io0(dev, 0x0200);
 
-	uint8_t step_config[24] = {0};
-	/*
-			step_config[0] = (uint8_t)watermark1;
-			step_config[1] = (uint8_t)((watermark2 | reset_counter) >> 8);
-			step_config[2] = (uint8_t)env_min_dist_up1;
-			step_config[3] = (uint8_t)(env_min_dist_up2 >> 8);
-			step_config[4] = (uint8_t)env_coef_up1;
-			step_config[5] = (uint8_t)(env_coef_up2 >> 8);
-			step_config[6] = (uint8_t)env_min_dist_down1;
-			step_config[7] = (uint8_t)(env_min_dist_down2 >> 8);
-			step_config[8] = (uint8_t)env_coef_down1;
-			step_config[9] = (uint8_t)(env_coef_down2 >> 8);
-			step_config[10] = (uint8_t)mean_val_decay1;
-			step_config[11] = (uint8_t)(mean_val_decay2 >> 8);
-			step_config[12] = (uint8_t)mean_step_dur1;
-			step_config[13] = (uint8_t)(mean_step_dur2 >> 8);
-			step_config[14] = (uint8_t)(step_buffer_size | filter_cascade_enabled | step_counter_increment1);
-			step_config[15] = (uint8_t)(step_counter_increment2 >> 8);
-			step_config[16] = (uint8_t)peak_duration_min_walking;
-			step_config[17] = (uint8_t)(peak_duration_min_running >> 8);
-			step_config[18] = (uint8_t)(activity_detection_factor | activity_detection_threshold1);
-			step_config[19] = (uint8_t)(activity_detection_threshold2 >> 8);
-			step_config[20] = (uint8_t)step_duration_max;
-			step_config[21] = (uint8_t)(step_duration_window >> 8);
-			step_config[22] =
-				(uint8_t)(step_duration_pp_enabled | step_duration_threshold | mean_crossing_pp_enabled |
-						  mcr_threshold1);
-			step_config[23] = (uint8_t)((mcr_threshold2 | sc_12_res) >> 8);
-	*/
-	ret = bmi323_write_bytes(dev, BMI3_REG_FEATURE_DATA_TX, step_config, 24);
+	if (ret < 0)
+	{
+		LOG_ERR("Error setting feature IO0 %d", ret);
+		return ret;
+	}
+	return 0;
+}
+
+static uint32_t bmi323_fetch_step_counter(const struct device *dev)
+{
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+
+	int ret;
+	uint16_t step_counter0, step_counter1;
+	uint32_t steps;
+
+	ret = bmi323_read_reg_16(dev, BMI3_REG_FEATURE_IO2, &step_counter0);
+	ret = bmi323_read_reg_16(dev, BMI3_REG_FEATURE_IO3, &step_counter1);
+
+	steps = (step_counter1 << 16) | step_counter0;
+
+	//LOG_INF("Step Counter: %d", steps);
+	data->step_counter = steps;
+
+	return 0;
 }
 
 static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum sensor_channel chan,
@@ -279,22 +270,15 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 		{
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_set_acc_odr(dev, val);
-
 			break;
-
 		case SENSOR_ATTR_FULL_SCALE:
 			// ret = bosch_bmi323_driver_api_set_acc_full_scale(dev, val);
-
 			break;
-
 		case SENSOR_ATTR_FEATURE_MASK:
 			// ret = bosch_bmi323_driver_api_set_acc_feature_mask(dev, val);
-
 			break;
-
 		default:
 			ret = -ENODEV;
-
 			break;
 		}
 
@@ -305,22 +289,15 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 		{
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_set_gyro_odr(dev, val);
-
 			break;
-
 		case SENSOR_ATTR_FULL_SCALE:
 			// ret = bosch_bmi323_driver_api_set_gyro_full_scale(dev, val);
-
 			break;
-
 		case SENSOR_ATTR_FEATURE_MASK:
 			// ret = bosch_bmi323_driver_api_set_gyro_feature_mask(dev, val);
-
 			break;
-
 		default:
 			ret = -ENODEV;
-
 			break;
 		}
 
@@ -328,7 +305,6 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 
 	default:
 		ret = -ENODEV;
-
 		break;
 	}
 
@@ -352,22 +328,18 @@ static int bosch_bmi323_driver_api_attr_get(const struct device *dev, enum senso
 		{
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_get_acc_odr(dev, val);
-
 			break;
 
 		case SENSOR_ATTR_FULL_SCALE:
 			// ret = bosch_bmi323_driver_api_get_acc_full_scale(dev, val);
-
 			break;
 
 		case SENSOR_ATTR_FEATURE_MASK:
 			// ret = bosch_bmi323_driver_api_get_acc_feature_mask(dev, val);
-
 			break;
 
 		default:
 			ret = -ENODEV;
-
 			break;
 		}
 
@@ -378,22 +350,15 @@ static int bosch_bmi323_driver_api_attr_get(const struct device *dev, enum senso
 		{
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_get_gyro_odr(dev, val);
-
 			break;
-
 		case SENSOR_ATTR_FULL_SCALE:
 			// ret = bosch_bmi323_driver_api_get_gyro_full_scale(dev, val);
-
 			break;
-
 		case SENSOR_ATTR_FEATURE_MASK:
 			// ret = bosch_bmi323_driver_api_get_gyro_feature_mask(dev, val);
-
 			break;
-
 		default:
 			ret = -ENODEV;
-
 			break;
 		}
 
@@ -428,14 +393,10 @@ static int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
 		{
 		case SENSOR_TRIG_DATA_READY:
 			// ret = bosch_bmi323_driver_api_trigger_set_acc_drdy(dev);
-
 			break;
-
 		case SENSOR_TRIG_MOTION:
 			// ret = bosch_bmi323_driver_api_trigger_set_acc_motion(dev);
-
 			break;
-
 		default:
 			break;
 		}
@@ -462,41 +423,21 @@ static int bosch_bmi323_driver_api_sample_fetch(const struct device *dev, enum s
 	{
 	case SENSOR_CHAN_ACCEL_XYZ:
 		// ret = bosch_bmi323_driver_api_fetch_acc_samples(dev);
-
 		break;
-
 	case SENSOR_CHAN_GYRO_XYZ:
 		// ret = bosch_bmi323_driver_api_fetch_gyro_samples(dev);
-
 		break;
-
 	case SENSOR_CHAN_DIE_TEMP:
 		// ret = bosch_bmi323_driver_api_fetch_temperature(dev);
-
 		break;
-
+	case SENSOR_CHAN_ACCEL_X:
+		ret = bmi323_fetch_step_counter(dev);
+		break;
 	case SENSOR_CHAN_ALL:
-		// ret = bosch_bmi323_driver_api_fetch_acc_samples(dev);
-
-		if (ret < 0)
-		{
-			break;
-		}
-
-		// ret = bosch_bmi323_driver_api_fetch_gyro_samples(dev);
-
-		if (ret < 0)
-		{
-			break;
-		}
-
-		// ret = bosch_bmi323_driver_api_fetch_temperature(dev);
-
+		ret = bmi323_fetch_step_counter(dev);
 		break;
-
 	default:
 		ret = -ENODEV;
-
 		break;
 	}
 
@@ -519,41 +460,32 @@ static int bosch_bmi323_driver_api_channel_get(const struct device *dev, enum se
 		if (data->acc_samples_valid == false)
 		{
 			ret = -ENODATA;
-
 			break;
 		}
-
 		memcpy(val, data->acc_samples, sizeof(data->acc_samples));
-
 		break;
-
 	case SENSOR_CHAN_GYRO_XYZ:
 		if (data->gyro_samples_valid == false)
 		{
 			ret = -ENODATA;
-
 			break;
 		}
-
 		memcpy(val, data->gyro_samples, sizeof(data->gyro_samples));
-
 		break;
-
 	case SENSOR_CHAN_DIE_TEMP:
 		if (data->temperature_valid == false)
 		{
 			ret = -ENODATA;
-
 			break;
 		}
-
 		(*val) = data->temperature;
-
 		break;
-
+	case SENSOR_CHAN_ACCEL_X:
+		val->val1 = data->step_counter;
+		val->val2 = 0;
+		break;
 	default:
 		ret = -ENOTSUP;
-
 		break;
 	}
 
@@ -749,6 +681,14 @@ static int bosch_bmi323_init(const struct device *dev)
 		return ret;
 	}
 
+	ret = bmi323_get_status(dev);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to read status");
+		return ret;
+	}
+
 	ret = bmi323_enable_feature_engine(dev);
 
 	if (ret < 0)
@@ -757,7 +697,21 @@ static int bosch_bmi323_init(const struct device *dev)
 		return ret;
 	}
 
-	
+	ret = bmi323_enable_step_counter(dev);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to enable step counter");
+		return ret;
+	}
+
+	ret = bmi323_get_status(dev);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to read status");
+		return ret;
+	}
 
 	return ret;
 }

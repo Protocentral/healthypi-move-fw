@@ -529,6 +529,11 @@ void hw_init(void)
         // return 0;
     }
 
+    if(!device_is_ready(acc_dev))
+    {
+        LOG_ERR("Error: Accelerometer device not ready\n");
+    }
+
     // device_init(display_dev);
     //  k_sleep(K_MSEC(1000));
     // hw_pwr_display_enable();
@@ -669,11 +674,20 @@ struct rtc_time hw_get_current_time(void)
     return global_system_time;
 }
 
+static uint32_t acc_get_steps(void)
+{
+    struct sensor_value steps;
+    sensor_sample_fetch(acc_dev);
+    sensor_channel_get(acc_dev, SENSOR_CHAN_ACCEL_X, &steps);
+    return (uint32_t) steps.val1;
+}
+
 void hw_thread(void)
 {
     LOG_INF("HW Thread starting");
 
     struct rtc_time sys_time;
+    uint32_t global_steps = 0;
 
     for (;;)
     {
@@ -684,6 +698,8 @@ void hw_thread(void)
 
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
+        global_steps = acc_get_steps();
+        printk("Steps: %d\n", global_steps);        
 
         k_sleep(K_MSEC(6000));
     }
