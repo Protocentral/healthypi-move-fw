@@ -204,6 +204,8 @@ static int bmi323_enable_feature_engine(const struct device *dev)
 		return ret;
 	}
 
+	LOG_INF("Feature engine enabled");
+
 	return 0;
 }
 
@@ -740,6 +742,22 @@ static int bosch_bmi323_init(const struct device *dev)
 	}
 
 	ret = bmi323_get_chip_id(dev);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to validate chip id");
+		return ret;
+	}
+
+	ret = bmi323_enable_feature_engine(dev);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to enable feature engine");
+		return ret;
+	}
+
+	
 
 	return ret;
 }
