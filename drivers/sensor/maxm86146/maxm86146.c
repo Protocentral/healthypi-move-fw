@@ -428,15 +428,15 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
-    // Set continuous mode - only HR
+    // Set continuous mode - HR + SpO2
     m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
-
-    // Enable AEC
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     if (mode == MAXM86146_OP_MODE_ALGO_AEC)
     {
         LOG_DBG("MAXM86146 entering AEC ALGO mode...");
+
+        // Enable AEC
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
         // EN Auto PD
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
@@ -444,11 +444,11 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
         // EN SCD
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
-        //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
-        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
-        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
+        // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
-         m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
+        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
         m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
         m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
 
@@ -649,7 +649,7 @@ static int maxm86146_chip_init(const struct device *dev)
 
     maxm86146_do_enter_app(dev);
 
-    //uint8_t ver_buf[4] = {0};
+    // uint8_t ver_buf[4] = {0};
     if (maxm86146_get_ver(dev, data->hub_ver) == 0)
     {
         LOG_DBG("Hub Version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);

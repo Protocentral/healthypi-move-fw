@@ -707,7 +707,7 @@ void hw_thread(void)
         };
         zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
-        k_sleep(K_MSEC(6000));
+        k_sleep(K_MSEC(2000));
     }
 }
 
