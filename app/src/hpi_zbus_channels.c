@@ -28,3 +28,11 @@ ZBUS_CHAN_DEFINE(hr_chan,                 /* Name */
                  ZBUS_OBSERVERS(disp_hr_lis),
                  ZBUS_MSG_INIT(0)                      /* Initial value {0} */
 );
+
+ZBUS_CHAN_DEFINE(steps_chan,                 /* Name */
+                 struct hpi_steps_t, /* Message type */
+                 NULL,                                 /* Validator */
+                 NULL,                                 /* User Data */
+                 ZBUS_OBSERVERS(disp_steps_lis),
+                 ZBUS_MSG_INIT(0)                      /* Initial value {0} */
+);

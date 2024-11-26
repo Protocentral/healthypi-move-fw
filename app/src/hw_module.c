@@ -57,7 +57,9 @@ char curr_string[40];
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
+
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
+ZBUS_CHAN_DECLARE(steps_chan);
 
 /****END EXTERNS****/
 
@@ -66,7 +68,7 @@ const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 
-const struct device *acc_dev = DEVICE_DT_GET_ONE(st_lsm6dso);
+const struct device *acc_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
@@ -529,6 +531,11 @@ void hw_init(void)
         // return 0;
     }
 
+    if(!device_is_ready(acc_dev))
+    {
+        LOG_ERR("Error: Accelerometer device not ready\n");
+    }
+
     // device_init(display_dev);
     //  k_sleep(K_MSEC(1000));
     // hw_pwr_display_enable();
@@ -625,16 +632,6 @@ void hw_init(void)
         LOG_ERR("MAX30205 device not found!");
     }
 
-    if (!device_is_ready(acc_dev))
-    {
-        LOG_ERR("LSM6DSO device not found!");
-    }
-    else
-    {
-        // Set initial start-up mode
-    }
-    // pm_device_runtime_put(acc_dev);
-
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
@@ -679,11 +676,20 @@ struct rtc_time hw_get_current_time(void)
     return global_system_time;
 }
 
+static uint32_t acc_get_steps(void)
+{
+    struct sensor_value steps;
+    sensor_sample_fetch(acc_dev);
+    sensor_channel_get(acc_dev, SENSOR_CHAN_ACCEL_X, &steps);
+    return (uint32_t) steps.val1;
+}
+
 void hw_thread(void)
 {
     LOG_INF("HW Thread starting");
 
     struct rtc_time sys_time;
+    uint32_t _steps = 0;
 
     for (;;)
     {
@@ -694,6 +700,12 @@ void hw_thread(void)
 
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
+        _steps = acc_get_steps();
+        //printk("Steps: %d\n", global_steps);        
+        struct hpi_steps_t steps = {
+            .steps_walk = _steps,
+        };
+        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
         k_sleep(K_MSEC(6000));
     }
