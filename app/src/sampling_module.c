@@ -37,6 +37,7 @@ K_SEM_DEFINE(sem_ppg_finger_sample_trigger, 0, 1);
 // *** Externs ***
 ZBUS_CHAN_DECLARE(hr_chan);
 
+
 extern struct k_sem sem_ecg_intb_recd;
 
 extern const struct device *const max30001_dev;
@@ -142,12 +143,12 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
 
                 k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
 
-                /*struct hpi_hr_t hr_chan_value = {
+                struct hpi_hr_t hr_chan_value = {
                     .hr = edata->hr,
                     .hr_ready_flag = true,
                 };
                 zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
-                */
+        
         }
 }
 

@@ -942,6 +942,14 @@ static void disp_hr_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
+static void disp_steps_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
+    ui_steps_button_update(hpi_steps->steps_walk);
+    //ui_step_update(hpi_steps->steps_walk
+}
+ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
+
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
 #define DISPLAY_SCREENS_THREAD_PRIORITY 5
 // Power Cost - 80 uA

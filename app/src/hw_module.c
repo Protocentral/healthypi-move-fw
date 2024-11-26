@@ -57,7 +57,9 @@ char curr_string[40];
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
+
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
+ZBUS_CHAN_DECLARE(steps_chan);
 
 /****END EXTERNS****/
 
@@ -687,7 +689,7 @@ void hw_thread(void)
     LOG_INF("HW Thread starting");
 
     struct rtc_time sys_time;
-    uint32_t global_steps = 0;
+    uint32_t _steps = 0;
 
     for (;;)
     {
@@ -698,8 +700,12 @@ void hw_thread(void)
 
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
-        global_steps = acc_get_steps();
-        printk("Steps: %d\n", global_steps);        
+        _steps = acc_get_steps();
+        //printk("Steps: %d\n", global_steps);        
+        struct hpi_steps_t steps = {
+            .steps_walk = _steps,
+        };
+        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
         k_sleep(K_MSEC(6000));
     }
