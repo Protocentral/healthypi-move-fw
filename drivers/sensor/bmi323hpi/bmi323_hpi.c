@@ -79,7 +79,7 @@ static int bmi323_read_reg_16(const struct device *dev, uint8_t addr, uint16_t *
 		return ret;
 	}
 
-	//LOG_INF("Reg Read: %x | %x %x %x %x", addr, rd_buf[0], rd_buf[1], rd_buf[2], rd_buf[3]);
+	// LOG_INF("Reg Read: %x | %x %x %x %x", addr, rd_buf[0], rd_buf[1], rd_buf[2], rd_buf[3]);
 
 	*data = (rd_buf[2] | rd_buf[3] << 8);
 	return 0;
@@ -90,7 +90,7 @@ static int bmi323_write_reg_16(const struct device *dev, uint8_t addr, uint16_t 
 	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
 	uint8_t wr_buf[3] = {addr, data & 0xFF, data >> 8};
 
-	//LOG_INF("Reg Write: %x | %x %x", addr, wr_buf[1], wr_buf[2]);
+	// LOG_INF("Reg Write: %x | %x %x", addr, wr_buf[1], wr_buf[2]);
 
 	return i2c_write_dt(&config->bus, wr_buf, sizeof(wr_buf));
 }
@@ -227,6 +227,8 @@ static int bmi323_enable_step_counter(const struct device *dev)
 	// Enable Step Counter
 	ret = bmi323_set_feature_io0(dev, 0x0200);
 
+	LOG_INF("Step Counter enabled");
+
 	if (ret < 0)
 	{
 		LOG_ERR("Error setting feature IO0 %d", ret);
@@ -248,7 +250,7 @@ static uint32_t bmi323_fetch_step_counter(const struct device *dev)
 
 	steps = (step_counter1 << 16) | step_counter0;
 
-	//LOG_INF("Step Counter: %d", steps);
+	// LOG_INF("Step Counter: %d", steps);
 	data->step_counter = steps;
 
 	return 0;
@@ -268,6 +270,12 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 	case SENSOR_CHAN_ACCEL_XYZ:
 		switch (attr)
 		{
+		case BMI323_HPI_ATTR_EN_FEATURE_ENGINE:
+			ret = bmi323_enable_feature_engine(dev);
+			break;
+		case BMI323_HPI_ATTR_EN_STEP_COUNTER:
+			ret = bmi323_enable_step_counter(dev);
+			break;
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_set_acc_odr(dev, val);
 			break;
@@ -374,6 +382,22 @@ static int bosch_bmi323_driver_api_attr_get(const struct device *dev, enum senso
 	return ret;
 }
 
+static int bmi323_trigger_set_acc_drdy(const struct device *dev)
+{
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	int ret;
+
+	// ret = bmi323_write_reg_16(dev, BMI3_REG_ACC_INT_CONF_0, 0x0001);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Error setting acc drdy trigger %d", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
 											   const struct sensor_trigger *trig,
 											   sensor_trigger_handler_t handler)
@@ -392,7 +416,7 @@ static int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
 		switch (trig->type)
 		{
 		case SENSOR_TRIG_DATA_READY:
-			// ret = bosch_bmi323_driver_api_trigger_set_acc_drdy(dev);
+			ret = bmi323_trigger_set_acc_drdy(dev);
 			break;
 		case SENSOR_TRIG_MOTION:
 			// ret = bosch_bmi323_driver_api_trigger_set_acc_motion(dev);
@@ -493,14 +517,6 @@ static int bosch_bmi323_driver_api_channel_get(const struct device *dev, enum se
 
 	return ret;
 }
-
-static const struct sensor_driver_api bosch_bmi323_api = {
-	.attr_set = bosch_bmi323_driver_api_attr_set,
-	.attr_get = bosch_bmi323_driver_api_attr_get,
-	.trigger_set = bosch_bmi323_driver_api_trigger_set,
-	.sample_fetch = bosch_bmi323_driver_api_sample_fetch,
-	.channel_get = bosch_bmi323_driver_api_channel_get,
-};
 
 static void bosch_bmi323_irq_callback(const struct device *dev)
 {
@@ -657,6 +673,14 @@ static int bosch_bmi323_pm_action(const struct device *dev, enum pm_device_actio
 }
 #endif /* CONFIG_PM_DEVICE */
 
+static const struct sensor_driver_api bosch_bmi323_api = {
+	.attr_set = bosch_bmi323_driver_api_attr_set,
+	.attr_get = bosch_bmi323_driver_api_attr_get,
+	.trigger_set = bosch_bmi323_driver_api_trigger_set,
+	.sample_fetch = bosch_bmi323_driver_api_sample_fetch,
+	.channel_get = bosch_bmi323_driver_api_channel_get,
+};
+
 static int bosch_bmi323_init(const struct device *dev)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
@@ -666,6 +690,18 @@ static int bosch_bmi323_init(const struct device *dev)
 	LOG_INF("HPI BMI323 init");
 
 	data->dev = dev;
+
+	k_mutex_init(&data->lock);
+
+	k_work_init(&data->callback_work, bosch_bmi323_irq_callback_handler);
+
+	ret = bosch_bmi323_init_irq(dev);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to init IRQ");
+		return ret;
+	}
 
 	if (!device_is_ready(config->bus.bus))
 	{
@@ -689,7 +725,7 @@ static int bosch_bmi323_init(const struct device *dev)
 		return ret;
 	}
 
-	ret = bmi323_enable_feature_engine(dev);
+	/*ret = bmi323_enable_feature_engine(dev);
 
 	if (ret < 0)
 	{
@@ -711,7 +747,7 @@ static int bosch_bmi323_init(const struct device *dev)
 	{
 		LOG_ERR("Failed to read status");
 		return ret;
-	}
+	}*/
 
 	return ret;
 }

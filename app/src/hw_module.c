@@ -32,6 +32,8 @@
 #include "max30001.h"
 #include "max32664.h"
 
+#include "bmi323_hpi.h"
+
 #ifdef CONFIG_SENSOR_MAXM86146
 #include "maxm86146.h"
 #endif
@@ -68,7 +70,7 @@ const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 
-const struct device *acc_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
+const struct device *imu_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
@@ -507,10 +509,28 @@ uint8_t hw_get_battery_level(void)
     return global_batt_level;
 }
 
+static void trigger_handler(const struct device *dev, const struct sensor_trigger *trigger)
+{
+    ARG_UNUSED(trigger);
+
+    if (sensor_sample_fetch(dev))
+    {
+        printf("Acc Trig\n");
+        return;
+    }
+
+    // k_sem_give(&sem);
+}
+
 void hw_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
+
+    struct sensor_trigger imu_trig = {
+        .type = SENSOR_TRIG_DATA_READY,
+        .chan = SENSOR_CHAN_ACCEL_XYZ,
+    };
 
     k_sem_give(&sem_display_on);
 
@@ -531,9 +551,24 @@ void hw_init(void)
         // return 0;
     }
 
-    if(!device_is_ready(acc_dev))
+    if (!device_is_ready(imu_dev))
     {
-        LOG_ERR("Error: Accelerometer device not ready\n");
+        LOG_ERR("Error: Accelerometer device not ready");
+    }
+    else
+    {
+        if (sensor_trigger_set(imu_dev, &imu_trig, trigger_handler)<0)
+        {
+            LOG_ERR("Could not set trigger");
+            //return 0;
+        } else
+        {
+            LOG_INF("IMU Trigger set");
+            struct sensor_value set_val;
+            set_val.val1 = 1;
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
+        }
     }
 
     // device_init(display_dev);
@@ -679,9 +714,9 @@ struct rtc_time hw_get_current_time(void)
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;
-    sensor_sample_fetch(acc_dev);
-    sensor_channel_get(acc_dev, SENSOR_CHAN_ACCEL_X, &steps);
-    return (uint32_t) steps.val1;
+    sensor_sample_fetch(imu_dev);
+    sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_X, &steps);
+    return (uint32_t)steps.val1;
 }
 
 void hw_thread(void)
@@ -701,7 +736,7 @@ void hw_thread(void)
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
         _steps = acc_get_steps();
-        //printk("Steps: %d\n", global_steps);        
+        // printk("Steps: %d\n", global_steps);
         struct hpi_steps_t steps = {
             .steps_walk = _steps,
         };

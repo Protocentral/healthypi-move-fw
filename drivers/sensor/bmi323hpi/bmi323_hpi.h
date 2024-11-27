@@ -732,3 +732,11 @@ struct bmi323_chip_internal_cfg
 {
     bmi323_acc_conf_t reg_acc_conf;
 };
+
+enum bmi323_hpi_attribute
+{
+    BMI323_HPI_ATTR_EN_FEATURE_ENGINE = 0x01,
+    BMI323_HPI_ATTR_EN_STEP_COUNTER = 0x02,
+    BMI323_HPI_ATTR_EN_ANY_MOTION = 0x03,
+    BMI323_HPI_ATTR_EN_NO_MOTION = 0x04,
+};
