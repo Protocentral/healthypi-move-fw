@@ -1,40 +1,40 @@
 /**
-* Copyright (c) 2023 Bosch Sensortec GmbH. All rights reserved.
-*
-* BSD-3-Clause
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are met:
-*
-* 1. Redistributions of source code must retain the above copyright
-*    notice, this list of conditions and the following disclaimer.
-*
-* 2. Redistributions in binary form must reproduce the above copyright
-*    notice, this list of conditions and the following disclaimer in the
-*    documentation and/or other materials provided with the distribution.
-*
-* 3. Neither the name of the copyright holder nor the names of its
-*    contributors may be used to endorse or promote products derived from
-*    this software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-* COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-* HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-* STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-* IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*
-* @file       bmi3_defs.h
-* @date       2023-02-17
-* @version    v2.1.0
-*
-*/
+ * Copyright (c) 2023 Bosch Sensortec GmbH. All rights reserved.
+ *
+ * BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * @file       bmi3_defs.h
+ * @date       2023-02-17
+ * @version    v2.1.0
+ *
+ */
 
 #pragma once
 
@@ -251,7 +251,6 @@ in INT_STATUS_INT1/2. */
 
 /*! Macro to define start address of data in RAM patch */
 #define BMI3_CONFIG_ARRAY_DATA_START_ADDR (4)
-
 
 /*!
  * @brief Structure to define accelerometer configuration
@@ -587,7 +586,6 @@ struct bmi3_tap_detector_config
     uint8_t quite_time_after_gest;
 };
 
-
 /*!
  * @brief Union to define the sensor configurations
  */
@@ -648,89 +646,171 @@ struct bmi3_sens_config
     union bmi3_sens_config_types cfg;
 };
 
-#define BMI3_OK                                      INT8_C(0)
+#define BMI3_OK INT8_C(0)
 
 /***************************************************************************** */
 /*!         Sensor Macro Definitions                 */
 /***************************************************************************** */
 /*! Macros to define BMI3 sensor/feature types */
-#define BMI3_ACCEL                                   UINT8_C(0)
-#define BMI3_GYRO                                    UINT8_C(1)
-#define BMI3_SIG_MOTION                              UINT8_C(2)
-#define BMI3_ANY_MOTION                              UINT8_C(3)
-#define BMI3_NO_MOTION                               UINT8_C(4)
-#define BMI3_STEP_COUNTER                            UINT8_C(5)
-#define BMI3_TILT                                    UINT8_C(6)
-#define BMI3_ORIENTATION                             UINT8_C(7)
-#define BMI3_FLAT                                    UINT8_C(8)
-#define BMI3_TAP                                     UINT8_C(9)
-#define BMI3_ALT_ACCEL                               UINT8_C(10)
-#define BMI3_ALT_GYRO                                UINT8_C(11)
-#define BMI3_ALT_AUTO_CONFIG                         UINT8_C(12)
+#define BMI3_ACCEL UINT8_C(0)
+#define BMI3_GYRO UINT8_C(1)
+#define BMI3_SIG_MOTION UINT8_C(2)
+#define BMI3_ANY_MOTION UINT8_C(3)
+#define BMI3_NO_MOTION UINT8_C(4)
+#define BMI3_STEP_COUNTER UINT8_C(5)
+#define BMI3_TILT UINT8_C(6)
+#define BMI3_ORIENTATION UINT8_C(7)
+#define BMI3_FLAT UINT8_C(8)
+#define BMI3_TAP UINT8_C(9)
+#define BMI3_ALT_ACCEL UINT8_C(10)
+#define BMI3_ALT_GYRO UINT8_C(11)
+#define BMI3_ALT_AUTO_CONFIG UINT8_C(12)
 
 /******************************************************************************/
 /*!        Accelerometer Macro Definitions               */
 /******************************************************************************/
 /*!  Accelerometer Bandwidth parameters */
-#define BMI3_ACC_AVG1                                UINT8_C(0x00)
-#define BMI3_ACC_AVG2                                UINT8_C(0x01)
-#define BMI3_ACC_AVG4                                UINT8_C(0x02)
-#define BMI3_ACC_AVG8                                UINT8_C(0x03)
-#define BMI3_ACC_AVG16                               UINT8_C(0x04)
-#define BMI3_ACC_AVG32                               UINT8_C(0x05)
-#define BMI3_ACC_AVG64                               UINT8_C(0x06)
+#define BMI3_ACC_AVG1 UINT8_C(0x00)
+#define BMI3_ACC_AVG2 UINT8_C(0x01)
+#define BMI3_ACC_AVG4 UINT8_C(0x02)
+#define BMI3_ACC_AVG8 UINT8_C(0x03)
+#define BMI3_ACC_AVG16 UINT8_C(0x04)
+#define BMI3_ACC_AVG32 UINT8_C(0x05)
+#define BMI3_ACC_AVG64 UINT8_C(0x06)
 
 /*! Accelerometer Output Data Rate */
-#define BMI3_ACC_ODR_0_78HZ                          UINT8_C(0x01)
-#define BMI3_ACC_ODR_1_56HZ                          UINT8_C(0x02)
-#define BMI3_ACC_ODR_3_125HZ                         UINT8_C(0x03)
-#define BMI3_ACC_ODR_6_25HZ                          UINT8_C(0x04)
-#define BMI3_ACC_ODR_12_5HZ                          UINT8_C(0x05)
-#define BMI3_ACC_ODR_25HZ                            UINT8_C(0x06)
-#define BMI3_ACC_ODR_50HZ                            UINT8_C(0x07)
-#define BMI3_ACC_ODR_100HZ                           UINT8_C(0x08)
-#define BMI3_ACC_ODR_200HZ                           UINT8_C(0x09)
-#define BMI3_ACC_ODR_400HZ                           UINT8_C(0x0A)
-#define BMI3_ACC_ODR_800HZ                           UINT8_C(0x0B)
-#define BMI3_ACC_ODR_1600HZ                          UINT8_C(0x0C)
-#define BMI3_ACC_ODR_3200HZ                          UINT8_C(0x0D)
-#define BMI3_ACC_ODR_6400HZ                          UINT8_C(0x0E)
+#define BMI3_ACC_ODR_0_78HZ UINT8_C(0x01)
+#define BMI3_ACC_ODR_1_56HZ UINT8_C(0x02)
+#define BMI3_ACC_ODR_3_125HZ UINT8_C(0x03)
+#define BMI3_ACC_ODR_6_25HZ UINT8_C(0x04)
+#define BMI3_ACC_ODR_12_5HZ UINT8_C(0x05)
+#define BMI3_ACC_ODR_25HZ UINT8_C(0x06)
+#define BMI3_ACC_ODR_50HZ UINT8_C(0x07)
+#define BMI3_ACC_ODR_100HZ UINT8_C(0x08)
+#define BMI3_ACC_ODR_200HZ UINT8_C(0x09)
+#define BMI3_ACC_ODR_400HZ UINT8_C(0x0A)
+#define BMI3_ACC_ODR_800HZ UINT8_C(0x0B)
+#define BMI3_ACC_ODR_1600HZ UINT8_C(0x0C)
+#define BMI3_ACC_ODR_3200HZ UINT8_C(0x0D)
+#define BMI3_ACC_ODR_6400HZ UINT8_C(0x0E)
 
 /*! Accelerometer G Range */
-#define BMI3_ACC_RANGE_2G                            UINT8_C(0x00)
-#define BMI3_ACC_RANGE_4G                            UINT8_C(0x01)
-#define BMI3_ACC_RANGE_8G                            UINT8_C(0x02)
-#define BMI3_ACC_RANGE_16G                           UINT8_C(0x03)
+#define BMI3_ACC_RANGE_2G UINT8_C(0x00)
+#define BMI3_ACC_RANGE_4G UINT8_C(0x01)
+#define BMI3_ACC_RANGE_8G UINT8_C(0x02)
+#define BMI3_ACC_RANGE_16G UINT8_C(0x03)
 
 /*! Accelerometer mode */
-#define BMI3_ACC_MODE_DISABLE                        UINT8_C(0x00)
-#define BMI3_ACC_MODE_LOW_PWR                        UINT8_C(0x03)
-#define BMI3_ACC_MODE_NORMAL                         UINT8_C(0X04)
-#define BMI3_ACC_MODE_HIGH_PERF                      UINT8_C(0x07)
+#define BMI3_ACC_MODE_DISABLE UINT8_C(0x00)
+#define BMI3_ACC_MODE_LOW_PWR UINT8_C(0x03)
+#define BMI3_ACC_MODE_NORMAL UINT8_C(0X04)
+#define BMI3_ACC_MODE_HIGH_PERF UINT8_C(0x07)
 
 /*! Accelerometer bandwidth */
-#define BMI3_ACC_BW_ODR_HALF                         UINT8_C(0)
-#define BMI3_ACC_BW_ODR_QUARTER                      UINT8_C(1)
+#define BMI3_ACC_BW_ODR_HALF UINT8_C(0)
+#define BMI3_ACC_BW_ODR_QUARTER UINT8_C(1)
+
+/*! No-motion detection output */
+#define BMI3_NO_MOTION_X_EN_MASK UINT16_C(0x0001)
+
+/*! No-motion detection output */
+#define BMI3_NO_MOTION_Y_EN_MASK UINT16_C(0x0002)
+#define BMI3_NO_MOTION_Y_EN_POS UINT8_C(1)
+
+/*! No-motion detection output */
+#define BMI3_NO_MOTION_Z_EN_MASK UINT16_C(0x0004)
+#define BMI3_NO_MOTION_Z_EN_POS UINT8_C(2)
+
+/*! Any-motion detection output */
+#define BMI3_ANY_MOTION_X_EN_MASK UINT16_C(0x0008)
+#define BMI3_ANY_MOTION_X_EN_POS UINT8_C(3)
+
+/*! Any-motion detection output */
+#define BMI3_ANY_MOTION_Y_EN_MASK UINT16_C(0x0010)
+#define BMI3_ANY_MOTION_Y_EN_POS UINT8_C(4)
+
+/*! Any-motion detection output */
+#define BMI3_ANY_MOTION_Z_EN_MASK UINT16_C(0x0020)
+#define BMI3_ANY_MOTION_Z_EN_POS UINT8_C(5)
+
+/*! Flat detection output */
+#define BMI3_FLAT_EN_MASK UINT16_C(0x0040)
+#define BMI3_FLAT_EN_POS UINT8_C(6)
+
+/*! Orientation detection output */
+#define BMI3_ORIENTATION_EN_MASK UINT16_C(0x0080)
+#define BMI3_ORIENTATION_EN_POS UINT8_C(7)
+
+/*! Step detector output */
+#define BMI3_STEP_DETECTOR_EN_MASK UINT16_C(0x0100)
+#define BMI3_STEP_DETECTOR_EN_POS UINT8_C(8)
+
+/*! Step counter watermark output */
+#define BMI3_STEP_COUNTER_EN_MASK UINT16_C(0x0200)
+#define BMI3_STEP_COUNTER_EN_POS UINT8_C(9)
+
+/*! Sigmotion detection output */
+#define BMI3_SIG_MOTION_EN_MASK UINT16_C(0x0400)
+#define BMI3_SIG_MOTION_EN_POS UINT8_C(10)
+
+/*! Tilt detection output */
+#define BMI3_TILT_EN_MASK UINT16_C(0x0800)
+#define BMI3_TILT_EN_POS UINT8_C(11)
+
+/*! Tap detection output */
+#define BMI3_TAP_DETECTOR_S_TAP_EN_MASK UINT16_C(0x1000)
+#define BMI3_TAP_DETECTOR_S_TAP_EN_POS UINT8_C(12)
+
+#define BMI3_TAP_DETECTOR_D_TAP_EN_MASK UINT16_C(0x2000)
+#define BMI3_TAP_DETECTOR_D_TAP_EN_POS UINT8_C(13)
+
+#define BMI3_TAP_DETECTOR_T_TAP_EN_MASK UINT16_C(0x4000)
+#define BMI3_TAP_DETECTOR_T_TAP_EN_POS UINT8_C(14)
 
 typedef union bmi323_acc_conf_reg
 {
     uint16_t all;
-    struct 
+    struct
     {
-        uint16_t acc_odr: 4;
-        uint16_t acc_range: 3;
-        uint16_t acc_bw: 1;
-        uint16_t acc_avg_num:3;
-        uint16_t reserved1: 1;
-        uint16_t acc_mode: 3;
-        uint16_t reserved2: 1;
+        uint16_t acc_odr : 4;
+        uint16_t acc_range : 3;
+        uint16_t acc_bw : 1;
+        uint16_t acc_avg_num : 3;
+        uint16_t reserved1 : 1;
+        uint16_t acc_mode : 3;
+        uint16_t reserved2 : 1;
     } bit;
 
 } bmi323_acc_conf_t;
 
+typedef union bmi323_feature_cfg
+{
+    uint16_t all;
+    struct
+    {
+        uint16_t no_motion_x_en : 1;
+        uint16_t no_motion_y_en : 1;
+        uint16_t no_motion_z_en : 1;
+        uint16_t any_motion_x_en : 1;
+        uint16_t any_motion_y_en : 1;
+        uint16_t any_motion_z_en : 1;
+        uint16_t flat_en : 1;
+        uint16_t orientation_en : 1;
+        uint16_t step_detector_en : 1;
+        uint16_t step_counter_en : 1;
+        uint16_t sig_motion_en : 1;
+        uint16_t tilt_en : 1;
+        uint16_t s_tap_en : 1;
+        uint16_t d_tap_en : 1;
+        uint16_t t_tap_en : 1;
+        uint16_t i3c_sync_en : 1;
+    } bit;
+} bmi323_feature_conf_t;
+
 struct bmi323_chip_internal_cfg
 {
     bmi323_acc_conf_t reg_acc_conf;
+    bmi323_feature_conf_t reg_feature_conf;
 };
 
 enum bmi323_hpi_attribute

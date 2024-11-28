@@ -26,6 +26,14 @@ LOG_MODULE_REGISTER(bosch_bmi323hpi);
 #define IMU_BOSCH_DIE_TEMP_OFFSET_MICRO_DEG_CELCIUS (23000000LL)
 #define IMU_BOSCH_DIE_TEMP_MICRO_DEG_CELCIUS_LSB (1953L)
 
+#define BMI3_SET_BITS(reg_data, bitname, data) \
+	((reg_data & ~(bitname##_MASK)) |          \
+	 ((data << bitname##_POS) & bitname##_MASK))
+
+#define BMI3_GET_BITS(reg_data, bitname) \
+	((reg_data & (bitname##_MASK)) >>    \
+	 (bitname##_POS))
+
 typedef void (*bosch_bmi323_gpio_callback_ptr)(const struct device *dev, struct gpio_callback *cb,
 											   uint32_t pins);
 
@@ -59,6 +67,16 @@ struct bosch_bmi323_data
 	const struct device *dev;
 
 	struct bmi323_chip_internal_cfg chip_cfg;
+
+	bool feature_engine_enabled;
+	bool feature_step_counter_enabled;
+	bool feature_step_detector_enabled;
+	bool feature_tilt_enabled;
+	bool feature_orientation_enabled;
+	bool feature_flat_enabled;
+	bool feature_double_tap_enabled;
+	bool feature_single_tap_enabled;
+	bool feature_any_motion_enabled;
 
 	uint32_t step_counter;
 };
@@ -167,6 +185,7 @@ static int bmi323_set_feature_io0(const struct device *dev, uint16_t val)
 
 static int bmi323_enable_feature_engine(const struct device *dev)
 {
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 	uint16_t tmp_data = 0;
 
@@ -198,6 +217,8 @@ static int bmi323_enable_feature_engine(const struct device *dev)
 		return ret;
 	}
 
+	data->feature_engine_enabled = true;
+
 	LOG_INF("Feature engine enabled");
 
 	// bmi323_set_feature_io0(dev);
@@ -205,7 +226,7 @@ static int bmi323_enable_feature_engine(const struct device *dev)
 	return 0;
 }
 
-static int bmi323_enable_step_counter(const struct device *dev)
+static int bmi323_enable_acc(const struct device *dev)
 {
 	int ret;
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
@@ -224,16 +245,59 @@ static int bmi323_enable_step_counter(const struct device *dev)
 		// return ret;
 	}
 
-	// Enable Step Counter
-	ret = bmi323_set_feature_io0(dev, 0x0200);
+	LOG_INF("Accel enabled");
 
-	LOG_INF("Step Counter enabled");
+	return 0;
+}
+
+static int bmi323_set_feature_map(const struct device *dev)
+{
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	int ret;
+
+	if (data->feature_step_counter_enabled==true)
+	{
+		// Enable Step Counter Bit in Feature IO0
+		//BMI3_SET_BITS(reg_feature_io0, BMI3_STEP_COUNTER_EN, 1);
+		data->chip_cfg.reg_feature_conf.bit.step_counter_en = 1;
+		LOG_INF("Step Counter enabled");
+	}
+
+	if (data->feature_single_tap_enabled==true)
+	{
+		data->chip_cfg.reg_feature_conf.bit.s_tap_en = 1;
+		LOG_INF("Single Tap Detection enabled");
+	}
+
+	//printf("Feature IO0: %x\n", data->chip_cfg.reg_feature_conf.all);
+
+	// Enable Step Counter
+	ret = bmi323_set_feature_io0(dev, data->chip_cfg.reg_feature_conf.all);
 
 	if (ret < 0)
 	{
 		LOG_ERR("Error setting feature IO0 %d", ret);
 		return ret;
 	}
+
+	return 0;
+}
+
+static int bmi323_enable_int1(const struct device *dev)
+{
+	int ret;
+	uint16_t int1_config = 0x0001;
+
+	ret = bmi323_write_reg_16(dev, BMI3_REG_IO_INT_CTRL, int1_config);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Error enabling INT1 %d", ret);
+		return ret;
+	}
+
+	LOG_INF("INT1 enabled");
+
 	return 0;
 }
 
@@ -271,10 +335,16 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 		switch (attr)
 		{
 		case BMI323_HPI_ATTR_EN_FEATURE_ENGINE:
-			ret = bmi323_enable_feature_engine(dev);
+			if (data->feature_engine_enabled == false)
+			{
+				ret = bmi323_enable_feature_engine(dev);
+			}
+			data->feature_engine_enabled = true;
 			break;
 		case BMI323_HPI_ATTR_EN_STEP_COUNTER:
-			ret = bmi323_enable_step_counter(dev);
+			ret = bmi323_enable_acc(dev);
+
+			data->feature_step_counter_enabled = true;
 			break;
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_set_acc_odr(dev, val);
@@ -289,6 +359,8 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 			ret = -ENODEV;
 			break;
 		}
+
+		bmi323_set_feature_map(dev);
 
 		break;
 
@@ -315,6 +387,8 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 		ret = -ENODEV;
 		break;
 	}
+
+
 
 	k_mutex_unlock(&data->lock);
 

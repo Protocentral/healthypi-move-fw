@@ -655,7 +655,7 @@ void display_screens_thread(void)
 
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
-    printk("Display boot complete");
+    //printk("Display boot complete");
 
     draw_scr_home(SCROLL_NONE);
     // draw_scr_ppg(SCROLL_RIGHT);

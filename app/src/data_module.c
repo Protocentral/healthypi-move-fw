@@ -265,7 +265,7 @@ void data_thread(void)
 
     LOG_INF("Data Thread starting");
 
-    printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
+    //printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
 
     for (;;)
     {
