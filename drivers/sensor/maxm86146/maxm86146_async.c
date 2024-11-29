@@ -21,13 +21,13 @@ int maxm86146_get_fifo_count(const struct device *dev)
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
     fifo_count = rd_buf[1];
-    //printk("FIFO Count: %d\n", fifo_count);
+    // printk("FIFO Count: %d\n", fifo_count);
     return (int)fifo_count;
 }
 
 static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
                                         uint32_t *num_samples, uint16_t *spo2, uint16_t *hr, uint16_t *rtor, uint8_t *scd_state, uint8_t *activity_class,
-                                        uint32_t *steps_run, uint32_t *steps_walk)
+                                        uint32_t *steps_run, uint32_t *steps_walk, uint8_t chip_op_mode)
 {
     struct maxm86146_data *data = dev->data;
     const struct maxm86146_config *config = dev->config;
@@ -46,7 +46,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
     {
         // printk("DRDY ");
         int fifo_count = maxm86146_get_fifo_count(dev);
-        //printk("F: %d | ", fifo_count);
+        printk("F: %d | ", fifo_count);
 
         if (fifo_count > 16)
         {
@@ -65,6 +65,11 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
             {
                 sample_len = 94; // 42 data + 52 algo
             }
+            else if (data->op_mode == MAXM86146_OP_MODE_SCD)
+            {
+                sample_len = 1;
+            }
+            chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
@@ -76,26 +81,25 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
 
             for (int i = 0; i < fifo_count; i++)
             {
-                uint32_t led_green = (uint32_t)buf[(sample_len * i) + 0 + MAXM86146_SENSOR_DATA_OFFSET] << 16;
-                led_green |= (uint32_t)buf[(sample_len * i) + 1 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
-                led_green |= (uint32_t)buf[(sample_len * i) + 2 + MAXM86146_SENSOR_DATA_OFFSET];
-
-                green_samples[i] = led_green;
-
-                uint32_t led_red = (uint32_t)buf[(sample_len * i) + 21 + MAXM86146_SENSOR_DATA_OFFSET] << 16;
-                led_red |= (uint32_t)buf[(sample_len * i) + 22 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
-                led_red |= (uint32_t)buf[(sample_len * i) + 23 + MAXM86146_SENSOR_DATA_OFFSET];
-
-                red_samples[i] = led_red;
-
-                uint32_t led_ir = (uint32_t)buf[(sample_len * i) + 24] << 16;
-                led_ir |= (uint32_t)buf[(sample_len * i) + 25] << 8;
-                led_ir |= (uint32_t)buf[(sample_len * i) + 26];
-
-                ir_samples[i] = led_ir;
-
                 if (data->op_mode == MAXM86146_OP_MODE_ALGO_AEC || data->op_mode == MAXM86146_OP_MODE_ALGO_AGC)
                 {
+                    uint32_t led_green = (uint32_t)buf[(sample_len * i) + 0 + MAXM86146_SENSOR_DATA_OFFSET] << 16;
+                    led_green |= (uint32_t)buf[(sample_len * i) + 1 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
+                    led_green |= (uint32_t)buf[(sample_len * i) + 2 + MAXM86146_SENSOR_DATA_OFFSET];
+
+                    green_samples[i] = led_green;
+
+                    uint32_t led_red = (uint32_t)buf[(sample_len * i) + 21 + MAXM86146_SENSOR_DATA_OFFSET] << 16;
+                    led_red |= (uint32_t)buf[(sample_len * i) + 22 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
+                    led_red |= (uint32_t)buf[(sample_len * i) + 23 + MAXM86146_SENSOR_DATA_OFFSET];
+
+                    red_samples[i] = led_red;
+
+                    uint32_t led_ir = (uint32_t)buf[(sample_len * i) + 24] << 16;
+                    led_ir |= (uint32_t)buf[(sample_len * i) + 25] << 8;
+                    led_ir |= (uint32_t)buf[(sample_len * i) + 26];
+
+                    ir_samples[i] = led_ir;
 
                     uint16_t hr_val = (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 1 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
                     hr_val |= (uint16_t)buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 2 + MAXM86146_SENSOR_DATA_OFFSET];
@@ -114,6 +118,14 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
 
                     *scd_state = buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 19 + MAXM86146_SENSOR_DATA_OFFSET];
                 }
+                else if (data->op_mode == MAXM86146_OP_MODE_SCD)
+                {
+
+                    *scd_state = buf[(sample_len * i) + MAXM86146_SENSOR_DATA_OFFSET];
+                    // printk("SCD State: %d\n", *scd_state);
+                    //*activity_class = buf[(sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + 20 + MAXM86146_SENSOR_DATA_OFFSET];
+                }
+
                 /*
                 else if (data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED)
                 {
@@ -143,6 +155,11 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
             }
         }
     }
+
+    if (hub_stat & MAXM86146_HUB_STAT_SCD_MASK)
+    {
+        printk("SCD ");
+    }
 }
 
 int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
@@ -151,9 +168,6 @@ int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     int rc;
     uint8_t *buf;
     uint32_t buf_len;
-
-    // struct maxm86146_encoded_data *edata;
-    // struct maxm86146_enc_calib_data *calib_data;
 
     struct maxm86146_encoded_data *m_edata;
 
@@ -170,13 +184,13 @@ int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
     // printk("Fetch ");
     if (data->op_mode == MAXM86146_OP_MODE_ALGO_AGC || data->op_mode == MAXM86146_OP_MODE_ALGO_AEC ||
-        data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED || data->op_mode == MAXM86146_OP_MODE_RAW)
+        data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED || data->op_mode == MAXM86146_OP_MODE_RAW || data->op_mode == MAXM86146_OP_MODE_SCD)
     {
         m_edata = (struct maxm86146_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
         rc = maxm86146_async_sample_fetch(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples,
                                           &m_edata->num_samples, &m_edata->spo2, &m_edata->hr, &m_edata->rtor, &m_edata->scd_state,
-                                          &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk);
+                                          &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode);
         // printk("Device is in idle mode\n");
     }
     else

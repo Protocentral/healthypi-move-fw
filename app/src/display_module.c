@@ -124,7 +124,7 @@ void hpi_display_sleep_on(void)
 {
     if (m_display_active == true)
     {
-        printk("Display off");
+        LOG_DBG("Display off");
         // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
 
@@ -141,7 +141,7 @@ void hpi_display_sleep_off(void)
 {
     if (m_display_active == false)
     {
-        printk("Display on");
+        LOG_DBG("Display on");
         hpi_disp_set_brightness(hpi_disp_get_brightness());
 
         // display_blanking_on(display_dev);

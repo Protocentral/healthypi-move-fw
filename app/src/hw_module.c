@@ -621,7 +621,7 @@ void hw_init(void)
 
         struct sensor_value mode_get;
         sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_IS_APP_PRESENT, &mode_get);
-        LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
+        //LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
         if (mode_get.val1 == 8)
         {
             LOG_INF("MAXM86146 App not present. Starting bootloader mode");
@@ -631,8 +631,10 @@ void hw_init(void)
         }
         else
         {
+            LOG_INF("MAXM86146 App present");
             struct sensor_value mode_set;
-            mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
+            //mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
+            mode_set.val1 = MAXM86146_OP_MODE_SCD;
             sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
         }
     }

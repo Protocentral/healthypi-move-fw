@@ -2,15 +2,16 @@
  * (c) 2024 Protocentral Electronics
  *
  * SPDX-License-Identifier: Apache-2.0
- */
-
+ */ 
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
 
 #define MAXM86146_I2C_ADDRESS 0x55
+
 #define MAXM86146_HUB_STAT_DRDY_MASK 0x08
+#define MAXM86146_HUB_STAT_SCD_MASK 0x80
 
 #define MAXM86146_DEFAULT_CMD_DELAY 10
 
@@ -22,14 +23,12 @@ int maxm86146_do_enter_app(const struct device *dev);
 enum maxm86146_mode
 {
 	MAXM86146_OP_MODE_CAL,
-	MAXM86146_OP_MODE_BPT,
-	MAXM86146_OP_MODE_BPT_CAL_START,
-	MAXM86146_OP_MODE_BPT_CAL_GET_VECTOR,
 	MAXM86146_OP_MODE_IDLE,
 	MAXM86146_OP_MODE_RAW,
 	MAXM86146_OP_MODE_ALGO_AEC,
 	MAXM86146_OP_MODE_ALGO_AGC,
 	MAXM86146_OP_MODE_ALGO_EXTENDED,
+	MAXM86146_OP_MODE_SCD,
 	
 };
 
@@ -86,6 +85,8 @@ struct maxm86146_decoder_header
 struct maxm86146_encoded_data
 {
 	struct maxm86146_decoder_header header;
+	uint8_t chip_op_mode;
+
 	uint32_t num_samples;
 
 	uint32_t green_samples[32];

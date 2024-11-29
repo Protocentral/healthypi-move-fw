@@ -68,9 +68,35 @@ uint8_t maxm86146_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    //LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
+}
+
+static int m_i2c_write_cmd_2(const struct device *dev, uint8_t byte1, uint8_t byte2)
+{
+    const struct maxm86146_config *config = dev->config;
+    uint8_t wr_buf[2];
+    uint8_t rd_buf[1];
+
+    wr_buf[0] = byte1;
+    wr_buf[1] = byte2;
+
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+
+    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
+    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
+
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    LOG_DBG("CMD: %x %x | RSP: %x ", wr_buf[0], wr_buf[1], rd_buf[0]);
+
+    k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
+
+    return 0;
 }
 
 static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint16_t cmd_delay)
@@ -409,6 +435,38 @@ static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
     return 0;
 }
 
+static int maxm86146_set_mode_scd(const struct device *dev)
+{
+    LOG_DBG("MAXM86146 entering SCD mode...");
+
+    maxm86146_do_enter_app(dev);
+
+    //maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
+
+    // Set LED for SCD
+    m_i2c_write_cmd_2(dev, 0xE5, 0x02);
+
+    // Set output mode to algo data
+    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x02, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set interrupt threshold
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+
+    // Set report period
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, 100);
+
+    // Enable AFE
+    m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
+
+    // Enable Accel
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 30);
+
+    // Enable SCD Only algo
+    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x03, 500);
+
+    return 0;
+}
+
 static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode mode)
 {
     maxm86146_do_enter_app(dev);
@@ -481,7 +539,6 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
         m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
         // k_sleep(K_MSEC(500));
     }
-
     return 0;
 }
 
@@ -557,6 +614,11 @@ static int maxm86146_attr_set(const struct device *dev,
             maxm86146_set_mode_raw(dev);
             data->op_mode = MAXM86146_OP_MODE_RAW;
         }
+        else if (val->val1 == MAXM86146_OP_MODE_SCD)
+        {
+            maxm86146_set_mode_scd(dev);
+            data->op_mode = MAXM86146_OP_MODE_SCD;
+        }
         else
 
         {
@@ -577,18 +639,18 @@ static int maxm86146_attr_set(const struct device *dev,
 
 static int maxm86146_check_app_present(const struct device *dev)
 {
-    LOG_DBG("Checking MAXM86146 app present...");
+    //LOG_DBG("Checking MAXM86146 app present...");
 
     struct maxm86146_data *data = dev->data;
 
     if (data->hub_ver[1] == 0x08 && data->hub_ver[2] == 0x00 && data->hub_ver[3] == 0x00)
     {
-        LOG_ERR("App not present !!\n");
+        LOG_ERR("App not present !!");
         return 8;
     }
     else
     {
-        LOG_DBG("App present !!\n");
+        LOG_DBG("App present !!");
         return 1;
     }
 
