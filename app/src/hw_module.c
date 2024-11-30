@@ -66,9 +66,9 @@ ZBUS_CHAN_DECLARE(steps_chan);
 /****END EXTERNS****/
 
 // Peripheral Device Pointers
-const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
-const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
-const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
+static const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
+static const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
+static const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 
 const struct device *imu_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
@@ -114,8 +114,10 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
 
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
+
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
+
+K_SEM_DEFINE(sem_ppg_sm_start, 0, 1);
 
 K_SEM_DEFINE(sem_display_on, 0, 1);
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
@@ -522,6 +524,18 @@ static void trigger_handler(const struct device *dev, const struct sensor_trigge
     // k_sem_give(&sem);
 }
 
+bool hw_is_maxm86146_present(void)
+{
+    return maxm86146_device_present;
+}
+
+int hw_maxm86146_set_op_mode(uint8_t mode)
+{
+    struct sensor_value mode_set;
+    mode_set.val1 = mode;
+    return sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+}
+
 void hw_init(void)
 {
     int ret = 0;
@@ -632,10 +646,11 @@ void hw_init(void)
         else
         {
             LOG_INF("MAXM86146 App present");
-            struct sensor_value mode_set;
+            
+            //struct sensor_value mode_set;
             //mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
-            mode_set.val1 = MAXM86146_OP_MODE_SCD;
-            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+            //mode_set.val1 = MAXM86146_OP_MODE_SCD;
+            //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
         }
     }
 
@@ -692,7 +707,8 @@ void hw_init(void)
 
     if (maxm86146_device_present)
     {
-        k_sem_give(&sem_ppg_wrist_thread_start);
+        
+        k_sem_give(&sem_ppg_sm_start);
     }
 
     if (max32664d_device_present)

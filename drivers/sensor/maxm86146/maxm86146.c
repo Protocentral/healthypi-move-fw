@@ -68,7 +68,7 @@ uint8_t maxm86146_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    //LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -441,7 +441,7 @@ static int maxm86146_set_mode_scd(const struct device *dev)
 
     maxm86146_do_enter_app(dev);
 
-    //maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
+    // maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
     // Set LED for SCD
     m_i2c_write_cmd_2(dev, 0xE5, 0x02);
@@ -467,7 +467,7 @@ static int maxm86146_set_mode_scd(const struct device *dev)
     return 0;
 }
 
-static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode mode)
+static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode mode, uint8_t algo_mode)
 {
     maxm86146_do_enter_app(dev);
 
@@ -486,8 +486,8 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
-    // Set continuous mode - HR + SpO2
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
+    // Set Algorithm mode
+    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, algo_mode, MAXM86146_DEFAULT_CMD_DELAY);
 
     if (mode == MAXM86146_OP_MODE_ALGO_AEC)
     {
@@ -596,12 +596,12 @@ static int maxm86146_attr_set(const struct device *dev,
     case MAXM86146_ATTR_OP_MODE:
         if (val->val1 == MAXM86146_OP_MODE_ALGO_AEC)
         {
-            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AEC);
+            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AEC, MAXM86146_ALGO_OP_MODE_SAMPLED_HRM);
             data->op_mode = MAXM86146_OP_MODE_ALGO_AEC;
         }
         else if (val->val1 == MAXM86146_OP_MODE_ALGO_AGC)
         {
-            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AGC);
+            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AGC, MAXM86146_ALGO_OP_MODE_SAMPLED_HRM);
             data->op_mode = MAXM86146_OP_MODE_ALGO_AGC;
         }
         else if (val->val1 == MAXM86146_OP_MODE_ALGO_EXTENDED)
@@ -639,7 +639,7 @@ static int maxm86146_attr_set(const struct device *dev,
 
 static int maxm86146_check_app_present(const struct device *dev)
 {
-    //LOG_DBG("Checking MAXM86146 app present...");
+    // LOG_DBG("Checking MAXM86146 app present...");
 
     struct maxm86146_data *data = dev->data;
 
