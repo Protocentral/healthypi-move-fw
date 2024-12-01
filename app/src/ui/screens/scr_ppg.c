@@ -23,6 +23,7 @@ static lv_chart_series_t *ser_ppg;
 // GUI Labels
 static lv_obj_t *label_ppg_hr;
 static lv_obj_t *label_ppg_spo2;
+static lv_obj_t *label_status;
 
 static bool chart_ppg_update = true;
 
@@ -70,7 +71,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // HR Number label
     label_ppg_hr = lv_label_create(scr_ppg);
     lv_label_set_text(label_ppg_hr, "--");
-    lv_obj_align_to(label_ppg_hr, NULL, LV_ALIGN_CENTER, -50, 50);
+    lv_obj_align_to(label_ppg_hr, NULL, LV_ALIGN_CENTER, -100, 70);
     lv_obj_add_style(label_ppg_hr, &style_lbl_white, 0);
 
     // HR Sub bpm label
@@ -81,7 +82,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // HR caption label
     lv_obj_t *label_hr_cap = lv_label_create(scr_ppg);
     lv_label_set_text(label_hr_cap, "HR");
-    lv_obj_align_to(label_hr_cap, label_ppg_hr, LV_ALIGN_OUT_TOP_MID, -5, -5);
+    lv_obj_align_to(label_hr_cap, label_ppg_hr, LV_ALIGN_OUT_LEFT_MID, -5, -5);
     lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
 
     /*LV_IMG_DECLARE(heart);
@@ -93,7 +94,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // SpO2 Number label
     label_ppg_spo2 = lv_label_create(scr_ppg);
     lv_label_set_text(label_ppg_spo2, "--");
-    lv_obj_align_to(label_ppg_spo2, NULL, LV_ALIGN_CENTER, 30, 50);
+    lv_obj_align_to(label_ppg_spo2, NULL, LV_ALIGN_CENTER, 100, 70);
     lv_obj_add_style(label_ppg_spo2, &style_lbl_white, 0);
 
     // SpO2 Sub % label
@@ -104,7 +105,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // SpO2 caption label
     lv_obj_t *label_spo2_cap = lv_label_create(scr_ppg);
     lv_label_set_text(label_spo2_cap, "SpO2");
-    lv_obj_align_to(label_spo2_cap, label_ppg_spo2, LV_ALIGN_OUT_TOP_MID, -5, -5);
+    lv_obj_align_to(label_spo2_cap, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, -5);
     lv_obj_add_style(label_spo2_cap, &style_lbl_red, 0);
 
     // Bottom signal label
@@ -112,6 +113,11 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_signal, "PPG");
     lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
     lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
+
+    // Status label
+    label_status = lv_label_create(scr_ppg);
+    lv_label_set_text(label_status, "Active");
+    lv_obj_align_to(label_status, label_signal, LV_ALIGN_OUT_TOP_MID, 0, -5);
 
     /*LV_IMG_DECLARE(o2);
     lv_obj_t *img2 = lv_img_create(scr_ppg);
@@ -157,6 +163,35 @@ void hpi_ppg_disp_update_spo2(int spo2)
     }
     // sprintf(buf, "%d", spo2);
     lv_label_set_text(label_ppg_spo2, buf);
+}
+
+void hpi_ppg_disp_update_status(uint8_t status)
+{
+    if (label_status == NULL)
+        return;
+
+    char stat_str[16];
+
+    switch (status)
+    {
+    case 0:
+        sprintf(stat_str, "UNK.");
+        break;
+    case 1:
+        sprintf(stat_str, "OFF SKIN");
+        break;
+    case 2:
+        sprintf(stat_str, "ON OBJ");
+        break;
+    case 3:
+        sprintf(stat_str, "ON SKIN");
+        break;
+    default:
+        sprintf(stat_str, "UNK.");
+        break;
+    }
+
+    lv_label_set_text(label_status, stat_str);
 }
 
 static void hpi_ppg_disp_add_samples(int num_samples)

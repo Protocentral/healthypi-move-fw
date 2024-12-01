@@ -13,7 +13,7 @@
 #define DISPLAY_DEFAULT_BRIGHTNESS 50
 
 #define DISP_WINDOW_SIZE_EDA 250
-#define PPG_DISP_WINDOW_SIZE 128 // To be verified 
+#define PPG_DISP_WINDOW_SIZE 128 // To be verified
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 
@@ -26,18 +26,16 @@ enum scroll_dir
     SCROLL_NONE,
 };
 
-
-
 enum hpi_disp_screens
 {
     SCR_LIST_START,
-    SCR_HOME,
-    // SCR_CLOCK_SMALL,
 
+    SCR_HOME,
     SCR_PLOT_PPG,
-    SCR_BPT_HOME,
-    SCR_PLOT_EDA,
     SCR_PLOT_ECG,
+    SCR_PLOT_EDA,
+    SCR_BPT_HOME,
+
     SCR_PLOT_HRV,
     SCR_PLOT_HRV_SCATTER,
 
@@ -62,7 +60,7 @@ enum hpi_disp_subscreens
 
 void draw_scr_boot(void);
 
-//Clock Screen functions
+// Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);
 void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 
@@ -85,6 +83,7 @@ void hpi_ecg_disp_update_hr(int hr);
 void hpi_disp_ppg_draw_plotPPG(int32_t *data_ppg, int num_samples);
 void hpi_ppg_disp_update_hr(int hr);
 void hpi_ppg_disp_update_spo2(int spo2);
+void hpi_ppg_disp_update_status(uint8_t status);
 
 // EDA screen functions
 void draw_scr_eda(enum scroll_dir m_scroll_dir);
@@ -101,7 +100,7 @@ void hpi_disp_bpt_update_progress(int progress);
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);
 void hpi_disp_hrv_draw_plot_rtor(float rtor);
 void hpi_disp_hrv_update_rtor(int rtor);
-void hpi_disp_hrv_update_sdnn(int sdnn); 
+void hpi_disp_hrv_update_sdnn(int sdnn);
 
 // HRV Scatter screen functions
 void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir);
@@ -121,7 +120,7 @@ void hpi_disp_set_curr_screen(int screen);
 void hpi_disp_set_brightness(uint8_t brightness_percent);
 uint8_t hpi_disp_get_brightness(void);
 
-//Component objects
+// Component objects
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);
 void ui_hr_button_update(uint8_t hr_bpm);
 
@@ -146,20 +145,16 @@ void hpi_disp_update_temp(int temp);
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void disp_screen_event(lv_event_t *e);
 
-
 LV_IMG_DECLARE(heart);
-LV_IMG_DECLARE( ui_img_flash_png);
-LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png
-LV_IMG_DECLARE( ui_img_heart_png);   // assets/heart2.png
-LV_IMG_DECLARE( ui_img_heart2_png);   // assets/heart2.png
-LV_IMG_DECLARE( ui_img_daily_mission_png);   // assets/daily_mission.png
-LV_IMG_DECLARE( ui_img_step_png);   // assets/step.png
+LV_IMG_DECLARE(ui_img_flash_png);
+LV_IMG_DECLARE(ui_img_step_png);          // assets/step.png
+LV_IMG_DECLARE(ui_img_heart_png);         // assets/heart2.png
+LV_IMG_DECLARE(ui_img_heart2_png);        // assets/heart2.png
+LV_IMG_DECLARE(ui_img_daily_mission_png); // assets/daily_mission.png
+LV_IMG_DECLARE(ui_img_step_png);          // assets/step.png
 
-
-//LV_FONT_DECLARE( ui_font_H1);
-LV_FONT_DECLARE( ui_font_Number_big);
-//LV_FONT_DECLARE( ui_font_Number_extra);
-//LV_FONT_DECLARE( ui_font_Subtitle);
-//LV_FONT_DECLARE( ui_font_Title);
-
-
+// LV_FONT_DECLARE( ui_font_H1);
+LV_FONT_DECLARE(ui_font_Number_big);
+// LV_FONT_DECLARE( ui_font_Number_extra);
+// LV_FONT_DECLARE( ui_font_Subtitle);
+// LV_FONT_DECLARE( ui_font_Title);

@@ -380,12 +380,12 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
         return;
     }
 
-    if(batt_level<=0)
+    if (batt_level <= 0)
     {
         batt_level = 0;
     }
 
-    //printk("Updating battery level: %d\n", batt_level);
+    // printk("Updating battery level: %d\n", batt_level);
 
     char buf[8];
     sprintf(buf, "%2d % ", batt_level);
@@ -662,10 +662,8 @@ void display_screens_thread(void)
 
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
-    //printk("Display boot complete");
-
-    draw_scr_home(SCROLL_NONE);
-    // draw_scr_ppg(SCROLL_RIGHT);
+    // draw_scr_home(SCROLL_NONE);
+    draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
@@ -687,6 +685,7 @@ void display_screens_thread(void)
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
                         hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
+                        hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
                         scr_ppg_hr_spo2_refresh_counter = 0;
                     }
@@ -937,8 +936,8 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
-    //ui_steps_button_update(hpi_steps->steps_walk);
-    //ui_step_update(hpi_steps->steps_walk
+    // ui_steps_button_update(hpi_steps->steps_walk);
+    // ui_step_update(hpi_steps->steps_walk
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 

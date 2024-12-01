@@ -596,7 +596,7 @@ static int maxm86146_attr_set(const struct device *dev,
     case MAXM86146_ATTR_OP_MODE:
         if (val->val1 == MAXM86146_OP_MODE_ALGO_AEC)
         {
-            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AEC, MAXM86146_ALGO_OP_MODE_SAMPLED_HRM);
+            maxm86146_set_mode_algo(dev, MAXM86146_OP_MODE_ALGO_AEC, MAXM86146_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
             data->op_mode = MAXM86146_OP_MODE_ALGO_AEC;
         }
         else if (val->val1 == MAXM86146_OP_MODE_ALGO_AGC)
