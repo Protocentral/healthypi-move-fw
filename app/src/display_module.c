@@ -345,7 +345,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset + 2));
 
     label_batt_level_val = lv_label_create(parent);
-    lv_label_set_text_fmt(label_batt_level_val, "%d %", hw_get_battery_level());
+    lv_label_set_text(label_batt_level_val, "--");
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
     lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, 0, -2);
 }
@@ -380,8 +380,15 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
         return;
     }
 
-    char buf[32];
-    sprintf(buf, "%d %% ", batt_level);
+    if(batt_level<=0)
+    {
+        batt_level = 0;
+    }
+
+    //printk("Updating battery level: %d\n", batt_level);
+
+    char buf[8];
+    sprintf(buf, "%2d % ", batt_level);
     lv_label_set_text(label_batt_level_val, buf);
 
     if (batt_level > 75)
@@ -846,21 +853,6 @@ void display_screens_thread(void)
                 }
             }
 
-            /*(curr_screen == SCR_VITALS)
-            {
-                if (temp_disp_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS)) // Once a second
-                {
-                    // temp_val = read_temp();
-                    // hpi_disp_update_temp(temp_val);
-                    temp_disp_counter = 0;
-                }
-                else
-                {
-                    temp_disp_counter++;
-                }
-                // lv_task_handler();
-            }*/
-
             if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
                 if (m_display_active)
@@ -945,13 +937,13 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
-    ui_steps_button_update(hpi_steps->steps_walk);
+    //ui_steps_button_update(hpi_steps->steps_walk);
     //ui_step_update(hpi_steps->steps_walk
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 
-#define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
-#define DISPLAY_SCREENS_THREAD_PRIORITY 5
+#define DISPLAY_SCREENS_THREAD_STACKSIZE 32768
+#define DISPLAY_SCREENS_THREAD_PRIORITY 7
 // Power Cost - 80 uA
 
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);
