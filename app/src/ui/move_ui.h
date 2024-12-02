@@ -31,6 +31,7 @@ enum hpi_disp_screens
     SCR_LIST_START,
 
     SCR_HOME,
+    SCR_TODAY,
     SCR_PLOT_PPG,
     SCR_PLOT_ECG,
     SCR_PLOT_EDA,
@@ -67,12 +68,14 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 // Home Screen functions
 void draw_scr_home(enum scroll_dir m_scroll_dir);
 void ui_home_time_display_update(struct rtc_time in_time);
-
 void hpi_home_hr_update(int hr);
 
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
+
+// Today Screen functions
+void draw_scr_today(enum scroll_dir m_scroll_dir);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -148,10 +151,14 @@ void disp_screen_event(lv_event_t *e);
 LV_IMG_DECLARE(heart);
 LV_IMG_DECLARE(ui_img_flash_png);
 LV_IMG_DECLARE(ui_img_step_png);          // assets/step.png
-LV_IMG_DECLARE(ui_img_heart_png);         // assets/heart2.png
 LV_IMG_DECLARE(ui_img_heart2_png);        // assets/heart2.png
 LV_IMG_DECLARE(ui_img_daily_mission_png); // assets/daily_mission.png
 LV_IMG_DECLARE(ui_img_step_png);          // assets/step.png
+
+LV_IMG_DECLARE(img_heart_48px);         // assets/heart2.png
+LV_IMG_DECLARE(img_steps_48px);
+LV_IMG_DECLARE(img_calories_48px);
+LV_IMG_DECLARE(img_clock_48px);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(ui_font_Number_big);

@@ -559,6 +559,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
+    case SCR_TODAY:
+        draw_scr_today(m_scroll_dir);
+        break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
         break;
@@ -663,7 +666,8 @@ void display_screens_thread(void)
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
     // draw_scr_home(SCROLL_NONE);
-    draw_scr_ppg(SCROLL_RIGHT);
+    //draw_scr_ppg(SCROLL_RIGHT);
+    draw_scr_today(SCROLL_NONE);
     // draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
@@ -681,12 +685,13 @@ void display_screens_thread(void)
                 if (curr_screen == SCR_PLOT_PPG)
                 {
                     hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
+                    hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
+
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
                         hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
-                        hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
-
+                       
                         scr_ppg_hr_spo2_refresh_counter = 0;
                     }
                     else
@@ -843,7 +848,7 @@ void display_screens_thread(void)
                 if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
                     ui_home_time_display_update(m_disp_sys_time);
-                    // ui_hr_button_update(m_disp_hr);
+                    ui_hr_button_update(m_disp_hr);
                     time_refresh_counter = 0;
                 }
                 else
@@ -936,8 +941,11 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
-    // ui_steps_button_update(hpi_steps->steps_walk);
-    // ui_step_update(hpi_steps->steps_walk
+    if(curr_screen == SCR_HOME)
+    {
+        ui_steps_button_update(hpi_steps->steps_walk);
+    }
+    //ui_steps_button_update(hpi_steps->steps_walk);
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 

@@ -46,7 +46,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
 {
     scr_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    draw_bg(scr_ppg);
+    //draw_bg(scr_ppg);
     draw_header_minimal(scr_ppg, 10);
 
     // Create Chart 1 - ECG
@@ -118,6 +118,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     label_status = lv_label_create(scr_ppg);
     lv_label_set_text(label_status, "Active");
     lv_obj_align_to(label_status, label_signal, LV_ALIGN_OUT_TOP_MID, 0, -5);
+    lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
 
     /*LV_IMG_DECLARE(o2);
     lv_obj_t *img2 = lv_img_create(scr_ppg);
@@ -175,16 +176,16 @@ void hpi_ppg_disp_update_status(uint8_t status)
     switch (status)
     {
     case 0:
-        sprintf(stat_str, "UNK.");
+        sprintf(stat_str, "Unk.");
         break;
     case 1:
-        sprintf(stat_str, "OFF SKIN");
+        sprintf(stat_str, "Off Skin");
         break;
     case 2:
-        sprintf(stat_str, "ON OBJ");
+        sprintf(stat_str, "On Obj.");
         break;
     case 3:
-        sprintf(stat_str, "ON SKIN");
+        sprintf(stat_str, "On Skin");
         break;
     default:
         sprintf(stat_str, "UNK.");
