@@ -71,9 +71,6 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
-    // lv_chart_set_type(chart_ecg, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    // lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -200, 250);
-    // lv_chart_set_range(chart_ecg, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
     // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
