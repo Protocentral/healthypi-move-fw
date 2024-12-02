@@ -124,7 +124,7 @@ void hpi_display_sleep_on(void)
 {
     if (m_display_active == true)
     {
-        printk("Display off");
+        LOG_DBG("Display off");
         // display_blanking_on(display_dev);
         display_set_brightness(display_dev, 0);
 
@@ -141,7 +141,7 @@ void hpi_display_sleep_off(void)
 {
     if (m_display_active == false)
     {
-        printk("Display on");
+        LOG_DBG("Display on");
         hpi_disp_set_brightness(hpi_disp_get_brightness());
 
         // display_blanking_on(display_dev);
@@ -345,7 +345,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset + 2));
 
     label_batt_level_val = lv_label_create(parent);
-    lv_label_set_text_fmt(label_batt_level_val, "%d %", hw_get_battery_level());
+    lv_label_set_text(label_batt_level_val, "--");
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
     lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, 0, -2);
 }
@@ -380,8 +380,15 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
         return;
     }
 
-    char buf[32];
-    sprintf(buf, "%d %% ", batt_level);
+    if (batt_level <= 0)
+    {
+        batt_level = 0;
+    }
+
+    // printk("Updating battery level: %d\n", batt_level);
+
+    char buf[8];
+    sprintf(buf, "%2d % ", batt_level);
     lv_label_set_text(label_batt_level_val, buf);
 
     if (batt_level > 75)
@@ -552,6 +559,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
+    case SCR_TODAY:
+        draw_scr_today(m_scroll_dir);
+        break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
         break;
@@ -655,11 +665,10 @@ void display_screens_thread(void)
 
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
-    printk("Display boot complete");
-
-    draw_scr_home(SCROLL_NONE);
+    // draw_scr_home(SCROLL_NONE);
     // draw_scr_ppg(SCROLL_RIGHT);
-    // draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_today(SCROLL_NONE);
+    draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt_home(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
@@ -676,6 +685,8 @@ void display_screens_thread(void)
                 if (curr_screen == SCR_PLOT_PPG)
                 {
                     hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
+                    hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
+
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                     {
                         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
@@ -837,7 +848,7 @@ void display_screens_thread(void)
                 if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
                 {
                     ui_home_time_display_update(m_disp_sys_time);
-                    // ui_hr_button_update(m_disp_hr);
+                    ui_hr_button_update(m_disp_hr);
                     time_refresh_counter = 0;
                 }
                 else
@@ -845,21 +856,6 @@ void display_screens_thread(void)
                     time_refresh_counter++;
                 }
             }
-
-            /*(curr_screen == SCR_VITALS)
-            {
-                if (temp_disp_counter >= (1000 / HPI_DISP_THREAD_ACTIVE_REFRESH_INT_MS)) // Once a second
-                {
-                    // temp_val = read_temp();
-                    // hpi_disp_update_temp(temp_val);
-                    temp_disp_counter = 0;
-                }
-                else
-                {
-                    temp_disp_counter++;
-                }
-                // lv_task_handler();
-            }*/
 
             if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
             {
@@ -945,13 +941,16 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
-    ui_steps_button_update(hpi_steps->steps_walk);
-    //ui_step_update(hpi_steps->steps_walk
+    if (curr_screen == SCR_HOME)
+    {
+        ui_steps_button_update(hpi_steps->steps_walk);
+    }
+    // ui_steps_button_update(hpi_steps->steps_walk);
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 
-#define DISPLAY_SCREENS_THREAD_STACKSIZE 65536
-#define DISPLAY_SCREENS_THREAD_PRIORITY 5
+#define DISPLAY_SCREENS_THREAD_STACKSIZE 32768
+#define DISPLAY_SCREENS_THREAD_PRIORITY 7
 // Power Cost - 80 uA
 
 K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);

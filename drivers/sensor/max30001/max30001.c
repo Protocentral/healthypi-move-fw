@@ -216,28 +216,41 @@ static int _max30001_read_bioz_fifo(const struct device *dev, int num_bytes)
     return 0;
 }
 
-static void max30001_enable_ecg(const struct device *dev)
+static int max30001_enable_ecg(const struct device *dev, bool ecg_en)
 {
-    LOG_INF("Enabling MAX30001 ECG...\n");
-    _max30001RegWrite(dev, CNFG_EMUX, 0x0B0000); // Pins internally connection to ECG Channels
-    k_sleep(K_MSEC(100));
+    struct max30001_data *data = dev->data;
 
-    //_max30001RegWrite(dev, CNFG_ECG, 0x835000); // Gain 160
+    if (ecg_en == true)
+    {
+        LOG_INF("Enabling MAX30001 ECG...");
+        data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 1;
+    }
+    else
+    {
+        LOG_INF("Disabling MAX30001 ECG...");
+        data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 0;
+    }
+    //_max30001RegWrite(dev, CNFG_EMUX, 0x0B0000); // Pins internally connection to ECG Channels
     // k_sleep(K_MSEC(100));
+
+    return _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
 }
 
-static void max30001_enable_bioz(const struct device *dev)
+static int max30001_enable_bioz(const struct device *dev, bool bioz_en)
 {
-    _max30001RegWrite(dev, CNFG_BMUX, 0x000040);
-    k_sleep(K_MSEC(100));
+    struct max30001_data *data = dev->data;
 
-    // Set MAX30001G specific BioZ LC
-    _max30001RegWrite(dev, CNFG_BIOZ_LC, 0x800000); // Turn OFF low current mode
-    k_sleep(K_MSEC(100));
-
-    _max30001RegWrite(dev, CNFG_BIOZ, 0x201433);
-    k_sleep(K_MSEC(100));
-    //_max30001RegWrite(dev, CNFG_GEN, 0xC0004); // ECG, BIOZ Enabled, DC LOFF disabled
+    if (bioz_en == true)
+    {
+        LOG_INF("Enabling MAX30001 BioZ...");
+        data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 1;
+    }
+    else
+    {
+        LOG_INF("Disabling MAX30001 BioZ...");
+        data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 0;
+    }
+    return _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
 }
 
 static void max30001_enable_rtor(const struct device *dev)
@@ -249,16 +262,6 @@ static void max30001_enable_rtor(const struct device *dev)
 static void max30001_enable_dcloff(const struct device *dev)
 {
     LOG_INF("Enabling MAX30001 DCLOFF...\n");
-}
-
-static void max30001_disable_ecg(const struct device *dev)
-{
-    LOG_INF("Disabling MAX30001 ECG...\n");
-}
-
-static void max30001_disable_bioz(const struct device *dev)
-{
-    LOG_INF("Disabling MAX30001 BioZ...\n");
 }
 
 static void max30001_disable_rtor(const struct device *dev)
@@ -383,24 +386,21 @@ static int max30001_attr_set(const struct device *dev,
     case MAX30001_ATTR_ECG_ENABLED:
         if (val->val1 == 1)
         {
-            max30001_enable_ecg(dev);
+            max30001_enable_ecg(dev, true);
         }
         else if (val->val1 == 0)
         {
-            // Disable ECG
-            max30001_disable_ecg(dev);
+            max30001_enable_ecg(dev, false);
         }
-
         break;
     case MAX30001_ATTR_BIOZ_ENABLED:
         if (val->val1 == 1)
         {
-            max30001_enable_bioz(dev);
+            max30001_enable_bioz(dev, true);
         }
         else if (val->val1 == 0)
         {
-            // Disable BioZ
-            max30001_disable_bioz(dev);
+            max30001_enable_bioz(dev, false);
         }
         break;
     case MAX30001_ATTR_RTOR_ENABLED:
@@ -543,7 +543,7 @@ static int max30001_chip_init(const struct device *dev)
     k_sleep(K_MSEC(100));
 
     // max30001_enable_ecg(dev);
-    LOG_INF("Enabling MAX30001 ECG");
+    // LOG_INF("Enabling MAX30001 ECG");
 
     _max30001RegWrite(dev, CNFG_ECG, data->chip_cfg.reg_cnfg_ecg.all);
     //_max30001RegWrite(dev, CNFG_ECG, 0x835000); // Gain 160
@@ -558,7 +558,7 @@ static int max30001_chip_init(const struct device *dev)
     k_sleep(K_MSEC(100));
 
     // max30001_enable_bioz(dev);
-    LOG_INF("Enabling MAX30001 BioZ");
+    // LOG_INF("Enabling MAX30001 BioZ");
     _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
     //_max30001RegWrite(dev, CNFG_BIOZ, 0x201433);
     k_sleep(K_MSEC(100));

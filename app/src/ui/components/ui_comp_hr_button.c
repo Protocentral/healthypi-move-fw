@@ -13,8 +13,8 @@ lv_obj_t *ui_hr_number;
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent)
 {
     btn_hr_disp = lv_btn_create(comp_parent);
-    lv_obj_set_width(btn_hr_disp, 80);
-    lv_obj_set_height(btn_hr_disp, 80);
+    lv_obj_set_width(btn_hr_disp, 100);
+    lv_obj_set_height(btn_hr_disp, 100);
     lv_obj_set_x(btn_hr_disp, 0);
     lv_obj_set_y(btn_hr_disp, 0);
     lv_obj_set_align(btn_hr_disp, LV_ALIGN_CENTER);
@@ -37,7 +37,7 @@ lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent)
 
     lv_obj_t *cui_heart;
     cui_heart = lv_img_create(btn_hr_disp);
-    lv_img_set_src(cui_heart, &ui_img_heart_png);
+    lv_img_set_src(cui_heart, &img_heart_48px);
     lv_obj_set_width(cui_heart, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(cui_heart, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(cui_heart, LV_ALIGN_TOP_MID);
