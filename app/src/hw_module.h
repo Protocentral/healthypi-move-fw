@@ -27,6 +27,9 @@ void hw_set_battery_level(uint8_t batt_level);
 bool hw_is_maxm86146_present(void);
 int hw_maxm86146_set_op_mode(uint8_t mode);
 
+int hw_max30001_ecg_enable(bool enable);
+int hw_max30001_bioz_enable(bool enable);
+
 enum gpio_keypad_key
 {
     GPIO_KEYPAD_KEY_NONE = 0,

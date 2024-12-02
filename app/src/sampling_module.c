@@ -222,6 +222,8 @@ void ecg_bioz_sampling_trigger_thread(void)
 
         LOG_INF("ECG/ BioZ Sampling starting");
 
+        
+
         for (;;)
         {
                 sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);

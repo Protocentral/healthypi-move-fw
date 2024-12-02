@@ -536,6 +536,35 @@ int hw_maxm86146_set_op_mode(uint8_t mode)
     return sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
 }
 
+int hw_max30001_ecg_enable(bool enable)
+{
+    struct sensor_value ecg_mode_set;
+    if (enable == true)
+    {
+        ecg_mode_set.val1 = 1;
+    }
+    else
+    {
+        ecg_mode_set.val1 = 0;
+    }
+
+    sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
+}
+
+int hw_max30001_bioz_enable(bool enable)
+{
+    struct sensor_value bioz_mode_set;
+    if (enable == true)
+    {
+        bioz_mode_set.val1 = 1;
+    }
+    else
+    {
+        bioz_mode_set.val1 = 0;
+    }
+    return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
+}
+
 void hw_init(void)
 {
     int ret = 0;
@@ -571,11 +600,12 @@ void hw_init(void)
     }
     else
     {
-        if (sensor_trigger_set(imu_dev, &imu_trig, trigger_handler)<0)
+        if (sensor_trigger_set(imu_dev, &imu_trig, trigger_handler) < 0)
         {
             LOG_ERR("Could not set trigger");
-            //return 0;
-        } else
+            // return 0;
+        }
+        else
         {
             LOG_INF("IMU Trigger set");
             struct sensor_value set_val;
@@ -607,14 +637,14 @@ void hw_init(void)
     {
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
-        /*struct sensor_value ecg_mode_set;
-        // ecg_mode_set.val1 = 1;
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
-        */
+
+        // Disable ECG and BIOZ by default        
+        hw_max30001_ecg_enable(false);
+        hw_max30001_bioz_enable(false);
     }
 
     k_sleep(K_MSEC(1000));
+    
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
     {
@@ -635,7 +665,7 @@ void hw_init(void)
 
         struct sensor_value mode_get;
         sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_IS_APP_PRESENT, &mode_get);
-        //LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
+        // LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
         if (mode_get.val1 == 8)
         {
             LOG_INF("MAXM86146 App not present. Starting bootloader mode");
@@ -646,11 +676,11 @@ void hw_init(void)
         else
         {
             LOG_INF("MAXM86146 App present");
-            
-            //struct sensor_value mode_set;
-            //mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
-            //mode_set.val1 = MAXM86146_OP_MODE_SCD;
-            //sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+
+            // struct sensor_value mode_set;
+            // mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
+            // mode_set.val1 = MAXM86146_OP_MODE_SCD;
+            // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
         }
     }
 
@@ -707,7 +737,7 @@ void hw_init(void)
 
     if (maxm86146_device_present)
     {
-        
+
         k_sem_give(&sem_ppg_sm_start);
     }
 
