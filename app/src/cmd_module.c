@@ -32,6 +32,10 @@ volatile bool cmd_module_ble_connected = false;
 
 extern int global_dev_status;
 
+bool settings_log_data_enabled = false;
+int8_t data_pkt[272];
+
+
 void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
 
@@ -56,6 +60,54 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         k_sleep(K_MSEC(1000));
         sys_reboot(SYS_REBOOT_COLD);
         break;
+    
+    case CMD_LOG_GET_COUNT:
+        printk("Comamnd to send log count\n");
+        hpi_get_session_count();
+        break;
+
+    /*case CMD_FETCH_SD_CARD_STATUS:
+        if (sd_card_present)
+            cmdif_send_memory_status(CMD_SD_CARD_PRESENT);
+        else
+            cmdif_send_memory_status(CMD_SD_CARD_NOT_PRESENT);
+        break;
+    */
+
+    case CMD_LOG_SESSION_HEADERS:
+        printk("Sending all session headers\n");
+        hpi_get_session_index();
+        break;
+
+    case CMD_FETCH_LOG_FILE_DATA:
+        printk("Command to fetch file data\n");
+        hpi_session_fetch(in_pkt_buf[2] | (in_pkt_buf[1] << 8),in_pkt_buf[3]);
+        break;
+
+    case CMD_SESSION_WIPE_ALL:
+        printk("Command to delete all files\n");
+        hpi_datalog_delete_all();
+        break;
+
+    case CMG_SESSION_DELETE:
+        printk("Command to delete file\n");
+        hpi_datalog_delete_session(in_pkt_buf[2] | (in_pkt_buf[1] << 8),in_pkt_buf[3]);
+        break;
+
+    case CMD_LOGGING_END:
+        printk("Command to end logging\n");
+        // AKW: Replace with a function to stop logging
+        settings_log_data_enabled = false;
+        flush_current_session_logs();
+        break;
+
+    case CMD_LOGGING_START:
+        // bool header_set_flag = false;
+        printk("Command to start logging\n");
+        hpi_datalog_start_session(in_pkt_buf);
+        break;
+
+
     default:
         LOG_DBG("Recd Unknown Command");
         break;
@@ -135,6 +187,59 @@ void cmd_thread(void)
         k_sleep(K_MSEC(1000));
     }
 }
+
+void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
+{
+    uint8_t cmd_pkt[1 + m_data_len];
+    cmd_pkt[0] = CES_CMDIF_TYPE_LOG_IDX;
+
+    for (int i = 0; i < m_data_len; i++)
+    {
+        cmd_pkt[1 + i] = m_data[i];
+    }
+
+    healthypi_move_service_send_data(cmd_pkt, 1 + m_data_len);
+}
+
+void cmdif_send_memory_status(uint8_t m_cmd)
+{
+    // printk("Sending BLE Status\n");
+    uint8_t cmd_pkt[3];
+
+    cmd_pkt[0] = CES_CMDIF_TYPE_STATUS;
+    cmd_pkt[1] = 0x55;
+    cmd_pkt[2] = m_cmd;
+
+    healthypi_move_service_send_data(cmd_pkt, 3);
+}
+
+void cmdif_send_session_count(uint8_t m_cmd,uint8_t indication)
+{
+    // printk("Sending BLE Status\n");
+    uint8_t cmd_pkt[3];
+
+    cmd_pkt[0] = CES_CMDIF_TYPE_CMD_RSP;
+    cmd_pkt[1] = indication;
+    cmd_pkt[2] = m_cmd;
+
+    // printk("sending response\n");
+    healthypi_move_service_send_data(cmd_pkt, 3);
+}
+
+void cmdif_send_ble_session_data(int8_t *m_data, uint8_t m_data_len)
+{
+    // printk("Sending BLE Data: %d\n", m_data_len);
+
+    data_pkt[0] = CES_CMDIF_TYPE_DATA;
+
+    for (int i = 0; i < m_data_len; i++)
+    {
+        data_pkt[1 + i] = m_data[i];
+    }
+    healthypi_move_service_send_data(data_pkt, 1 + m_data_len);
+}
+
+
 
 #define CMD_THREAD_STACKSIZE 1024
 #define CMD_THREAD_PRIORITY 7

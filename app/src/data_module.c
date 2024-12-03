@@ -13,6 +13,7 @@
 #include "sampling_module.h"
 #include "fs_module.h"
 #include "ble_module.h"
+#include "cmd_module.h"
 
 #include <zephyr/logging/log.h>
 
@@ -44,7 +45,20 @@ enum hpi5_data_format
     DATA_FMT_PLAIN_TEXT,
 } hpi5_data_format_t;
 
-static bool settings_log_data_enabled = true; // true;
+extern bool settings_log_data_enabled; // true;
+extern struct fs_mount_t *lfs_storage_mnt;
+extern struct hpi_log_session_header_t hpi_log_session_header;
+struct hpi_sensor_logging_data_t log_buffer[LOG_BUFFER_LENGTH];
+
+uint16_t current_session_ecg_counter = 0;
+uint16_t serial_ecg_counter = 0;
+uint16_t serial_bioz_counter = 0;
+uint16_t serial_ppg_counter = 0;
+uint16_t current_session_bioz_counter = 0;
+uint16_t current_session_ppg_counter = 0;
+uint16_t current_session_log_id = 0;
+char session_id_str[15];
+
 static int settings_data_format = DATA_FMT_OPENVIEW;
 
 extern struct k_msgq q_ecg_bioz_sample;
@@ -197,6 +211,84 @@ float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
     return y;
 }
 
+// Start a new session log
+void flush_current_session_logs()
+{
+
+    for (int i = 0; i < LOG_BUFFER_LENGTH; i++)
+    {
+        log_buffer[i].log_ecg_sample = 0;
+        log_buffer[i].log_ppg_sample = 0;
+        log_buffer[i].log_bioz_sample = 0;
+    }
+
+    current_session_ecg_counter = 0;
+    current_session_ppg_counter = 0;
+    current_session_bioz_counter = 0;
+    hpi_log_session_header.session_start_time.day = 0;
+    hpi_log_session_header.session_start_time.hour = 0;
+    hpi_log_session_header.session_start_time.minute = 0;
+    hpi_log_session_header.session_start_time.month = 0;
+    hpi_log_session_header.session_start_time.second = 0;
+    hpi_log_session_header.session_start_time.year = 0;
+
+    hpi_log_session_header.session_id = 0;
+    hpi_log_session_header.session_size = 0;
+    hpi_log_session_header.file_no = 0;
+}
+
+void record_session_add_ppg_point(int16_t ppg_sample)
+{
+    if (current_session_ppg_counter < LOG_BUFFER_LENGTH)
+    {
+        log_buffer[current_session_ppg_counter++].log_ppg_sample = ppg_sample;
+    }
+    else
+    {
+        hpi_log_session_write_file(PPG_DATA);
+        current_session_ppg_counter = 0;
+        log_buffer[current_session_ppg_counter++].log_ppg_sample = ppg_sample;
+    }
+}
+
+// Add a log point to the current session log
+void record_session_add_ecg_point(int32_t *ecg_samples, uint8_t ecg_len, int32_t *bioz_samples, uint8_t bioz_len)
+{
+    if (current_session_ecg_counter < LOG_BUFFER_LENGTH)
+    {
+        // printk("Writing dataa to the file\n");
+        for (int i = 0; i < ecg_len; i++)
+        {
+            // k_sem_give(&log_sem);
+            log_buffer[current_session_ecg_counter++].log_ecg_sample = ecg_samples[i];
+        }
+
+        for (int i = 0; i < bioz_len; i++)
+        {
+            // k_sem_give(&log_sem);
+            log_buffer[current_session_bioz_counter++].log_bioz_sample = bioz_samples[i];
+        }
+    }
+    else
+    {
+
+        hpi_log_session_write_file(ECG_DATA);
+        current_session_ecg_counter = 0;
+        current_session_bioz_counter = 0;
+        for (int i = 0; i < ecg_len; i++)
+        {
+            log_buffer[current_session_ecg_counter++].log_ecg_sample = ecg_samples[i];
+        }
+
+        for (int i = 0; i < bioz_len; i++)
+        {
+            log_buffer[current_session_bioz_counter++].log_bioz_sample = bioz_samples[i];
+        }
+    }
+}
+
+
+
 void data_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
@@ -306,6 +398,11 @@ void data_thread(void)
             {
                 k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
             }
+
+            if (settings_log_data_enabled)
+            {
+                record_session_add_ecg_point(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.bioz_samples, ecg_bioz_sensor_sample.bioz_num_samples);
+            }
         }
 
         // Check if PPG data is available
@@ -323,6 +420,11 @@ void data_thread(void)
             if (settings_send_usb_enabled)
             {
                
+            }
+
+            if (settings_log_data_enabled)
+            {
+                record_session_add_ppg_point(ppg_sensor_sample.ppg_ir_sample);
             }
             
 

@@ -5,11 +5,31 @@
 #define CES_CMDIF_PKT_STOP_1 0x00
 #define CES_CMDIF_PKT_STOP_2 0x0B
 
+#define CMD_LOGGING_MEMORY_FREE 0x32 
+#define CMD_LOGGING_MEMORY_NOT_AVAILABLE 0x31
+#define CMD_LOGGING_END 0x56 
+#define CMD_LOGGING_START 0x55
+#define CMD_LOG_GET_COUNT 0x54  
+#define CMD_FETCH_LOG_FILE_DATA 0x51 
+#define CMD_LOG_SESSION_HEADERS 0x50
+#define CMG_SESSION_DELETE 0x52 
+#define CMD_SESSION_WIPE_ALL 0x53 
+
+//#define CMD_SD_CARD_PRESENT 0x59
+//#define CMD_SD_CARD_NOT_PRESENT 0x58
+//#define CMD_FETCH_SD_CARD_STATUS 0x57
+
 void cmdif_send_ble_progress(uint8_t m_stage, uint16_t m_total_time, uint16_t m_curr_time, uint16_t m_current, uint16_t m_imped);
 void cmdif_send_ble_command(uint8_t m_cmd);
 void cmdif_send_ble_device_status_response(void);
-
 void cmdif_send_ble_data(const char *buf, size_t len);
+
+void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len);
+void cmdif_send_memory_status(uint8_t m_cmd);
+void cmdif_send_session_count(uint8_t m_cmd,uint8_t indication);
+void cmdif_send_ble_session_data(int8_t *m_data, uint8_t m_data_len);
+
+
 
 enum cmdsm_state
 {
