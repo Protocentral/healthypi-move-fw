@@ -71,6 +71,22 @@
 	};
 };
 
+&vregmain {
+	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
+&vregradio {
+	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
+&vregh {
+	status = "okay";
+};
+
+&uicr {
+    nfct-pins-as-gpios;
+};
+
 &gpiote {
 	status = "okay";
 };
@@ -437,5 +453,5 @@ zephyr_udc0: &usbd {
 	};
 };
 
-/* Include partition configuration file */
-#include "nrf5340_cpuapp_partition_conf.dtsi"
+/* Include default memory partition configuration file */
+#include <common/nordic/nrf5340_cpuapp_partition.dtsi>
