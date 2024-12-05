@@ -35,7 +35,7 @@ enum hpi_disp_screens
     SCR_PLOT_PPG,
     SCR_PLOT_ECG,
     SCR_PLOT_EDA,
-    SCR_BPT_HOME,
+    SCR_BPT,
 
     SCR_PLOT_HRV,
     SCR_PLOT_HRV_SCATTER,
@@ -93,9 +93,9 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir);
 void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead_off);
 
 // BPT screen functions
-void draw_scr_bpt_calibrate(void);
-void draw_scr_bpt_home(enum scroll_dir m_scroll_dir);
-void draw_scr_bpt_measure(void);
+//void draw_scr_bpt_calibrate(void);
+void draw_scr_bpt(enum scroll_dir m_scroll_dir);
+//void draw_scr_bpt_measure(void);
 void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples);
 void hpi_disp_bpt_update_progress(int progress);
 
@@ -148,12 +148,9 @@ void hpi_disp_update_temp(int temp);
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void disp_screen_event(lv_event_t *e);
 
-LV_IMG_DECLARE(heart);
 LV_IMG_DECLARE(ui_img_flash_png);
-LV_IMG_DECLARE(ui_img_step_png);          // assets/step.png
 LV_IMG_DECLARE(ui_img_heart2_png);        // assets/heart2.png
 LV_IMG_DECLARE(ui_img_daily_mission_png); // assets/daily_mission.png
-LV_IMG_DECLARE(ui_img_step_png);          // assets/step.png
 
 LV_IMG_DECLARE(img_heart_48px);         // assets/heart2.png
 LV_IMG_DECLARE(img_steps_48px);

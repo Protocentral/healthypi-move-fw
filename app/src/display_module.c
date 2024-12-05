@@ -577,8 +577,8 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_PLOT_HRV_SCATTER:
         draw_scr_hrv_scatter(m_scroll_dir);
         break;
-    case SCR_BPT_HOME:
-        draw_scr_bpt_home(m_scroll_dir);
+    case SCR_BPT:
+        draw_scr_bpt(m_scroll_dir);
         break;
 
     /*
@@ -668,8 +668,8 @@ void display_screens_thread(void)
     // draw_scr_home(SCROLL_NONE);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_today(SCROLL_NONE);
-    draw_scr_ecg(SCROLL_RIGHT);
-    // draw_scr_bpt_home(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    draw_scr_bpt(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
