@@ -16,9 +16,10 @@
 		zephyr,uart-mcumgr = &uart0;
 		zephyr,bt-mon-uart = &uart0;
 		zephyr,bt-c2h-uart = &uart0;
-		zephyr,bt-hci-ipc = &ipc0;
+		zephyr,bt-hci = &bt_hci_ipc0;
 		nordic,802154-spinel-ipc = &ipc0;
 		zephyr,ieee802154 = &ieee802154;
+
 		zephyr,display= &sh8601;
 		nordic,pm-ext-flash = &w25q01jv;
 	};
@@ -49,6 +50,14 @@
 		sensor_dcdc_en: dcdc_en {
 			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
 			label = "Boost 5V converter enable";
+		};
+	};
+
+	gpio_fwd: nrf-gpio-forwarder {
+		compatible = "nordic,nrf-gpio-forwarder";
+		status = "okay";
+		uart {
+			gpios = <&gpio1 1 0>, <&gpio1 0 0>, <&gpio0 11 0>, <&gpio0 10 0>;
 		};
 	};
 
@@ -84,7 +93,7 @@
 };
 
 &uicr {
-    nfct-pins-as-gpios;
+	nfct-pins-as-gpios;
 };
 
 &gpiote {
