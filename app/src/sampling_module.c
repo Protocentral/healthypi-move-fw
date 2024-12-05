@@ -194,7 +194,7 @@ void ppg_finger_sampling_trigger_thread(void)
         {
                 // k_sem_take(&sem_ppg_finger_sample_trigger, K_FOREVER);
 
-                sensor_read(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
+                sensor_read_async_mempool(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max32664d_read_rtio_ctx, sensor_ppg_finger_processing_callback);
 
                 k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
@@ -208,7 +208,7 @@ void ppg_wrist_sampling_trigger_thread(void)
         LOG_INF("PPG Wrist Sampling starting");
         for (;;)
         {
-                sensor_read(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
+                sensor_read_async_mempool(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
                 k_sleep(K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
@@ -226,7 +226,7 @@ void ecg_bioz_sampling_trigger_thread(void)
 
         for (;;)
         {
-                sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
+                sensor_read_async_mempool(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_bioz_process_cb);
 
                 k_sleep(K_MSEC(ECG_SAMPLING_INTERVAL_MS));
