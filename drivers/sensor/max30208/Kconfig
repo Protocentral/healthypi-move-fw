@@ -1,0 +1,6 @@
+# ProtoCentral Electronics (info@protocentral.com)
+# SPDX-License-Identifier: Apache-2.0
+
+config SENSOR_MAX30208
+	bool "MAX30208 Temperature Sensor"
+	depends on I2C

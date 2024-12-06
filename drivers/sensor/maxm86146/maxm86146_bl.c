@@ -5,9 +5,11 @@
 #include <zephyr/drivers/gpio.h>
 #include "maxm86146.h"
 
-#include "maxm86146_msbl_33_13.h"
+//#include "maxm86146_msbl_33_13.h"
 //  #include "maxm86146c_msbl.h"
 //  #include "maxm86146d_msbl.h"
+
+#include "max32664c_msbl_30_13_31.h"
 
 LOG_MODULE_REGISTER(MAXM86146_BL, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -189,7 +191,7 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 #if (MAXM86146_FW_BIN_INCLUDE == 1)
 	for (int i = 0; i < 8; i++)
 	{
-		memcpy(tmp_wr_buf[i], &maxm86146_msbl[(i * msg_len) + msbl_page_offset], msg_len);
+		memcpy(tmp_wr_buf[i], &max32664c_msbl[(i * msg_len) + msbl_page_offset], msg_len);
 
 		maxm86146_i2c_msgs[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
 		maxm86146_i2c_msgs[i + 1].len = msg_len;
@@ -259,20 +261,20 @@ static int maxm86146_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 
 #if (MAXM86146_FW_BIN_INCLUDE == 1)
 	printk("---\nLoading MSBL\n");
-	printk("MSBL Array Size: %d\n", sizeof(maxm86146_msbl));
+	printk("MSBL Array Size: %d\n", sizeof(max32664c_msbl));
 
-	msbl_num_pages = maxm86146_msbl[0x44];
+	msbl_num_pages = max32664c_msbl[0x44];
 	printk("MSBL Load: Pages: %d (%x)\n", msbl_num_pages, msbl_num_pages);
 
 	m_read_mcu_id(dev);
 
 	m_write_set_num_pages(dev, msbl_num_pages);
 
-	memcpy(maxm86146_fw_init_vector, &maxm86146_msbl[0x28], 11);
+	memcpy(maxm86146_fw_init_vector, &max32664c_msbl[0x28], 11);
 	m_write_init_vector(dev, maxm86146_fw_init_vector);
 	printk("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x\n", maxm86146_fw_init_vector[0], maxm86146_fw_init_vector[1], maxm86146_fw_init_vector[2], maxm86146_fw_init_vector[3], maxm86146_fw_init_vector[4], maxm86146_fw_init_vector[5], maxm86146_fw_init_vector[6], maxm86146_fw_init_vector[7], maxm86146_fw_init_vector[8], maxm86146_fw_init_vector[9], maxm86146_fw_init_vector[10]);
 
-	memcpy(maxm86146_fw_auth_vector, &maxm86146_msbl[0x34], 16);
+	memcpy(maxm86146_fw_auth_vector, &max32664c_msbl[0x34], 16);
 	m_write_auth_vector(dev, maxm86146_fw_auth_vector);
 
 	m_erase_app(dev);
@@ -287,7 +289,7 @@ static int maxm86146_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 		// memcpy(maxm86146_fw_page_buf, &fw_bin_array[MAXM86146_FW_UPDATE_START_ADDR + (i * MAXM86146_FW_UPDATE_WRITE_SIZE)], MAXM86146_FW_UPDATE_WRITE_SIZE);
 		uint32_t msbl_page_offset = (MAXM86146_FW_UPDATE_START_ADDR + (i * MAXM86146_FW_UPDATE_WRITE_SIZE));
 		printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
-		m_fw_write_page(dev, maxm86146_msbl, msbl_page_offset);
+		m_fw_write_page(dev, max32664c_msbl, msbl_page_offset);
 		//m_fw_write_page_single(dev, maxm86146_msbl, msbl_page_offset);
 
 		// k_sleep(K_MSEC(500));
@@ -349,6 +351,6 @@ void maxm86146_do_enter_bl(const struct device *dev)
 	printk("BL Page Size: %d\n", bl_page_size);
 
 #if (MAXM86146_FW_BIN_INCLUDE == 1)
-	maxm86146_load_fw(dev, maxm86146_msbl);
+	maxm86146_load_fw(dev, max32664c_msbl);
 #endif
 }
