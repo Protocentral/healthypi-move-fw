@@ -472,8 +472,8 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
     maxm86146_do_enter_app(dev);
 
     // Read  WHOAMI
-    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
 
     maxm86146_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
@@ -481,7 +481,7 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, 200);
 
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
@@ -506,9 +506,9 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
-        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
+        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x11, 0x30, 0x00);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x10, 0x20);
 
         // Enable HR, SpO2 algo
         m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
