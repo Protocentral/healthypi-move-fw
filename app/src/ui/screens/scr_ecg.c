@@ -13,6 +13,7 @@
 #include "sampling_module.h"
 
 #include "ui/move_ui.h"
+#include "hw_module.h"
 
 lv_obj_t *scr_ecg;
 
@@ -23,11 +24,13 @@ static lv_chart_series_t *ser_ecg;
 static lv_obj_t *label_ecg_hr;
 static lv_obj_t *label_ecg_lead_off;
 
+static lv_obj_t *btn_ecg_measure_start;
+
 static bool chart_ecg_update = true;
 static float y_max_ecg = 0;
 static float y_min_ecg = 10000;
 
-//static bool ecg_plot_hidden = false;
+// static bool ecg_plot_hidden = false;
 
 static float gx = 0;
 
@@ -37,27 +40,39 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
+static void scr_ecg_measure_btn_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        lv_obj_add_flag(btn_ecg_measure_start, LV_OBJ_FLAG_HIDDEN);
+        hw_max30001_ecg_enable(true);
+    }
+}
+
+void hpi_disp_scr_ecg_exit_handler(void)
+{
+    hw_max30001_ecg_enable(false);
+}
+
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
     scr_ecg = lv_obj_create(NULL);
     draw_header_minimal(scr_ecg, 10);
-    draw_bg(scr_ecg);
+    // draw_bg(scr_ecg);
 
     // Create Chart 1 - ECG
     chart_ecg = lv_chart_create(scr_ecg);
-    lv_obj_set_size(chart_ecg, 390, 150);
+    lv_obj_set_size(chart_ecg, 390, 140);
     lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ecg, 0, LV_PART_MAIN);
 
     lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
-    // lv_chart_set_type(chart_ecg, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    //lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -200, 250);
-    // lv_chart_set_range(chart_ecg, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
-    // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
     ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_main(LV_PALETTE_YELLOW), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ecg, 4, LV_PART_ITEMS);
@@ -65,7 +80,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     // HR Number label
     label_ecg_hr = lv_label_create(scr_ecg);
     lv_label_set_text(label_ecg_hr, "--");
-    lv_obj_align_to(label_ecg_hr, NULL, LV_ALIGN_CENTER, -10, 50);
+    lv_obj_align_to(label_ecg_hr, NULL, LV_ALIGN_CENTER, -10, 60);
     lv_obj_add_style(label_ecg_hr, &style_lbl_white, 0);
 
     // HR Sub bpm label
@@ -76,7 +91,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     // HR caption label
     lv_obj_t *label_hr_cap = lv_label_create(scr_ecg);
     lv_label_set_text(label_hr_cap, "HR");
-    lv_obj_align_to(label_hr_cap, label_ecg_hr, LV_ALIGN_OUT_TOP_MID, -5, -5);
+    lv_obj_align_to(label_hr_cap, label_ecg_hr, LV_ALIGN_OUT_LEFT_MID, -5, -5);
     lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
 
     // Bottom signal label
@@ -92,11 +107,14 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
     lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
 
-    /*LV_IMG_DECLARE(heart);
-    lv_obj_t *img1 = lv_img_create(scr_ecg);
-    lv_img_set_src(img1, &heart);
-    lv_obj_set_size(img1, 35, 33);
-    lv_obj_align_to(img1, label_hr, LV_ALIGN_OUT_LEFT_MID, 0, 0);*/
+    btn_ecg_measure_start = lv_btn_create(scr_ecg);
+    lv_obj_add_event_cb(btn_ecg_measure_start, scr_ecg_measure_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align(btn_ecg_measure_start, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_set_height(btn_ecg_measure_start, 80);
+
+    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_ecg_measure_start);
+    lv_label_set_text(label_btn_bpt_measure, LV_SYMBOL_PLAY " Measure ECG");
+    lv_obj_center(label_btn_bpt_measure);
 
     hpi_disp_set_curr_screen(SCR_PLOT_ECG);
     hpi_show_screen(scr_ecg, m_scroll_dir);
@@ -147,7 +165,7 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
     {
         for (int i = 0; i < num_samples; i++)
         {
-            int32_t data_ecg_i = ((data_ecg[i]*1000)/5242880)*10;// in mV// (data_ecg[i]);
+            int32_t data_ecg_i = ((data_ecg[i] * 1000) / 5242880) * 10; // in mV// (data_ecg[i]);
 
             if (data_ecg_i < y_min_ecg)
             {

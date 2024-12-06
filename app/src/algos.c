@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <math.h>
 #include "algos.h"
-#include "data_module.h"
 
 int rear = -1;
 int k = 0;

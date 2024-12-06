@@ -32,6 +32,8 @@
 #include "max30001.h"
 #include "max32664.h"
 
+#include "bmi323_hpi.h"
+
 #ifdef CONFIG_SENSOR_MAXM86146
 #include "maxm86146.h"
 #endif
@@ -57,16 +59,18 @@ char curr_string[40];
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
+
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
+ZBUS_CHAN_DECLARE(steps_chan);
 
 /****END EXTERNS****/
 
 // Peripheral Device Pointers
-const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
-const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
-const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
+static const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
+static const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
+static const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 
-const struct device *acc_dev = DEVICE_DT_GET_ONE(st_lsm6dso);
+const struct device *imu_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
@@ -110,8 +114,10 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
 
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
+
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
+
+K_SEM_DEFINE(sem_ppg_sm_start, 0, 1);
 
 K_SEM_DEFINE(sem_display_on, 0, 1);
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
@@ -505,10 +511,69 @@ uint8_t hw_get_battery_level(void)
     return global_batt_level;
 }
 
+static void trigger_handler(const struct device *dev, const struct sensor_trigger *trigger)
+{
+    ARG_UNUSED(trigger);
+
+    if (sensor_sample_fetch(dev))
+    {
+        printf("Acc Trig\n");
+        return;
+    }
+
+    // k_sem_give(&sem);
+}
+
+bool hw_is_maxm86146_present(void)
+{
+    return maxm86146_device_present;
+}
+
+int hw_maxm86146_set_op_mode(uint8_t mode)
+{
+    struct sensor_value mode_set;
+    mode_set.val1 = mode;
+    return sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+}
+
+int hw_max30001_ecg_enable(bool enable)
+{
+    struct sensor_value ecg_mode_set;
+    if (enable == true)
+    {
+        ecg_mode_set.val1 = 1;
+    }
+    else
+    {
+        ecg_mode_set.val1 = 0;
+    }
+
+    sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
+}
+
+int hw_max30001_bioz_enable(bool enable)
+{
+    struct sensor_value bioz_mode_set;
+    if (enable == true)
+    {
+        bioz_mode_set.val1 = 1;
+    }
+    else
+    {
+        bioz_mode_set.val1 = 0;
+    }
+    return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
+}
+
 void hw_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
+
+    struct sensor_trigger imu_trig = {
+        .type = SENSOR_TRIG_DATA_READY,
+        .chan = SENSOR_CHAN_ACCEL_XYZ,
+    };
 
     k_sem_give(&sem_display_on);
 
@@ -527,6 +592,27 @@ void hw_init(void)
     {
         LOG_ERR("Could not initialise fuel gauge.\n");
         // return 0;
+    }
+
+    if (!device_is_ready(imu_dev))
+    {
+        LOG_ERR("Error: Accelerometer device not ready");
+    }
+    else
+    {
+        if (sensor_trigger_set(imu_dev, &imu_trig, trigger_handler) < 0)
+        {
+            LOG_ERR("Could not set trigger");
+            // return 0;
+        }
+        else
+        {
+            LOG_INF("IMU Trigger set");
+            struct sensor_value set_val;
+            set_val.val1 = 1;
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
+        }
     }
 
     // device_init(display_dev);
@@ -551,14 +637,14 @@ void hw_init(void)
     {
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
-        /*struct sensor_value ecg_mode_set;
-        // ecg_mode_set.val1 = 1;
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-        // sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &ecg_mode_set);
-        */
+
+        // Disable ECG and BIOZ by default        
+        hw_max30001_ecg_enable(false);
+        hw_max30001_bioz_enable(false);
     }
 
     k_sleep(K_MSEC(1000));
+    
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
     {
@@ -579,8 +665,10 @@ void hw_init(void)
 
         struct sensor_value mode_get;
         sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_IS_APP_PRESENT, &mode_get);
+
         LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
         //mode_get.val1 = 8;
+
         if (mode_get.val1 == 8)
         {
             LOG_INF("MAXM86146 App not present. Starting bootloader mode");
@@ -590,9 +678,12 @@ void hw_init(void)
         }
         else
         {
-            struct sensor_value mode_set;
-            mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
-            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+            LOG_INF("MAXM86146 App present");
+
+            // struct sensor_value mode_set;
+            // mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
+            // mode_set.val1 = MAXM86146_OP_MODE_SCD;
+            // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
         }
     }
 
@@ -626,16 +717,6 @@ void hw_init(void)
         LOG_ERR("MAX30205 device not found!");
     }
 
-    if (!device_is_ready(acc_dev))
-    {
-        LOG_ERR("LSM6DSO device not found!");
-    }
-    else
-    {
-        // Set initial start-up mode
-    }
-    // pm_device_runtime_put(acc_dev);
-
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
@@ -659,7 +740,8 @@ void hw_init(void)
 
     if (maxm86146_device_present)
     {
-        k_sem_give(&sem_ppg_wrist_thread_start);
+
+        k_sem_give(&sem_ppg_sm_start);
     }
 
     if (max32664d_device_present)
@@ -680,11 +762,20 @@ struct rtc_time hw_get_current_time(void)
     return global_system_time;
 }
 
+static uint32_t acc_get_steps(void)
+{
+    struct sensor_value steps;
+    sensor_sample_fetch(imu_dev);
+    sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_X, &steps);
+    return (uint32_t)steps.val1;
+}
+
 void hw_thread(void)
 {
     LOG_INF("HW Thread starting");
 
     struct rtc_time sys_time;
+    uint32_t _steps = 0;
 
     for (;;)
     {
@@ -695,8 +786,14 @@ void hw_thread(void)
 
         //  send_usb_cdc("H ", 1);
         //  printk("H ");
+        _steps = acc_get_steps();
+        // printk("Steps: %d\n", global_steps);
+        struct hpi_steps_t steps = {
+            .steps_walk = _steps,
+        };
+        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
-        k_sleep(K_MSEC(6000));
+        k_sleep(K_MSEC(2000));
     }
 }
 

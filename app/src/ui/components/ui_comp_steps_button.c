@@ -13,8 +13,8 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 {
     lv_obj_t *cui_buttonround;
     cui_buttonround = lv_btn_create(comp_parent);
-    lv_obj_set_width(cui_buttonround, 80);
-    lv_obj_set_height(cui_buttonround, 80);
+    lv_obj_set_width(cui_buttonround, 100);
+    lv_obj_set_height(cui_buttonround, 100);
     lv_obj_set_x(cui_buttonround, 0);
     lv_obj_set_y(cui_buttonround, 0);
     lv_obj_set_align(cui_buttonround, LV_ALIGN_CENTER);
@@ -51,7 +51,7 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 
     lv_obj_t *cui_step;
     cui_step = lv_img_create(cui_buttonround);
-    lv_img_set_src(cui_step, &ui_img_step_png);
+    lv_img_set_src(cui_step, &img_steps_48px);
     lv_obj_set_width(cui_step, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(cui_step, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(cui_step, LV_ALIGN_TOP_MID);
@@ -64,7 +64,7 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
     // lv_obj_set_x(cui_step_label, 2);
     // lv_obj_set_y(cui_step_label, -4);
     lv_obj_set_align(cui_step_label, LV_ALIGN_BOTTOM_MID);
-    lv_label_set_text(cui_step_label, "124");
+    lv_label_set_text(cui_step_label, "--");
     lv_obj_set_style_text_color(cui_step_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(cui_step_label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(cui_step_label, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);

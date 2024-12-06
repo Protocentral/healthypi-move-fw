@@ -3,4 +3,5 @@
 
 zephyr_library()
 
-zephyr_library_sources(bmi323.c)
+zephyr_library_sources(bmi323_hpi.c)
+zephyr_include_directories(.)

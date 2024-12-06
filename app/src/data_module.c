@@ -1,23 +1,19 @@
 #include <zephyr/kernel.h>
-
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <stdio.h>
-
 #include <arm_math.h>
-
-#include "max30001.h"
-
-#include "data_module.h"
-#include "hw_module.h"
-#include "sampling_module.h"
-#include "fs_module.h"
-#include "ble_module.h"
 
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 
+#include "max30001.h"
+
+#include "hw_module.h"
+#include "sampling_module.h"
+#include "fs_module.h"
+#include "ble_module.h"
 #include "algos.h"
 
 // ProtoCentral data formats
@@ -143,20 +139,6 @@ void send_data_text_1(int32_t in_sample)
     send_usb_cdc(data, strlen(data));
 }
 
-/*
-function y = iir_filter(x, filter_instance)
- y = 0;
- N = filter_instance.filter_taps;
- c = filter_instance.filter_cycle;
- filter_instance.input_history[mod(c,N)] = x;
- for i = 0 to N-1
-y = y + filter_instance.b[i] * filter_instance.input_history[(mod(c-i+N,N)];
- for i = 1 to N-1
-y = y - filter_instance.a[i] * filter_instance.output_history[mod(c-i+N,N)];
- y = y / filter_instance.a[0];
- filter_instance.output_history[mod(c,N)] = y;
- filter_instance.filter_cycle = mod(c+1,N);
- */
 #define IIR_FILT_TAPS 5
 
 static const float32_t filt_low_b[IIR_FILT_TAPS] = {0.418163345761899, 0.836326691523798, 0.418163345761899, 0.0, 0.0}; //{ 1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
@@ -265,7 +247,7 @@ void data_thread(void)
 
     LOG_INF("Data Thread starting");
 
-    printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
+    // printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
 
     for (;;)
     {
@@ -313,7 +295,7 @@ void data_thread(void)
         {
             if (settings_send_ble_enabled)
             {
-                //ble_ppg_notify(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples);
+                // ble_ppg_notify(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples);
             }
             if (settings_plot_enabled)
             {
@@ -322,38 +304,8 @@ void data_thread(void)
 
             if (settings_send_usb_enabled)
             {
-               
             }
-            
-
-            /*if (ppg_sensor_sample.rtor != 0)
-            {
-                calculate_hrv(ppg_sensor_sample.rtor, &hrv_max, &hrv_min, &hrv_mean, &hrv_sdnn, &hrv_pnn, &hrv_rmssd, &hrv_ready_flag);
-                if (hrv_ready_flag == true)
-                {
-                    hrv_calculated.hrv_ready_flag = hrv_ready_flag;
-                    hrv_calculated.hrv_max = hrv_max;
-                    hrv_calculated.hrv_min = hrv_min;
-                    hrv_calculated.mean = hrv_mean;
-                    hrv_calculated.sdnn = hrv_sdnn;
-                    hrv_calculated.pnn = hrv_pnn;
-                    hrv_calculated.rmssd = hrv_rmssd;
-
-                    k_msgq_put(&q_plot_hrv, &hrv_calculated, K_NO_WAIT);
-                    // printk("mean: %f, max: %d, min: %d, sdnn: %f, pnn: %f, rmssd:%f\n", hrv_calculated.mean, hrv_calculated.hrv_max, hrv_calculated.hrv_min, hrv_calculated.sdnn, hrv_calculated.pnn, hrv_calculated.rmssd);
-                }
-            }*/
         }
-
-        // Data is now available in sensor_sample
-
-        // Send, store or process data here
-
-        // printk("%d\n", sensor_sample.raw_ir);
-
-        /***** Send to USB if enabled *****/
-
-        //
 
         if (settings_log_data_enabled)
         {
@@ -368,5 +320,4 @@ void data_thread(void)
 #define DATA_THREAD_STACKSIZE 4096
 #define DATA_THREAD_PRIORITY 7
 
-// Power Cost: (155 uA) 815 to 970
 K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);
