@@ -1,0 +1,93 @@
+    // Draw button to calibrate BP
+
+    lv_obj_t *btn_bpt_calibrate = lv_btn_create(scr_bpt_home);
+    lv_obj_add_event_cb(btn_bpt_calibrate, scr_bpt_calib_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align_to(btn_bpt_calibrate, btn_bpt_measure_start, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
+    lv_obj_set_height(btn_bpt_calibrate, 80);
+
+    lv_obj_t *label_btn_bpt_calibrate = lv_label_create(btn_bpt_calibrate);
+    lv_label_set_text(label_btn_bpt_calibrate, "Calibrate BP");
+    lv_obj_center(label_btn_bpt_calibrate);
+
+    void draw_scr_bpt_calibrate(void)
+{
+    scr_bpt_calibrate = lv_obj_create(NULL);
+    draw_header_minimal(scr_bpt_calibrate, 320);
+
+    //draw_bg(scr_bpt_calibrate);
+
+    // Draw Blood Pressure label
+    lv_obj_t *label_bp = lv_label_create(scr_bpt_calibrate);
+    lv_label_set_text(label_bp, "BP Calibration");
+    lv_obj_align(label_bp, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_add_style(label_bp, &style_lbl_white_14, 0);
+
+    // Create Chart 1 - ECG
+    chart_bpt = lv_chart_create(scr_bpt_calibrate);
+    lv_obj_set_size(chart_bpt, 390, 150);
+    lv_obj_set_style_bg_color(chart_bpt, lv_color_black(), LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(chart_bpt, 0, LV_PART_MAIN);
+
+    lv_obj_set_style_size(chart_bpt, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_border_width(chart_bpt, 0, LV_PART_MAIN);
+    lv_chart_set_point_count(chart_bpt, PPG_DISP_WINDOW_SIZE);
+    lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
+    lv_chart_set_div_line_count(chart_bpt, 0, 0);
+    lv_chart_set_update_mode(chart_bpt, LV_CHART_UPDATE_MODE_CIRCULAR);
+    lv_obj_align_to(chart_bpt, label_bp, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
+    ser_bpt = lv_chart_add_series(chart_bpt, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_set_style_line_width(chart_bpt, 3, LV_PART_ITEMS);
+
+    label_cal_status = lv_label_create(scr_bpt_calibrate);
+    lv_label_set_text(label_cal_status, "Calibration\nDone");
+    lv_obj_align_to(label_cal_status, NULL, LV_ALIGN_CENTER, -30, -25);
+    lv_obj_set_style_text_align(label_cal_status, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_style(label_cal_status, &style_lbl_white, 0);
+    lv_obj_add_flag(label_cal_status, LV_OBJ_FLAG_HIDDEN);
+
+    // Draw Progress bar
+    bar_bpt_progress = lv_bar_create(scr_bpt_calibrate);
+    lv_obj_set_size(bar_bpt_progress, 200, 5);
+    lv_obj_align_to(bar_bpt_progress, chart_bpt, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    lv_bar_set_value(bar_bpt_progress, 0, LV_ANIM_OFF);
+
+    // Draw Progress bar label
+    label_progress = lv_label_create(scr_bpt_calibrate);
+    lv_label_set_text(label_progress, "Progress: --");
+    lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
+    lv_obj_add_style(label_progress, &style_lbl_white_14, 0);
+
+    // Draw button to start BP calibration
+
+    btn_bpt_cal_start = lv_btn_create(scr_bpt_calibrate);
+    lv_obj_add_event_cb(btn_bpt_cal_start, scr_bpt_btn_cal_start_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align_to(btn_bpt_cal_start, NULL, LV_ALIGN_BOTTOM_LEFT, 0, -60);
+    lv_obj_set_height(btn_bpt_cal_start, 90);
+    lv_obj_set_width(btn_bpt_cal_start, 390);
+    lv_obj_set_style_bg_color(btn_bpt_cal_start, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN);
+
+    lv_obj_t *label_btn_bpt = lv_label_create(btn_bpt_cal_start);
+    lv_label_set_text(label_btn_bpt, "Start");
+    lv_obj_add_style(label_btn_bpt, &style_lbl_black_small, 0);
+    lv_obj_center(label_btn_bpt);
+
+    btn_bpt_cal_exit = lv_btn_create(scr_bpt_calibrate);
+    lv_obj_add_event_cb(btn_bpt_cal_exit, scr_bpt_btn_cal_exit_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align_to(btn_bpt_cal_exit, NULL, LV_ALIGN_BOTTOM_LEFT, 0, -60);
+    lv_obj_set_height(btn_bpt_cal_exit, 90);
+    lv_obj_set_width(btn_bpt_cal_exit, 390);
+    lv_obj_set_style_bg_color(btn_bpt_cal_exit, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
+
+    lv_obj_t *label_btn_bpt_exit = lv_label_create(btn_bpt_cal_exit);
+    lv_label_set_text(label_btn_bpt_exit, "Exit");
+    // lv_obj_add_style(label_btn_bpt_exit, &style_lbl_white_small, 0);
+    lv_obj_center(label_btn_bpt_exit);
+
+    // Hide exit button by default
+    lv_obj_add_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_add_event_cb(scr_bpt_calibrate, disp_screen_event, LV_EVENT_GESTURE, NULL);
+    curr_screen = SUBSCR_BPT_CALIBRATE;
+
+    lv_scr_load_anim(scr_bpt_calibrate, LV_SCR_LOAD_ANIM_MOVE_TOP, SCREEN_TRANS_TIME, 0, true);
+}
