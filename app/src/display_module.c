@@ -666,10 +666,10 @@ void display_screens_thread(void)
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
     // draw_scr_home(SCROLL_NONE);
-    // draw_scr_ppg(SCROLL_RIGHT);
+    draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_today(SCROLL_NONE);
     // draw_scr_ecg(SCROLL_RIGHT);
-    draw_scr_bpt(SCROLL_RIGHT);
+    //draw_scr_bpt(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);

@@ -55,7 +55,8 @@
 	aliases {
 		max30001 = &max30001;
 		max32664d = &max32664d;
-		maxm86146 = &maxm86146;
+		//maxm86146 = &maxm86146;
+		max32664c = &max32664c;
 		rtc = &rtc_rv;
 	};
 };
@@ -218,8 +219,17 @@
 	zephyr,concat-buf-size = <8250>;
 	zephyr,flash-buf-max-size = <8250>;
 
-	maxm86146: maxm86146@55 {
+	/*maxm86146: maxm86146@55 {
 		compatible = "maxim,maxm86146";
+		reg = <0x55>;
+		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+		//zephyr,deferred-init;
+	};*/
+
+	max32664c: max32664c@55 {
+		compatible = "maxim,max32664c";
 		reg = <0x55>;
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;

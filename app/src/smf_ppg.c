@@ -5,10 +5,10 @@
 LOG_MODULE_REGISTER(smf_ppg, LOG_LEVEL_DBG);
 
 #include "hw_module.h"
-#include "maxm86146.h"
+#include "max32664c.h"
 
 static const struct smf_state ppg_samp_states[];
-static const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
+static const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
 
 K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
 
@@ -31,7 +31,7 @@ static void st_ppg_samp_active_entry(void *o)
 {
     LOG_DBG("PPG SM Active Entry");
 
-    hw_maxm86146_set_op_mode(MAXM86146_OP_MODE_ALGO_AEC);
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW);
 }
 
 static void st_ppg_samp_active_run(void *o)
@@ -49,7 +49,7 @@ static void st_ppg_samp_probing_entry(void *o)
     LOG_DBG("PPG SM Probing Entry");
 
     // Enter SCD mode
-    hw_maxm86146_set_op_mode(MAXM86146_OP_MODE_SCD);
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD);
 }
 
 static void st_ppg_samp_probing_run(void *o)
@@ -89,9 +89,9 @@ void smf_ppg_thread(void)
 
     k_sem_take(&sem_ppg_sm_start, K_FOREVER);
 
-    if (hw_is_maxm86146_present() == false)
+    if (hw_is_max32664c_present() == false)
     {
-        LOG_ERR("MAXM86146 device not present. Not starting PPG SMF");
+        LOG_ERR("MAX32664C device not present. Not starting PPG SMF");
         return;
     }
 
