@@ -667,6 +667,8 @@ void hw_init(void)
         sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_IS_APP_PRESENT, &mode_get);
 
         LOG_INF("MAX32664C App Present: %d", mode_get.val1);
+        
+        // To force bootloader mode
         //mode_get.val1 = 8;
 
         if (mode_get.val1 == 8)
@@ -684,6 +686,8 @@ void hw_init(void)
             // mode_set.val1 = MAX32664C_OP_MODE_ALGO_AEC;
             // mode_set.val1 = MAX32664C_OP_MODE_SCD;
             // sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+
+            // Move start commands to SMF PPG
         }
     }
 

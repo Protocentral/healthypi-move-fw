@@ -85,7 +85,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
     static int sample_len = 62;
 
-#define MAX32664C_ALGO_DATA_OFFSET 42
+#define MAX32664C_ALGO_DATA_OFFSET 24
 
     uint8_t hub_stat = max32664c_read_hub_status(dev);
     // int fifo_count = max32664c_get_fifo_count(dev);
@@ -93,7 +93,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
     {
         // printk("DRDY ");
         int fifo_count = max32664c_get_fifo_count(dev);
-        // printk("F: %d | ", fifo_count);
+        printk("F: %d | ", fifo_count);
 
         if (fifo_count > 16)
         {
@@ -106,11 +106,11 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
         {
             if (data->op_mode == MAX32664C_OP_MODE_ALGO_AGC || data->op_mode == MAX32664C_OP_MODE_ALGO_AEC)
             {
-                sample_len = 62; // 42 data + 20 algo
+                sample_len = 48; // 18 PPG + 6 accel data + 24 algo
             }
             else if (data->op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
             {
-                sample_len = 94; // 42 data + 52 algo
+                sample_len = 70; // 18 data + 52 algo
             }
 
             chip_op_mode = data->op_mode;
@@ -120,7 +120,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
             i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 
             i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
-            // k_sleep(K_USEC(300));
+            k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
             for (int i = 0; i < fifo_count; i++)
@@ -131,17 +131,17 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 green_samples[i] = led_green;
 
-                uint32_t led_red = (uint32_t)buf[(sample_len * i) + 21 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
-                led_red |= (uint32_t)buf[(sample_len * i) + 22 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
-                led_red |= (uint32_t)buf[(sample_len * i) + 23 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                red_samples[i] = led_red;
-
-                uint32_t led_ir = (uint32_t)buf[(sample_len * i) + 24] << 16;
-                led_ir |= (uint32_t)buf[(sample_len * i) + 25] << 8;
-                led_ir |= (uint32_t)buf[(sample_len * i) + 26];
+                uint32_t led_ir = (uint32_t)buf[(sample_len * i) + 3 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
+                led_ir |= (uint32_t)buf[(sample_len * i) + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
+                led_ir |= (uint32_t)buf[(sample_len * i) + 5 + MAX32664C_SENSOR_DATA_OFFSET];
 
                 ir_samples[i] = led_ir;
+
+                uint32_t led_red = (uint32_t)buf[(sample_len * i) + 6 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
+                led_red |= (uint32_t)buf[(sample_len * i) + 7 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
+                led_red |= (uint32_t)buf[(sample_len * i) + 8 + MAX32664C_SENSOR_DATA_OFFSET];
+
+                red_samples[i] = led_red;
 
                 uint16_t hr_val = (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 hr_val |= (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 2 + MAX32664C_SENSOR_DATA_OFFSET];
@@ -150,7 +150,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 uint16_t spo2_val = (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 11 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 spo2_val |= (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 12 + MAX32664C_SENSOR_DATA_OFFSET];
-
+ 
                 *spo2 = (spo2_val / 10);
 
                 uint16_t rtor_val = (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;

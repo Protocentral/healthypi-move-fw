@@ -121,7 +121,7 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         }
         else
         {
-                // printk("WR NS: %d ", _n_samples);
+                //printk("WR NS: %d ", _n_samples);
                 if (_n_samples > 8)
                 {
                         _n_samples = 8;
@@ -222,9 +222,7 @@ void ecg_bioz_sampling_trigger_thread(void)
 
         LOG_INF("ECG/ BioZ Sampling starting");
 
-        
-
-        for (;;)
+                for (;;)
         {
                 sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_bioz_process_cb);

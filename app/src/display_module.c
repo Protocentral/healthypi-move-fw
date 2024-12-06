@@ -684,7 +684,7 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
+                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_green, ppg_sensor_sample.ppg_num_samples);
                     hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))

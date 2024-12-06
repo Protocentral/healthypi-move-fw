@@ -68,7 +68,7 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    //LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -481,7 +481,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, 200);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, 200);
 
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
@@ -506,9 +506,9 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
-        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x34, 0x56);
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x10, 0x20);
+        //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
+        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
         // Enable HR, SpO2 algo
         m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
@@ -527,9 +527,9 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // Set AGC target PD current
         m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
 
-        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
+        //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
+        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
+        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
 
         // Read  WHOAMI
         // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
@@ -601,7 +601,7 @@ static int max32664c_attr_set(const struct device *dev,
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_AGC)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, MAX32664C_ALGO_OP_MODE_SAMPLED_HRM);
+            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
             data->op_mode = MAX32664C_OP_MODE_ALGO_AGC;
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_EXTENDED)
