@@ -640,7 +640,7 @@ void hw_init(void)
 
         // Disable ECG and BIOZ by default        
         hw_max30001_ecg_enable(false);
-        hw_max30001_bioz_enable(false);
+        hw_max30001_bioz_enable(true);
     }
 
     k_sleep(K_MSEC(1000));
