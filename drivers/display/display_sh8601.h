@@ -15,6 +15,7 @@
 /*Configuration data struct.*/
 struct sh8601_config
 {
+  struct mipi_dbi_config dbi_config;
   struct spi_dt_spec spi;
   struct gpio_dt_spec reset;
   uint8_t pixel_format;

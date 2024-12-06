@@ -18,7 +18,7 @@
 #include "sampling_module.h"
 #include "ui/move_ui.h"
 
-LOG_MODULE_REGISTER(display_module, LOG_LEVEL_WRN);
+LOG_MODULE_REGISTER(display_module, LOG_LEVEL_DBG);
 
 // LVGL Common Objects
 // static lv_indev_drv_t m_keypad_drv;
@@ -665,11 +665,11 @@ void display_screens_thread(void)
 
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
-    // draw_scr_home(SCROLL_NONE);
+    draw_scr_home(SCROLL_NONE);
     // draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_today(SCROLL_NONE);
     // draw_scr_ecg(SCROLL_RIGHT);
-    draw_scr_bpt(SCROLL_RIGHT);
+    //draw_scr_bpt(SCROLL_RIGHT);
     // draw_scr_settings(SCROLL_RIGHT);
     // draw_scr_eda();
     // draw_scr_hrv_scatter(SCROLL_RIGHT);
@@ -918,7 +918,7 @@ static void disp_batt_status_listener(const struct zbus_channel *chan)
 {
     const struct batt_status *batt_s = zbus_chan_const_msg(chan);
 
-    LOG_DBG("Ch Batt: %d, Charge: %d", batt_s->batt_level, batt_s->batt_charging);
+    //LOG_DBG("Ch Batt: %d, Charge: %d", batt_s->batt_level, batt_s->batt_charging);
     m_disp_batt_level = batt_s->batt_level;
 }
 

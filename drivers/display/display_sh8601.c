@@ -10,6 +10,7 @@
 
 #include <zephyr/drivers/display.h>
 #include <zephyr/sys/byteorder.h>
+#include <zephyr/drivers/mipi_dbi.h>
 #include <zephyr/logging/log.h>
 #include "display_sh8601.h"
 

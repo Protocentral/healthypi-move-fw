@@ -795,6 +795,8 @@ void hw_init(void)
 
     k_sem_give(&sem_disp_boot_complete);
 
+    LOG_INF("HW Init complete");
+
     // init_settings();
 
     // usb_init();
