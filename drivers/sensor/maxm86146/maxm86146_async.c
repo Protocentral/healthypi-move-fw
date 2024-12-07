@@ -69,7 +69,7 @@ static int maxm86146_async_sample_fetch_scd(const struct device *dev, uint8_t ch
 
     if (hub_stat & MAXM86146_HUB_STAT_SCD_MASK)
     {
-        //printk("SCD ");
+        // printk("SCD ");
     }
 }
 
@@ -191,6 +191,66 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
     }
 }
 
+static int maxm86146_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16], uint32_t *num_samples, uint8_t chip_op_mode)
+{
+    struct maxm86146_data *data = dev->data;
+    const struct maxm86146_config *config = dev->config;
+
+    uint8_t wr_buf[2] = {0x12, 0x01};
+    static uint8_t buf[2048];
+    static int sample_len = 24;
+
+    uint8_t hub_stat = maxm86146_read_hub_status(dev);
+    if (hub_stat & MAXM86146_HUB_STAT_DRDY_MASK)
+    {
+        int fifo_count = maxm86146_get_fifo_count(dev);
+
+        printk("F: %d | ", fifo_count);
+
+        if (fifo_count > 16)
+        {
+            fifo_count = 16;
+        }
+
+        *num_samples = fifo_count;
+
+        if (fifo_count > 0)
+        {
+            chip_op_mode = data->op_mode;
+
+            gpio_pin_set_dt(&config->mfio_gpio, 0);
+            k_sleep(K_USEC(300));
+            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+
+            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAXM86146_SENSOR_DATA_OFFSET));
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+            for (int i = 0; i < fifo_count; i++)
+            {
+                uint32_t led_green = (uint32_t)buf[(sample_len * i) + 0 + MAXM86146_SENSOR_DATA_OFFSET] << 16;
+                led_green |= (uint32_t)buf[(sample_len * i) + 1 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
+                led_green |= (uint32_t)buf[(sample_len * i) + 2 + MAXM86146_SENSOR_DATA_OFFSET];
+
+                green_samples[i] = led_green;
+
+                uint32_t led_ir = (uint32_t)buf[(sample_len * i) + 3 + MAXM86146_SENSOR_DATA_OFFSET] << 16;
+                led_ir |= (uint32_t)buf[(sample_len * i) + 4 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
+                led_ir |= (uint32_t)buf[(sample_len * i) + 5 + MAXM86146_SENSOR_DATA_OFFSET];
+
+                ir_samples[i] = led_ir;
+
+                uint32_t led_red = (uint32_t)buf[(sample_len * i) + 6 + MAXM86146_SENSOR_DATA_OFFSET] << 16;
+                led_red |= (uint32_t)buf[(sample_len * i) + 7 + MAXM86146_SENSOR_DATA_OFFSET] << 8;
+                led_red |= (uint32_t)buf[(sample_len * i) + 8 + MAXM86146_SENSOR_DATA_OFFSET];
+
+                red_samples[i] = led_red;
+            }
+        }
+    }
+
+    return 0;
+}
+
 int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
     uint32_t min_buf_len = sizeof(struct maxm86146_encoded_data);
@@ -213,7 +273,7 @@ int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
     // printk("Fetch ");
     if (data->op_mode == MAXM86146_OP_MODE_ALGO_AGC || data->op_mode == MAXM86146_OP_MODE_ALGO_AEC ||
-        data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED || data->op_mode == MAXM86146_OP_MODE_RAW)
+        data->op_mode == MAXM86146_OP_MODE_ALGO_EXTENDED)
     {
         m_edata = (struct maxm86146_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
@@ -221,6 +281,13 @@ int maxm86146_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
                                           &m_edata->num_samples, &m_edata->spo2, &m_edata->hr, &m_edata->rtor, &m_edata->scd_state,
                                           &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode);
         // printk("Device is in idle mode\n");
+    }
+    else if (data->op_mode == MAXM86146_OP_MODE_RAW)
+    {
+        m_edata = (struct maxm86146_encoded_data *)buf;
+        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
+        rc = maxm86146_async_sample_fetch_raw(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples,
+                                              &m_edata->num_samples, &m_edata->chip_op_mode);
     }
     else if (data->op_mode == MAXM86146_OP_MODE_SCD)
     {
