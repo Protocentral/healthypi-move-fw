@@ -121,7 +121,7 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         }
         else
         {
-                //printk("WR NS: %d ", _n_samples);
+                // printk("WR NS: %d ", _n_samples);
                 if (_n_samples > 8)
                 {
                         _n_samples = 8;
@@ -137,10 +137,20 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
                                 ppg_sensor_sample.raw_green[i] = edata->green_samples[i];
                         }
 
-                        ppg_sensor_sample.hr = edata->hr;
-                        ppg_sensor_sample.spo2 = edata->spo2;
-                        ppg_sensor_sample.rtor = edata->rtor;
-                        ppg_sensor_sample.scd_state = edata->scd_state;
+                        if (edata->chip_op_mode == MAX32664C_OP_MODE_RAW)
+                        {
+                                ppg_sensor_sample.hr = 0;
+                                ppg_sensor_sample.spo2 = 0;
+                                ppg_sensor_sample.rtor = 0;
+                                ppg_sensor_sample.scd_state = 0;
+                        }
+                        else
+                        {
+                                ppg_sensor_sample.hr = edata->hr;
+                                ppg_sensor_sample.spo2 = edata->spo2;
+                                ppg_sensor_sample.rtor = edata->rtor;
+                                ppg_sensor_sample.scd_state = edata->scd_state;
+                        }
 
                         k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
 
@@ -222,7 +232,7 @@ void ecg_bioz_sampling_trigger_thread(void)
 
         LOG_INF("ECG/ BioZ Sampling starting");
 
-                for (;;)
+        for (;;)
         {
                 sensor_read(&max30001_iodev, &max30001_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max30001_read_rtio_ctx, sensor_ecg_bioz_process_cb);

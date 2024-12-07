@@ -348,61 +348,42 @@ static int max32664c_set_mode_raw(const struct device *dev)
 
     max32664c_do_enter_app(dev);
 
+    // Read  WHOAMI
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+
     // Output mode Raw
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Enable accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Enable AFE
-    m_i2c_write_cmd_3(dev, 0x44, 0x00, 0x01, 500);
-
-    // Write 9 bytes
-    uint8_t wr_buf[9] = {0x44, 0xFF, 0x02, 0x04, 0x01, 0x00, 0x00, 0x01, 0x00}; //, 0xFB, 0xDD, 0x00, 0xAB, 0x61, 0xFE};
-    uint8_t rd_buf[1] = {0x00};
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-
-    k_sleep(K_MSEC(500));
-
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-
-    k_sleep(K_USEC(300));
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    // Read  WHOAMI
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+    m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
 
     // Enabled AFE Sample rate 100
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x00, 50);
+    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x18, 50);
 
     // Set LED1 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x23, 0xFF, 50);
+    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x23, 0x7F, 50);
+
+    // Set LED2 current
+    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x24, 0x7F, 50);
 
     // Set LED3 current
     m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x25, 0xFF, 50);
 
-    // Set LED5 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x27, 0xFF, 50);
-
-    // Set LED6 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x27, 0xFF, 50);
+    // Set sequence
+    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x20, 0x21, 50);
 
     // Set sequence
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x20, 0x21, 50);
+    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x21, 0xA3, 50);
 
     // Set sequence
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x21, 0xA3, 50);
-
-    // Set sequence
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x22, 0x21, 50);
+    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x22, 0x21, 50);
 
     k_sleep(K_MSEC(500));
 
@@ -506,9 +487,9 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
-        //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
-        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
-        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
+        // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
         // Enable HR, SpO2 algo
         m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
@@ -527,9 +508,9 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // Set AGC target PD current
         m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
 
-        //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
-        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
-        //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
+        // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
+        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
 
         // Read  WHOAMI
         // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);

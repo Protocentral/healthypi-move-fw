@@ -682,12 +682,7 @@ void hw_init(void)
         {
             LOG_INF("MAX32664C App present");
 
-            // struct sensor_value mode_set;
-            // mode_set.val1 = MAX32664C_OP_MODE_ALGO_AEC;
-            // mode_set.val1 = MAX32664C_OP_MODE_SCD;
-            // sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
-
-            // Move start commands to SMF PPG
+            // Moved all start commands to SMF PPG
         }
     }
 
