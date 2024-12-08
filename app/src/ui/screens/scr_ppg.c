@@ -166,7 +166,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_color(btn_settings, lv_palette_main(LV_PALETTE_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(btn_settings, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_width(btn_settings, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_event_cb(btn_settings, hpi_disp_ppg_settings_open, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_settings, ppg_settings_button_cb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *ui_hr_number = lv_label_create(btn_settings);
     lv_obj_set_width(ui_hr_number, LV_SIZE_CONTENT);  /// 1
@@ -187,7 +187,6 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     hpi_disp_set_curr_screen(SCR_PLOT_PPG);
     hpi_show_screen(scr_ppg, m_scroll_dir);
 }
-
 
 void hpi_ppg_disp_update_hr(int hr)
 {
