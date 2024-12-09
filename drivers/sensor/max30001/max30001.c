@@ -450,12 +450,11 @@ static int max30001_chip_init(const struct device *dev)
     uint8_t chip_id[3];
     _max30001_read_chip_id(dev, chip_id);
 
-    if (chip_id[0] != 0x54)
+    if ((chip_id[0] != 0x54) && chip_id[0] != 0x52)
     {
         LOG_ERR("MAX30001 not found");
         return -ENODEV;
     }
-
     // Load settings from the device tree
 
     // General Configuration

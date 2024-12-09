@@ -27,7 +27,7 @@ int max32664c_get_fifo_count(const struct device *dev)
     return (int)fifo_count;
 }
 
-static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t chip_op_mode, uint8_t *scd_state)
+static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *chip_op_mode, uint8_t *scd_state)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -56,6 +56,7 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t ch
             i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 
             i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
             for (int i = 0; i < fifo_count; i++)
@@ -73,7 +74,7 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t ch
     }
 }
 
-static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16], uint32_t *num_samples, uint8_t chip_op_mode)
+static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16], uint32_t *num_samples, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -91,7 +92,7 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 
         if (fifo_count > 16)
         {
-            fifo_count = 16;
+            fifo_count = 8;
         }
 
         *num_samples = fifo_count;
@@ -105,6 +106,7 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
             i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 
             i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
             for(int i = 0; i < fifo_count; i++)
@@ -135,7 +137,7 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 
 static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
                                         uint32_t *num_samples, uint16_t *spo2, uint16_t *hr, uint16_t *rtor, uint8_t *scd_state, uint8_t *activity_class,
-                                        uint32_t *steps_run, uint32_t *steps_walk, uint8_t chip_op_mode)
+                                        uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -153,7 +155,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
     {
         // printk("DRDY ");
         int fifo_count = max32664c_get_fifo_count(dev);
-        printk("F: %d | ", fifo_count);
+        printk("AL F: %d | ", fifo_count);
 
         if (fifo_count > 16)
         {

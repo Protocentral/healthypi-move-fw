@@ -121,7 +121,7 @@
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <1800000>;
+				regulator-init-microvolt =<2000000>;
 
 				//regulator-always-on;
 			};
@@ -214,7 +214,7 @@
 	status = "okay";
 	pinctrl-0 = <&i2c2_default>;
 	pinctrl-1 = <&i2c2_sleep>;
-	clock-frequency = <I2C_BITRATE_STANDARD>;
+	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
 	zephyr,concat-buf-size = <8250>;
 	zephyr,flash-buf-max-size = <8250>;

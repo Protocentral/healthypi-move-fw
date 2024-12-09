@@ -32,6 +32,8 @@
 #define MAX30208_INT_STATUS_TEMP_HIGH 0x02
 #define MAX30208_INT_STATUS_TEMP_RDY 0x01
 
+#define MAX30208_REG_CHIP_ID 0xFF
+
 struct max30208_config
 {
   struct i2c_dt_spec i2c;

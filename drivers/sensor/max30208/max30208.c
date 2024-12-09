@@ -28,7 +28,7 @@ uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
 		{
 			.buf = read_buf,
 			.len = 1,
-			.flags = I2C_MSG_READ | I2C_MSG_RESTART,
+			.flags = I2C_MSG_RESTART | I2C_MSG_READ | I2C_MSG_STOP,
 		},
 	};
 
@@ -57,7 +57,7 @@ static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t*
 static int max30208_get_chip_id(const struct device *dev)
 {
 	uint8_t read_buf[1] = {0};
-	m_read_reg(dev, MAX30208_CHIP_ID, read_buf);
+	m_read_reg(dev, MAX30208_REG_CHIP_ID, read_buf);
 	LOG_DBG("MAX30208 Chip ID: %x\n", read_buf[0]);
 	return 0;
 }
@@ -129,7 +129,7 @@ static int max30208_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = max30208_get_int_status(dev);
+	ret = max30208_get_chip_id(dev);
 	if (ret < 0)
 	{
 		LOG_ERR("Failed to get chip id");

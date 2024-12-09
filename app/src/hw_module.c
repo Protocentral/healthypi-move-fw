@@ -652,6 +652,7 @@ void hw_init(void)
     }
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
+    k_sleep(K_MSEC(1000));
 
     if (!device_is_ready(max32664c_dev))
     {
@@ -710,11 +711,6 @@ void hw_init(void)
 #endif
 
     // setup_pmic_callbacks();
-
-    if (!device_is_ready(max30205_dev))
-    {
-        LOG_ERR("MAX30205 device not found!");
-    }
 
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);

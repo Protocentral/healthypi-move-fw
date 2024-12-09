@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 #define SAMPLING_INTERVAL_MS 8
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 1
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 100
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 #define ECG_SAMPLING_INTERVAL_MS 65
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -121,7 +121,7 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         }
         else
         {
-                // printk("WR NS: %d ", _n_samples);
+                //printk("WR NS: %d ", _n_samples);
                 if (_n_samples > 8)
                 {
                         _n_samples = 8;
