@@ -62,7 +62,7 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
 
     i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+    //k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
     i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
     k_sleep(K_USEC(300));
@@ -356,7 +356,7 @@ static int max32664c_set_mode_raw(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01 , MAX32664C_DEFAULT_CMD_DELAY);
 
     // Enable accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
@@ -462,7 +462,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, 200);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, 200);
 
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
@@ -481,7 +481,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
         // EN SCD
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
         // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);

@@ -17,7 +17,23 @@ LOG_MODULE_REGISTER(MAX30208, CONFIG_SENSOR_LOG_LEVEL);
 uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
 {
 	const struct max30208_config *config = dev->config;
-	int ret = i2c_write_read_dt(&config->i2c, &reg, sizeof(reg), read_buf, sizeof(read_buf));
+	//int ret = i2c_write_read_dt(&config->i2c, &reg, sizeof(reg), read_buf, sizeof(read_buf));
+
+	struct i2c_msg msgs[2] = {
+		{
+			.buf = &reg,
+			.len = 1,
+			.flags = I2C_MSG_WRITE,
+		},
+		{
+			.buf = read_buf,
+			.len = 1,
+			.flags = I2C_MSG_READ | I2C_MSG_RESTART,
+		},
+	};
+
+	int ret = i2c_transfer_dt(&config->i2c, msgs, 2);
+
 	if (ret < 0)
 	{
 		LOG_ERR("Failed to read register: %d", ret);
@@ -41,7 +57,7 @@ static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t*
 static int max30208_get_chip_id(const struct device *dev)
 {
 	uint8_t read_buf[1] = {0};
-	max30208_read_reg(dev, MAX30208_CHIP_ID, read_buf);
+	m_read_reg(dev, MAX30208_CHIP_ID, read_buf);
 	LOG_DBG("MAX30208 Chip ID: %x\n", read_buf[0]);
 	return 0;
 }

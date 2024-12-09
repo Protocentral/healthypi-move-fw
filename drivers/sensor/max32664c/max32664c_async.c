@@ -5,7 +5,7 @@ LOG_MODULE_REGISTER(MAX32664C_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "max32664c.h"
 
-#define MAX32664C_SENSOR_DATA_OFFSET 0
+#define MAX32664C_SENSOR_DATA_OFFSET 1
 
 int max32664c_get_fifo_count(const struct device *dev)
 {
