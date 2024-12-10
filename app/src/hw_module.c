@@ -62,11 +62,12 @@ extern struct k_msgq q_session_cmd_msg;
 
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
+ZBUS_CHAN_DECLARE(temp_chan);
 
 /****END EXTERNS****/
 
 // Peripheral Device Pointers
-static const struct device *max30205_dev = DEVICE_DT_GET_ANY(maxim_max30205);
+static const struct device *max30208_dev = DEVICE_DT_GET_ANY(maxim_max30208);
 static const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 static const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 
@@ -114,15 +115,13 @@ K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
 K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
-
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
-
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
-
 K_SEM_DEFINE(sem_ppg_sm_start, 0, 1);
-
 K_SEM_DEFINE(sem_display_on, 0, 1);
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
+
+K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
@@ -404,14 +403,17 @@ static int usb_init()
     return ret;
 }
 
-int32_t read_temp(void)
+double read_temp_f(void)
 {
-    sensor_sample_fetch(max30205_dev);
     struct sensor_value temp_sample;
-    sensor_channel_get(max30205_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
+   
+    sensor_sample_fetch(max30208_dev);
+    sensor_channel_get(max30208_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
     // last_read_temp_value = temp_sample.val1;
-    printk("Temp: %d\n", temp_sample.val1);
-    return temp_sample.val1;
+    double temp_c = (double)temp_sample.val1 * 0.005;
+    double temp_f = (temp_c * 1.8) + 32.0;
+    //printk("Temp: %.2f F\n", temp_f);
+    return temp_f;
 }
 
 void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
@@ -756,9 +758,13 @@ void hw_init(void)
 
     // setup_pmic_callbacks();
 
-    if (!device_is_ready(max30205_dev))
+    if (!device_is_ready(max30208_dev))
     {
-        LOG_ERR("MAX30205 device not found!");
+        LOG_ERR("MAX30208 device not found!");
+    }
+    else
+    {
+        LOG_INF("MAX30208 device found!");
     }
 
     rtc_get_time(rtc_dev, &curr_time);
@@ -794,6 +800,7 @@ void hw_init(void)
     }
 
     k_sem_give(&sem_disp_boot_complete);
+    k_sem_give(&sem_hw_thread_start);
 
     LOG_INF("HW Init complete");
 
@@ -818,10 +825,12 @@ static uint32_t acc_get_steps(void)
 
 void hw_thread(void)
 {
-    LOG_INF("HW Thread starting");
-
     struct rtc_time sys_time;
     uint32_t _steps = 0;
+    double _temp_f = 0.0;
+
+    k_sem_take(&sem_hw_thread_start, K_FOREVER);
+    LOG_INF("HW Thread starting");
 
     for (;;)
     {
@@ -830,14 +839,18 @@ void hw_thread(void)
         rtc_get_time(rtc_dev, &sys_time);
         zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
 
-        //  send_usb_cdc("H ", 1);
-        //  printk("H ");
+        _temp_f = read_temp_f();
         _steps = acc_get_steps();
-        // printk("Steps: %d\n", global_steps);
+
         struct hpi_steps_t steps = {
             .steps_walk = _steps,
         };
         zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
+
+        struct hpi_temp_t temp = {
+            .temp_f = _temp_f,
+        };
+        zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
 
         k_sleep(K_MSEC(2000));
     }

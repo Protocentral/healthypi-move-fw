@@ -949,6 +949,13 @@ static void disp_steps_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 
+static void disp_temp_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
+    printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
+}
+ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
+
 #define DISPLAY_SCREENS_THREAD_STACKSIZE 32768
 #define DISPLAY_SCREENS_THREAD_PRIORITY 7
 // Power Cost - 80 uA

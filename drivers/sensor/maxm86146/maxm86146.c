@@ -348,67 +348,47 @@ static int maxm86146_set_mode_raw(const struct device *dev)
 
     maxm86146_do_enter_app(dev);
 
+    // Read  WHOAMI
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+
     // Output mode Raw
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x08, MAXM86146_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Enable accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAXM86146_DEFAULT_CMD_DELAY);
 
     // Enable AFE
-    m_i2c_write_cmd_3(dev, 0x44, 0x00, 0x01, 500);
-
-    // Write 9 bytes
-    uint8_t wr_buf[9] = {0x44, 0xFF, 0x02, 0x04, 0x01, 0x00, 0x00, 0x01, 0x00}; //, 0xFB, 0xDD, 0x00, 0xAB, 0x61, 0xFE};
-    uint8_t rd_buf[1] = {0x00};
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-
-    k_sleep(K_MSEC(500));
-
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-
-    k_sleep(K_USEC(300));
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    // Read  WHOAMI
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+    m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
 
     // Enabled AFE Sample rate 100
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x00, 50);
+    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x18, 50);
 
     // Set LED1 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x23, 0x3F, 50);
+    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x23, 0x7F, 50);
+
+    // Set LED2 current
+    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x24, 0x7F, 50);
 
     // Set LED3 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x25, 0x3F, 50);
-
-    // Set LED5 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x27, 0x7F, 50);
-
-    // Set LED6 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x27, 0x7F, 50);
+    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x25, 0xFF, 50);
 
     // Set sequence
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x20, 0x21, 50);
+    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x20, 0x21, 50);
 
     // Set sequence
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x21, 0xA3, 50);
+    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x21, 0xA3, 50);
 
     // Set sequence
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x22, 0x21, 50);
+    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x22, 0x21, 50);
 
     k_sleep(K_MSEC(500));
 
     return 0;
 }
-
 static int maxm86146_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
     const struct maxm86146_config *config = dev->config;

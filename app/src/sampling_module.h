@@ -66,3 +66,9 @@ struct hpi_steps_t
     uint32_t steps_run;
     uint32_t steps_walk;
 };
+
+struct hpi_temp_t
+{
+    double temp_f;
+    double temp_c;
+};
