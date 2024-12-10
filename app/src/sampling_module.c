@@ -19,7 +19,7 @@ LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 #define ECG_SAMPLING_INTERVAL_MS 65
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
-K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 4);
+K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
 
 // ASync sensor RTIO defines
 
@@ -114,40 +114,42 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         // uint8_t hr_chan_value=0;
         uint16_t _n_samples = edata->num_samples;
 
-        //printk("WR NS: %d ", _n_samples);
-        if (_n_samples > 8)
+        if (edata->chip_op_mode == MAXM86146_OP_MODE_SCD)
         {
-                _n_samples = 8;
+                printk("SCD: ", edata->scd_state);
+                return;
         }
-        if (_n_samples > 0)
+        else
         {
-                ppg_sensor_sample.ppg_num_samples = _n_samples;
-
-                for (int i = 0; i < _n_samples; i++)
+                // printk("WR NS: %d ", _n_samples);
+                if (_n_samples > 8)
                 {
-                        ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
-                        ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
-                        ppg_sensor_sample.raw_green[i] = edata->green_samples[i];
+                        _n_samples = 8;
                 }
+                if (_n_samples > 0)
+                {
+                        ppg_sensor_sample.ppg_num_samples = _n_samples;
 
-                ppg_sensor_sample.hr = edata->hr;
-                ppg_sensor_sample.spo2 = edata->spo2;
-                ppg_sensor_sample.rtor = edata->rtor;
-                ppg_sensor_sample.scd_state = edata->scd_state;
+                        for (int i = 0; i < _n_samples; i++)
+                        {
+                                ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
+                                ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
+                                ppg_sensor_sample.raw_green[i] = edata->green_samples[i];
+                        }
 
-                // ppg_sensor_sample.steps_run = edata->steps_run;
-                // ppg_sensor_sample.steps_walk = edata->steps_walk;
+                        ppg_sensor_sample.hr = edata->hr;
+                        ppg_sensor_sample.spo2 = edata->spo2;
+                        ppg_sensor_sample.rtor = edata->rtor;
+                        ppg_sensor_sample.scd_state = edata->scd_state;
 
-                // printk("Steps Run: %d Steps Walk: %d\n", edata->steps_run, edata->steps_walk);
+                        k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
 
-                k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
-
-                /*struct hpi_hr_t hr_chan_value = {
-                    .hr = edata->hr,
-                    .hr_ready_flag = true,
-                };
-                zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
-                */
+                        struct hpi_hr_t hr_chan_value = {
+                            .hr = edata->hr,
+                            .hr_ready_flag = true,
+                        };
+                        zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                }
         }
 }
 
@@ -219,6 +221,8 @@ void ecg_bioz_sampling_trigger_thread(void)
         k_sem_take(&sem_ecg_bioz_thread_start, K_FOREVER);
 
         LOG_INF("ECG/ BioZ Sampling starting");
+
+        
 
         for (;;)
         {

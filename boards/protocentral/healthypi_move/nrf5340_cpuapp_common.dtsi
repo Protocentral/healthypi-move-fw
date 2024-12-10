@@ -64,7 +64,7 @@
 / {
 	lvgl_pointer_input: lvgl_pointer {
 		compatible = "zephyr,lvgl-pointer-input";
-		input = <&chsc5816>; 
+		input = <&chsc5816>;
 		//invert-y;
 		swap-xy;
 		//invert-x;
@@ -121,7 +121,7 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <2000000>;
-				
+
 				//regulator-always-on;
 			};
 
@@ -173,12 +173,20 @@
 		reg = <0x51>;
 	};
 
-	lsm6: lsm6dso@6a {
+	/*lsm6: lsm6dso@6a {
 		compatible = "st,lsm6dso";
 		reg = <0x6a>;
 		status = "okay";
 		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 		zephyr,deferred-init;
+	};*/
+
+	bmi323: bmi323@68 {
+		compatible = "bosch,bmi323hpi";
+		reg = <0x68>;
+		status = "okay";
+		int-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+		//zephyr,deferred-init;
 	};
 
 	chsc5816: chsc5816@2e {
@@ -249,8 +257,8 @@
 	pinctrl-names = "default", "sleep";
 };
 
-&uart1{
-    status="disabled";
+&uart1 {
+	status = "disabled";
 };
 
 &adc {
@@ -307,23 +315,20 @@
 		spi-max-frequency = <DT_FREQ_M(4)>;
 		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
 		rtor-enabled;
-		ecg-enabled;
-		bioz-enabled;
-		
+		//ecg-enabled;
+		//bioz-enabled;
 		ecg-gain = <2>;
 		//ecg-invert;
-		//
 		//ecg-dcloff-enable;
 		//ecg-dcloff-current = <1>; // 5 nA
-
 	};
 };
 
 &spi4 {
 	compatible = "nordic,nrf-spim";
-	status = "okay"; 
+	status = "okay";
 
-	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;	// For Device
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;    // For Device
 	//cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
 
 	//<&gpio1 4 GPIO_ACTIVE_LOW>;
@@ -336,7 +341,7 @@
 	/*gc9a01: gc9a01@0 {
 		compatible = "waveshare,gc9a01a";
 		spi-max-frequency = <DT_FREQ_M(45)>;
-		reg = <0>;	
+		reg = <0>;
 		cmd-data-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
 		//bl-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;

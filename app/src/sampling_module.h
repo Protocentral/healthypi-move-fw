@@ -60,3 +60,9 @@ struct hpi_hr_t
     uint8_t hr;
     bool hr_ready_flag;
 };
+
+struct hpi_steps_t
+{
+    uint32_t steps_run;
+    uint32_t steps_walk;
+};

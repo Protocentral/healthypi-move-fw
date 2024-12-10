@@ -18,7 +18,10 @@
         "ble_module.h": "c",
         "npm1300.h": "c",
         "hw_module.h": "c",
-        "device.h": "c"
+        "device.h": "c",
+        "bmi323_spi.h": "c",
+        "fs_module.h": "c",
+        "zbus.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",
