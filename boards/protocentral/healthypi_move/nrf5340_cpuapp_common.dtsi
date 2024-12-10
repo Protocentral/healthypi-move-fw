@@ -227,16 +227,10 @@
 		//zephyr,deferred-init;
 	};
 
-	/*max30205: max30205@48 {
-		compatible = "maxim,max30205";
-		status = "okay";
-		reg = <0x48>;
-	};*/
-
-	max30208: max30208@51 {
+	max30208: max30208@50 {
 		compatible = "maxim,max30208";
 		status = "okay";
-		reg = <0x51>;
+		reg = <0x50>;
 	};
 
 

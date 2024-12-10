@@ -14,7 +14,7 @@
 
 LOG_MODULE_REGISTER(MAX30208, CONFIG_SENSOR_LOG_LEVEL);
 
-uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
+/*uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
 {
 	const struct max30208_config *config = dev->config;
 	int ret = i2c_write_read_dt(&config->i2c, &reg, sizeof(reg), read_buf, sizeof(read_buf));
@@ -23,38 +23,74 @@ uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
 		LOG_ERR("Failed to read register: %d", ret);
 	}
 	return 0;
-}
+}*/
 
-
-static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t* read_buf)
+static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf, uint8_t read_len)
 {
 	const struct max30208_config *config = dev->config;
-	
-	int ret = i2c_reg_read_byte_dt(&config->i2c, reg, read_buf);
-	if(ret<0)
+
+	struct i2c_msg m_msgs[2];
+	uint8_t reg_buf[1] ={reg};
+
+	m_msgs[0].buf = reg_buf;
+	m_msgs[0].len = 1U;
+	m_msgs[0].flags = I2C_MSG_WRITE;
+
+	m_msgs[1].buf = read_buf;
+	m_msgs[1].len = read_len;
+	m_msgs[1].flags = I2C_MSG_READ | I2C_MSG_STOP | I2C_MSG_RESTART;
+
+	int ret = i2c_transfer_dt(&config->i2c, m_msgs, 2);
+	if (ret < 0)
 	{
 		LOG_ERR("Failed to read register: %d", ret);
 	}
-	return read_buf[0];
+
+	//printk("Read register: %x\n", read_buf[0]);
+	return 0;
+}
+
+static int max30208_write_reg(const struct device *dev, uint8_t reg, uint8_t val)
+{
+	const struct max30208_config *config = dev->config;
+
+	uint8_t write_buf[2] = {reg, val};
+
+	i2c_write_dt(&config->i2c, write_buf, sizeof(write_buf));
+
+	return 0;
 }
 
 static int max30208_get_chip_id(const struct device *dev)
 {
 	uint8_t read_buf[1] = {0};
-	max30208_read_reg(dev, MAX30208_CHIP_ID, read_buf);
+	max30208_read_reg(dev, MAX30208_REG_CHIP_ID, read_buf,1U);
 	LOG_DBG("MAX30208 Chip ID: %x\n", read_buf[0]);
 	return 0;
 }
 
-static int max30208_get_int_status(const struct device *dev)
+static int max30208_start_convert(const struct device *dev)
 {
-	uint8_t read_buf[1] = {0};
-	//max30208_read_reg(dev, MAX30208_INTERRUPT_STATUS, read_buf);
-	m_read_reg(dev, MAX30208_INTERRUPT_STATUS, read_buf);
-	LOG_DBG("MAX30208 Interrupt Status: %x\n", read_buf[0]);
+	max30208_write_reg(dev, MAX30208_REG_TEMP_SENSOR_SETUP, MAX30208_CONVERT_T);
 	return 0;
 }
 
+static uint8_t max30208_get_status(const struct device *dev)
+{
+	uint8_t read_buf[1] = {0};
+	max30208_read_reg(dev, MAX30208_REG_STATUS, read_buf,1U);
+	//LOG_DBG("MAX30208 Status: %x\n", read_buf[0]);
+	return read_buf[0];
+}
+
+static int max30208_get_temp(const struct device *dev)
+{
+	uint8_t read_buf[2] = {0, 0};
+	max30208_read_reg(dev, MAX30208_REG_FIFO_DATA, read_buf,2U);
+	int16_t raw = read_buf[0] << 8 | read_buf[1];
+	//LOG_DBG("Raw Temp: %d\n", raw);
+	return raw;
+}
 /*
 static int max30208_get_fifo_avail(const struct device *dev)
 {
@@ -69,12 +105,15 @@ static int max30208_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
 {
 	struct max30208_data *data = dev->data;
-	/*uint8_t read_buf[2] = {0, 0};
-	m_read_reg_2(dev, MAX30208_TEMPERATURE, read_buf);
-	int16_t raw = read_buf[0] << 8 | read_buf[1];
-	data->temperature = raw * 0.00390625; // convert to temperature
-	data->temp_int = data->temperature * 1000;
-	*/
+	max30208_start_convert(dev);
+
+	while(!(max30208_get_status(dev) & 0x01))
+	{
+		k_sleep(K_MSEC(10));
+	}
+
+	data->temp_int = max30208_get_temp(dev);
+
 	return 0;
 }
 
@@ -85,7 +124,7 @@ static int max30208_channel_get(const struct device *dev, enum sensor_channel ch
 	{
 	case SENSOR_CHAN_AMBIENT_TEMP:
 		val->val1 = (int)((data->temp_int));
-		val->val2 = (int)((data->temp_int));
+		val->val2 = 0;
 		break;
 	default:
 		LOG_ERR("Unsupported sensor channel");
@@ -104,7 +143,7 @@ static int max30208_init(const struct device *dev)
 {
 	const struct max30208_config *config = dev->config;
 
-	int ret=0;
+	int ret = 0;
 
 	/* Get the I2C device */
 	if (!device_is_ready(config->i2c.bus))
@@ -113,11 +152,11 @@ static int max30208_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = max30208_get_int_status(dev);
+	ret = max30208_get_chip_id(dev);
 	if (ret < 0)
 	{
 		LOG_ERR("Failed to get chip id");
-		return ret;
+		return -ENODEV;
 	}
 
 	return 0;
@@ -154,7 +193,7 @@ static int max30208_pm_action(const struct device *dev, enum pm_device_action ac
 	PM_DEVICE_DT_INST_DEFINE(inst, max30208_pm_action);          \
 	SENSOR_DEVICE_DT_INST_DEFINE(inst,                           \
 								 max30208_init,                  \
-								 PM_DEVICE_DT_INST_GET(inst),	 \
+								 PM_DEVICE_DT_INST_GET(inst),    \
 								 &max30208_data_##inst,          \
 								 &max30208_config_##inst,        \
 								 POST_KERNEL,                    \
