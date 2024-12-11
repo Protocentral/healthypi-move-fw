@@ -6,6 +6,13 @@
 
 source "${ZEPHYR_BASE}/share/sysbuild/Kconfig"
 
+config PM_EXTERNAL_FLASH_MCUBOOT_SECONDARY
+	default y 
+
+choice MCUBOOT_MODE
+	default MCUBOOT_MODE_OVERWRITE_ONLY if SOC_SERIES_NRF53X
+endchoice
+
 config NRF_DEFAULT_IPC_RADIO
 	default y
 
