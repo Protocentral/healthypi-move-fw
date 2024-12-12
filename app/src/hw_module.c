@@ -531,10 +531,11 @@ bool hw_is_max32664c_present(void)
     return max32664c_device_present;
 }
 
-int hw_max32664c_set_op_mode(uint8_t mode)
+int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
 {
     struct sensor_value mode_set;
-    mode_set.val1 = mode;
+    mode_set.val1 = op_mode;
+    mode_set.val2 = algo_mode;
     return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
 }
 

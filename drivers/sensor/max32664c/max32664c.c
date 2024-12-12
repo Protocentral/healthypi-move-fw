@@ -483,9 +483,9 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // EN SCD
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
-        // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
-        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
-        // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
+        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x34, 0x00);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
         // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
@@ -577,12 +577,12 @@ static int max32664c_attr_set(const struct device *dev,
     case MAX32664C_ATTR_OP_MODE:
         if (val->val1 == MAX32664C_OP_MODE_ALGO_AEC)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2);//MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
             data->op_mode = MAX32664C_OP_MODE_ALGO_AEC;
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_AGC)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2);// MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
             data->op_mode = MAX32664C_OP_MODE_ALGO_AGC;
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_EXTENDED)
