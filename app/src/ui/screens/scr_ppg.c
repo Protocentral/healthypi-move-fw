@@ -42,6 +42,47 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
+static void hpi_disp_ppg_settings_open(void)
+{
+    lv_obj_t * setting = lv_msgbox_create(scr_ppg,"PPG Settings","Message",NULL,true);
+    lv_obj_set_style_clip_corner(setting, true, 0);
+
+    lv_obj_set_size(setting, 320, 320);
+    lv_obj_center(setting);
+
+    lv_obj_t * content = lv_msgbox_get_content(setting);
+    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_right(content, -1, LV_PART_SCROLLBAR);
+
+    lv_obj_t * cont_brightness = lv_obj_create(content);
+    lv_obj_set_size(cont_brightness, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cont_brightness, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_brightness, LV_FLEX_ALIGN_CENTER,  LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t * lb_brightness = lv_label_create(cont_brightness);
+    lv_label_set_text(lb_brightness, "Brightness : ");
+    lv_obj_t * slider_brightness = lv_slider_create(cont_brightness);
+    lv_obj_set_width(slider_brightness, lv_pct(100));
+    lv_slider_set_value(slider_brightness, 50, LV_ANIM_OFF);
+
+    lv_obj_t * cont_speed = lv_obj_create(content);
+    lv_obj_set_size(cont_speed, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cont_speed, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_speed, LV_FLEX_ALIGN_CENTER,  LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t * lb_speed = lv_label_create(cont_speed);
+    lv_label_set_text(lb_speed, "Speed : ");
+    lv_obj_t * slider_speed = lv_slider_create(cont_speed);
+    lv_obj_set_width(slider_speed, lv_pct(100));
+    lv_slider_set_value(slider_speed, 80, LV_ANIM_OFF);
+}
+
+static void ppg_settings_button_cb(lv_event_t * e)
+{
+    hpi_disp_ppg_settings_open();
+}
+
 void draw_scr_ppg(enum scroll_dir m_scroll_dir)
 {
     scr_ppg = lv_obj_create(NULL);
@@ -49,9 +90,15 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     //draw_bg(scr_ppg);
     draw_header_minimal(scr_ppg, 10);
 
+    // Bottom signal label
+    lv_obj_t *label_signal = lv_label_create(scr_ppg);
+    lv_label_set_text(label_signal, "PPG");
+    lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
+
     // Create Chart 1 - ECG
     chart_ppg = lv_chart_create(scr_ppg);
-    lv_obj_set_size(chart_ppg, 390, 150);
+    lv_obj_set_size(chart_ppg, 390, 100);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
 
@@ -71,7 +118,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // HR Number label
     label_ppg_hr = lv_label_create(scr_ppg);
     lv_label_set_text(label_ppg_hr, "--");
-    lv_obj_align_to(label_ppg_hr, NULL, LV_ALIGN_CENTER, -100, 70);
+    lv_obj_align_to(label_ppg_hr, NULL, LV_ALIGN_CENTER, -100, 40);
     lv_obj_add_style(label_ppg_hr, &style_lbl_white, 0);
 
     // HR Sub bpm label
@@ -94,7 +141,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // SpO2 Number label
     label_ppg_spo2 = lv_label_create(scr_ppg);
     lv_label_set_text(label_ppg_spo2, "--");
-    lv_obj_align_to(label_ppg_spo2, NULL, LV_ALIGN_CENTER, 100, 70);
+    lv_obj_align_to(label_ppg_spo2, NULL, LV_ALIGN_CENTER, 100, 40);
     lv_obj_add_style(label_ppg_spo2, &style_lbl_white, 0);
 
     // SpO2 Sub % label
@@ -108,23 +155,34 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(label_spo2_cap, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, -5);
     lv_obj_add_style(label_spo2_cap, &style_lbl_red, 0);
 
-    // Bottom signal label
-    lv_obj_t *label_signal = lv_label_create(scr_ppg);
-    lv_label_set_text(label_signal, "PPG");
-    lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
+    lv_obj_t *btn_settings  = lv_btn_create(scr_ppg);
+    lv_obj_set_width(btn_settings, 80);
+    lv_obj_set_height(btn_settings, 80);
+    lv_obj_set_x(btn_settings, 0);
+    lv_obj_align_to(btn_settings, NULL, LV_ALIGN_CENTER, 0, 120);
+    lv_obj_add_flag(btn_settings, LV_OBJ_FLAG_SCROLL_ON_FOCUS); /// Flags
+    lv_obj_clear_flag(btn_settings, LV_OBJ_FLAG_SCROLLABLE);    /// Flags
+    lv_obj_set_style_radius(btn_settings, 100, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(btn_settings, lv_palette_main(LV_PALETTE_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(btn_settings, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_width(btn_settings, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_event_cb(btn_settings, ppg_settings_button_cb, LV_EVENT_CLICKED, NULL);
 
-    // Status label
+    lv_obj_t *ui_hr_number = lv_label_create(btn_settings);
+    lv_obj_set_width(ui_hr_number, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(ui_hr_number, LV_SIZE_CONTENT); /// 1
+    lv_obj_set_align(ui_hr_number, LV_ALIGN_BOTTOM_MID);
+    lv_label_set_text(ui_hr_number, LV_SYMBOL_SETTINGS);
+    lv_obj_set_style_text_color(ui_hr_number, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(ui_hr_number, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_hr_number, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    // PPG Sensor Status label
     label_status = lv_label_create(scr_ppg);
     lv_label_set_text(label_status, "Active");
-    lv_obj_align_to(label_status, label_signal, LV_ALIGN_OUT_TOP_MID, 0, -5);
+    lv_obj_align_to(label_status, btn_settings, LV_ALIGN_OUT_TOP_MID, 0, -10);
     lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
-
-    /*LV_IMG_DECLARE(o2);
-    lv_obj_t *img2 = lv_img_create(scr_ppg);
-    lv_img_set_src(img2, &o2);
-    lv_obj_set_size(img2, 22, 35);
-    lv_obj_align_to(img2, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, 0);*/
+    lv_obj_add_style(label_status, &style_lbl_white_small, 0);
 
     hpi_disp_set_curr_screen(SCR_PLOT_PPG);
     hpi_show_screen(scr_ppg, m_scroll_dir);

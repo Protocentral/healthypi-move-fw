@@ -40,6 +40,8 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
+
+
 static void scr_ecg_measure_btn_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -48,6 +50,7 @@ static void scr_ecg_measure_btn_event_handler(lv_event_t *e)
     {
         lv_obj_add_flag(btn_ecg_measure_start, LV_OBJ_FLAG_HIDDEN);
         hw_max30001_ecg_enable(true);
+        //lv_example_msgbox_2();
     }
 }
 

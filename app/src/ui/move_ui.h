@@ -127,6 +127,8 @@ uint8_t hpi_disp_get_brightness(void);
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);
 void ui_hr_button_update(uint8_t hr_bpm);
 
+lv_obj_t *ui_settings_button_create(lv_obj_t *comp_parent, int y_offset);
+
 lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent);
 void ui_spo2_button_update(uint8_t spo2);
 
