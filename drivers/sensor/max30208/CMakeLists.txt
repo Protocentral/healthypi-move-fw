@@ -1,6 +1,5 @@
 # ProtoCentral Electronics (info@protocentral.com)
 # SPDX-License-Identifier: Apache-2.0
 
-config SENSOR_MAX30205
-	bool "MAX30205 Temperature Sensor"
-	depends on I2C
+zephyr_library()    
+zephyr_library_sources(max30208.c)
