@@ -55,7 +55,8 @@
 	aliases {
 		max30001 = &max30001;
 		max32664d = &max32664d;
-		maxm86146 = &maxm86146;
+		//maxm86146 = &maxm86146;
+		max32664c = &max32664c;
 		rtc = &rtc_rv;
 	};
 };
@@ -114,13 +115,16 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3000000>;
+				//regulator-initial-mode = <NPM1300_BUCK_MODE_PWM>;
+
 				//regulator-always-on;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <2000000>;
+				regulator-init-microvolt =<2000000>;
+				regulator-initial-mode = <NPM1300_BUCK_MODE_PWM>;
 
 				//regulator-always-on;
 			};
@@ -218,14 +222,24 @@
 	zephyr,concat-buf-size = <8250>;
 	zephyr,flash-buf-max-size = <8250>;
 
-	maxm86146: maxm86146@55 {
+	/*maxm86146: maxm86146@55 {
 		compatible = "maxim,maxm86146";
 		reg = <0x55>;
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
 		status = "okay";
 		//zephyr,deferred-init;
+	};*/
+
+	max32664c: max32664c@55 {
+		compatible = "maxim,max32664c";
+		reg = <0x55>;
+		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+		//zephyr,deferred-init;
 	};
+
 
 	max30208: max30208@50 {
 		compatible = "maxim,max30208";

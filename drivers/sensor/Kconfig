@@ -5,6 +5,9 @@ rsource "max30205/Kconfig"
 rsource "max32664/Kconfig"
 rsource "maxm86146/Kconfig"
 
-rsource "max30208/Kconfig"
+rsource "max32664c/Kconfig"
 
+rsource "max30208/Kconfig"
 rsource "bmi323hpi/Kconfig"
+
+

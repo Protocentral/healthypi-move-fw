@@ -34,8 +34,8 @@
 
 #include "bmi323_hpi.h"
 
-#ifdef CONFIG_SENSOR_MAXM86146
-#include "maxm86146.h"
+#ifdef CONFIG_SENSOR_MAX32664C
+#include "max32664c.h"
 #endif
 
 #include "hw_module.h"
@@ -69,7 +69,7 @@ ZBUS_CHAN_DECLARE(temp_chan);
 // Peripheral Device Pointers
 static const struct device *max30208_dev = DEVICE_DT_GET_ANY(maxim_max30208);
 static const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
-static const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
+static const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
 
 const struct device *imu_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
@@ -92,7 +92,7 @@ const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
 
 volatile bool max30001_device_present = false;
-volatile bool maxm86146_device_present = false;
+volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
@@ -526,16 +526,16 @@ static void trigger_handler(const struct device *dev, const struct sensor_trigge
     // k_sem_give(&sem);
 }
 
-bool hw_is_maxm86146_present(void)
+bool hw_is_max32664c_present(void)
 {
-    return maxm86146_device_present;
+    return max32664c_device_present;
 }
 
-int hw_maxm86146_set_op_mode(uint8_t mode)
+int hw_max32664c_set_op_mode(uint8_t mode)
 {
     struct sensor_value mode_set;
     mode_set.val1 = mode;
-    return sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+    return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
 }
 
 int hw_max30001_ecg_enable(bool enable)
@@ -654,35 +654,38 @@ void hw_init(void)
     }
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
+    k_sleep(K_MSEC(1000));
 
-    if (!device_is_ready(maxm86146_dev))
+    if (!device_is_ready(max32664c_dev))
     {
-        LOG_ERR("MAXM86146 device not present!");
-        maxm86146_device_present = false;
+        LOG_ERR("MAX32664C device not present!");
+        max32664c_device_present = false;
     }
     else
     {
-        LOG_INF("MAXM86146 device present!");
-        maxm86146_device_present = true;
+        LOG_INF("MAX32664C device present!");
+        max32664c_device_present = true;
 
         struct sensor_value mode_get;
-        sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_IS_APP_PRESENT, &mode_get);
-        // LOG_INF("MAXM86146 App Present: %d", mode_get.val1);
+        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_IS_APP_PRESENT, &mode_get);
+
+        LOG_INF("MAX32664C App Present: %d", mode_get.val1);
+        
+        // To force bootloader mode
+        //mode_get.val1 = 8;
+
         if (mode_get.val1 == 8)
         {
-            LOG_INF("MAXM86146 App not present. Starting bootloader mode");
+            LOG_INF("MAX32664C App not present. Starting bootloader mode");
             struct sensor_value mode_set;
             mode_set.val1 = 1;
-            sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_ENTER_BOOTLOADER, &mode_set);
+            sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
         }
         else
         {
-            LOG_INF("MAXM86146 App present");
+            LOG_INF("MAX32664C App present");
 
-            // struct sensor_value mode_set;
-            // mode_set.val1 = MAXM86146_OP_MODE_ALGO_AEC;
-            // mode_set.val1 = MAXM86146_OP_MODE_SCD;
-            // sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+            // Moved all start commands to SMF PPG
         }
     }
 
@@ -720,6 +723,7 @@ void hw_init(void)
         LOG_INF("MAX30208 device found!");
     }
 
+
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
@@ -741,7 +745,7 @@ void hw_init(void)
         k_sem_give(&sem_ecg_bioz_thread_start);
     }
 
-    if (maxm86146_device_present)
+    if (max32664c_device_present)
     {
 
         k_sem_give(&sem_ppg_sm_start);
