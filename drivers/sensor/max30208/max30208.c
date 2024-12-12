@@ -229,9 +229,7 @@ static int max30208_pm_action(const struct device *dev, enum pm_device_action ac
 	PM_DEVICE_DT_INST_DEFINE(inst, max30208_pm_action);          \
 	SENSOR_DEVICE_DT_INST_DEFINE(inst,                           \
 								 max30208_init,                  \
-
 								 PM_DEVICE_DT_INST_GET(inst),    \
-
 								 &max30208_data_##inst,          \
 								 &max30208_config_##inst,        \
 								 POST_KERNEL,                    \
