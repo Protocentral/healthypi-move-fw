@@ -21,8 +21,6 @@ uint8_t m_read_reg_2(const struct device *dev, uint8_t reg, uint8_t *read_buf)
 	return 0;
 }
 
-v
-
 static int max30205_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
 {
