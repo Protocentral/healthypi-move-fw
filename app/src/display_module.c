@@ -342,12 +342,12 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, 0, (top_offset + 2));
+    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, -15, (top_offset + 2));
 
     label_batt_level_val = lv_label_create(parent);
     lv_label_set_text(label_batt_level_val, "--");
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_BOTTOM_MID, 0, -2);
+    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 3, 0);
 }
 
 void draw_bg(lv_obj_t *parent)
@@ -684,7 +684,7 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.ppg_num_samples);
+                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_green, ppg_sensor_sample.ppg_num_samples);
                     hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))

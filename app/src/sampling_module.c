@@ -1,4 +1,4 @@
-// #include <zephyr/kernel.h>
+2// #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
@@ -7,7 +7,7 @@
 
 #include "max30001.h"
 #include "max32664.h"
-#include "maxm86146.h"
+#include "max32664c.h"
 #include "sampling_module.h"
 
 LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 #define SAMPLING_INTERVAL_MS 8
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 1
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 50
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 #define ECG_SAMPLING_INTERVAL_MS 65
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -23,7 +23,7 @@ K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
 
 // ASync sensor RTIO defines
 
-SENSOR_DT_READ_IODEV(maxm86146_iodev, DT_ALIAS(maxm86146), SENSOR_CHAN_VOLTAGE);
+SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), SENSOR_CHAN_VOLTAGE);
 SENSOR_DT_READ_IODEV(max30001_iodev, DT_ALIAS(max30001), SENSOR_CHAN_VOLTAGE);
 
@@ -40,7 +40,7 @@ ZBUS_CHAN_DECLARE(hr_chan);
 extern struct k_sem sem_ecg_intb_recd;
 
 extern const struct device *const max30001_dev;
-extern const struct device *const maxm86146_dev;
+extern const struct device *const max32664c_dev;
 extern const struct device *const max32664d_dev;
 
 extern struct k_sem sem_ppg_finger_thread_start;
@@ -50,7 +50,7 @@ extern struct k_sem sem_ecg_bioz_thread_start;
 // static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
 //  static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-RTIO_DEFINE_WITH_MEMPOOL(maxm86146_read_rtio_ctx,
+RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_ctx,
                          32,  /* submission queue size */
                          32,  /* completion queue size */
                          128, /* number of memory blocks */
@@ -107,21 +107,21 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
 static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
                                                  uint32_t buf_len, void *userdata)
 {
-        const struct maxm86146_encoded_data *edata = (const struct maxm86146_encoded_data *)buf;
+        const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
 
         static uint8_t prev_hr_val = 0;
         // uint8_t hr_chan_value=0;
         uint16_t _n_samples = edata->num_samples;
 
-        if (edata->chip_op_mode == MAXM86146_OP_MODE_SCD)
+        if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
         {
                 printk("SCD: ", edata->scd_state);
                 return;
         }
         else
         {
-                // printk("WR NS: %d ", _n_samples);
+                //printk("WR NS: %d ", _n_samples);
                 if (_n_samples > 8)
                 {
                         _n_samples = 8;
@@ -137,10 +137,20 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
                                 ppg_sensor_sample.raw_green[i] = edata->green_samples[i];
                         }
 
-                        ppg_sensor_sample.hr = edata->hr;
-                        ppg_sensor_sample.spo2 = edata->spo2;
-                        ppg_sensor_sample.rtor = edata->rtor;
-                        ppg_sensor_sample.scd_state = edata->scd_state;
+                        if (edata->chip_op_mode == MAX32664C_OP_MODE_RAW)
+                        {
+                                ppg_sensor_sample.hr = 0;
+                                ppg_sensor_sample.spo2 = 0;
+                                ppg_sensor_sample.rtor = 0;
+                                ppg_sensor_sample.scd_state = 0;
+                        }
+                        else
+                        {
+                                ppg_sensor_sample.hr = edata->hr;
+                                ppg_sensor_sample.spo2 = edata->spo2;
+                                ppg_sensor_sample.rtor = edata->rtor;
+                                ppg_sensor_sample.scd_state = edata->scd_state;
+                        }
 
                         k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
 

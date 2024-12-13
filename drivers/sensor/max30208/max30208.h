@@ -16,6 +16,7 @@
 
 #define MAX30208_CONVERT_T 0x01
 
+
 struct max30208_config
 {
   struct i2c_dt_spec i2c;
