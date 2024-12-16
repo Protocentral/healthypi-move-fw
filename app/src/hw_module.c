@@ -818,7 +818,7 @@ void hw_thread(void)
         };
         zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
 
-        k_sleep(K_MSEC(2000));
+        k_sleep(K_MSEC(5000));
     }
 }
 
