@@ -138,10 +138,11 @@ static int max30208_sample_fetch(const struct device *dev,
 
 	max30208_start_convert(dev);
 
-	while(!(max30208_get_status(dev) & 0x01))
-	{
-		k_sleep(K_MSEC(10));
-	}
+	//while(!(max30208_get_status(dev) & 0x01))
+	//{
+	//	k_sleep(K_MSEC(10));
+	//}
+	k_sleep(K_MSEC(100));
 
 	data->temp_int = max30208_get_temp(dev);
 

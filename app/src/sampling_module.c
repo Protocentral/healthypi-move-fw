@@ -121,7 +121,7 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         }
         else
         {
-                //printk("WR NS: %d ", _n_samples);
+                // printk("WR NS: %d ", _n_samples);
                 if (_n_samples > 8)
                 {
                         _n_samples = 8;
