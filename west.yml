@@ -12,10 +12,10 @@ manifest:
     - name: sdk-nrf
       remote: nrf
       path: nrf
-      revision: v2.7.0
+      revision: v2.8.0
       import:
         path-prefix: external
-      clone-depth: 1
+#      clone-depth: 1
 #    - name: max30001
 #      repo-path: protocentral_max30001_zephyr_driver
 #      remote: protocentral
