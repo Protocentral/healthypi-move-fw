@@ -854,7 +854,7 @@ void hw_thread(void)
         rtc_get_time(rtc_dev, &sys_time);
         zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
 
-        //_temp_f = read_temp_f();
+        _temp_f = read_temp_f();
         _steps = acc_get_steps();
 
         struct hpi_steps_t steps = {
