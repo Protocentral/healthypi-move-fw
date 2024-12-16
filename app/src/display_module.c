@@ -645,11 +645,11 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
-    draw_scr_boot();
+    //draw_scr_boot();
     // Init all styles globally
     display_init_styles();
 
-    touch_indev = lv_indev_get_next(NULL);
+    /*touch_indev = lv_indev_get_next(NULL);
     while (touch_indev)
     {
         if (lv_indev_get_type(touch_indev) == LV_INDEV_TYPE_POINTER)
@@ -658,7 +658,7 @@ void display_screens_thread(void)
             break;
         }
         touch_indev = lv_indev_get_next(touch_indev);
-    }
+    }*/
 
     display_blanking_off(display_dev);
     hpi_disp_set_brightness(50);
@@ -666,7 +666,7 @@ void display_screens_thread(void)
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
     draw_scr_home(SCROLL_NONE);
-    // draw_scr_ppg(SCROLL_RIGHT);
+    //draw_scr_ppg(SCROLL_RIGHT);
     // draw_scr_today(SCROLL_NONE);
     // draw_scr_ecg(SCROLL_RIGHT);
     //draw_scr_bpt(SCROLL_RIGHT);
@@ -943,7 +943,7 @@ static void disp_steps_listener(const struct zbus_channel *chan)
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     if (curr_screen == SCR_HOME)
     {
-        ui_steps_button_update(hpi_steps->steps_walk);
+       // ui_steps_button_update(hpi_steps->steps_walk);
     }
     // ui_steps_button_update(hpi_steps->steps_walk);
 }
@@ -952,7 +952,7 @@ ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
-    printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
+    //printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 

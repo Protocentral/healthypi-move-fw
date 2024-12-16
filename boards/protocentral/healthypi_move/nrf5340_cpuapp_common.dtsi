@@ -9,6 +9,7 @@
 #include <dt-bindings/regulator/npm1300.h>
 
 #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+#include <zephyr/dt-bindings/lvgl/lvgl.h>
 
 / {
 
@@ -94,9 +95,15 @@
 		max32664c = &max32664c;
 		rtc = &rtc_rv;
 	};
+
+	pointer {
+		compatible = "zephyr,lvgl-pointer-input";
+		input = <&chsc5816>;
+		swap-xy;
+	};
 };
 
-
+/* 
 / {
 	lvgl_pointer_input: lvgl_pointer {
 		compatible = "zephyr,lvgl-pointer-input";
@@ -106,6 +113,7 @@
 		//invert-x;
 	};
 };
+*/
 
 &vregmain {
 	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
