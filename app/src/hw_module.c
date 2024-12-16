@@ -103,6 +103,8 @@ static uint8_t global_batt_level = 0;
 // bool global_batt_charging = false;
 static struct rtc_time global_system_time;
 
+uint8_t hw_second_boot __attribute__((section(".noinit"))) =0;
+
 // USB CDC UART
 #define RING_BUF_SIZE 1024
 uint8_t ring_buffer[RING_BUF_SIZE];
@@ -630,6 +632,12 @@ void hw_init(void)
     // device_init(display_dev);
     // k_sleep(K_MSEC(100));
     device_init(touch_dev);
+
+    if(hw_second_boot==0)
+    {
+        hw_second_boot = 1;
+        sys_reboot(SYS_REBOOT_WARM);
+    }
 
     if (!device_is_ready(max30001_dev))
     {
