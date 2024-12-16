@@ -415,7 +415,7 @@
 		width = <390>;
 		height = <390>;
 		pixel-format = <0>;
-		display-inversion;
+		//display-inversion;
 		rotation = <0>;
 		status = "okay";
 		//zephyr,deferred-init;

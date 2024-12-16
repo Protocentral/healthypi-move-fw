@@ -645,8 +645,8 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
-    //draw_scr_boot();
-    // Init all styles globally
+    // draw_scr_boot();
+    //  Init all styles globally
     display_init_styles();
 
     /*touch_indev = lv_indev_get_next(NULL);
@@ -659,20 +659,22 @@ void display_screens_thread(void)
         }
         touch_indev = lv_indev_get_next(touch_indev);
     }*/
-
+    
     display_blanking_off(display_dev);
     hpi_disp_set_brightness(50);
 
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
     draw_scr_home(SCROLL_NONE);
-    //draw_scr_ppg(SCROLL_RIGHT);
-    // draw_scr_today(SCROLL_NONE);
-    // draw_scr_ecg(SCROLL_RIGHT);
-    //draw_scr_bpt(SCROLL_RIGHT);
-    // draw_scr_settings(SCROLL_RIGHT);
-    // draw_scr_eda();
-    // draw_scr_hrv_scatter(SCROLL_RIGHT);
+
+     lv_task_handler();
+    // draw_scr_ppg(SCROLL_RIGHT);
+    //  draw_scr_today(SCROLL_NONE);
+    //  draw_scr_ecg(SCROLL_RIGHT);
+    // draw_scr_bpt(SCROLL_RIGHT);
+    //  draw_scr_settings(SCROLL_RIGHT);
+    //  draw_scr_eda();
+    //  draw_scr_hrv_scatter(SCROLL_RIGHT);
 
     LOG_INF("Display screens inited");
 
@@ -901,6 +903,10 @@ void display_screens_thread(void)
             hpi_display_sleep_off();
         }
 
+        //lv_task_handler();
+        //k_msleep(disp_thread_refresh_int_ms);
+
+        //k_msleep(30);
         k_msleep(lv_task_handler());
     }
 }
@@ -918,7 +924,7 @@ static void disp_batt_status_listener(const struct zbus_channel *chan)
 {
     const struct batt_status *batt_s = zbus_chan_const_msg(chan);
 
-    //LOG_DBG("Ch Batt: %d, Charge: %d", batt_s->batt_level, batt_s->batt_charging);
+    // LOG_DBG("Ch Batt: %d, Charge: %d", batt_s->batt_level, batt_s->batt_charging);
     m_disp_batt_level = batt_s->batt_level;
 }
 
@@ -943,7 +949,7 @@ static void disp_steps_listener(const struct zbus_channel *chan)
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     if (curr_screen == SCR_HOME)
     {
-       // ui_steps_button_update(hpi_steps->steps_walk);
+        // ui_steps_button_update(hpi_steps->steps_walk);
     }
     // ui_steps_button_update(hpi_steps->steps_walk);
 }
@@ -952,7 +958,7 @@ ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
-    //printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
+    // printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 
