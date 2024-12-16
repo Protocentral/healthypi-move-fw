@@ -21,23 +21,6 @@ LOG_MODULE_REGISTER(display_sh8601, CONFIG_DISPLAY_LOG_LEVEL);
 #define SH8601_PIXEL_FORMAT_RGB565 0U
 #define SH8601_PIXEL_FORMAT_RGB888 1U
 
-struct sh8601_config
-{
-	const struct device *mipi_dbi;
-	struct mipi_dbi_config dbi_config;
-
-	uint16_t width;
-	uint16_t height;
-	bool inverted; /* Display color inversion */
-
-	// struct gpio_dt_spec reset;
-	uint8_t pixel_format;
-	uint16_t rotation;
-	uint16_t x_resolution;
-	uint16_t y_resolution;
-	bool inversion;
-};
-
 /*Display data struct*/
 struct sh8601_data
 {
@@ -57,7 +40,7 @@ int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_da
 {
 	const struct sh8601_config *config = dev->config;
 
-	/*int r;
+	int r;
 	struct spi_buf tx_buf[3];
 	struct spi_buf_set tx_bufs = {.buffers = tx_buf, .count = 2U};
 
@@ -70,7 +53,7 @@ int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_da
 	tx_buf[1].buf = &cmd_buf;
 	tx_buf[1].len = 2U;
 
-	/// send data
+	/* send data (if any) */
 	if (tx_data != NULL)
 	{
 		tx_buf[2].buf = (void *)tx_data;
@@ -83,9 +66,9 @@ int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd, const void *tx_da
 	if (r < 0)
 	{
 		return r;
-	}*/
+	}
 
-	return mipi_dbi_command_write(config->mipi_dbi, &config->dbi_config, cmd, tx_data, tx_len);
+	return 0;
 }
 
 int sh8601_transmit_data(const struct device *dev, const void *tx_data,
@@ -93,7 +76,7 @@ int sh8601_transmit_data(const struct device *dev, const void *tx_data,
 {
 	const struct sh8601_config *config = dev->config;
 
-	/*int r;
+	int r;
 	struct spi_buf tx_buf[3];
 	struct spi_buf_set tx_bufs = {.buffers = tx_buf, .count = 2U};
 
@@ -109,7 +92,7 @@ int sh8601_transmit_data(const struct device *dev, const void *tx_data,
 	tx_buf[1].buf = &cmd_buf;
 	tx_buf[1].len = 2U;
 
-	//
+	/* send data (if any) */
 	if (tx_data != NULL)
 	{
 		tx_buf[2].buf = (void *)tx_data;
@@ -122,11 +105,7 @@ int sh8601_transmit_data(const struct device *dev, const void *tx_data,
 	if (r < 0)
 	{
 		return r;
-	}*/
-	struct display_buffer_descriptor mipi_desc;
-	mipi_desc.buf_size = tx_len;
-
-	return mipi_dbi_write_display(config->mipi_dbi, &config->dbi_config, tx_data, &mipi_desc, config->pixel_format);
+	}
 
 	return 0;
 }
@@ -209,8 +188,7 @@ static int sh8601_exit_sleep(const struct device *dev)
  * @param dev SH8601 device instance.
  * @return 0 when succesful, errno otherwise.
  */
-
-/*static int sh8601_hw_reset(const struct device *dev)
+static int sh8601_hw_reset(const struct device *dev)
 {
 	const struct sh8601_config *config = dev->config;
 
@@ -226,7 +204,7 @@ static int sh8601_exit_sleep(const struct device *dev)
 	gpio_pin_set_dt(&config->reset, 1);
 	k_msleep(100);
 	return 0;
-}*/
+}
 
 /**
  * @brief To recover from the sleep mode
@@ -407,13 +385,13 @@ static int sh8601_init(const struct device *dev)
 
 	int r;
 
-	/*if (!spi_is_ready_dt(&config->spi))
+	if (!spi_is_ready_dt(&config->spi))
 	{
 		LOG_ERR("SPI device is not ready");
 		// return -ENODEV;
-	}*/
+	}
 
-	/*if (config->reset.port != NULL)
+	if (config->reset.port != NULL)
 	{
 		if (!device_is_ready(config->reset.port))
 		{
@@ -427,10 +405,9 @@ static int sh8601_init(const struct device *dev)
 			LOG_ERR("Could not configure reset GPIO (%d)", r);
 			// return r;
 		}
-	}*/
+	}
 
-	// sh8601_hw_reset(dev);
-	mipi_dbi_reset(config->mipi_dbi, 200);
+	sh8601_hw_reset(dev);
 
 	k_msleep(SH8601_RST_DELAY);
 
@@ -621,12 +598,12 @@ static int sh8601_pm_action(const struct device *dev,
 	switch (action)
 	{
 	case PM_DEVICE_ACTION_SUSPEND:
-		// printk("Suspend device");
+		//printk("Suspend device");
 		sh8601_send_cmd(dev, SH8601_C_SLPIN);
 		k_msleep(SH8601_SLPIN_DELAY);
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-		// printk("Resume device");
+		//printk("Resume device");
 		sh8601_send_cmd(dev, SH8601_C_SLPOUT);
 		k_msleep(SH8601_SLPOUT_DELAY);
 		break;
@@ -639,30 +616,23 @@ static int sh8601_pm_action(const struct device *dev,
 
 #endif /* CONFIG_PM_DEVICE */
 
-#define SH8601_INIT(inst)                                                   \
-	static const struct sh8601_config sh8601_config_##inst = {              \
-		.mipi_dbi = DEVICE_DT_GET(DT_INST_PARENT(inst)),                    \
-		.dbi_config = {                                                     \
-			.mode = MIPI_DBI_MODE_SPI_3WIRE,                                \
-			.config = MIPI_DBI_SPI_CONFIG_DT_INST(inst,                       \
-												SPI_OP_MODE_MASTER |        \
-													SPI_WORD_SET(9),        \
-												0),                         \
-		},                                                                  \
-		.width = DT_INST_PROP(inst, width),                                 \
-		.height = DT_INST_PROP(inst, height),                               \
-		.pixel_format = DT_INST_PROP(inst, pixel_format),                   \
-		.rotation = DT_INST_PROP(inst, rotation),                           \
-	};                                                                      \
-	static struct sh8601_data sh8601_data_##inst;                           \
-                                                                            \
-	PM_DEVICE_DT_INST_DEFINE(inst, sh8601_pm_action);                       \
-                                                                            \
-	DEVICE_DT_INST_DEFINE(inst, &sh8601_init,                               \
-						  PM_DEVICE_DT_INST_GET(inst), &sh8601_data_##inst, \
-						  &sh8601_config_##inst, POST_KERNEL,               \
+#define SH8601_INIT(inst)                                                           \
+	static const struct sh8601_config sh8601_config_##inst = {                      \
+		.spi = SPI_DT_SPEC_INST_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0), \
+		.reset = GPIO_DT_SPEC_INST_GET_OR(inst, reset_gpios, {0}),                  \
+		.pixel_format = DT_INST_PROP(inst, pixel_format),                           \
+		.rotation = DT_INST_PROP(inst, rotation),                                   \
+		.x_resolution = DT_INST_PROP(inst, width),                                  \
+		.y_resolution = DT_INST_PROP(inst, height),                                 \
+		.inversion = DT_INST_PROP(inst, display_inversion),                         \
+	};                                                                              \
+	static struct sh8601_data sh8601_data_##inst;                                   \
+                                                                                    \
+	PM_DEVICE_DT_INST_DEFINE(inst, sh8601_pm_action);                               \
+                                                                                    \
+	DEVICE_DT_INST_DEFINE(inst, &sh8601_init,                                       \
+						  PM_DEVICE_DT_INST_GET(inst), &sh8601_data_##inst,         \
+						  &sh8601_config_##inst, POST_KERNEL,                       \
 						  CONFIG_DISPLAY_INIT_PRIORITY, &sh8601_api);
 
 DT_INST_FOREACH_STATUS_OKAY(SH8601_INIT)
-
-// .spi = SPI_DT_SPEC_INST_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8), 0),

@@ -602,7 +602,7 @@ void hw_init(void)
     if (!device_is_ready(pmic))
     {
         LOG_ERR("Pmic device not ready");
-        //return 0;
+        return 0;
     }
 
     if (!device_is_ready(regulators))
@@ -632,7 +632,7 @@ void hw_init(void)
     if (ret)
     {
         LOG_ERR("Failed to add pmic callback");
-       // return 0;
+        return 0;
     }
 
     /* Initialise vbus detection status. */
@@ -641,7 +641,7 @@ void hw_init(void)
 
     if (ret < 0)
     {
-        //return false;
+        return false;
     }
 
     vbus_connected = (val.val1 != 0) || (val.val2 != 0);
@@ -772,14 +772,14 @@ void hw_init(void)
 
     // setup_pmic_callbacks();
 
-    /*if (!device_is_ready(max30208_dev))
+    if (!device_is_ready(max30208_dev))
     {
         LOG_ERR("MAX30208 device not found!");
     }
     else
     {
         LOG_INF("MAX30208 device found!");
-    }*/
+    }
 
 
     rtc_get_time(rtc_dev, &curr_time);

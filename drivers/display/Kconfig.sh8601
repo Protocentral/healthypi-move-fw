@@ -6,6 +6,6 @@ config SH8601
 	bool "SH8601 display driver"
 	default y
 	depends on DT_HAS_SITRONIX_SH8601_ENABLED
-	select MIPI_DBI
+	select SPI
 	help
 	  Enable driver for SH8601 display driver.
