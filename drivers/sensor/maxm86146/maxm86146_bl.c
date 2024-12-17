@@ -19,7 +19,7 @@ uint8_t maxm86146_fw_auth_vector[16] = {0};
 #define MAXM86146_FW_UPDATE_WRITE_SIZE 8208 // Page size 8192 + 16 bytes for CRC
 #define MAXM86146_FW_UPDATE_START_ADDR 0x4C
 
-#define MAXM86146_FW_BIN_INCLUDE 1
+#define MAXM86146_FW_BIN_INCLUDE 0
 #define MAXM86146_WR_SIM_ONLY 0
 
 static int m_read_bl_ver(const struct device *dev)

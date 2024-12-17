@@ -95,6 +95,8 @@ volatile bool max30001_device_present = false;
 volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 
+static volatile bool vbus_connected;
+
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
@@ -333,7 +335,7 @@ int npm_fuel_gauge_init(const struct device *charger)
     return 0;
 }
 
-int npm_fuel_gauge_update(const struct device *charger)
+int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected)
 {
     float voltage;
     float current;
@@ -357,7 +359,7 @@ int npm_fuel_gauge_update(const struct device *charger)
 
     delta = (float)k_uptime_delta(&ref_time) / 1000.f;
 
-    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, NULL);
+    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, vbus_connected, NULL);
     tte = nrf_fuel_gauge_tte_get();
     ttf = nrf_fuel_gauge_ttf_get(cc_charging, -term_charge_current);
 
@@ -570,6 +572,21 @@ int hw_max30001_bioz_enable(bool enable)
     return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
 }
 
+static void event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+    if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))
+    {
+        printk("Vbus connected\n");
+        vbus_connected = true;
+    }
+
+    if (pins & BIT(NPM1300_EVENT_VBUS_REMOVED))
+    {
+        printk("Vbus removed\n");
+        vbus_connected = false;
+    }
+}
+
 void hw_init(void)
 {
     int ret = 0;
@@ -581,6 +598,12 @@ void hw_init(void)
     };
 
     k_sem_give(&sem_display_on);
+
+    if (!device_is_ready(pmic))
+    {
+        LOG_ERR("Pmic device not ready");
+        return 0;
+    }
 
     if (!device_is_ready(regulators))
     {
@@ -598,6 +621,30 @@ void hw_init(void)
         LOG_ERR("Could not initialise fuel gauge.\n");
         // return 0;
     }
+
+    static struct gpio_callback event_cb;
+
+    gpio_init_callback(&event_cb, event_callback,
+                       BIT(NPM1300_EVENT_VBUS_DETECTED) |
+                           BIT(NPM1300_EVENT_VBUS_REMOVED));
+
+    ret = mfd_npm1300_add_callback(pmic, &event_cb);
+    if (ret)
+    {
+        LOG_ERR("Failed to add pmic callback");
+        return 0;
+    }
+
+    /* Initialise vbus detection status. */
+    struct sensor_value val;
+    ret = sensor_attr_get(charger, SENSOR_CHAN_CURRENT, SENSOR_ATTR_UPPER_THRESH, &val);
+
+    if (ret < 0)
+    {
+        return false;
+    }
+
+    vbus_connected = (val.val1 != 0) || (val.val2 != 0);
 
     if (!device_is_ready(imu_dev))
     {
@@ -635,11 +682,11 @@ void hw_init(void)
 
     //printk("hw_second_boot: %d\n", hw_second_boot);
     
-    if(hw_second_boot!=1)
+    /*if(hw_second_boot!=1)
     {
         hw_second_boot = 1;
         sys_reboot(SYS_REBOOT_WARM);
-    }
+    }*/
 
     if (!device_is_ready(max30001_dev))
     {
@@ -651,13 +698,13 @@ void hw_init(void)
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
 
-        // Disable ECG and BIOZ by default        
+        // Disable ECG and BIOZ by default
         hw_max30001_ecg_enable(false);
         hw_max30001_bioz_enable(false);
     }
 
     k_sleep(K_MSEC(1000));
-    
+
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
     {
@@ -738,12 +785,13 @@ void hw_init(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    npm_fuel_gauge_update(charger);
-    // fs_module_init();
+    npm_fuel_gauge_update(charger, vbus_connected);
+    
+    fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
 
-    INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler);
+    INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler, NULL);
 
     // pm_device_runtime_put(w25_flash_dev);
 
@@ -769,6 +817,8 @@ void hw_init(void)
 
     k_sem_give(&sem_disp_boot_complete);
     k_sem_give(&sem_hw_thread_start);
+
+    LOG_INF("HW Init complete");
 
     // init_settings();
 
@@ -800,7 +850,7 @@ void hw_thread(void)
 
     for (;;)
     {
-        npm_fuel_gauge_update(charger);
+        npm_fuel_gauge_update(charger, vbus_connected);
 
         rtc_get_time(rtc_dev, &sys_time);
         zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));

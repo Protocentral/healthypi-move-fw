@@ -15,6 +15,7 @@
 /*Configuration data struct.*/
 struct sh8601_config
 {
+  struct mipi_dbi_config dbi_config;
   struct spi_dt_spec spi;
   struct gpio_dt_spec reset;
   uint8_t pixel_format;
@@ -27,7 +28,7 @@ struct sh8601_config
 #define SH8601_MAXWIDTH 480  ///< SH8601 max TFT width
 #define SH8601_MAXHEIGHT 480 ///< SH8601 max TFT width
 
-#define SH8601_RST_DELAY 200    ///< delay ms wait for reset finish
+#define SH8601_RST_DELAY 250    ///< delay ms wait for reset finish
 #define SH8601_SLPIN_DELAY 120  ///< delay ms wait for sleep in finish
 #define SH8601_SLPOUT_DELAY 120 ///< delay ms wait for sleep out finish
 

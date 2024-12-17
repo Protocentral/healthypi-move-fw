@@ -8,6 +8,9 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <dt-bindings/regulator/npm1300.h>
 
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+#include <zephyr/dt-bindings/lvgl/lvgl.h>
+
 / {
 
 	chosen {
@@ -16,9 +19,10 @@
 		zephyr,uart-mcumgr = &uart0;
 		zephyr,bt-mon-uart = &uart0;
 		zephyr,bt-c2h-uart = &uart0;
-		zephyr,bt-hci-ipc = &ipc0;
+		zephyr,bt-hci = &bt_hci_ipc0;
 		nordic,802154-spinel-ipc = &ipc0;
 		zephyr,ieee802154 = &ieee802154;
+
 		zephyr,display= &sh8601;
 		nordic,pm-ext-flash = &w25q01jv;
 	};
@@ -52,6 +56,38 @@
 		};
 	};
 
+	gpio_fwd: nrf-gpio-forwarder {
+		compatible = "nordic,nrf-gpio-forwarder";
+		status = "okay";
+		uart {
+			gpios = <&gpio1 1 0>, <&gpio1 0 0>, <&gpio0 10 0>;
+		};
+	};
+
+	/*mipi_dbi {
+		compatible = "zephyr,mipi-dbi-spi";
+		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		//dc-gpios = <&gpio0 12 GPIO_ACTIVE_HIGH>;
+		spi-dev = <&spi4>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	
+		sh8601: sh8601@0 {
+			compatible = "sitronix,sh8601";
+			spi-max-frequency = <DT_FREQ_M(33)>;
+			reg = <0>;
+			reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+			//<&gpio0 29 GPIO_ACTIVE_HIGH>;
+			width = <390>;
+			height = <390>;
+			pixel-format = <0>;
+			display-inversion;
+			rotation = <0>;
+			status = "okay";
+			//zephyr,deferred-init;
+		};
+	};*/
+
 	aliases {
 		max30001 = &max30001;
 		max32664d = &max32664d;
@@ -59,9 +95,15 @@
 		max32664c = &max32664c;
 		rtc = &rtc_rv;
 	};
+
+	pointer {
+		compatible = "zephyr,lvgl-pointer-input";
+		input = <&chsc5816>;
+		swap-xy;
+	};
 };
 
-
+/* 
 / {
 	lvgl_pointer_input: lvgl_pointer {
 		compatible = "zephyr,lvgl-pointer-input";
@@ -70,6 +112,23 @@
 		swap-xy;
 		//invert-x;
 	};
+};
+*/
+
+&vregmain {
+	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
+&vregradio {
+	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
+&vregh {
+	status = "okay";
+};
+
+&uicr {
+	nfct-pins-as-gpios;
 };
 
 &gpiote {
@@ -336,32 +395,11 @@
 	compatible = "nordic,nrf-spim";
 	status = "okay";
 
-	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;    // For Device
-	//cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
-
-	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
 	pinctrl-1 = <&spi4_sleep>;
 	pinctrl-names = "default", "sleep";
 	clock-frequency = <DT_FREQ_M(32)>;
-
-
-	/*gc9a01: gc9a01@0 {
-		compatible = "waveshare,gc9a01a";
-		spi-max-frequency = <DT_FREQ_M(45)>;
-		reg = <0>;
-		cmd-data-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
-		//bl-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
-		backlight-gpios = <&pwm_led0>;
-		//backlight-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;//<&pwm_led0>;
-		width = <240>;
-		height = <240>;
-		pixel-format = <0>;//<GC9A01A_PIXEL_FORMAT_RGB565>;
-		display-inversion;
-		rotation = <0>;
-		status = "okay";
-	};*/
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;    // For Device
 
 	sh8601: sh8601@0 {
 		compatible = "sitronix,sh8601";
@@ -372,41 +410,10 @@
 		width = <390>;
 		height = <390>;
 		pixel-format = <0>;
-		display-inversion;
+		//display-inversion;
 		rotation = <0>;
 		status = "okay";
 		//zephyr,deferred-init;
-	};
-};
-
-&flash0 {
-
-	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		boot_partition: partition@0 {
-			label = "mcuboot";
-			reg = <0x00000000 0x00010000>;
-		};
-		slot0_partition: partition@10000 {
-			label = "image-0";
-		};
-		slot0_ns_partition: partition@50000 {
-			label = "image-0-nonsecure";
-		};
-		slot1_partition: partition@80000 {
-			label = "image-1";
-		};
-		slot1_ns_partition: partition@c0000 {
-			label = "image-1-nonsecure";
-		};
-		/* 0xf0000 to 0xf7fff reserved for TF-M partitions */
-		storage_partition: partition@f8000 {
-			label = "storage";
-			reg = <0x000f8000 DT_SIZE_K(20)>;
-		};
 	};
 };
 
@@ -428,26 +435,5 @@ zephyr_udc0: &usbd {
 	};
 };
 
-/ {
-
-	reserved-memory {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges;
-
-		sram0_image: image@20000000 {
-			/* Zephyr image(s) memory */
-		};
-
-		sram0_s: image_s@20000000 {
-			/* Secure image memory */
-		};
-
-		sram0_ns: image_ns@20040000 {
-			/* Non-Secure image memory */
-		};
-	};
-};
-
-/* Include partition configuration file */
-#include "nrf5340_cpuapp_partition_conf.dtsi"
+/* Include default memory partition configuration file */
+#include <common/nordic/nrf5340_cpuapp_partition.dtsi>
