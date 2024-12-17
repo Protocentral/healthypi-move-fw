@@ -682,11 +682,11 @@ void hw_init(void)
 
     //printk("hw_second_boot: %d\n", hw_second_boot);
     
-    if(hw_second_boot!=1)
+    /*if(hw_second_boot!=1)
     {
         hw_second_boot = 1;
         sys_reboot(SYS_REBOOT_WARM);
-    }
+    }*/
 
     if (!device_is_ready(max30001_dev))
     {
