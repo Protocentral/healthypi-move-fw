@@ -661,7 +661,7 @@ void display_screens_thread(void)
     }*/
     
     display_blanking_off(display_dev);
-    hpi_disp_set_brightness(100);
+    hpi_disp_set_brightness(50);
 
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
