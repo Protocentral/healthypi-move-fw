@@ -80,7 +80,7 @@ int sh8601_transmit_data(const struct device *dev, const void *tx_data,
 	struct spi_buf tx_buf[3];
 	struct spi_buf_set tx_bufs = {.buffers = tx_buf, .count = 2U};
 
-	//printk("Transmitting data: %d", tx_len);
+	printk("Transmitting data: %d", tx_len);
 
 	// Send Pre command
 	uint8_t pre_cmd[4] = {0x02, 00};
@@ -461,7 +461,7 @@ static int sh8601_init(const struct device *dev)
 
 	data->device_in_sleep = false;
 
-	LOG_INF("Display SH8601 initialization done !");
+	LOG_INF("Display SH8601 init!");
 
 	k_msleep(200);
 
@@ -505,8 +505,8 @@ static int sh8601_write(const struct device *dev, const uint16_t x,
 						const struct display_buffer_descriptor *desc,
 						const void *buf)
 {
-	// printk("Writing %dx%d (w,h) @ %dx%d (x,y)", desc->width, desc->height,
-	//		x, y);
+	LOG_DBG("Writing %dx%d (w,h) @ %dx%d (x,y)", desc->width, desc->height,
+			x, y);
 	int r = sh8601_set_mem_area(dev, x, y, desc->width, desc->height);
 	if (r < 0)
 	{

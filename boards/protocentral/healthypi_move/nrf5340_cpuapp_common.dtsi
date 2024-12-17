@@ -60,7 +60,7 @@
 		compatible = "nordic,nrf-gpio-forwarder";
 		status = "okay";
 		uart {
-			gpios = <&gpio1 1 0>, <&gpio1 0 0>, <&gpio0 11 0>, <&gpio0 10 0>;
+			gpios = <&gpio1 1 0>, <&gpio1 0 0>, <&gpio0 10 0>;
 		};
 	};
 
@@ -391,20 +391,15 @@
 	};
 };
 
-
-
 &spi4 {
 	compatible = "nordic,nrf-spim";
 	status = "okay";
 
-	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;    // For Device
-	//cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>; // For DK
-
-	//<&gpio1 4 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
 	pinctrl-1 = <&spi4_sleep>;
 	pinctrl-names = "default", "sleep";
 	clock-frequency = <DT_FREQ_M(32)>;
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;    // For Device
 
 	sh8601: sh8601@0 {
 		compatible = "sitronix,sh8601";

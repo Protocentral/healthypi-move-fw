@@ -661,7 +661,7 @@ void display_screens_thread(void)
     }*/
     
     display_blanking_off(display_dev);
-    hpi_disp_set_brightness(50);
+    hpi_disp_set_brightness(100);
 
     k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
@@ -906,7 +906,7 @@ void display_screens_thread(void)
         //lv_task_handler();
         //k_msleep(disp_thread_refresh_int_ms);
 
-        //k_msleep(30);
+       // k_msleep(30);
         k_msleep(lv_task_handler());
     }
 }
