@@ -649,17 +649,6 @@ void display_screens_thread(void)
     //  Init all styles globally
     display_init_styles();
 
-    /*touch_indev = lv_indev_get_next(NULL);
-    while (touch_indev)
-    {
-        if (lv_indev_get_type(touch_indev) == LV_INDEV_TYPE_POINTER)
-        {
-
-            break;
-        }
-        touch_indev = lv_indev_get_next(touch_indev);
-    }*/
-    
     display_blanking_off(display_dev);
     hpi_disp_set_brightness(50);
 

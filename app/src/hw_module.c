@@ -786,7 +786,8 @@ void hw_init(void)
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
     npm_fuel_gauge_update(charger, vbus_connected);
-    // fs_module_init();
+    
+    fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
 
