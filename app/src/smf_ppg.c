@@ -32,7 +32,7 @@ static void st_ppg_samp_active_entry(void *o)
     LOG_DBG("PPG SM Active Entry");
 
     //hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AGC, MAX32664C_ALGO_MODE_CONT_HRM);
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AGC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
 }
 
 static void st_ppg_samp_active_run(void *o)

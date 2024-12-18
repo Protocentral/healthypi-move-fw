@@ -2,11 +2,6 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
-# Workaround for child image not working
-set(hci_ipc_CONFIG_LOG n)
-set(hci_ipc_CONFIG_SERIAL n)
-#set(mcuboot_CONFIG_BOOT_SIGNATURE_KEY_FILE \"${CMAKE_CURRENT_SOURCE_DIR}/custom_key_dir/custom_priv.pem\")
-
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(healthypi_move)
