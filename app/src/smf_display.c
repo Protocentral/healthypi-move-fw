@@ -96,3 +96,6 @@ void smf_display_thread(void)
         k_msleep(100);
     }
 }
+
+#define SMF_DISPLAY_THREAD_STACK_SIZE 1024
+#d
