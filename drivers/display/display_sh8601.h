@@ -12,6 +12,8 @@
 #include <zephyr/drivers/spi.h>
 #include <zephyr/sys/util.h>
 
+#include <zephyr/drivers/mipi_dbi.h>
+
 /*Configuration data struct.*/
 struct sh8601_config
 {
@@ -170,5 +172,7 @@ static const uint8_t sh8601_regs[] =
 */
 int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd,
                      const void *tx_data, size_t tx_len);
+
+int sh8601_reinit(const struct device *dev);
 
 #endif

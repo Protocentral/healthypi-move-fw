@@ -468,6 +468,11 @@ static int sh8601_init(const struct device *dev)
 	return 0;
 }
 
+int sh8601_reinit(const struct device *dev)
+{
+	sh8601_init(dev);
+}
+
 static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
 							   const uint16_t y, const uint16_t w,
 							   const uint16_t h)

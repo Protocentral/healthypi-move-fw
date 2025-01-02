@@ -406,7 +406,7 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    //LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
