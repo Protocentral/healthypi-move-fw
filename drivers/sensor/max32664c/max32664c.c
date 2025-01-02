@@ -406,7 +406,7 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    //LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
@@ -483,8 +483,8 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // EN SCD
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
-        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x12, 0x34, 0x00);
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x01);
+        m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x42, 0x30, 0x00);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x01, 0x01);
         m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
         // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x74, 0x50, 0x00);
@@ -506,7 +506,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
         // Set AGC target PD current
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
+        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0xFF);
 
         // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
@@ -730,10 +730,6 @@ static int max32664c_pm_action(const struct device *dev,
 }
 #endif /* CONFIG_PM_DEVICE */
 
-/*
- * Main instantiation macro, which selects the correct bus-specific
- * instantiation macros for the instance.
- */
 #define MAX32664C_DEFINE(inst)                                      \
     static struct max32664c_data max32664c_data_##inst;             \
     static const struct max32664c_config max32664c_config_##inst =  \

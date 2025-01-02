@@ -83,7 +83,7 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 void hpi_ecg_disp_update_hr(int hr);
 
 // PPG screen functions
-void hpi_disp_ppg_draw_plotPPG(int32_t *data_ppg, int num_samples);
+void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_sensor_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);
 void hpi_ppg_disp_update_spo2(int spo2);
 void hpi_ppg_disp_update_status(uint8_t status);

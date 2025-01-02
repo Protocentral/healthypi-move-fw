@@ -18,6 +18,8 @@
 #include "sampling_module.h"
 #include "ui/move_ui.h"
 
+#include <display_sh8601.h>
+
 LOG_MODULE_REGISTER(display_module, LOG_LEVEL_DBG);
 
 // LVGL Common Objects
@@ -645,19 +647,22 @@ void display_screens_thread(void)
 
     LOG_DBG("Display device: %s", display_dev->name);
 
-    // draw_scr_boot();
+    sh8601_reinit(display_dev);
+
     //  Init all styles globally
     display_init_styles();
+
+    // draw_scr_boot();
+    lv_task_handler();
 
     display_blanking_off(display_dev);
     hpi_disp_set_brightness(50);
 
-    k_sem_take(&sem_disp_boot_complete, K_FOREVER);
+    // k_sem_take(&sem_disp_boot_complete, K_FOREVER);
 
-    draw_scr_home(SCROLL_NONE);
+    // draw_scr_home(SCROLL_NONE);
 
-     lv_task_handler();
-    // draw_scr_ppg(SCROLL_RIGHT);
+    draw_scr_ppg(SCROLL_RIGHT);
     //  draw_scr_today(SCROLL_NONE);
     //  draw_scr_ecg(SCROLL_RIGHT);
     // draw_scr_bpt(SCROLL_RIGHT);
@@ -675,7 +680,7 @@ void display_screens_thread(void)
             {
                 if (curr_screen == SCR_PLOT_PPG)
                 {
-                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample.raw_green, ppg_sensor_sample.ppg_num_samples);
+                    hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
                     hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
                     if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
@@ -892,10 +897,10 @@ void display_screens_thread(void)
             hpi_display_sleep_off();
         }
 
-        //lv_task_handler();
-        //k_msleep(disp_thread_refresh_int_ms);
+        // lv_task_handler();
+        // k_msleep(disp_thread_refresh_int_ms);
 
-       // k_msleep(30);
+        // k_msleep(30);
         k_msleep(lv_task_handler());
     }
 }
