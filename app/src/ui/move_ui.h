@@ -57,6 +57,8 @@ enum hpi_disp_subscreens
     SUBSCR_BPT_MEASURE,
 };
 
+void display_init_styles(void);
+
 /******** UI Function Prototypes ********/
 
 void draw_scr_boot(void);

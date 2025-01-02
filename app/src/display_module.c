@@ -169,7 +169,7 @@ static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
     }
 }
 
-void display_init_styles()
+void display_init_styles(void)
 {
     /*Initialize the styles*/
     lv_style_init(&style_btn);
@@ -901,7 +901,7 @@ void display_screens_thread(void)
         // k_msleep(disp_thread_refresh_int_ms);
 
         // k_msleep(30);
-        k_msleep(lv_task_handler());
+        //k_msleep(lv_task_handler());
     }
 }
 
@@ -960,4 +960,4 @@ ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 #define DISPLAY_SCREENS_THREAD_PRIORITY 7
 // Power Cost - 80 uA
 
-K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);
+//K_THREAD_DEFINE(display_screens_thread_id, DISPLAY_SCREENS_THREAD_STACKSIZE, display_screens_thread, NULL, NULL, NULL, DISPLAY_SCREENS_THREAD_PRIORITY, 0, 0);
