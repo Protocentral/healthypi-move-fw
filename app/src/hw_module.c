@@ -54,6 +54,8 @@
 
 #include "nrf_fuel_gauge.h"
 
+#include "display_sh8601.h"
+
 LOG_MODULE_REGISTER(hw_module);
 char curr_string[40];
 
@@ -667,6 +669,8 @@ void hw_init(void)
         }
     }
 
+    sh8601_reinit(display_dev);
+
     // device_init(display_dev);
     //  k_sleep(K_MSEC(1000));
     // hw_pwr_display_enable();
@@ -713,6 +717,8 @@ void hw_init(void)
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(1000));
+
+    device_init(max32664c_dev);
 
     if (!device_is_ready(max32664c_dev))
     {
@@ -815,10 +821,10 @@ void hw_init(void)
         k_sem_give(&sem_ppg_finger_thread_start);
     }
 
+    LOG_INF("HW Init complete");
+
     k_sem_give(&sem_disp_boot_complete);
     k_sem_give(&sem_hw_thread_start);
-
-    LOG_INF("HW Init complete");
 
     // init_settings();
 

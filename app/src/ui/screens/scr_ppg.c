@@ -42,43 +42,88 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
+#define PPG_SIGNAL_RED 0
+#define PPG_SIGNAL_IR 1
+#define PPG_SIGNAL_GREEN 2
+
+uint8_t ppg_disp_signal_type = PPG_SIGNAL_RED;
+
+LOG_MODULE_REGISTER(ppg_scr);
+
+static lv_obj_t *btn_settings_close;
+
+static lv_obj_t *msg_box_settings;
+
+static void event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *obj = lv_event_get_target(e);
+    if (code == LV_EVENT_VALUE_CHANGED)
+    {
+        char buf[32];
+        lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
+        LOG_DBG("Option: %s", buf);
+    }
+}
+
+static void btn_close_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        lv_msgbox_close(msg_box_settings);
+    }
+}
+
 static void hpi_disp_ppg_settings_open(void)
 {
-    lv_obj_t * setting = lv_msgbox_create(scr_ppg,"PPG Settings","Message",NULL,true);
-    lv_obj_set_style_clip_corner(setting, true, 0);
+    msg_box_settings = lv_msgbox_create(scr_ppg, "PPG Settings", NULL, NULL, false);
+    lv_obj_set_style_clip_corner(msg_box_settings, true, 0);
 
-    lv_obj_set_size(setting, 320, 320);
-    lv_obj_center(setting);
+    // /lv_obj_set_size(msg_box_settings, 320, 320);
+    lv_obj_center(msg_box_settings);
 
-    lv_obj_t * content = lv_msgbox_get_content(setting);
+    lv_obj_t *content = lv_msgbox_get_content(msg_box_settings);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(content, -1, LV_PART_SCROLLBAR);
 
-    lv_obj_t * cont_brightness = lv_obj_create(content);
-    lv_obj_set_size(cont_brightness, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_brightness, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_brightness, LV_FLEX_ALIGN_CENTER,  LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t *lbl_plot_signal = lv_label_create(content);
+    lv_label_set_text(lbl_plot_signal, "Plot Signal : ");
 
-    lv_obj_t * lb_brightness = lv_label_create(cont_brightness);
-    lv_label_set_text(lb_brightness, "Brightness : ");
-    lv_obj_t * slider_brightness = lv_slider_create(cont_brightness);
-    lv_obj_set_width(slider_brightness, lv_pct(100));
-    lv_slider_set_value(slider_brightness, 50, LV_ANIM_OFF);
+    /*Create a normal drop down list*/
+    lv_obj_t *dd = lv_dropdown_create(content);
+    lv_dropdown_set_options(dd, "Red\n"
+                                "IR\n"
+                                "Green");
 
-    lv_obj_t * cont_speed = lv_obj_create(content);
+    lv_obj_align(dd, LV_ALIGN_TOP_MID, 0, 20);
+    lv_obj_add_event_cb(dd, event_handler, LV_EVENT_ALL, NULL);
+
+    /*lv_obj_t *cont_speed = lv_obj_create(content);
     lv_obj_set_size(cont_speed, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_speed, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_speed, LV_FLEX_ALIGN_CENTER,  LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(cont_speed, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t * lb_speed = lv_label_create(cont_speed);
+    lv_obj_t *lb_speed = lv_label_create(cont_speed);
     lv_label_set_text(lb_speed, "Speed : ");
-    lv_obj_t * slider_speed = lv_slider_create(cont_speed);
+    lv_obj_t *slider_speed = lv_slider_create(cont_speed);
     lv_obj_set_width(slider_speed, lv_pct(100));
     lv_slider_set_value(slider_speed, 80, LV_ANIM_OFF);
+    */
+
+    btn_settings_close = lv_btn_create(content);
+    lv_obj_add_event_cb(btn_settings_close, btn_close_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align(btn_settings_close, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_set_height(btn_settings_close, 80);
+
+    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_settings_close);
+    lv_label_set_text(label_btn_bpt_measure, "Close");
+    lv_obj_center(label_btn_bpt_measure);
 }
 
-static void ppg_settings_button_cb(lv_event_t * e)
+static void ppg_settings_button_cb(lv_event_t *e)
 {
     hpi_disp_ppg_settings_open();
 }
@@ -87,7 +132,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
 {
     scr_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    //draw_bg(scr_ppg);
+    // draw_bg(scr_ppg);
     draw_header_minimal(scr_ppg, 10);
 
     // Bottom signal label
@@ -155,11 +200,11 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(label_spo2_cap, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, -5);
     lv_obj_add_style(label_spo2_cap, &style_lbl_red, 0);
 
-    lv_obj_t *btn_settings  = lv_btn_create(scr_ppg);
+    lv_obj_t *btn_settings = lv_btn_create(scr_ppg);
     lv_obj_set_width(btn_settings, 80);
     lv_obj_set_height(btn_settings, 80);
     lv_obj_set_x(btn_settings, 0);
-    lv_obj_align_to(btn_settings, NULL, LV_ALIGN_CENTER, 0, 120);
+    lv_obj_align_to(btn_settings, NULL, LV_ALIGN_CENTER, 0, 150);
     lv_obj_add_flag(btn_settings, LV_OBJ_FLAG_SCROLL_ON_FOCUS); /// Flags
     lv_obj_clear_flag(btn_settings, LV_OBJ_FLAG_SCROLLABLE);    /// Flags
     lv_obj_set_style_radius(btn_settings, 100, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -260,7 +305,7 @@ static void hpi_ppg_disp_add_samples(int num_samples)
 
 static void hpi_ppg_disp_do_set_scale(int disp_window_size)
 {
-    if (gx >= (disp_window_size))
+    if (gx >= (disp_window_size / 4))
     {
         if (chart_ppg_update == true)
             lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
@@ -272,13 +317,14 @@ static void hpi_ppg_disp_do_set_scale(int disp_window_size)
     }
 }
 
-void hpi_disp_ppg_draw_plotPPG(int32_t *data_ppg, int num_samples)
+void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_sensor_data_t ppg_sensor_sample)
 {
+    uint32_t *data_ppg = ppg_sensor_sample.raw_green;
+
     if (chart_ppg_update == true)
     {
-        for (int i = 0; i < num_samples; i++)
+        for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
         {
-
             if (data_ppg[i] < y_min_ppg)
             {
                 y_min_ppg = data_ppg[i];
