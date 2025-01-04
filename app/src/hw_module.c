@@ -705,7 +705,7 @@ void hw_init(void)
     regulator_enable(ldsw_sens_1_8);
     //regulator_disable(ldsw_sens_1_8);
 
-    k_sleep(K_MSEC(100));
+    
 
     // device_init(display_dev);
     // k_sleep(K_MSEC(100));
@@ -785,6 +785,7 @@ void hw_init(void)
     }
 
     k_sleep(K_MSEC(1000));
+    device_init(max32664d_dev);
 
     if (!device_is_ready(max32664d_dev))
     {

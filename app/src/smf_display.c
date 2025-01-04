@@ -17,6 +17,7 @@ K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
+static bool hpi_boot_all_passed = true;
 
 static const struct smf_state display_states[];
 
@@ -107,7 +108,7 @@ static void st_display_splash_run(void *o)
     if ((k_uptime_get_32() - splash_scr_start_time) > 2000)
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
-    }    
+    }
 }
 
 static void st_display_boot_entry(void *o)
@@ -124,15 +125,26 @@ static void st_display_boot_run(void *o)
 {
     struct hpi_boot_msg_t boot_msg;
 
-    if(k_msgq_get(&q_disp_boot_msg, &boot_msg, K_NO_WAIT) == 0)
+    if (k_msgq_get(&q_disp_boot_msg, &boot_msg, K_NO_WAIT) == 0)
     {
+        if(boot_msg.status == false)
+        {
+            hpi_boot_all_passed = false;
+        }
         scr_boot_add_status(boot_msg.msg, boot_msg.status);
     }
 
     // Stay in this state until the boot is complete
     if (k_sem_take(&sem_disp_boot_complete, K_NO_WAIT) == 0)
     {
-        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+        if(hpi_boot_all_passed)
+        {
+            smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+        }
+        else
+        {
+            // smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
+        }
     }
     // LOG_DBG("Display SM Boot Run");
 }
