@@ -37,6 +37,19 @@ static bool m_disp_batt_charging = false;
 static struct rtc_time m_disp_sys_time;
 static uint8_t m_disp_hr = 0;
 
+extern int curr_screen;
+int scr_ppg_hr_spo2_refresh_counter = 0;
+extern uint16_t disp_thread_refresh_int_ms;
+
+int batt_refresh_counter = 0;
+int hr_refresh_counter = 0;
+int time_refresh_counter = 0;
+int m_disp_inact_refresh_counter = 0;
+
+extern struct k_sem sem_crown_key_pressed;
+
+static uint32_t splash_scr_start_time = 0;
+
 // Externs
 extern const struct device *display_dev;
 
@@ -72,7 +85,7 @@ static void st_display_init_entry(void *o)
 
     sh8601_reinit(display_dev);
 
-    //  Init all styles globally
+    // Init all styles globally
     display_init_styles();
 
     display_blanking_off(display_dev);
@@ -85,17 +98,16 @@ static void st_display_splash_entry(void *o)
 {
     LOG_DBG("Display SM Splash Entry");
     draw_scr_splash();
+    splash_scr_start_time = k_uptime_get_32();
 }
 
 static void st_display_splash_run(void *o)
 {
-    // Stay in this state until the boot is complete
-    // if (k_sem_take(&sem_disp_ready, K_NO_WAIT) == 0)
-    //{
-    //k_msleep(5000);
-    smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
-    //}
-    // LOG_DBG("Display SM Splash Run");
+    // Stay in this state for 2 seconds
+    if ((k_uptime_get_32() - splash_scr_start_time) > 2000)
+    {
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
+    }    
 }
 
 static void st_display_boot_entry(void *o)
@@ -133,19 +145,8 @@ static void st_display_boot_exit(void *o)
 static void st_display_active_entry(void *o)
 {
     LOG_DBG("Display SM Active Entry");
-    draw_scr_ppg(SCROLL_RIGHT);
+    draw_scr_home(SCROLL_RIGHT);
 }
-
-extern int curr_screen;
-int scr_ppg_hr_spo2_refresh_counter = 0;
-extern uint16_t disp_thread_refresh_int_ms;
-
-int batt_refresh_counter = 0;
-int hr_refresh_counter = 0;
-int time_refresh_counter = 0;
-int m_disp_inact_refresh_counter = 0;
-
-extern struct k_sem sem_crown_key_pressed;
 
 static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sample)
 {
