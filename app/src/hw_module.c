@@ -30,7 +30,7 @@
 #include <nrfx_spim.h>
 
 #include "max30001.h"
-#include "max32664.h"
+#include "max32664d.h"
 
 #include "bmi323_hpi.h"
 
@@ -414,13 +414,13 @@ static int usb_init()
 double read_temp_f(void)
 {
     struct sensor_value temp_sample;
-   
+
     sensor_sample_fetch(max30208_dev);
     sensor_channel_get(max30208_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
     // last_read_temp_value = temp_sample.val1;
     double temp_c = (double)temp_sample.val1 * 0.005;
     double temp_f = (temp_c * 1.8) + 32.0;
-    //printk("Temp: %.2f F\n", temp_f);
+    // printk("Temp: %.2f F\n", temp_f);
     return temp_f;
 }
 
@@ -596,13 +596,12 @@ static void event_callback(const struct device *dev, struct gpio_callback *cb, u
 static void hw_add_boot_msg(char *msg, bool status)
 {
     struct hpi_boot_msg_t boot_msg = {
-        
+
         .status = status,
     };
     strcpy(boot_msg.msg, msg);
 
     k_msgq_put(&q_disp_boot_msg, &boot_msg, K_NO_WAIT);
-
 }
 
 void hw_init(void)
@@ -622,7 +621,7 @@ void hw_init(void)
     if (!device_is_ready(pmic))
     {
         LOG_ERR("Pmic device not ready");
-        
+
         return 0;
     }
 
@@ -632,7 +631,7 @@ void hw_init(void)
         // return 0;
     }
 
-    //sh8601_reinit(display_dev);
+    // sh8601_reinit(display_dev);
 
     if (!device_is_ready(charger))
     {
@@ -644,7 +643,9 @@ void hw_init(void)
         LOG_ERR("Could not initialise fuel gauge.\n");
         hw_add_boot_msg("PMIC", false);
         // return 0;
-    } else {
+    }
+    else
+    {
         hw_add_boot_msg("PMIC", true);
     }
 
@@ -676,7 +677,6 @@ void hw_init(void)
     {
         LOG_ERR("Error: Accelerometer device not ready");
         hw_add_boot_msg("BMI323", false);
-
     }
     else
     {
@@ -696,23 +696,19 @@ void hw_init(void)
         }
     }
 
-    
-
     // device_init(display_dev);
     //  k_sleep(K_MSEC(1000));
     // hw_pwr_display_enable();
 
     regulator_enable(ldsw_sens_1_8);
-    //regulator_disable(ldsw_sens_1_8);
-
-    
+    // regulator_disable(ldsw_sens_1_8);
 
     // device_init(display_dev);
     // k_sleep(K_MSEC(100));
     device_init(touch_dev);
 
-    //printk("hw_second_boot: %d\n", hw_second_boot);
-    
+    // printk("hw_second_boot: %d\n", hw_second_boot);
+
     /*if(hw_second_boot!=1)
     {
         hw_second_boot = 1;
@@ -761,15 +757,52 @@ void hw_init(void)
         LOG_INF("MAX32664C device present!");
         max32664c_device_present = true;
 
-        struct sensor_value mode_get;
-        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_IS_APP_PRESENT, &mode_get);
+        struct sensor_value ver_get;
+        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_APP_VER, &ver_get);
+        LOG_INF("MAX32664C App Version: %d.%d", ver_get.val1, ver_get.val2);
 
-        LOG_INF("MAX32664C App Present: %d", mode_get.val1);
-        
+        struct sensor_value sensor_ids_get;
+        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_SENSOR_IDS, &sensor_ids_get);
+
+        if (sensor_ids_get.val1 != MAX32664C_AFE_ID)
+        {
+            LOG_ERR("MAX32664C AFE Not Present");
+            hw_add_boot_msg("\t AFE", false);
+        }
+        else
+        {
+            LOG_INF("MAX32664C AFE OK: %x", sensor_ids_get.val1);
+            hw_add_boot_msg("\t AFE", true);
+        }
+
+        if (sensor_ids_get.val2 != MAX32664C_ACC_ID)
+        {
+            LOG_ERR("MAX32664C Accel Not Present");
+            hw_add_boot_msg("\t Acc", false);
+        }
+        else
+        {
+            LOG_INF("MAX32664C Accel OK: %x", sensor_ids_get.val2);
+            hw_add_boot_msg("\t Acc", true);
+        }
+
+        if (ver_get.val1 < MAX32664C_LATEST_APP_VER1)
+        {
+            LOG_INF("App update required");
+
+            struct sensor_value mode_set;
+            mode_set.val1 = 1;
+            sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
+        }
+
+        // Moved all start commands to SMF PPG
+
+        // LOG_INF("MAX32664C App Present: %d", mode_get.val1);
+
         // To force bootloader mode
-        //mode_get.val1 = 8;
+        // mode_get.val1 = 8;
 
-        if (mode_get.val1 == 8)
+        /*if (mode_get.val1 == 8)
         {
             LOG_INF("MAX32664C App not present. Starting bootloader mode");
             struct sensor_value mode_set;
@@ -780,8 +813,8 @@ void hw_init(void)
         {
             LOG_INF("MAX32664C App present");
 
-            // Moved all start commands to SMF PPG
-        }
+
+        }*/
     }
 
     k_sleep(K_MSEC(1000));
@@ -823,12 +856,11 @@ void hw_init(void)
         hw_add_boot_msg("MAX30208", true);
     }
 
-
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
     npm_fuel_gauge_update(charger, vbus_connected);
-    
+
     fs_module_init();
 
     pm_device_runtime_get(gpio_keys_dev);
@@ -880,8 +912,6 @@ static uint32_t acc_get_steps(void)
     sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_X, &steps);
     return (uint32_t)steps.val1;
 }
-
-
 
 void hw_thread(void)
 {

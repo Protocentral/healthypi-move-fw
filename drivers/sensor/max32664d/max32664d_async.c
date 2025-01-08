@@ -4,7 +4,7 @@
 
 LOG_MODULE_REGISTER(MAX32664_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
-#include "max32664.h"
+#include "max32664d.h"
 
 static int max32664_async_calib_fetch(const struct device *dev, uint8_t calib_vector[824])
 {

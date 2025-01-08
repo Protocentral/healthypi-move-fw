@@ -487,7 +487,7 @@ ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
-    printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
+    //printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 

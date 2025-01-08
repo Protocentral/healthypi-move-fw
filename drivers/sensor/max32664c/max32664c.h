@@ -15,6 +15,12 @@
 
 #define MAX32664C_DEFAULT_CMD_DELAY 10
 
+#define MAX32664C_LATEST_APP_VER1 13
+#define MAX32664C_LATEST_APP_VER2 31
+
+#define MAX32664C_AFE_ID 0x25
+#define MAX32664C_ACC_ID 0x1B
+
 uint8_t max32664c_read_hub_status(const struct device *dev);
 void max32664c_do_enter_bl(const struct device *dev);
 //int m_read_op_mode(const struct device *dev);
@@ -56,7 +62,8 @@ enum max32664c_attribute
 	MAX32664C_ATTR_DO_FW_UPDATE = 0x09,
 
 	MAX32664C_ATTR_IS_APP_PRESENT = 0x10,
-
+	MAX32664C_ATTR_APP_VER=0x11,
+	MAX32664C_ATTR_SENSOR_IDS=0x12,
 };
 
 struct max32664c_config
@@ -71,8 +78,6 @@ struct max32664c_data
     uint8_t num_channels;
     uint8_t num_samples;
 
-	uint8_t hub_ver[4];
-
     uint32_t samples_led_ir[128];
     uint32_t samples_led_red[128];
 
@@ -84,6 +89,11 @@ struct max32664c_data
     uint8_t hr_above_resting;
 
     uint8_t calib_vector[824];
+
+	// Chip info	
+	uint8_t hub_ver[4];
+	uint8_t max86141_id;
+	uint8_t accel_id;
 };
 
 // Async API types

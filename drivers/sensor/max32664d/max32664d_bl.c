@@ -8,7 +8,7 @@
 //  #include "max32664c_msbl.h"
 //  #include "max32664d_msbl.h"
 
-#include "max32664.h"
+#include "max32664d.h"
 
 LOG_MODULE_REGISTER(MAX32664_BL, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -155,7 +155,7 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 
 	struct i2c_msg max32664_i2c_msg[num_msgs];
 
-	printk("Num Msgs: %d\n", num_msgs);
+	LOG_DBG("Num Msgs: %d\n", num_msgs);
 
 	max32664_i2c_msg[0].buf = cmd_wr_buf; // fw_data_wr_buf[0];
 	max32664_i2c_msg[0].len = 2;
@@ -170,7 +170,7 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 		max32664_i2c_msg[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
 		max32664_i2c_msg[i + 1].len = msg_len;
 		max32664_i2c_msg[i + 1].flags = I2C_MSG_WRITE;
-		printk("Msg %d: L %d\n", (i + 1), max32664_i2c_msg[i + 1].len);
+		LOG_DBG("Msg %d: L %d\n", (i + 1), max32664_i2c_msg[i + 1].len);
 
 		// Dump max32664_i2c_msg[i + 1].buf
 		//for (int j = 0; j < max32664_i2c_msg[i + 1].len; j++)

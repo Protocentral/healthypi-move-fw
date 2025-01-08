@@ -24,6 +24,16 @@ extern lv_style_t style_lbl_white_small;
 
 static lv_obj_t * ta_boot;
 
+static void scr_boot_proceed_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+
+    }
+}
+
 void draw_scr_boot(void)
 {
     scr_boot = lv_obj_create(NULL);
@@ -41,8 +51,18 @@ void draw_scr_boot(void)
     
     //lv_textarea_set_one_line(ta, true);
     lv_obj_align(ta_boot, LV_ALIGN_TOP_MID, 0, 40);
-    lv_obj_set_size(ta_boot, 240, 310);
+    lv_obj_set_size(ta_boot, 240, 260);
     lv_obj_set_style_bg_opa(ta_boot, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+
+    lv_obj_t *btn_proceed = lv_btn_create(scr_boot);
+    lv_obj_add_event_cb(btn_proceed, scr_boot_proceed_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align(btn_proceed, LV_ALIGN_BOTTOM_MID, 0, -30);
+    //lv_obj_set_height(btn_proceed, 80);
+
+    lv_obj_t *label_btn_proceed = lv_label_create(btn_proceed);
+    lv_label_set_text(label_btn_proceed, "Proceed");
+    lv_obj_center(label_btn_proceed);
 
     //lv_obj_add_event_cb(ta, textarea_event_handler, LV_EVENT_READY, ta);
     lv_obj_add_state(ta_boot, LV_STATE_FOCUSED);
