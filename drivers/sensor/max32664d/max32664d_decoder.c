@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "max32664.h"
+#include "max32664d.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(MAX32664_DECODER, CONFIG_SENSOR_LOG_LEVEL);

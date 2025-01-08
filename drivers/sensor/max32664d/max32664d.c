@@ -14,9 +14,9 @@
 //  #include "max32664c_msbl.h"
 //  #include "max32664d_msbl.h"
 
-#include "max32664.h"
+#include "max32664d.h"
 
-LOG_MODULE_REGISTER(MAX32664, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(MAX32664D, CONFIG_SENSOR_LOG_LEVEL);
 
 #define MAX32664_FW_BIN_INCLUDE 0
 

@@ -20,12 +20,12 @@ lv_obj_t *scr_clock;
 extern lv_obj_t *btn_hr_disp;
 extern lv_obj_t *ui_hr_number;
 
-extern lv_obj_t *ui_hour_group;
-extern lv_obj_t *ui_label_hour;
-extern lv_obj_t *ui_label_min;
-extern lv_obj_t *ui_label_date;
+lv_obj_t *ui_hour_group;
+lv_obj_t *ui_label_hour;
+lv_obj_t *ui_label_min;
+lv_obj_t *ui_label_date;
 
-extern lv_obj_t *ui_step_group;
+lv_obj_t *ui_step_group;
 
 extern struct rtc_time global_system_time;
 extern int curr_screen;

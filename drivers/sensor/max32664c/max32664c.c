@@ -12,7 +12,7 @@
 
 #include "max32664c.h"
 
-LOG_MODULE_REGISTER(MAX32664C, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 
 #define CALIBVECTOR_SIZE 827 // Command 3 bytes + 824 bytes of calib vectors
 #define DATE_TIME_VECTOR_SIZE 11
@@ -23,6 +23,8 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_SENSOR_LOG_LEVEL);
 #define DEFAULT_SPO2_C 112.68987
 
 #define MAX32664C_FW_BIN_INCLUDE 0
+
+
 
 static int m_read_op_mode(const struct device *dev)
 {
@@ -62,13 +64,13 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
 
     i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    //k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+    // k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
     i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    //LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -272,7 +274,7 @@ static int max32664c_set_spo2_coeffs(const struct device *dev, float a, float b,
     return 0;
 }
 
-static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3)
+static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t *rsp)
 {
     const struct max32664c_config *config = dev->config;
     uint8_t wr_buf[3];
@@ -298,7 +300,54 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
     LOG_DBG("CMD: %x %x %x | RSP: %x %x %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
 
+    memcpy(rsp, rd_buf, 3);
+
     k_sleep(K_MSEC(10));
+
+    return 0;
+}
+
+static int max32664c_check_sensors(const struct device *dev)
+{
+    LOG_DBG("MAX32664C checking sensors...");
+
+    struct max32664c_data *data = dev->data;
+
+    uint8_t rsp[3] = {0x00, 0x00, 0x00};
+
+    max32664c_do_enter_app(dev);
+
+    // Read MAX86141 WHOAMI
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF, rsp);
+
+    data->max86141_id = rsp[1];
+
+    //LOG_INF("MAX86141 WHOAMI: %x %x %x", rsp[0], rsp[1], rsp[2]);
+
+    if (data->max86141_id != MAX32664C_AFE_ID)
+    {
+        LOG_ERR("MAX86141 WHOAMI failed: %x", data->max86141_id);
+    }
+    else
+    {
+        LOG_DBG("MAX86141 WHOAMI OK: %x", data->max86141_id);
+    }
+
+    // Read Accelerometer WHOAMI
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F, rsp);
+
+    data->accel_id = rsp[1];
+
+    //LOG_INF("Accelerometer WHOAMI: %x %x %x", rsp[0], rsp[1], rsp[2]);
+
+    if (data->accel_id != MAX32664C_ACC_ID)
+    {
+        LOG_ERR("Accelerometer WHOAMI failed: %x", data->accel_id);
+    }
+    else
+    {
+        LOG_DBG("Accelerometer WHOAMI OK: %x", data->accel_id);
+    }
 
     return 0;
 }
@@ -346,17 +395,24 @@ static int max32664c_set_mode_raw(const struct device *dev)
 
     const struct max32664c_config *config = dev->config;
 
+    /*uint8_t rsp[3] = {0x00, 0x00, 0x00};
+
     max32664c_do_enter_app(dev);
 
-    // Read  WHOAMI
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+    // Read MAX86141 WHOAMI
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF, rsp);
+
+    // Read Accelerometer WHOAMI
+    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F, rsp);
+    */
+
+    //max32664c_check_sensors(dev);
 
     // Output mode Raw
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01 , MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Enable accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 200);
@@ -377,13 +433,13 @@ static int max32664c_set_mode_raw(const struct device *dev)
     m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x25, 0xFF, 50);
 
     // Set sequence
-    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x20, 0x21, 50);
+    // m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x20, 0x21, 50);
 
     // Set sequence
-    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x21, 0xA3, 50);
+    // m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x21, 0xA3, 50);
 
     // Set sequence
-    //m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x22, 0x21, 50);
+    // m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x22, 0x21, 50);
 
     k_sleep(K_MSEC(500));
 
@@ -406,7 +462,7 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    //LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    // LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
@@ -420,7 +476,7 @@ static int max32664c_set_mode_scd(const struct device *dev)
 {
     LOG_DBG("MAX32664C entering SCD mode...");
 
-    max32664c_do_enter_app(dev);
+    //max32664c_check_sensors(dev);
 
     // max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
@@ -450,11 +506,9 @@ static int max32664c_set_mode_scd(const struct device *dev)
 
 static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode mode, uint8_t algo_mode)
 {
-    max32664c_do_enter_app(dev);
+    LOG_DBG("MAX32664C entering ALGO mode...");
 
-    // Read  WHOAMI
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF);
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
+    //max32664c_check_sensors(dev);
 
     max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
@@ -577,12 +631,12 @@ static int max32664c_attr_set(const struct device *dev,
     case MAX32664C_ATTR_OP_MODE:
         if (val->val1 == MAX32664C_OP_MODE_ALGO_AEC)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2);//MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
             data->op_mode = MAX32664C_OP_MODE_ALGO_AEC;
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_AGC)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2);// MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
             data->op_mode = MAX32664C_OP_MODE_ALGO_AGC;
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_EXTENDED)
@@ -655,6 +709,14 @@ static int max32664c_attr_get(const struct device *dev,
         val->val1 = max32664c_check_app_present(dev);
         val->val2 = 0;
         break;
+    case MAX32664C_ATTR_APP_VER:
+        val->val1 = data->hub_ver[2];
+        val->val2 = data->hub_ver[3];
+        break;
+    case MAX32664C_ATTR_SENSOR_IDS:
+        val->val1 = data->max86141_id;
+        val->val2 = data->accel_id;
+        break;
     default:
         LOG_ERR("Unsupported sensor attribute");
         return -ENOTSUP;
@@ -702,6 +764,8 @@ static int max32664c_chip_init(const struct device *dev)
         // LOG_ERR("MAX32664C not responding\n");
         return -ENODEV;
     }
+
+    max32664c_check_sensors(dev);
 
     return 0;
 }

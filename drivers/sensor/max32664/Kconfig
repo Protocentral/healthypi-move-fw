@@ -1,8 +1,0 @@
-# Configuration options
-
-config SENSOR_MAX32664
-	bool "MAX32664 Driver"
-	default y
-	select I2C
-	help
-		Enable the driver for the Maxim MAX32664 sensor

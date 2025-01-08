@@ -17,6 +17,12 @@
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 
+struct hpi_boot_msg_t
+{
+    char msg[15];
+    bool status;
+};
+
 enum scroll_dir
 {
     SCROLL_UP,
@@ -57,9 +63,15 @@ enum hpi_disp_subscreens
     SUBSCR_BPT_MEASURE,
 };
 
+void display_init_styles(void);
+
 /******** UI Function Prototypes ********/
 
 void draw_scr_boot(void);
+void scr_boot_add_status(char *dev_label, bool status);
+void scr_boot_add_final(bool status);
+
+void draw_scr_splash(void);
 
 // Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);
@@ -93,9 +105,9 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir);
 void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead_off);
 
 // BPT screen functions
-//void draw_scr_bpt_calibrate(void);
+// void draw_scr_bpt_calibrate(void);
 void draw_scr_bpt(enum scroll_dir m_scroll_dir);
-//void draw_scr_bpt_measure(void);
+// void draw_scr_bpt_measure(void);
 void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples);
 void hpi_disp_bpt_update_progress(int progress);
 
@@ -150,11 +162,11 @@ void hpi_disp_update_temp(int temp);
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void disp_screen_event(lv_event_t *e);
 
-//LV_IMG_DECLARE(ui_img_flash_png);
-//LV_IMG_DECLARE(ui_img_heart2_png);        // assets/heart2.png
-//LV_IMG_DECLARE(ui_img_daily_mission_png); // assets/daily_mission.png
+// LV_IMG_DECLARE(ui_img_flash_png);
+// LV_IMG_DECLARE(ui_img_heart2_png);        // assets/heart2.png
+// LV_IMG_DECLARE(ui_img_daily_mission_png); // assets/daily_mission.png
 
-LV_IMG_DECLARE(img_heart_48px);         // assets/heart2.png
+LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
 LV_IMG_DECLARE(img_steps_48px);
 LV_IMG_DECLARE(img_calories_48px);
 LV_IMG_DECLARE(img_clock_48px);

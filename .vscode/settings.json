@@ -21,7 +21,9 @@
         "device.h": "c",
         "bmi323_spi.h": "c",
         "fs_module.h": "c",
-        "zbus.h": "c"
+        "zbus.h": "c",
+        "display_sh8601.h": "c",
+        "power_ctrl.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

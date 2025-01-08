@@ -6,7 +6,7 @@
 #include <zephyr/zbus/zbus.h>
 
 #include "max30001.h"
-#include "max32664.h"
+#include "max32664d.h"
 #include "max32664c.h"
 #include "sampling_module.h"
 
