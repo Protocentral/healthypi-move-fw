@@ -53,6 +53,7 @@ static uint32_t splash_scr_start_time = 0;
 
 // Externs
 extern const struct device *display_dev;
+extern const struct device *touch_dev;
 
 extern struct k_sem sem_display_on;
 extern struct k_sem sem_disp_boot_complete;
@@ -85,6 +86,8 @@ static void st_display_init_entry(void *o)
     LOG_DBG("Display device: %s", display_dev->name);
 
     sh8601_reinit(display_dev);
+    k_msleep(500);
+    device_init(touch_dev);
 
     // Init all styles globally
     display_init_styles();
@@ -116,6 +119,7 @@ static void st_display_boot_entry(void *o)
     LOG_DBG("Display SM Boot Entry");
     draw_scr_boot();
 
+    // Signal that the display is ready
     k_sem_give(&sem_disp_ready);
 
     // draw_scr_splash();
@@ -127,7 +131,7 @@ static void st_display_boot_run(void *o)
 
     if (k_msgq_get(&q_disp_boot_msg, &boot_msg, K_NO_WAIT) == 0)
     {
-        if(boot_msg.status == false)
+        if (boot_msg.status == false)
         {
             hpi_boot_all_passed = false;
         }
@@ -137,7 +141,7 @@ static void st_display_boot_run(void *o)
     // Stay in this state until the boot is complete
     if (k_sem_take(&sem_disp_boot_complete, K_NO_WAIT) == 0)
     {
-        if(hpi_boot_all_passed)
+        if (hpi_boot_all_passed)
         {
             smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
         }
@@ -152,6 +156,7 @@ static void st_display_boot_run(void *o)
 static void st_display_boot_exit(void *o)
 {
     LOG_DBG("Display SM Boot Exit");
+    lv_disp_trig_activity(NULL);
 }
 
 static void st_display_active_entry(void *o)
@@ -383,6 +388,7 @@ static void st_display_active_run(void *o)
     if (inactivity_time > DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
     }
     else
     {
@@ -399,11 +405,23 @@ static void st_display_active_exit(void *o)
 static void st_display_sleep_entry(void *o)
 {
     LOG_DBG("Display SM Sleep Entry");
+    hpi_display_sleep_on();
 }
 
 static void st_display_sleep_run(void *o)
 {
-    LOG_DBG("Display SM Sleep Run");
+    // LOG_DBG("Display SM Sleep Run");
+    int inactivity_time = lv_disp_get_inactive_time(NULL);
+    //LOG_DBG("Inactivity Time: %d", inactivity_time);
+    if (inactivity_time < DISP_SLEEP_TIME_MS)
+    {
+        // hpi_display_sleep_on();
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+    }
+    else
+    {
+        // hpi_display_sleep_off();
+    }
 }
 
 static void st_display_sleep_exit(void *o)
@@ -487,7 +505,7 @@ ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
-    //printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
+    // printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 

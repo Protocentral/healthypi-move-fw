@@ -33,7 +33,7 @@ static uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_b
 		},
 	};
 
-	int ret = i2c_transfer_dt(&config->i2c, msgs, 2);
+	return i2c_transfer_dt(&config->i2c, msgs, 2);
 }
 
 

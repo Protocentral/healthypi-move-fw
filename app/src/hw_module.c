@@ -614,10 +614,6 @@ void hw_init(void)
         .chan = SENSOR_CHAN_ACCEL_XYZ,
     };
 
-    k_sem_give(&sem_display_on);
-
-    k_sem_take(&sem_disp_ready, K_FOREVER);
-
     if (!device_is_ready(pmic))
     {
         LOG_ERR("Pmic device not ready");
@@ -631,13 +627,25 @@ void hw_init(void)
         // return 0;
     }
 
-    // sh8601_reinit(display_dev);
-
     if (!device_is_ready(charger))
     {
         LOG_ERR("Charger device not ready.\n");
         // return 0;
     }
+
+    regulator_disable(ldsw_disp_unit);
+    k_msleep(100);
+    regulator_enable(ldsw_disp_unit);
+    k_msleep(1500);
+    
+    //regulator_enable(ldsw_sens_1_8);
+
+    // Signal to start display state machine
+    k_sem_give(&sem_display_on);
+
+    // Wait for display system to be initialized and ready
+    k_sem_take(&sem_disp_ready, K_FOREVER);
+
     if (npm_fuel_gauge_init(charger) < 0)
     {
         LOG_ERR("Could not initialise fuel gauge.\n");
@@ -705,8 +713,7 @@ void hw_init(void)
 
     // device_init(display_dev);
     // k_sleep(K_MSEC(100));
-    device_init(touch_dev);
-
+   
     // printk("hw_second_boot: %d\n", hw_second_boot);
 
     /*if(hw_second_boot!=1)

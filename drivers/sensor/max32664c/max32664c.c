@@ -393,21 +393,6 @@ static int max32664c_set_mode_raw(const struct device *dev)
 {
     LOG_INF("MAX32664C entering RAW mode...");
 
-    const struct max32664c_config *config = dev->config;
-
-    /*uint8_t rsp[3] = {0x00, 0x00, 0x00};
-
-    max32664c_do_enter_app(dev);
-
-    // Read MAX86141 WHOAMI
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF, rsp);
-
-    // Read Accelerometer WHOAMI
-    m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F, rsp);
-    */
-
-    //max32664c_check_sensors(dev);
-
     // Output mode Raw
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
@@ -507,8 +492,6 @@ static int max32664c_set_mode_scd(const struct device *dev)
 static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode mode, uint8_t algo_mode)
 {
     LOG_DBG("MAX32664C entering ALGO mode...");
-
-    //max32664c_check_sensors(dev);
 
     max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 

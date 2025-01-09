@@ -131,7 +131,7 @@ static int bmi323_get_chip_id(const struct device *dev)
 	LOG_INF("Chip ID: 0x%x", chip_id);
 	if ((chip_id & 0xFF) != 0x43)
 	{
-		LOG_ERR("Invalid chip ID 0x%", chip_id);
+		LOG_ERR("Invalid chip ID 0x%x", chip_id);
 		return -ENODEV;
 	}
 
@@ -325,7 +325,7 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 											const struct sensor_value *val)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
-	int ret;
+	int ret=0;
 
 	k_mutex_lock(&data->lock, K_FOREVER);
 
@@ -458,7 +458,7 @@ static int bosch_bmi323_driver_api_attr_get(const struct device *dev, enum senso
 
 static int bmi323_trigger_set_acc_drdy(const struct device *dev)
 {
-	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	//struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 
 	// ret = bmi323_write_reg_16(dev, BMI3_REG_ACC_INT_CONF_0, 0x0001);
@@ -643,7 +643,7 @@ static void bosch_bmi323_irq_callback_handler(struct k_work *item)
 static int bosch_bmi323_pm_resume(const struct device *dev)
 {
 	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	int ret;
+	int ret=0;
 
 	// ret = bosch_bmi323_bus_init(dev);
 
