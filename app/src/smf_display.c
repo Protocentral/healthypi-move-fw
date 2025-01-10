@@ -427,6 +427,7 @@ static void st_display_sleep_run(void *o)
 static void st_display_sleep_exit(void *o)
 {
     LOG_DBG("Display SM Sleep Exit");
+    hpi_display_sleep_off();
 }
 
 static void st_display_on_entry(void *o)
