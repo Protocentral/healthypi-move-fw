@@ -17,6 +17,10 @@
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 
+#define HPI_DISP_TIME_REFR_INT 1000
+#define HPI_DISP_BATT_REFR_INT 1000
+#define HPI_DISP_HR_REFR_INT 1000
+
 struct hpi_boot_msg_t
 {
     char msg[15];
@@ -64,6 +68,9 @@ enum hpi_disp_subscreens
 };
 
 void display_init_styles(void);
+
+void hpi_display_sleep_off(void);
+void hpi_display_sleep_on(void);
 
 /******** UI Function Prototypes ********/
 

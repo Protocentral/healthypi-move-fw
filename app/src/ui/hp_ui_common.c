@@ -52,10 +52,8 @@ lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
 
-uint16_t disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
-static bool m_display_active = true;
 int curr_screen = SCR_VITALS;
 
 static lv_obj_t *label_batt_level;
@@ -67,38 +65,22 @@ extern const struct device *display_dev;
 
 void hpi_display_sleep_on(void)
 {
-    if (m_display_active == true)
-    {
-        LOG_DBG("Display off");
-        // display_blanking_on(display_dev);
-        display_set_brightness(display_dev, 0);
+    LOG_DBG("Display off");
+    // display_blanking_on(display_dev);
+    display_set_brightness(display_dev, 0);
 
-        hpi_pwr_display_sleep();
-
-        // Slow down the display thread
-        disp_thread_refresh_int_ms = 1000;
-
-        m_display_active = false;
-    }
+    hpi_pwr_display_sleep();
 }
 
 void hpi_display_sleep_off(void)
 {
-    if (m_display_active == false)
-    {
-        LOG_DBG("Display on");
-        hpi_disp_set_brightness(hpi_disp_get_brightness());
+    LOG_DBG("Display on");
+    hpi_disp_set_brightness(hpi_disp_get_brightness());
 
-        // display_blanking_on(display_dev);
-        hpi_move_load_screen(curr_screen, SCROLL_NONE);
-        // display_blanking_off(display_dev);
-        hpi_pwr_display_wake();
-
-        // Speed up the display thread
-        disp_thread_refresh_int_ms = HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS;
-
-        m_display_active = true;
-    }
+    // display_blanking_on(display_dev);
+    hpi_move_load_screen(curr_screen, SCROLL_NONE);
+    // display_blanking_off(display_dev);
+    hpi_pwr_display_wake();
 }
 
 void hpi_disp_set_brightness(uint8_t brightness_percent)

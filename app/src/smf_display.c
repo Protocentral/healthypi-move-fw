@@ -19,6 +19,12 @@ K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 static bool hpi_boot_all_passed = true;
 
+static int last_batt_refresh = 0;
+static int last_hr_refresh = 0;
+static int last_time_refresh = 0;
+
+static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
+
 static const struct smf_state display_states[];
 
 enum display_state
@@ -40,11 +46,12 @@ static uint8_t m_disp_hr = 0;
 
 extern int curr_screen;
 int scr_ppg_hr_spo2_refresh_counter = 0;
-extern uint16_t disp_thread_refresh_int_ms;
 
-int batt_refresh_counter = 0;
-int hr_refresh_counter = 0;
-int time_refresh_counter = 0;
+// extern uint16_t disp_thread_refresh_int_ms;
+
+// int batt_refresh_counter = 0;
+// int hr_refresh_counter = 0;
+// int time_refresh_counter = 0;
 int m_disp_inact_refresh_counter = 0;
 
 extern struct k_sem sem_crown_key_pressed;
@@ -172,16 +179,13 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
         hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
-        if (scr_ppg_hr_spo2_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+        if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
         {
+            hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
+            hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            // hpi_disp_update_hr(m_disp_hr);
             hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
             hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
-
-            scr_ppg_hr_spo2_refresh_counter = 0;
-        }
-        else
-        {
-            scr_ppg_hr_spo2_refresh_counter++;
         }
     }
     else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
@@ -340,29 +344,34 @@ static void st_display_active_run(void *o)
 
     if (curr_screen == SCR_HOME)
     {
-        ui_hr_button_update(m_disp_hr);
+        // ui_hr_button_update(m_disp_hr);
 
-        if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+        // if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+
+        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
         {
             ui_home_time_display_update(m_disp_sys_time);
             ui_hr_button_update(m_disp_hr);
-            time_refresh_counter = 0;
-        }
-        else
-        {
-            time_refresh_counter++;
         }
     }
 
-    if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+    // if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
+    //{
+
+    if (k_uptime_get_32() - last_batt_refresh > HPI_DISP_BATT_REFR_INT)
     {
         hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-        batt_refresh_counter = 0;
+        last_batt_refresh = k_uptime_get_32();
     }
-    else
+
+    // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+    //     batt_refresh_counter = 0;
+    // }
+
+    /*else
     {
         batt_refresh_counter++;
-    }
+    }*/
 
     // Add button handlers
     /*if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
@@ -385,6 +394,7 @@ static void st_display_active_run(void *o)
     }*/
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);
+    LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time > DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();
@@ -412,7 +422,7 @@ static void st_display_sleep_run(void *o)
 {
     // LOG_DBG("Display SM Sleep Run");
     int inactivity_time = lv_disp_get_inactive_time(NULL);
-    //LOG_DBG("Inactivity Time: %d", inactivity_time);
+    // LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time < DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();

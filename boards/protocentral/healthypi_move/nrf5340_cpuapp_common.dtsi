@@ -256,8 +256,8 @@
 		status = "okay";
 		compatible = "chipsemi,chsc5816";
 		reg = <0x2e>;
-		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+		irq-gpios = <&gpio0 26 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+		rst-gpios = <&gpio0 27 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 		zephyr,deferred-init;
 	};
 

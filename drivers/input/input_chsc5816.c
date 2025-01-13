@@ -171,7 +171,7 @@ static int chsc5816_process(const struct device *dev)
 			input_report_abs(dev, INPUT_ABS_Y, row, false, K_FOREVER);
 			input_report_key(dev, INPUT_BTN_TOUCH, 1, true, K_FOREVER);
 
-			// LOG_INF("Touch at %d, %d", col, row);
+			LOG_INF("Touch at %d, %d", col, row);
 		}
 	}
 
@@ -221,6 +221,7 @@ static void chsc5816_chip_reset(const struct device *dev)
 static int chsc5816_chip_init(const struct device *dev)
 {
 	const struct chsc5816_config *cfg = dev->config;
+	int ret;
 
 	if (!i2c_is_ready_dt(&cfg->i2c))
 	{
@@ -232,15 +233,37 @@ static int chsc5816_chip_init(const struct device *dev)
 	k_msleep(200);
 
 	uint8_t val[4] = {0x00, 0x00, 0x00, 0x00};
-	// chsc5816_write_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
-	//  Read FW version
-	chsc5816_read_reg4(dev, CHSC5816_REG_IMG_HEAD, val, 4);
-	LOG_INF("FW version: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);
+	ret = chsc5816_write_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
 
-	k_msleep(50);
+	if (ret < 0)
+	{
+		LOG_ERR("Touch not ready %i", ret);
 
-	chsc5816_read_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
-	LOG_INF("Boot state: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);
+		for(int i=0; i<4; i++)
+		{
+			LOG_ERR("Retry %d", i);
+			chsc5816_chip_reset(dev);
+			k_msleep(50);
+			ret = chsc5816_write_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
+			if(ret == 0)
+			{
+				break;
+			}
+		}
+		//return -ENODATA;
+	}
+	else
+	{
+
+		//  Read FW version
+		chsc5816_read_reg4(dev, CHSC5816_REG_IMG_HEAD, val, 4);
+		LOG_INF("FW version: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);
+
+		k_msleep(50);
+
+		chsc5816_read_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
+		LOG_INF("Boot state: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);
+	}
 
 	return 0;
 }
