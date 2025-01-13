@@ -95,6 +95,7 @@ static void st_display_init_entry(void *o)
     sh8601_reinit(display_dev);
     k_msleep(500);
     device_init(touch_dev);
+    k_msleep(50);
 
     // Init all styles globally
     display_init_styles();
@@ -154,6 +155,7 @@ static void st_display_boot_run(void *o)
         }
         else
         {
+            smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
             // smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
         }
     }

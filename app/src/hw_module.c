@@ -681,6 +681,9 @@ void hw_init(void)
 
     vbus_connected = (val.val1 != 0) || (val.val2 != 0);
 
+    device_init(imu_dev);
+    k_msleep(100);
+
     if (!device_is_ready(imu_dev))
     {
         LOG_ERR("Error: Accelerometer device not ready");
