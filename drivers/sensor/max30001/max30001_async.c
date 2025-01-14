@@ -48,12 +48,11 @@ static int max30001_async_sample_fetch(const struct device *dev,
         ecg_lead_off = 0;
     }
 
-
-    while (!(max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT);
-    
+    while (!(max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT)
+        ;
 
     if ((max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
-    //while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
+    // while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
     {
         max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
         e_fifo_num_samples = (((max30001_mngr_int & MAX30001_INT_MASK_EFIT) >> MAX30001_INT_SHIFT_EFIT) + 1); // No of samples = EFIT + 1
@@ -101,7 +100,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
             else if (etag == 0x07) // FIFO Overflow
             {
-                //printk("EOVF ");
+                // printk("EOVF ");
                 max30001_fifo_reset(dev);
                 // max30001_synch(dev);
                 break;
@@ -113,7 +112,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
         {
             uint32_t btag = ((((uint8_t)buf_bioz[i * 3 + 2]) & 0x07));
 
-            //printk("B %x ", btag);
+            // printk("B %x ", btag);
 
             if ((btag == 0x00) || (btag == 0x02)) // Valid sample
             {
@@ -132,7 +131,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
             else if (btag == 0x07) // FIFO Overflow
             {
-                //printk("BOVF ");
+                // printk("BOVF ");
                 max30001_fifo_reset(dev);
                 // max30001_synch(dev);
                 break;

@@ -62,7 +62,7 @@ static uint32_t splash_scr_start_time = 0;
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
 
-extern struct k_sem sem_display_on;
+extern struct k_sem sem_disp_smf_start;
 extern struct k_sem sem_disp_boot_complete;
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_sample;
@@ -460,7 +460,7 @@ void smf_display_thread(void)
 {
     int ret;
 
-    k_sem_take(&sem_display_on, K_FOREVER);
+    k_sem_take(&sem_disp_smf_start, K_FOREVER);
 
     LOG_DBG("Display SMF Thread Started");
 
