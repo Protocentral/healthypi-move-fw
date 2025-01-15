@@ -294,12 +294,16 @@ static int chsc5816_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = gpio_pin_configure_dt(&config->int_gpio, GPIO_INPUT);
+	ret = gpio_pin_configure_dt(&config->int_gpio, (GPIO_INPUT|GPIO_PULL_UP));
 	if (ret < 0)
 	{
 		LOG_ERR("Could not configure interrupt GPIO pin: %d", ret);
 		return ret;
 	}
+
+	k_msleep(50);
+
+	ret = chsc5816_chip_init(dev);
 
 	ret = gpio_pin_interrupt_configure_dt(&config->int_gpio, GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret < 0)
@@ -317,7 +321,7 @@ static int chsc5816_init(const struct device *dev)
 		return ret;
 	}
 
-	return chsc5816_chip_init(dev);
+	return 0;
 };
 
 #ifdef CONFIG_PM_DEVICE
