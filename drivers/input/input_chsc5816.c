@@ -82,6 +82,8 @@ union CHSC5816_rpt_point_t
 
 LOG_MODULE_REGISTER(chsc5816, CONFIG_INPUT_LOG_LEVEL);
 
+static int chsc5816_chip_init(const struct device *dev);
+
 static int chsc5816_write_reg4(const struct device *dev, uint32_t reg, uint8_t *val, uint32_t val_len)
 {
 	const struct chsc5816_config *cfg = dev->config;
@@ -154,7 +156,12 @@ static int chsc5816_process(const struct device *dev)
 	if (ret < 0)
 	{
 		LOG_ERR("Could not read data: %i", ret);
-		return -ENODATA;
+		chsc5816_chip_init(dev);
+		//return -ENODATA;
+	}
+	else
+	{
+		//LOG_INF("Point:", CHSC5816_rpt_point.rp.status);
 	}
 	if (CHSC5816_rpt_point.rp.status == 0xFF)
 	{
@@ -239,18 +246,18 @@ static int chsc5816_chip_init(const struct device *dev)
 	{
 		LOG_ERR("Touch not ready %i", ret);
 
-		for(int i=0; i<4; i++)
+		for (int i = 0; i < 4; i++)
 		{
 			LOG_ERR("Retry %d", i);
 			chsc5816_chip_reset(dev);
 			k_msleep(50);
 			ret = chsc5816_write_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
-			if(ret == 0)
+			if (ret == 0)
 			{
 				break;
 			}
 		}
-		//return -ENODATA;
+		// return -ENODATA;
 	}
 	else
 	{
