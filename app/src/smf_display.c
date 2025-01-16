@@ -38,11 +38,12 @@ enum display_state
     HPI_DISPLAY_STATE_OFF,
 };
 
+// Display screen variables
 static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
-
 static struct rtc_time m_disp_sys_time;
 static uint8_t m_disp_hr = 0;
+static uint32_t m_disp_steps = 0;
 
 extern int curr_screen;
 int scr_ppg_hr_spo2_refresh_counter = 0;
@@ -62,7 +63,7 @@ static uint32_t splash_scr_start_time = 0;
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
 
-extern struct k_sem sem_display_on;
+extern struct k_sem sem_disp_smf_start;
 extern struct k_sem sem_disp_boot_complete;
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_sample;
@@ -94,7 +95,9 @@ static void st_display_init_entry(void *o)
 
     sh8601_reinit(display_dev);
     k_msleep(500);
+
     device_init(touch_dev);
+    k_msleep(50);
 
     // Init all styles globally
     display_init_styles();
@@ -154,6 +157,7 @@ static void st_display_boot_run(void *o)
         }
         else
         {
+            smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
             // smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
         }
     }
@@ -187,6 +191,8 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
             hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
             hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
         }
+
+        lv_disp_trig_activity(NULL);
     }
     else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
     {
@@ -352,6 +358,7 @@ static void st_display_active_run(void *o)
         {
             ui_home_time_display_update(m_disp_sys_time);
             ui_hr_button_update(m_disp_hr);
+            ui_steps_button_update(m_disp_steps);
         }
     }
 
@@ -394,7 +401,7 @@ static void st_display_active_run(void *o)
     }*/
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);
-    LOG_DBG("Inactivity Time: %d", inactivity_time);
+    // LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time > DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();
@@ -458,7 +465,7 @@ void smf_display_thread(void)
 {
     int ret;
 
-    k_sem_take(&sem_display_on, K_FOREVER);
+    k_sem_take(&sem_disp_smf_start, K_FOREVER);
 
     LOG_DBG("Display SMF Thread Started");
 
@@ -505,10 +512,7 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
-    if (curr_screen == SCR_HOME)
-    {
-        // ui_steps_button_update(hpi_steps->steps_walk);
-    }
+    m_disp_steps = hpi_steps->steps_walk;
     // ui_steps_button_update(hpi_steps->steps_walk);
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);

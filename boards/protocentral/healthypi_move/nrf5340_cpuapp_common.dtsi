@@ -175,29 +175,22 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3000000>;
 				//regulator-initial-mode = <NPM1300_BUCK_MODE_PWM>;
-
-				//regulator-always-on;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt =<2000000>;
+				regulator-init-microvolt =<1800000>;
 				regulator-initial-mode = <NPM1300_BUCK_MODE_PWM>;
-
-				//regulator-always-on;
 			};
 
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
-				regulator-boot-on;
+				//regulator-boot-on;
 			};
 
 			npm_pmic_ldo2: LDO2 {
 				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
-				//regulator-min-microvolt = <1000000>;
-				//regulator-max-microvolt = <3300000>;
-				//regulator-init-microvolt = <1800000>;
 				//regulator-boot-on;
 			};
 		};
@@ -214,15 +207,6 @@
 			charging-enable;
 		};
 
-		/*npm_pmic_buttons: buttons {
-			compatible = "gpio-keys";
-			pmic_button0: pmic_button_0 {
-				gpios = <&npm_pmic_gpio 0 GPIO_ACTIVE_LOW>;
-				label = "Pmic button switch 0";
-				zephyr,code = <INPUT_KEY_0>;
-			};
-		};*/
-
 		npm_pmic_leds: leds {
 			compatible = "nordic,npm1300-led";
 			nordic,led0-mode = "error";
@@ -234,30 +218,23 @@
 	rtc_rv: rv@51 {
 		compatible = "microcrystal,rv8263";
 		reg = <0x51>;
-	};
-
-	/*lsm6: lsm6dso@6a {
-		compatible = "st,lsm6dso";
-		reg = <0x6a>;
-		status = "okay";
-		irq-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 		zephyr,deferred-init;
-	};*/
+	};
 
 	bmi323: bmi323@68 {
 		compatible = "bosch,bmi323hpi";
 		reg = <0x68>;
 		status = "okay";
 		int-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
-		//zephyr,deferred-init;
+		zephyr,deferred-init;
 	};
 
 	chsc5816: chsc5816@2e {
 		status = "okay";
 		compatible = "chipsemi,chsc5816";
 		reg = <0x2e>;
-		irq-gpios = <&gpio0 26 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-		rst-gpios = <&gpio0 27 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+		irq-gpios = <&gpio0 26 (GPIO_ACTIVE_LOW)>;// | GPIO_PULL_UP)>;
+		rst-gpios = <&gpio0 27 (GPIO_ACTIVE_LOW)>;// | GPIO_PULL_UP)>;
 		zephyr,deferred-init;
 	};
 
@@ -303,6 +280,7 @@
 		compatible = "maxim,max30208";
 		status = "okay";
 		reg = <0x50>;
+		//zephyr,deferred-init;
 	};
 };
 

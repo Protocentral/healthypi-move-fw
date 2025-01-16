@@ -23,7 +23,11 @@
         "fs_module.h": "c",
         "zbus.h": "c",
         "display_sh8601.h": "c",
-        "power_ctrl.h": "c"
+        "power_ctrl.h": "c",
+        "fuel_gauge.h": "c",
+        "npm1300_charger.h": "c",
+        "usbd.h": "c",
+        "pwm.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

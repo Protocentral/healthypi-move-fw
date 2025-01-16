@@ -1,4 +1,4 @@
-// ProtoCentral Electronics (info@protocentral.com)
+// ProtoCentral Electronics (ashwin@protocentral.com)
 // SPDX-License-Identifier: Apache-2.0
 
 #define DT_DRV_COMPAT maxim_max30208
@@ -14,11 +14,9 @@
 
 LOG_MODULE_REGISTER(MAX30208, CONFIG_SENSOR_LOG_LEVEL);
 
-
 static uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
 {
 	const struct max30208_config *config = dev->config;
-	//int ret = i2c_write_read_dt(&config->i2c, &reg, sizeof(reg), read_buf, sizeof(read_buf));
 
 	struct i2c_msg msgs[2] = {
 		{
@@ -36,25 +34,12 @@ static uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_b
 	return i2c_transfer_dt(&config->i2c, msgs, 2);
 }
 
-
-/*static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t* read_buf)
-{
-	const struct max30208_config *config = dev->config;
-	
-	int ret = i2c_reg_read_byte_dt(&config->i2c, reg, read_buf);
-	if(ret<0)
-	{
-		LOG_ERR("Failed to read register: %d", ret);
-	}
-	return read_buf[0];
-}*/
-
 static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf, uint8_t read_len)
 {
 	const struct max30208_config *config = dev->config;
 
 	struct i2c_msg m_msgs[2];
-	uint8_t reg_buf[1] ={reg};
+	uint8_t reg_buf[1] = {reg};
 
 	m_msgs[0].buf = reg_buf;
 	m_msgs[0].len = 1U;
@@ -70,7 +55,7 @@ static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t 
 		LOG_ERR("Failed to read register: %d", ret);
 	}
 
-	//printk("Read register: %x\n", read_buf[0]);
+	// printk("Read register: %x\n", read_buf[0]);
 	return 0;
 }
 
@@ -83,20 +68,16 @@ static int max30208_write_reg(const struct device *dev, uint8_t reg, uint8_t val
 	i2c_write_dt(&config->i2c, write_buf, sizeof(write_buf));
 
 	return 0;
-
 }
 
 static int max30208_get_chip_id(const struct device *dev)
 {
 	uint8_t read_buf[1] = {0};
 
-	//m_read_reg(dev, MAX30208_REG_CHIP_ID, read_buf);
-
-	max30208_read_reg(dev, MAX30208_REG_CHIP_ID, read_buf,1U);
-	LOG_DBG("MAX30208 Chip ID: %x\n", read_buf[0]);
+	max30208_read_reg(dev, MAX30208_REG_CHIP_ID, read_buf, 1U);
+	LOG_DBG("MAX30208 Chip ID: %x", read_buf[0]);
 	return 0;
 }
-
 
 static int max30208_start_convert(const struct device *dev)
 {
@@ -107,29 +88,19 @@ static int max30208_start_convert(const struct device *dev)
 static uint8_t max30208_get_status(const struct device *dev)
 {
 	uint8_t read_buf[1] = {0};
-	max30208_read_reg(dev, MAX30208_REG_STATUS, read_buf,1U);
-	//LOG_DBG("MAX30208 Status: %x\n", read_buf[0]);
+	max30208_read_reg(dev, MAX30208_REG_STATUS, read_buf, 1U);
+	// LOG_DBG("MAX30208 Status: %x\n", read_buf[0]);
 	return read_buf[0];
 }
 
 static int max30208_get_temp(const struct device *dev)
 {
 	uint8_t read_buf[2] = {0, 0};
-	max30208_read_reg(dev, MAX30208_REG_FIFO_DATA, read_buf,2U);
+	max30208_read_reg(dev, MAX30208_REG_FIFO_DATA, read_buf, 2U);
 	int16_t raw = read_buf[0] << 8 | read_buf[1];
-	//LOG_DBG("Raw Temp: %d\n", raw);
+	// LOG_DBG("Raw Temp: %d\n", raw);
 	return raw;
 }
-
-/*
-static int max30208_get_fifo_avail(const struct device *dev)
-{
-	uint8_t read_buf[2] = {0, 0};
-	m_read_reg_2(dev, MAX30208_TEMPERATURE, read_buf);
-	int16_t raw = read_buf[0] << 8 | read_buf[1];
-	//return readRegister8(MAX30208_FIFO_DATA_COUNTER);
-	return raw;
-}*/
 
 static int max30208_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
@@ -138,10 +109,10 @@ static int max30208_sample_fetch(const struct device *dev,
 
 	max30208_start_convert(dev);
 
-	//while(!(max30208_get_status(dev) & 0x01))
+	// while(!(max30208_get_status(dev) & 0x01))
 	//{
 	//	k_sleep(K_MSEC(10));
-	//}
+	// }
 	k_sleep(K_MSEC(100));
 
 	data->temp_int = max30208_get_temp(dev);
@@ -176,9 +147,7 @@ static const struct sensor_driver_api max30208_driver_api = {
 static int max30208_init(const struct device *dev)
 {
 	const struct max30208_config *config = dev->config;
-
-	int ret=0;
-
+	int ret = 0;
 
 	/* Get the I2C device */
 	if (!device_is_ready(config->i2c.bus))
@@ -193,7 +162,6 @@ static int max30208_init(const struct device *dev)
 		LOG_ERR("Failed to get chip id");
 
 		return -ENODEV;
-
 	}
 
 	return 0;

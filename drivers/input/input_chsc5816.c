@@ -82,6 +82,8 @@ union CHSC5816_rpt_point_t
 
 LOG_MODULE_REGISTER(chsc5816, CONFIG_INPUT_LOG_LEVEL);
 
+static int chsc5816_chip_init(const struct device *dev);
+
 static int chsc5816_write_reg4(const struct device *dev, uint32_t reg, uint8_t *val, uint32_t val_len)
 {
 	const struct chsc5816_config *cfg = dev->config;
@@ -156,11 +158,13 @@ static int chsc5816_process(const struct device *dev)
 		LOG_ERR("Could not read data: %i", ret);
 		return -ENODATA;
 	}
+
 	if (CHSC5816_rpt_point.rp.status == 0xFF)
 	{
 		if (CHSC5816_rpt_point.rp.fingerNumber == 0)
 		{
 			input_report_key(dev, INPUT_BTN_TOUCH, 0, true, K_FOREVER);
+			LOG_DBG("Touch released");
 		}
 		else
 		{
@@ -171,13 +175,12 @@ static int chsc5816_process(const struct device *dev)
 			input_report_abs(dev, INPUT_ABS_Y, row, false, K_FOREVER);
 			input_report_key(dev, INPUT_BTN_TOUCH, 1, true, K_FOREVER);
 
-			LOG_INF("Touch at %d, %d", col, row);
+			LOG_DBG("Touch at %d, %d", col, row);
 		}
 	}
-
 	else
 	{
-		LOG_INF("No touch");
+		LOG_DBG("No touch");
 		return -ENODATA;
 	}
 
@@ -187,7 +190,6 @@ static int chsc5816_process(const struct device *dev)
 static void chsc5816_work_handler(struct k_work *work)
 {
 	struct chsc5816_data *data = CONTAINER_OF(work, struct chsc5816_data, work);
-
 	chsc5816_process(data->dev);
 }
 
@@ -239,28 +241,25 @@ static int chsc5816_chip_init(const struct device *dev)
 	{
 		LOG_ERR("Touch not ready %i", ret);
 
-		for(int i=0; i<4; i++)
+		for (int i = 0; i < 4; i++)
 		{
 			LOG_ERR("Retry %d", i);
 			chsc5816_chip_reset(dev);
 			k_msleep(50);
 			ret = chsc5816_write_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
-			if(ret == 0)
+			if (ret == 0)
 			{
 				break;
 			}
 		}
-		//return -ENODATA;
+		// return -ENODATA;
 	}
 	else
 	{
-
 		//  Read FW version
 		chsc5816_read_reg4(dev, CHSC5816_REG_IMG_HEAD, val, 4);
 		LOG_INF("FW version: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);
-
 		k_msleep(50);
-
 		chsc5816_read_reg4(dev, CHSC5816_REG_BOOT_STATE, val, 4);
 		LOG_INF("Boot state: %d.%d.%d.%d", val[0], val[1], val[2], val[3]);
 	}
@@ -287,12 +286,16 @@ static int chsc5816_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = gpio_pin_configure_dt(&config->int_gpio, GPIO_INPUT);
+	ret = gpio_pin_configure_dt(&config->int_gpio, (GPIO_INPUT)); // | GPIO_PULL_UP));
 	if (ret < 0)
 	{
 		LOG_ERR("Could not configure interrupt GPIO pin: %d", ret);
 		return ret;
 	}
+
+	k_msleep(50);
+
+	ret = chsc5816_chip_init(dev);
 
 	ret = gpio_pin_interrupt_configure_dt(&config->int_gpio, GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret < 0)
@@ -310,7 +313,7 @@ static int chsc5816_init(const struct device *dev)
 		return ret;
 	}
 
-	return chsc5816_chip_init(dev);
+	return 0;
 };
 
 #ifdef CONFIG_PM_DEVICE
@@ -321,7 +324,7 @@ static int chsc5816_pm_action(const struct device *dev, enum pm_device_action ac
 	{
 	case PM_DEVICE_ACTION_RESUME:
 		printk("Resume touch");
-		// chsc5816_chip_init(dev);
+		//chsc5816_chip_init(dev);
 		break;
 	case PM_DEVICE_ACTION_SUSPEND:
 		printk("Suspend touch");
@@ -340,6 +343,7 @@ static int chsc5816_pm_action(const struct device *dev, enum pm_device_action ac
 	static const struct chsc5816_config chsc5816_config_##index = {                      \
 		.i2c = I2C_DT_SPEC_INST_GET(index),                                              \
 		.int_gpio = GPIO_DT_SPEC_INST_GET(index, irq_gpios),                             \
+		.rst_gpio = GPIO_DT_SPEC_INST_GET(index, rst_gpios),                             \
 	};                                                                                   \
 	PM_DEVICE_DT_INST_DEFINE(index, chsc5816_pm_action);                                 \
 	static struct chsc5816_data chsc5816_data_##index;                                   \

@@ -122,11 +122,14 @@ K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_sm_start, 0, 1);
-K_SEM_DEFINE(sem_display_on, 0, 1);
+
+// Signals to start the SMF threads
+K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
+K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
+K_SEM_DEFINE(sem_ecg_bioz_smf_start, 0, 1);
+
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
-
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
-
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
 #define MOVE_SAMPLING_DISABLED 0
@@ -523,19 +526,6 @@ uint8_t hw_get_battery_level(void)
     return global_batt_level;
 }
 
-static void trigger_handler(const struct device *dev, const struct sensor_trigger *trigger)
-{
-    ARG_UNUSED(trigger);
-
-    if (sensor_sample_fetch(dev))
-    {
-        printf("Acc Trig\n");
-        return;
-    }
-
-    // k_sem_give(&sem);
-}
-
 bool hw_is_max32664c_present(void)
 {
     return max32664c_device_present;
@@ -578,7 +568,7 @@ int hw_max30001_bioz_enable(bool enable)
     return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
 }
 
-static void event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+static void pmic_event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
     if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))
     {
@@ -604,64 +594,13 @@ static void hw_add_boot_msg(char *msg, bool status)
     k_msgq_put(&q_disp_boot_msg, &boot_msg, K_NO_WAIT);
 }
 
-void hw_init(void)
+static void hw_en_pmic_cb(void)
 {
-    int ret = 0;
-    static struct rtc_time curr_time;
-
-    struct sensor_trigger imu_trig = {
-        .type = SENSOR_TRIG_DATA_READY,
-        .chan = SENSOR_CHAN_ACCEL_XYZ,
-    };
-
-    if (!device_is_ready(pmic))
-    {
-        LOG_ERR("Pmic device not ready");
-
-        return 0;
-    }
-
-    if (!device_is_ready(regulators))
-    {
-        LOG_ERR("Error: Regulator device is not ready\n");
-        // return 0;
-    }
-
-    if (!device_is_ready(charger))
-    {
-        LOG_ERR("Charger device not ready.\n");
-        // return 0;
-    }
-
-    regulator_disable(ldsw_disp_unit);
-    k_msleep(100);
-    regulator_enable(ldsw_disp_unit);
-    k_msleep(1500);
-    
-    //regulator_enable(ldsw_sens_1_8);
-
-    // Signal to start display state machine
-    k_sem_give(&sem_display_on);
-
-    // Wait for display system to be initialized and ready
-    k_sem_take(&sem_disp_ready, K_FOREVER);
-
-    if (npm_fuel_gauge_init(charger) < 0)
-    {
-        LOG_ERR("Could not initialise fuel gauge.\n");
-        hw_add_boot_msg("PMIC", false);
-        // return 0;
-    }
-    else
-    {
-        hw_add_boot_msg("PMIC", true);
-    }
-
     static struct gpio_callback event_cb;
+    int ret = 0;
 
-    gpio_init_callback(&event_cb, event_callback,
-                       BIT(NPM1300_EVENT_VBUS_DETECTED) |
-                           BIT(NPM1300_EVENT_VBUS_REMOVED));
+    gpio_init_callback(&event_cb, pmic_event_callback,
+                       BIT(NPM1300_EVENT_VBUS_DETECTED) | BIT(NPM1300_EVENT_VBUS_REMOVED));
 
     ret = mfd_npm1300_add_callback(pmic, &event_cb);
     if (ret)
@@ -680,47 +619,72 @@ void hw_init(void)
     }
 
     vbus_connected = (val.val1 != 0) || (val.val2 != 0);
+}
+
+void hw_init(void)
+{
+    int ret = 0;
+    static struct rtc_time curr_time;
+
+    if (!device_is_ready(pmic))
+    {
+        LOG_ERR("Pmic device not ready");
+    }
+
+    if (!device_is_ready(regulators))
+    {
+        LOG_ERR("Error: Regulator device is not ready\n");
+    }
+
+    if (!device_is_ready(charger))
+    {
+        LOG_ERR("Charger device not ready.\n");
+    }
+
+    // Power ON display
+    regulator_disable(ldsw_disp_unit);
+    k_msleep(100);
+    regulator_enable(ldsw_disp_unit);
+    k_msleep(500);
+
+    // regulator_enable(ldsw_sens_1_8);
+
+    // Signal to start display state machine
+    k_sem_give(&sem_disp_smf_start);
+
+    // Wait for display system to be initialized and ready
+    k_sem_take(&sem_disp_ready, K_FOREVER);
+
+    // Init PMIC Fuel Gauge
+    if (npm_fuel_gauge_init(charger) < 0)
+    {
+        LOG_ERR("Could not initialise fuel gauge.\n");
+        hw_add_boot_msg("PMIC", false);
+    }
+    else
+    {
+        hw_add_boot_msg("PMIC", true);
+        hw_en_pmic_cb();
+    }
+
+    // Init IMU device
+    ret = device_init(imu_dev);
+    k_msleep(100);
 
     if (!device_is_ready(imu_dev))
     {
-        LOG_ERR("Error: Accelerometer device not ready");
+        LOG_ERR("Error: IMU device not ready");
         hw_add_boot_msg("BMI323", false);
     }
     else
     {
         hw_add_boot_msg("BMI323", true);
-        if (sensor_trigger_set(imu_dev, &imu_trig, trigger_handler) < 0)
-        {
-            LOG_ERR("Could not set trigger");
-            // return 0;
-        }
-        else
-        {
-            LOG_INF("IMU Trigger set");
-            struct sensor_value set_val;
-            set_val.val1 = 1;
-            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
-            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
-        }
+        k_sem_give(&sem_imu_smf_start);
     }
 
-    // device_init(display_dev);
-    //  k_sleep(K_MSEC(1000));
-    // hw_pwr_display_enable();
-
+    // Turn 1.8v power to sensors ON
     regulator_enable(ldsw_sens_1_8);
     // regulator_disable(ldsw_sens_1_8);
-
-    // device_init(display_dev);
-    // k_sleep(K_MSEC(100));
-   
-    // printk("hw_second_boot: %d\n", hw_second_boot);
-
-    /*if(hw_second_boot!=1)
-    {
-        hw_second_boot = 1;
-        sys_reboot(SYS_REBOOT_WARM);
-    }*/
 
     if (!device_is_ready(max30001_dev))
     {
@@ -734,12 +698,10 @@ void hw_init(void)
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
 
-        // Disable ECG and BIOZ by default
-        hw_max30001_ecg_enable(false);
-        hw_max30001_bioz_enable(false);
+        k_sem_give(&sem_ecg_bioz_smf_start);
     }
 
-    k_sleep(K_MSEC(1000));
+    k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
@@ -748,7 +710,7 @@ void hw_init(void)
     }
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
-    k_sleep(K_MSEC(1000));
+    k_sleep(K_MSEC(100));
 
     device_init(max32664c_dev);
 
@@ -802,10 +764,6 @@ void hw_init(void)
             sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
         }
 
-        // Moved all start commands to SMF PPG
-
-        // LOG_INF("MAX32664C App Present: %d", mode_get.val1);
-
         // To force bootloader mode
         // mode_get.val1 = 8;
 
@@ -815,17 +773,13 @@ void hw_init(void)
             struct sensor_value mode_set;
             mode_set.val1 = 1;
             sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
-        }
-        else
-        {
-            LOG_INF("MAX32664C App present");
-
-
         }*/
+
+        k_sem_give(&sem_ppg_sm_start);
     }
 
-    k_sleep(K_MSEC(1000));
     device_init(max32664d_dev);
+    k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -885,12 +839,6 @@ void hw_init(void)
         k_sem_give(&sem_ecg_bioz_thread_start);
     }
 
-    if (max32664c_device_present)
-    {
-
-        k_sem_give(&sem_ppg_sm_start);
-    }
-
     if (max32664d_device_present)
     {
         k_sem_give(&sem_ppg_finger_thread_start);
@@ -931,19 +879,22 @@ void hw_thread(void)
 
     for (;;)
     {
+        // Read and publish battery level
         npm_fuel_gauge_update(charger, vbus_connected);
 
+        // Read and publish time
         rtc_get_time(rtc_dev, &sys_time);
         zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
 
-        _temp_f = read_temp_f();
+        // Read and publish steps
         _steps = acc_get_steps();
-
         struct hpi_steps_t steps = {
             .steps_walk = _steps,
         };
         zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
+        // Read and publish temperature
+        _temp_f = read_temp_f();
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,
         };
