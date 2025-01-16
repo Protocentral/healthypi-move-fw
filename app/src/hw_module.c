@@ -645,7 +645,7 @@ void hw_init(void)
     regulator_disable(ldsw_disp_unit);
     k_msleep(100);
     regulator_enable(ldsw_disp_unit);
-    k_msleep(1500);
+    k_msleep(500);
 
     // regulator_enable(ldsw_sens_1_8);
 
@@ -701,7 +701,7 @@ void hw_init(void)
         k_sem_give(&sem_ecg_bioz_smf_start);
     }
 
-    k_sleep(K_MSEC(1000));
+    k_sleep(K_MSEC(100));
 
     ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
@@ -710,7 +710,7 @@ void hw_init(void)
     }
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
-    k_sleep(K_MSEC(1000));
+    k_sleep(K_MSEC(100));
 
     device_init(max32664c_dev);
 
@@ -778,7 +778,7 @@ void hw_init(void)
         k_sem_give(&sem_ppg_sm_start);
     }
 
-    k_sleep(K_MSEC(1000));
+    k_sleep(K_MSEC(100));
     device_init(max32664d_dev);
 
     if (!device_is_ready(max32664d_dev))

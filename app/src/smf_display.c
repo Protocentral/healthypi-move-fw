@@ -94,6 +94,7 @@ static void st_display_init_entry(void *o)
 
     sh8601_reinit(display_dev);
     k_msleep(500);
+    
     device_init(touch_dev);
     k_msleep(50);
 
