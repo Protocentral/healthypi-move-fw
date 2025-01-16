@@ -778,8 +778,8 @@ void hw_init(void)
         k_sem_give(&sem_ppg_sm_start);
     }
 
-    k_sleep(K_MSEC(100));
     device_init(max32664d_dev);
+    k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -879,19 +879,22 @@ void hw_thread(void)
 
     for (;;)
     {
+        // Read and publish battery level
         npm_fuel_gauge_update(charger, vbus_connected);
 
+        // Read and publish time
         rtc_get_time(rtc_dev, &sys_time);
         zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
 
-        _temp_f = read_temp_f();
+        // Read and publish steps
         _steps = acc_get_steps();
-
         struct hpi_steps_t steps = {
             .steps_walk = _steps,
         };
         zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
+        // Read and publish temperature
+        _temp_f = read_temp_f();
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,
         };

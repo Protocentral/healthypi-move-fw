@@ -280,7 +280,7 @@
 		compatible = "maxim,max30208";
 		status = "okay";
 		reg = <0x50>;
-		zephyr,deferred-init;
+		//zephyr,deferred-init;
 	};
 };
 

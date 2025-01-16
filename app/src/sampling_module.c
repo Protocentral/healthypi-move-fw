@@ -218,8 +218,8 @@ void ppg_wrist_sampling_trigger_thread(void)
         LOG_INF("PPG Wrist Sampling starting");
         for (;;)
         {
-                //sensor_read_async_mempool(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
-                //sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
+                // sensor_read_async_mempool(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
+                // sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
                 sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_ctx, NULL);
                 sensor_processing_with_callback(&max32664c_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
