@@ -683,8 +683,10 @@ void hw_init(void)
     }
 
     // Turn 1.8v power to sensors ON
+    regulator_disable(ldsw_sens_1_8);
+    k_msleep(100);
     regulator_enable(ldsw_sens_1_8);
-    // regulator_disable(ldsw_sens_1_8);
+    k_msleep(100);
 
     if (!device_is_ready(max30001_dev))
     {
