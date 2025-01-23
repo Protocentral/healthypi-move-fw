@@ -70,12 +70,13 @@ static int max30208_write_reg(const struct device *dev, uint8_t reg, uint8_t val
 	return 0;
 }
 
-static int max30208_get_chip_id(const struct device *dev)
+static int max30208_get_chip_id(const struct device *dev, uint8_t* id)
 {
 	uint8_t read_buf[1] = {0};
 
 	max30208_read_reg(dev, MAX30208_REG_CHIP_ID, read_buf, 1U);
 	LOG_DBG("MAX30208 Chip ID: %x", read_buf[0]);
+	id[0] = read_buf[0];
 	return 0;
 }
 
@@ -149,6 +150,8 @@ static int max30208_init(const struct device *dev)
 	const struct max30208_config *config = dev->config;
 	int ret = 0;
 
+	uint8_t chip_id[1] = {0};
+
 	/* Get the I2C device */
 	if (!device_is_ready(config->i2c.bus))
 	{
@@ -156,11 +159,16 @@ static int max30208_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = max30208_get_chip_id(dev);
+	ret = max30208_get_chip_id(dev, chip_id);
 	if (ret < 0)
 	{
 		LOG_ERR("Failed to get chip id");
+		return -ENODEV;
+	}
 
+	if(chip_id[0] != MAX30208_CHIP_ID)
+	{
+		LOG_ERR("Invalid chip id: %x", chip_id[0]);
 		return -ENODEV;
 	}
 
