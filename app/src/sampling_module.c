@@ -53,9 +53,9 @@ extern struct k_sem sem_ecg_bioz_thread_start;
 RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_ctx,
                          32,
                          32,
-                         256,
-                         32,
-                         2);
+                         128,
+                         64,
+                         4);
 
 RTIO_DEFINE_WITH_MEMPOOL(max32664d_read_rtio_ctx,
                          32,  /* submission queue size */
@@ -300,6 +300,7 @@ void ppg_wrist_sampling_trigger_thread(void)
                 //  sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
                 sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_ctx, NULL);
+                sensor_processing_with_callback(&max32664c_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
                 /*cqe = rtio_cqe_consume_block(&max32664c_read_rtio_ctx);
 
@@ -322,7 +323,7 @@ void ppg_wrist_sampling_trigger_thread(void)
 
                 /* Done with the completion event, release it */
                 // rtio_cqe_release(&max32664c_read_rtio_ctx, cqe);
-                sensor_processing_with_callback(&max32664c_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
+                
 
                 k_sleep(K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
         }
