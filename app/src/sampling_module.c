@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(sampling_module, CONFIG_SENSOR_LOG_LEVEL);
 #define SAMPLING_INTERVAL_MS 8
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 1
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 20
 #define ECG_SAMPLING_INTERVAL_MS 65
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -50,13 +50,13 @@ extern struct k_sem sem_ecg_bioz_thread_start;
 // static const struct gpio_dt_spec max30001_intb = GPIO_DT_SPEC_GET(DT_NODELABEL(max30001_intb), gpios);
 //  static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_ctx,
-                         32,  /* submission queue size */
-                         32,  /* completion queue size */
-                         128, /* number of memory blocks */
-                         64,  /* size of each memory block */
-                         4    /* memory alignment */
-);
+/*RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_ctx,
+                         32,
+                         32,
+                         128,
+                         64,
+                         4);
+*/
 
 RTIO_DEFINE_WITH_MEMPOOL(max32664d_read_rtio_ctx,
                          32,  /* submission queue size */
@@ -73,6 +73,8 @@ RTIO_DEFINE_WITH_MEMPOOL(max30001_read_rtio_ctx,
                          64,  /* size of each memory block */
                          4    /* memory alignment */
 );
+
+RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
 
 static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                                                   uint32_t buf_len, void *userdata)
@@ -104,8 +106,9 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                 // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
         }
 }
-static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
-                                                 uint32_t buf_len, void *userdata)
+
+/*
+static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf, uint32_t buf_len, void *userdata)
 {
         const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
         struct hpi_ppg_sensor_data_t ppg_sensor_sample;
@@ -113,6 +116,65 @@ static void sensor_ppg_wrist_processing_callback(int result, uint8_t *buf,
         static uint8_t prev_hr_val = 0;
         // uint8_t hr_chan_value=0;
         uint16_t _n_samples = edata->num_samples;
+
+        if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
+        {
+                printk("SCD: ", edata->scd_state);
+                return;
+        }
+        else
+        {
+                // printk("WR NS: %d ", _n_samples);
+                if (_n_samples > 8)
+                {
+                        _n_samples = 8;
+                }
+                if (_n_samples > 0)
+                {
+                        ppg_sensor_sample.ppg_num_samples = _n_samples;
+
+                        for (int i = 0; i < _n_samples; i++)
+                        {
+                                ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
+                                ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
+                                ppg_sensor_sample.raw_green[i] = edata->green_samples[i];
+                        }
+
+                        if (edata->chip_op_mode == MAX32664C_OP_MODE_RAW)
+                        {
+                                ppg_sensor_sample.hr = 0;
+                                ppg_sensor_sample.spo2 = 0;
+                                ppg_sensor_sample.rtor = 0;
+                                ppg_sensor_sample.scd_state = 0;
+                        }
+                        else
+                        {
+                                ppg_sensor_sample.hr = edata->hr;
+                                ppg_sensor_sample.spo2 = edata->spo2;
+                                ppg_sensor_sample.rtor = edata->rtor;
+                                ppg_sensor_sample.scd_state = edata->scd_state;
+                        }
+
+                        k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
+
+                        struct hpi_hr_t hr_chan_value = {
+                            .hr = edata->hr,
+                            .hr_ready_flag = true,
+                        };
+                        zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                }
+        }
+}*/
+
+static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
+{
+        const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
+        struct hpi_ppg_sensor_data_t ppg_sensor_sample;
+
+        static uint8_t prev_hr_val = 0;
+        // uint8_t hr_chan_value=0;
+        uint16_t _n_samples = edata->num_samples;
+        
 
         if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
         {
@@ -215,14 +277,55 @@ void ppg_wrist_sampling_trigger_thread(void)
 {
         k_sem_take(&sem_ppg_wrist_thread_start, K_FOREVER);
 
+        int ret;
+
+        struct rtio_cqe *cqe;
+
+        uint8_t *buf;
+        uint32_t buf_len;
+
+        uint8_t wrist_buf[512];
+
         LOG_INF("PPG Wrist Sampling starting");
         for (;;)
         {
+                ret = sensor_read(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, wrist_buf, sizeof(wrist_buf));
+
+                if (ret < 0)
+                {
+                        LOG_ERR("Error reading sensor data");
+                        continue;
+                }
+
+                sensor_ppg_wrist_decode(wrist_buf, sizeof(wrist_buf));
+
                 // sensor_read_async_mempool(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
                 // sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
 
-                sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_ctx, NULL);
-                sensor_processing_with_callback(&max32664c_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
+                // sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_ctx, NULL);
+                // sensor_processing_with_callback(&max32664c_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
+
+                /*cqe = rtio_cqe_consume_block(&max32664c_read_rtio_ctx);
+
+                if (cqe->result != 0)
+                {
+                        printk("async read failed %d\n", cqe->result);
+                        //return;
+                }*/
+
+                /* Get the associated mempool buffer with the completion */
+                /*ret = rtio_cqe_get_mempool_buffer(&max32664c_read_rtio_ctx, cqe, &buf, &buf_len);
+
+                if (ret != 0)
+                {
+                        printk("get mempool buffer failed %d\n", ret);
+                       //return;
+                }*/
+
+                // sensor_ppg_wrist_decode(buf, buf_len);
+
+                /* Done with the completion event, release it */
+                // rtio_cqe_release(&max32664c_read_rtio_ctx, cqe);
 
                 k_sleep(K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
         }
@@ -264,7 +367,7 @@ void ecg_sampling_timer_start(void)
 #define PPG_FINGER_SAMPLING_THREAD_STACKSIZE 4096
 #define PPG_FINGER_SAMPLING_THREAD_PRIORITY 7
 
-#define PPG_WRIST_SAMPLING_THREAD_STACKSIZE 4096
+#define PPG_WRIST_SAMPLING_THREAD_STACKSIZE 8192
 #define PPG_WRIST_SAMPLING_THREAD_PRIORITY 7
 
 #define ECG_BIOZ_SAMPLING_THREAD_STACKSIZE 2048

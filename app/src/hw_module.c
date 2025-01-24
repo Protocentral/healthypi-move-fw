@@ -683,8 +683,10 @@ void hw_init(void)
     }
 
     // Turn 1.8v power to sensors ON
+    regulator_disable(ldsw_sens_1_8);
+    k_msleep(100);
     regulator_enable(ldsw_sens_1_8);
-    // regulator_disable(ldsw_sens_1_8);
+    k_msleep(1000);
 
     if (!device_is_ready(max30001_dev))
     {
@@ -713,6 +715,7 @@ void hw_init(void)
     k_sleep(K_MSEC(100));
 
     device_init(max32664c_dev);
+    k_sleep(K_MSEC(500));
 
     if (!device_is_ready(max32664c_dev))
     {
@@ -805,6 +808,9 @@ void hw_init(void)
 #endif
 
     // setup_pmic_callbacks();
+
+    device_init(max30208_dev);
+    k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max30208_dev))
     {
