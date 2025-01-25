@@ -49,7 +49,7 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
         if (fifo_count > 0)
         {
             sample_len = 1;
-            chip_op_mode = data->op_mode;
+            *chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
@@ -63,7 +63,7 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
             {
                 uint8_t scd_state_val = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
                 *scd_state = scd_state_val;
-                printk("SCD: %d\n", scd_state_val);
+                //printk("SCD: %d\n", scd_state_val);
             }
         }
     }
@@ -99,7 +99,7 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 
         if (fifo_count > 0)
         {
-            chip_op_mode = data->op_mode;
+            *chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
@@ -175,7 +175,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
                 sample_len = 70; // 18 data + 52 algo
             }
 
-            chip_op_mode = data->op_mode;
+            *chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
