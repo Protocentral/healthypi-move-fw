@@ -175,6 +175,7 @@ static void st_display_active_entry(void *o)
     LOG_DBG("Display SM Active Entry");
     //draw_scr_home(SCROLL_RIGHT);
     draw_scr_ppg(SCROLL_RIGHT);
+    
 }
 
 static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sample)

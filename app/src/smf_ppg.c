@@ -18,6 +18,7 @@ K_MUTEX_DEFINE(mutex_scd);
 K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
 
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
 
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
 
@@ -98,6 +99,12 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.scd_state = edata->scd_state;
             }
 
+            if(ppg_sensor_sample.scd_state!=3)
+            {
+                LOG_DBG("OFF SKIN");
+                k_sem_give(&sem_ppg_wrist_off_skin);
+            }
+
             k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
 
             /*struct hpi_hr_t hr_chan_value = {
@@ -149,6 +156,11 @@ static void st_ppg_samp_active_entry(void *o)
 static void st_ppg_samp_active_run(void *o)
 {
     // LOG_DBG("PPG SM Active Run");
+    if(k_sem_take(&sem_ppg_wrist_off_skin, K_FOREVER)==0)
+    {
+        LOG_DBG("Switching to Off Skin");
+        smf_set_state(SMF_CTX(&s_obj), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
+    }
 }
 
 static void st_ppg_samp_active_exit(void *o)
@@ -170,7 +182,7 @@ static void st_ppg_samp_probing_run(void *o)
     if(k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER)==0)
     {
         LOG_DBG("Switching to Active");
-        //smf_set_state(SMF_CTX(&s_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+        smf_set_state(SMF_CTX(&s_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
     }
 }
 
@@ -187,6 +199,12 @@ static void st_ppg_samp_off_skin_entry(void *o)
 static void st_ppg_samp_off_skin_run(void *o)
 {
     LOG_DBG("PPG SM Off Skin Running");
+
+    if(k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER)==0)
+    {
+        LOG_DBG("Switching to Probing");
+        smf_set_state(SMF_CTX(&s_obj), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
+    }
 }
 
 static void st_ppg_samp_off_skin_exit(void *o)

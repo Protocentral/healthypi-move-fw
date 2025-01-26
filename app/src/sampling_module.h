@@ -6,7 +6,6 @@ void ppg_data_stop(void);
 
 #define ECG_POINTS_PER_SAMPLE 8
 #define BIOZ_POINTS_PER_SAMPLE 8
-
 #define PPG_POINTS_PER_SAMPLE 8
 
 struct hpi_ecg_bioz_sensor_data_t

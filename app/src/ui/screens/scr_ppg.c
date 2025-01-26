@@ -11,8 +11,8 @@
 #include <zephyr/logging/log.h>
 
 #include "sampling_module.h"
-
 #include "ui/move_ui.h"
+#include "hpi_common_types.h"
 
 lv_obj_t *scr_ppg;
 
@@ -24,8 +24,7 @@ static lv_chart_series_t *ser_ppg;
 static lv_obj_t *label_ppg_hr;
 static lv_obj_t *label_ppg_spo2;
 static lv_obj_t *label_status;
-
-static bool chart_ppg_update = true;
+static lv_obj_t *label_ppg_no_signal;
 
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
@@ -141,24 +140,26 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
-    // Create Chart 1 - ECG
     chart_ppg = lv_chart_create(scr_ppg);
     lv_obj_set_size(chart_ppg, 390, 100);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
-
     lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ppg, PPG_DISP_WINDOW_SIZE);
-    // lv_chart_set_type(chart_ppg, LV_CHART_TYPE_LINE);
-    // lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    // lv_chart_set_range(chart_ppg, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
-    // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
+    
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 3, LV_PART_ITEMS);
+
+    label_ppg_no_signal = lv_label_create(scr_ppg);
+    lv_label_set_text(label_ppg_no_signal, LV_SYMBOL_UP "\nPlace device \non wrist \nto start PPG");
+    lv_obj_align_to(label_ppg_no_signal, NULL, LV_ALIGN_CENTER, -20, -40);
+    lv_obj_set_style_text_align(label_ppg_no_signal, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_style(label_ppg_no_signal, &style_lbl_red, 0);
+    lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
 
     // HR Number label
     label_ppg_hr = lv_label_create(scr_ppg);
@@ -224,7 +225,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
 
     // PPG Sensor Status label
     label_status = lv_label_create(scr_ppg);
-    lv_label_set_text(label_status, "Active");
+    lv_label_set_text(label_status, "--");
     lv_obj_align_to(label_status, btn_settings, LV_ALIGN_OUT_TOP_MID, 0, -10);
     lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_style(label_status, &style_lbl_white_small, 0);
@@ -269,6 +270,20 @@ void hpi_ppg_disp_update_spo2(int spo2)
     lv_label_set_text(label_ppg_spo2, buf);
 }
 
+static void hpi_scr_ppg_hide_plot(bool hide)
+{
+    if (hide)
+    {
+        lv_obj_add_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
+    }
+    else
+    {
+        lv_obj_clear_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 void hpi_ppg_disp_update_status(uint8_t status)
 {
     if (label_status == NULL)
@@ -278,17 +293,17 @@ void hpi_ppg_disp_update_status(uint8_t status)
 
     switch (status)
     {
-    case 0:
-        sprintf(stat_str, "Unk.");
-        break;
-    case 1:
+    case HPI_PPG_STATUS_UNKNOWN:
+    case HPI_PPG_STATUS_OFF_SKIN:
         sprintf(stat_str, "Off Skin");
+        hpi_scr_ppg_hide_plot(true);
         break;
-    case 2:
+    case HPI_PPG_STATUS_ON_OBJ:
         sprintf(stat_str, "On Obj.");
         break;
-    case 3:
+    case HPI_PPG_STATUS_ON_SKIN:
         sprintf(stat_str, "On Skin");
+        hpi_scr_ppg_hide_plot(false);
         break;
     default:
         sprintf(stat_str, "UNK.");
@@ -307,11 +322,10 @@ static void hpi_ppg_disp_do_set_scale(int disp_window_size)
 {
     if (gx >= (disp_window_size / 4))
     {
-        if (chart_ppg_update == true)
-            lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
+
+        lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
 
         gx = 0;
-
         y_max_ppg = -900000;
         y_min_ppg = 900000;
     }
@@ -321,24 +335,21 @@ void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_sensor_data_t ppg_sensor_sample)
 {
     uint32_t *data_ppg = ppg_sensor_sample.raw_red;
 
-    if (chart_ppg_update == true)
+    for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
-        for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
+        if (data_ppg[i] < y_min_ppg)
         {
-            if (data_ppg[i] < y_min_ppg)
-            {
-                y_min_ppg = data_ppg[i];
-            }
-
-            if (data_ppg[i] > y_max_ppg)
-            {
-                y_max_ppg = data_ppg[i];
-            }
-
-            lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
-
-            hpi_ppg_disp_add_samples(1);
-            hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
+            y_min_ppg = data_ppg[i];
         }
+
+        if (data_ppg[i] > y_max_ppg)
+        {
+            y_max_ppg = data_ppg[i];
+        }
+
+        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
+
+        hpi_ppg_disp_add_samples(1);
+        hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
     }
 }
