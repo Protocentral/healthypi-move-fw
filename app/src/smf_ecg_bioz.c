@@ -9,7 +9,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_INF);
 
 static const struct smf_state ecg_bioz_states[];
 
@@ -77,7 +77,7 @@ void smf_ecg_bioz_thread(void)
 {
     int ret;
 
-    LOG_DBG("ECG/BioZ SMF Thread Started");
+    LOG_INF("ECG/BioZ SMF Thread Started");
 
     // Wait for HW module to init ECG/BioZ
     k_sem_take(&sem_ecg_bioz_smf_start, K_FOREVER);

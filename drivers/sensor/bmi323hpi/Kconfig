@@ -8,3 +8,8 @@ config SENSOR_BMI323_HPI
 	select I2C
 	help
 		Enable driver for BMI323 IMU sensor.
+
+module = BMI323_HPI
+module-str = bmi323_hpi
+
+source "subsys/logging/Kconfig.template.log_config"

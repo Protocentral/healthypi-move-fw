@@ -14,10 +14,9 @@
 #include "fs_module.h"
 #include "ui/move_ui.h"
 
-LOG_MODULE_REGISTER(fs_module);
+LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_INF);
 
 K_SEM_DEFINE(sem_fs_module, 0, 1);
-
 #define PARTITION_NODE DT_NODELABEL(lfs1)
 
 #if DT_NODE_EXISTS(PARTITION_NODE)
@@ -84,11 +83,11 @@ static int littlefs_mount(struct fs_mount_t *mp)
     rc = fs_mount(mp);
     if (rc < 0)
     {
-        printk("FAIL: mount id %" PRIuPTR " at %s: %d\n",
+        LOG_DBG("FAIL: mount id %" PRIuPTR " at %s: %d\n",
                (uintptr_t)mp->storage_dev, mp->mnt_point, rc);
         return rc;
     }
-    printk("%s mount: %d\n", mp->mnt_point, rc);
+    LOG_DBG("%s mount: %d\n", mp->mnt_point, rc);
 
 
     return 0;
@@ -265,7 +264,7 @@ void fs_module_init(void)
     int rc;
     struct fs_statvfs sbuf;
 
-    printk("Initing FS...\n");
+    LOG_DBG("Initing FS...");
 
     rc = littlefs_mount(mp);
     if (rc < 0)
@@ -280,18 +279,18 @@ void fs_module_init(void)
         // goto out;
     }
 
-    printk("%s: bsize = %lu ; frsize = %lu ;"
+    LOG_DBG("%s: bsize = %lu ; frsize = %lu ;"
            " blocks = %lu ; bfree = %lu\n",
            mp->mnt_point,
            sbuf.f_bsize, sbuf.f_frsize,
            sbuf.f_blocks, sbuf.f_bfree);
     
-    rc = lsdir("/lfs");
+    /*rc = lsdir("/lfs");
     if (rc < 0)
     {
         LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         // goto out;
-    }
+    }*/
 
     //rc = settings_subsys_init();
 	if (rc) {
@@ -303,7 +302,6 @@ void fs_module_init(void)
 
     //hpi_settings_brightness++;
     //settings_save_one("hpi_set/brightness", &hpi_settings_brightness, sizeof(hpi_settings_brightness));
-    printk("Brightness: %d\n", hpi_settings_brightness);
-
-	printk("settings subsys initialization: OK.\n");
+    //printk("Brightness: %d\n", hpi_settings_brightness);
+	//printk("settings subsys initialization: OK.\n");
 }

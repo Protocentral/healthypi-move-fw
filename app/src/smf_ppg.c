@@ -2,7 +2,7 @@
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(smf_ppg, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(smf_ppg, LOG_LEVEL_INF);
 
 #include "hw_module.h"
 #include "max32664c.h"
@@ -62,7 +62,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
         if(edata->scd_state==3)
         {
             LOG_DBG("ON SKIN");
-            k_sem_give(&sem_ppg_wrist_on_skin);
+            //k_sem_give(&sem_ppg_wrist_on_skin);
         }
         return;
     }
@@ -102,7 +102,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             if(ppg_sensor_sample.scd_state!=3)
             {
                 LOG_DBG("OFF SKIN");
-                k_sem_give(&sem_ppg_wrist_off_skin);
+                //k_sem_give(&sem_ppg_wrist_off_skin);
             }
 
             k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
@@ -230,7 +230,7 @@ void smf_ppg_thread(void)
         return;
     }
 
-    smf_set_initial(SMF_CTX(&s_obj), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
+    smf_set_initial(SMF_CTX(&s_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
     k_sem_give(&sem_ppg_wrist_thread_start);
 

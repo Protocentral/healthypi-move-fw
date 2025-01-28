@@ -326,6 +326,7 @@
 		t-exit-dpd = <30000>;
 		jedec-id = [ ef 40 21  ];
 		status = "okay";
+		
 	};
 };
 
@@ -363,6 +364,7 @@
 		//ecg-invert;
 		//ecg-dcloff-enable;
 		//ecg-dcloff-current = <1>; // 5 nA
+		zephyr,deferred-init;
 	};
 };
 

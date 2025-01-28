@@ -16,3 +16,8 @@ config SENSOR_MAX30001_INIT_PRIORITY
 	  MAX30001 device driver initialization priority.
 
 endif # SENSOR_MAX30001
+
+module = MAX30001
+module-str = max30001
+
+source "subsys/logging/Kconfig.template.log_config"

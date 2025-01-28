@@ -10,7 +10,7 @@
 #include "ui/move_ui.h"
 #include "bmi323_hpi.h"
 
-LOG_MODULE_REGISTER(smf_imu, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(smf_imu, LOG_LEVEL_INF);
 
 static const struct smf_state imu_states[];
 
@@ -125,7 +125,7 @@ void smf_imu_thread(void)
 {
     int ret;
 
-    LOG_DBG("IMU SMF Thread Started");
+    LOG_INF("IMU SMF Thread Started");
 
     // Wait for HW module to init IMU
     k_sem_take(&sem_imu_smf_start, K_FOREVER);
