@@ -10,7 +10,7 @@
 
 #include "max30001.h"
 
-LOG_MODULE_REGISTER(SENSOR_MAX30001, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(SENSOR_MAX30001, CONFIG_MAX30001_LOG_LEVEL);
 
 #if DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 0
 #warning "MAX30001 driver enabled without any devices"
@@ -222,12 +222,12 @@ static int max30001_enable_ecg(const struct device *dev, bool ecg_en)
 
     if (ecg_en == true)
     {
-        LOG_INF("Enabling MAX30001 ECG...");
+        LOG_DBG("Enabling MAX30001 ECG...");
         data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 1;
     }
     else
     {
-        LOG_INF("Disabling MAX30001 ECG...");
+        LOG_DBG("Disabling MAX30001 ECG...");
         data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 0;
     }
     //_max30001RegWrite(dev, CNFG_EMUX, 0x0B0000); // Pins internally connection to ECG Channels
@@ -242,12 +242,12 @@ static int max30001_enable_bioz(const struct device *dev, bool bioz_en)
 
     if (bioz_en == true)
     {
-        LOG_INF("Enabling MAX30001 BioZ...");
+        LOG_DBG("Enabling MAX30001 BioZ...");
         data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 1;
     }
     else
     {
-        LOG_INF("Disabling MAX30001 BioZ...");
+        LOG_DBG("Disabling MAX30001 BioZ...");
         data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 0;
     }
     return _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
@@ -261,17 +261,17 @@ static void max30001_enable_rtor(const struct device *dev)
 
 static void max30001_enable_dcloff(const struct device *dev)
 {
-    LOG_INF("Enabling MAX30001 DCLOFF...\n");
+    LOG_DBG("Enabling MAX30001 DCLOFF...\n");
 }
 
 static void max30001_disable_rtor(const struct device *dev)
 {
-    LOG_INF("Disabling MAX30001 RTOR...\n");
+    LOG_DBG("Disabling MAX30001 RTOR...\n");
 }
 
 static void max30001_disable_dcloff(const struct device *dev)
 {
-    LOG_INF("Disabling MAX30001 DCLOFF...\n");
+    LOG_DBG("Disabling MAX30001 DCLOFF...\n");
 }
 
 static int max30001_sample_fetch(const struct device *dev,

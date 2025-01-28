@@ -669,7 +669,7 @@ void hw_init(void)
 
     // Init IMU device
     ret = device_init(imu_dev);
-    k_msleep(100);
+    k_msleep(10);
 
     if (!device_is_ready(imu_dev))
     {
@@ -683,10 +683,13 @@ void hw_init(void)
     }
 
     // Turn 1.8v power to sensors ON
-    regulator_disable(ldsw_sens_1_8);
-    k_msleep(100);
+    //regulator_disable(ldsw_sens_1_8);
+    //k_msleep(100);
     regulator_enable(ldsw_sens_1_8);
-    k_msleep(1000);
+    k_msleep(100);
+
+    device_init(max30001_dev);
+    k_sleep(K_MSEC(10));
 
     if (!device_is_ready(max30001_dev))
     {
@@ -715,7 +718,7 @@ void hw_init(void)
     k_sleep(K_MSEC(100));
 
     device_init(max32664c_dev);
-    k_sleep(K_MSEC(500));
+    k_sleep(K_MSEC(10));
 
     if (!device_is_ready(max32664c_dev))
     {
@@ -804,7 +807,7 @@ void hw_init(void)
     }
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    LOG_INF("SPIM runs at 32MHz !");
+    LOG_DBG("SPIM runs at 32MHz !");
 #endif
 
     // setup_pmic_callbacks();

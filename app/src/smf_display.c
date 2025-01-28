@@ -10,7 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
@@ -175,6 +175,7 @@ static void st_display_active_entry(void *o)
     LOG_DBG("Display SM Active Entry");
     //draw_scr_home(SCROLL_RIGHT);
     draw_scr_ppg(SCROLL_RIGHT);
+    
 }
 
 static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sample)
@@ -182,7 +183,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
     if (curr_screen == SCR_PLOT_PPG)
     {
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
-        hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
+        //hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
         if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
         {
@@ -468,7 +469,7 @@ void smf_display_thread(void)
 
     k_sem_take(&sem_disp_smf_start, K_FOREVER);
 
-    LOG_DBG("Display SMF Thread Started");
+    LOG_INF("Display SMF Thread Started");
 
     smf_set_initial(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_INIT]);
 
