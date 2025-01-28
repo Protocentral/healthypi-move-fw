@@ -461,7 +461,7 @@ static int sh8601_init(const struct device *dev)
 
 	data->device_in_sleep = false;
 
-	LOG_INF("Display SH8601 init!");
+	LOG_DBG("Display SH8601 init!");
 
 	k_msleep(200);
 
