@@ -174,7 +174,8 @@ static void st_display_active_entry(void *o)
 {
     LOG_DBG("Display SM Active Entry");
     //draw_scr_home(SCROLL_RIGHT);
-    draw_scr_ppg(SCROLL_RIGHT);
+    //draw_scr_ppg(SCROLL_RIGHT);
+    draw_scr_ecg(SCROLL_RIGHT);
     
 }
 

@@ -119,14 +119,14 @@ K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
 K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
-K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
-K_SEM_DEFINE(sem_ecg_bioz_thread_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_sm_start, 0, 1);
+
 
 // Signals to start the SMF threads
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
-K_SEM_DEFINE(sem_ecg_bioz_smf_start, 0, 1);
+K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 1);
+K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
@@ -703,7 +703,7 @@ void hw_init(void)
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
 
-        k_sem_give(&sem_ecg_bioz_smf_start);
+        k_sem_give(&sem_ecg_bioz_sm_start);
     }
 
     k_sleep(K_MSEC(100));
@@ -781,7 +781,7 @@ void hw_init(void)
             sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
         }*/
 
-        k_sem_give(&sem_ppg_sm_start);
+        k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
     device_init(max32664d_dev);
@@ -799,11 +799,7 @@ void hw_init(void)
         max32664d_device_present = true;
         hw_add_boot_msg("MAX32664D", true);
 
-        struct sensor_value mode_set;
-
-        // Set initial mode
-        mode_set.val1 = MAX32664_OP_MODE_BPT;
-        sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+        k_sem_give(&sem_ppg_finger_sm_start);
     }
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
@@ -840,18 +836,6 @@ void hw_init(void)
     // pm_device_runtime_put(w25_flash_dev);
 
     k_sem_give(&sem_hw_inited);
-
-    // Start sampling only if devices are present
-
-    if (max30001_device_present)
-    {
-        k_sem_give(&sem_ecg_bioz_thread_start);
-    }
-
-    if (max32664d_device_present)
-    {
-        k_sem_give(&sem_ppg_finger_thread_start);
-    }
 
     LOG_INF("HW Init complete");
 
