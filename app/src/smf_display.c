@@ -10,6 +10,8 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
+#define HPI_DEFAULT_START_SCREEN SCR_TEMP
+
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -44,6 +46,7 @@ static bool m_disp_batt_charging = false;
 static struct rtc_time m_disp_sys_time;
 static uint8_t m_disp_hr = 0;
 static uint32_t m_disp_steps = 0;
+static float m_disp_temp = 0;
 
 int scr_ppg_hr_spo2_refresh_counter = 0;
 
@@ -321,7 +324,7 @@ static void st_display_active_entry(void *o)
     // draw_scr_ecg(SCROLL_RIGHT);
     if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
     {
-        hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+        hpi_move_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
     }
     else
     {
@@ -340,25 +343,14 @@ static void st_display_active_run(void *o)
         hpi_disp_process_ppg_data(ppg_sensor_sample);
     }
 
-    /*if (k_msgq_get(&q_plot_hrv, &hrv_sample, K_NO_WAIT) == 0)
-    {
-        if (hpi_disp_get_curr_screen()== SCR_PLOT_HRV)
-        {
-            hpi_disp_hrv_update_sdnn(hrv_sample.rmssd);
-        }
-        else if (hpi_disp_get_curr_screen()== SCR_PLOT_HRV_SCATTER)
-        {
-            hpi_disp_hrv_scatter_update_sdnn(hrv_sample.rmssd);
-        }
-    }*/
-
     if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
     {
         hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
     }
 
-    if (hpi_disp_get_curr_screen() == SCR_HOME)
+    switch (hpi_disp_get_curr_screen())
     {
+    case SCR_HOME:
         // ui_hr_button_update(m_disp_hr);
 
         // if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
@@ -369,6 +361,12 @@ static void st_display_active_run(void *o)
             ui_hr_button_update(m_disp_hr);
             ui_steps_button_update(m_disp_steps);
         }
+        break;
+    case SCR_TEMP:
+        hpi_temp_disp_update_temp_f((float)m_disp_temp);
+        break;
+    default:
+        break;
     }
 
     // if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
@@ -529,6 +527,7 @@ ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
+    m_disp_temp = hpi_temp->temp_f;
     // printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
