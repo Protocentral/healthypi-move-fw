@@ -50,8 +50,6 @@ extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_lbl_white_14;
 extern lv_style_t style_lbl_black_small;
 
-extern int curr_screen;
-
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
 static float gx = 0;
@@ -112,7 +110,7 @@ static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
         // lv_obj__flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
 
         bpt_meas_started = true;
-        hw_bpt_start_est();
+        //hw_bpt_start_est();
     }
 }
 
@@ -210,7 +208,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_btn_bpt_measure, "Measure BP");
     lv_obj_center(label_btn_bpt_measure);
 
-    curr_screen = SCR_BPT;
+    hpi_disp_set_curr_screen(SCR_BPT);
     hpi_show_screen(scr_bpt, m_scroll_dir);
 }
 

@@ -10,6 +10,13 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_INF);
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 40
 
+#define DEFAULT_DATE 240428 // YYMMDD 28th April 2024
+#define DEFAULT_TIME 121212 // HHMMSS 12:12:12
+
+#define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
+#define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
+
+
 SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), SENSOR_CHAN_VOLTAGE);
 
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
@@ -112,6 +119,71 @@ void ppg_finger_sampling_trigger_thread(void)
 
         k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
     }
+}
+
+void hpi_bpt_start_cal(void)
+{
+    LOG_INF("Starting BPT Calibration\n");
+
+    struct sensor_value data_time_val;
+    data_time_val.val1 = DEFAULT_DATE; // Date
+    data_time_val.val2 = DEFAULT_TIME; // Time
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
+    k_sleep(K_MSEC(100));
+
+    struct sensor_value bp_cal_val;
+    bp_cal_val.val1 = 0x00787A7D; // Sys vals
+    bp_cal_val.val2 = 0x00505152; // Dia vals
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_BP_CAL, &bp_cal_val);
+    k_sleep(K_MSEC(100));
+
+    // Start BPT Calibration
+    struct sensor_value mode_val;
+    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_START;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
+    k_sleep(K_MSEC(100));
+
+    // ppg_data_start();
+}
+
+/**
+ * @brief Starts the Blood Pressure Trend (BPT) estimation process.
+ *
+ * This function sets the date and time for the BPT estimation, then sets the 
+ * operation mode to BPT and starts the estimation process.
+ */
+void hpi_bpt_start_est(void)
+{
+    struct sensor_value load_cal;
+    load_cal.val1 = 0x00000000;
+    // sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
+
+    struct sensor_value data_time_val;
+    data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
+    data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
+    k_sleep(K_MSEC(100));
+
+    struct sensor_value mode_set;
+    mode_set.val1 = MAX32664_OP_MODE_BPT;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+
+    k_sleep(K_MSEC(1000));
+    // ppg_data_start();
+}
+
+void hpi_bpt_stop(void)
+{
+    struct sensor_value mode_val;
+    mode_val.val1 = MAX32664_ATTR_STOP_EST;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_STOP_EST, &mode_val);
+}
+
+void hpi_bpt_get_calib(void)
+{
+    struct sensor_value mode_val;
+    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_GET_VECTOR;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
 static void st_ppg_fing_idle_entry(void *o)

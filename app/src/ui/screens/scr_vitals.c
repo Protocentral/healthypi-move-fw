@@ -26,8 +26,6 @@ extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_lbl_red_small;
 
-extern int curr_screen;
-
 void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
 {
     scr_vitals_home = lv_obj_create(NULL);
@@ -117,7 +115,7 @@ void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(label_temp_cap, label_vitals_temp, LV_ALIGN_OUT_LEFT_MID, -10, 0);
     lv_obj_add_style(label_temp_cap, &style_lbl_red_small, 0);
 
-    curr_screen = SCR_VITALS;
+    //curr_screen = SCR_VITALS;
 
     lv_obj_add_event_cb(scr_vitals_home, disp_screen_event, LV_EVENT_GESTURE, NULL);
     hpi_show_screen(scr_vitals_home, m_scroll_dir);

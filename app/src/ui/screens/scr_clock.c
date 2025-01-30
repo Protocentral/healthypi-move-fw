@@ -28,7 +28,6 @@ lv_obj_t *ui_label_date;
 lv_obj_t *ui_step_group;
 
 extern struct rtc_time global_system_time;
-extern int curr_screen;
 
 static void scr_clock_hr_event_handler(lv_event_t *e)
 {
@@ -93,7 +92,7 @@ void draw_scr_clockface(enum scroll_dir m_scroll_dir)
 
     lv_obj_add_event_cb(btn_hr_disp, scr_clock_hr_event_handler, LV_EVENT_ALL, NULL);
 
-    curr_screen = SCR_CLOCK;
+    hpi_disp_set_curr_screen(SCR_CLOCK);
 
     // lv_obj_add_event_cb(scr_clock, disp_screen_event, LV_EVENT_GESTURE, NULL);
     hpi_show_screen(scr_clock, m_scroll_dir);

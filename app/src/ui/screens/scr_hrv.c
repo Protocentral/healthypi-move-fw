@@ -35,8 +35,6 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_lbl_red;
 extern lv_style_t style_lbl_white_small;
 
-extern int curr_screen;
-
 static void anim_x_cb(void * var, int32_t v)
 {
     lv_obj_set_x(var, v);
@@ -138,7 +136,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir)
     lv_anim_set_values(&a, 10, 300);
     lv_anim_start(&a);
 
-    curr_screen = SCR_PLOT_HRV;
+    hpi_disp_set_curr_screen(SCR_PLOT_HRV);
 
     // Add screen to display
     hpi_show_screen(scr_hrv, m_scroll_dir);

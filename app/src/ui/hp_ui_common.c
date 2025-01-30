@@ -54,7 +54,7 @@ lv_style_t style_lbl_black_small;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
-int curr_screen = SCR_VITALS;
+static int curr_screen = SCR_HOME;
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
@@ -184,6 +184,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
         break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
+        break;
+    case SCR_TEMP:
+        draw_scr_temp(m_scroll_dir);
         break;
     case SCR_PLOT_ECG:
         draw_scr_ecg(m_scroll_dir);
@@ -468,4 +471,12 @@ void hpi_disp_set_curr_screen(int screen)
     k_mutex_lock(&mutex_curr_screen, K_FOREVER);
     curr_screen = screen;
     k_mutex_unlock(&mutex_curr_screen);
+}
+
+int hpi_disp_get_curr_screen(void)
+{
+    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
+    int screen = curr_screen;
+    k_mutex_unlock(&mutex_curr_screen);
+    return screen;
 }

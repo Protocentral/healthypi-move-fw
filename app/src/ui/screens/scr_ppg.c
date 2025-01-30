@@ -12,7 +12,6 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
-#include "hpi_common_types.h"
 
 lv_obj_t *scr_ppg;
 

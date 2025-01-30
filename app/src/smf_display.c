@@ -45,7 +45,6 @@ static struct rtc_time m_disp_sys_time;
 static uint8_t m_disp_hr = 0;
 static uint32_t m_disp_steps = 0;
 
-extern int curr_screen;
 int scr_ppg_hr_spo2_refresh_counter = 0;
 
 // extern uint16_t disp_thread_refresh_int_ms;
@@ -170,21 +169,12 @@ static void st_display_boot_exit(void *o)
     lv_disp_trig_activity(NULL);
 }
 
-static void st_display_active_entry(void *o)
-{
-    LOG_DBG("Display SM Active Entry");
-    //draw_scr_home(SCROLL_RIGHT);
-    //draw_scr_ppg(SCROLL_RIGHT);
-    draw_scr_ecg(SCROLL_RIGHT);
-    
-}
-
 static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sample)
 {
-    if (curr_screen == SCR_PLOT_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_PLOT_PPG)
     {
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
-        //hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
+        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
         if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
         {
@@ -197,10 +187,10 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
 
         lv_disp_trig_activity(NULL);
     }
-    else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
+    else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
     {
     }
-    else if (curr_screen == SCR_PLOT_HRV)
+    else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV)
     {
         if (ppg_sensor_sample.rtor != 0) // && ppg_sensor_sample.rtor != prev_rtor)
         {
@@ -210,7 +200,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }
-    else if (curr_screen == SCR_PLOT_HRV_SCATTER)
+    else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV_SCATTER)
     {
         if (ppg_sensor_sample.rtor != 0) //&& ppg_sensor_sample.rtor != prev_rtor)
         {
@@ -220,7 +210,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }
-    else if (curr_screen == SUBSCR_BPT_CALIBRATE)
+    else if (hpi_disp_get_curr_screen() == SUBSCR_BPT_CALIBRATE)
     {
 
         // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
@@ -256,7 +246,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
         }*/
     }
     /*
-    if (curr_screen == SUBSCR_BPT_MEASURE)
+    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
     {
     if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
     {
@@ -291,7 +281,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
                     bpt_meas_started = false;
                     hpi_disp_update_bp(global_bp_sys, global_bp_dia);
 
-                    if (curr_screen == SUBSCR_BPT_MEASURE)
+                    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
                     {
                         lv_obj_clear_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
                         lv_obj_clear_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
@@ -311,15 +301,31 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
 {
-    if (curr_screen == SCR_PLOT_ECG)
+    if (hpi_disp_get_curr_screen() == SCR_PLOT_ECG)
     {
         //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
         hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
     }
-    else if (curr_screen == SCR_PLOT_EDA)
+    else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
         hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
+    }
+}
+
+static void st_display_active_entry(void *o)
+{
+    LOG_DBG("Display SM Active Entry");
+    // draw_scr_home(SCROLL_RIGHT);
+    // draw_scr_ppg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
+    {
+        hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+    }
+    else
+    {
+        hpi_move_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
     }
 }
 
@@ -336,11 +342,11 @@ static void st_display_active_run(void *o)
 
     /*if (k_msgq_get(&q_plot_hrv, &hrv_sample, K_NO_WAIT) == 0)
     {
-        if (curr_screen == SCR_PLOT_HRV)
+        if (hpi_disp_get_curr_screen()== SCR_PLOT_HRV)
         {
             hpi_disp_hrv_update_sdnn(hrv_sample.rmssd);
         }
-        else if (curr_screen == SCR_PLOT_HRV_SCATTER)
+        else if (hpi_disp_get_curr_screen()== SCR_PLOT_HRV_SCATTER)
         {
             hpi_disp_hrv_scatter_update_sdnn(hrv_sample.rmssd);
         }
@@ -351,7 +357,7 @@ static void st_display_active_run(void *o)
         hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
     }
 
-    if (curr_screen == SCR_HOME)
+    if (hpi_disp_get_curr_screen() == SCR_HOME)
     {
         // ui_hr_button_update(m_disp_hr);
 
@@ -392,7 +398,7 @@ static void st_display_active_run(void *o)
         }
         else
         {
-            if (curr_screen == SCR_HOME)
+            if (hpi_disp_get_curr_screen()== SCR_HOME)
             {
                 hpi_display_sleep_on();
             }

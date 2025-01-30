@@ -59,15 +59,6 @@
 LOG_MODULE_REGISTER(hw_module);
 char curr_string[40];
 
-/*******EXTERNS******/
-extern struct k_msgq q_session_cmd_msg;
-
-ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
-ZBUS_CHAN_DECLARE(steps_chan);
-ZBUS_CHAN_DECLARE(temp_chan);
-
-/****END EXTERNS****/
-
 // Peripheral Device Pointers
 static const struct device *max30208_dev = DEVICE_DT_GET_ANY(maxim_max30208);
 static const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
@@ -118,9 +109,6 @@ static bool rx_throttled;
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
-K_SEM_DEFINE(sem_ecg_intb_recd, 0, 1);
-
-
 // Signals to start the SMF threads
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
@@ -132,23 +120,22 @@ K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
-#define MOVE_SAMPLING_DISABLED 0
+ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
+ZBUS_CHAN_DECLARE(steps_chan);
+ZBUS_CHAN_DECLARE(temp_chan);
 
-static float max_charge_current;
-static float term_charge_current;
 static int64_t ref_time;
-
-void ecg_sampling_trigger(void);
 
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
 };
 
-/* nPM1300 CHARGER.BCHGCHARGESTATUS.CONSTANTCURRENT register bitmask */
-#define NPM1300_CHG_STATUS_CC_MASK BIT_MASK(3)
+static float max_charge_current;
+static float term_charge_current;
 
+/*******EXTERNS******/
+extern struct k_msgq q_session_cmd_msg;
 extern struct k_sem sem_disp_ready;
-
 extern struct k_msgq q_disp_boot_msg;
 
 static void gpio_keys_cb_handler(struct input_event *evt)
@@ -346,6 +333,8 @@ int npm_fuel_gauge_init(const struct device *charger)
 
 int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected)
 {
+    /* nPM1300 CHARGER.BCHGCHARGESTATUS.CONSTANTCURRENT register bitmask */
+#define NPM1300_CHG_STATUS_CC_MASK BIT_MASK(3)
     float voltage;
     float current;
     float temp;
@@ -370,7 +359,7 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected)
 
     soc = nrf_fuel_gauge_process(voltage, current, temp, delta, vbus_connected, NULL);
     tte = nrf_fuel_gauge_tte_get();
-    ttf = nrf_fuel_gauge_ttf_get(cc_charging, -term_charge_current);
+    ttf = nrf_fuel_gauge_ttf_get(cc_charging, term_charge_current);
 
     // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
     // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
@@ -440,71 +429,6 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
 
     int ret = rtc_set_time(rtc_dev, &time_set);
     printk("RTC Set Time: %d\n", ret);
-}
-
-#define DEFAULT_DATE 240428 // YYMMDD 28th April 2024
-#define DEFAULT_TIME 121212 // HHMMSS 12:12:12
-
-#define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
-#define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
-
-void hw_bpt_start_cal(void)
-{
-    LOG_INF("Starting BPT Calibration\n");
-
-    struct sensor_value data_time_val;
-    data_time_val.val1 = DEFAULT_DATE; // Date
-    data_time_val.val2 = DEFAULT_TIME; // Time
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
-    k_sleep(K_MSEC(100));
-
-    struct sensor_value bp_cal_val;
-    bp_cal_val.val1 = 0x00787A7D; // Sys vals
-    bp_cal_val.val2 = 0x00505152; // Dia vals
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_BP_CAL, &bp_cal_val);
-    k_sleep(K_MSEC(100));
-
-    // Start BPT Calibration
-    struct sensor_value mode_val;
-    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_START;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
-    k_sleep(K_MSEC(100));
-
-    // ppg_data_start();
-}
-
-void hw_bpt_start_est(void)
-{
-    struct sensor_value load_cal;
-    load_cal.val1 = 0x00000000;
-    // sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
-
-    struct sensor_value data_time_val;
-    data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
-    data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
-    k_sleep(K_MSEC(100));
-
-    struct sensor_value mode_set;
-    mode_set.val1 = MAX32664_OP_MODE_BPT;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
-
-    k_sleep(K_MSEC(1000));
-    // ppg_data_start();
-}
-
-void hw_bpt_stop(void)
-{
-    struct sensor_value mode_val;
-    mode_val.val1 = MAX32664_ATTR_STOP_EST;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_STOP_EST, &mode_val);
-}
-
-void hw_bpt_get_calib(void)
-{
-    struct sensor_value mode_val;
-    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_GET_VECTOR;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
 void hw_pwr_display_enable(void)
@@ -594,7 +518,7 @@ static void hw_add_boot_msg(char *msg, bool status)
     k_msgq_put(&q_disp_boot_msg, &boot_msg, K_NO_WAIT);
 }
 
-static void hw_en_pmic_cb(void)
+static int hw_enable_pmic_callback(void)
 {
     static struct gpio_callback event_cb;
     int ret = 0;
@@ -606,7 +530,7 @@ static void hw_en_pmic_cb(void)
     if (ret)
     {
         LOG_ERR("Failed to add pmic callback");
-        return 0;
+        return ret;
     }
 
     /* Initialise vbus detection status. */
@@ -615,10 +539,11 @@ static void hw_en_pmic_cb(void)
 
     if (ret < 0)
     {
-        return false;
+        return ret;
     }
 
     vbus_connected = (val.val1 != 0) || (val.val2 != 0);
+    return 0;
 }
 
 void hw_init(void)
@@ -655,7 +580,7 @@ void hw_init(void)
     // Wait for display system to be initialized and ready
     k_sem_take(&sem_disp_ready, K_FOREVER);
 
-    // Init PMIC Fuel Gauge
+    hw_enable_pmic_callback();
     if (npm_fuel_gauge_init(charger) < 0)
     {
         LOG_ERR("Could not initialise fuel gauge.\n");
@@ -664,7 +589,7 @@ void hw_init(void)
     else
     {
         hw_add_boot_msg("PMIC", true);
-        hw_en_pmic_cb();
+        hw_enable_pmic_callback();
     }
 
     // Init IMU device
@@ -683,8 +608,8 @@ void hw_init(void)
     }
 
     // Turn 1.8v power to sensors ON
-    //regulator_disable(ldsw_sens_1_8);
-    //k_msleep(100);
+    // regulator_disable(ldsw_sens_1_8);
+    // k_msleep(100);
     regulator_enable(ldsw_sens_1_8);
     k_msleep(100);
 
@@ -847,6 +772,15 @@ void hw_init(void)
     // usb_init();
 }
 
+/**
+ * @brief Retrieves the current time from the RTC (Real-Time Clock) device.
+ *
+ * This function calls the rtc_get_time function to get the current time from
+ * the RTC device and stores it in the global_system_time variable. It then
+ * returns the current time.
+ *
+ * @return struct rtc_time The current time retrieved from the RTC device.
+ */
 struct rtc_time hw_get_current_time(void)
 {
     rtc_get_time(rtc_dev, &global_system_time);
