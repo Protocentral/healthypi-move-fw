@@ -10,7 +10,7 @@
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/settings/settings.h>
 
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
 

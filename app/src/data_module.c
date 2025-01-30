@@ -11,7 +11,7 @@ LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 #include "max30001.h"
 
 #include "hw_module.h"
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ble_module.h"
 #include "algos.h"

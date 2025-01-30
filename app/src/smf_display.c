@@ -6,7 +6,7 @@
 #include <zephyr/zbus/zbus.h>
 
 #include <display_sh8601.h>
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
 

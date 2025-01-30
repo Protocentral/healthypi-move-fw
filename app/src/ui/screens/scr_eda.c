@@ -10,7 +10,7 @@
 #include <app_version.h>
 #include <zephyr/logging/log.h>
 
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 
 #include "ui/move_ui.h"
 

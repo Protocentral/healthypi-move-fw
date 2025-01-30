@@ -6,7 +6,7 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_INF);
 
 #include "hw_module.h"
 #include "max32664c.h"
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 
 #define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 
