@@ -19,7 +19,7 @@ void scr_boot_add_final(bool status);
 // Externs
 extern lv_style_t style_lbl_orange;
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 
 static lv_obj_t * ta_boot;

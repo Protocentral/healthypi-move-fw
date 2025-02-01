@@ -1,6 +1,4 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <stdio.h>
@@ -13,6 +11,7 @@
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
+#include "record_module.h"
 
 LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_INF);
 
@@ -142,48 +141,6 @@ static int lsdir(const char *path)
     return res;
 }
 
-void record_write_to_file(int current_session_log_id, int current_session_log_counter, struct hpi_ecg_bioz_sensor_data_t *current_session_log_points)
-{
-    struct fs_file_t file;
-    struct fs_statvfs sbuf;
-
-    fs_file_t_init(&file);
-
-    fs_mkdir("/lfs/log");
-
-    char fname[30] = "/lfs/log/";
-
-    printf("Write to file... %d\n", current_session_log_id);
-    char session_id_str[5];
-    sprintf(session_id_str, "%d", current_session_log_id);
-    strcat(fname, session_id_str);
-
-    printf("Session Length: %d\n", current_session_log_counter);
-
-    int rc = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
-    if (rc < 0)
-    {
-        printk("FAIL: open %s: %d", fname, rc);
-    }
-    // Session log header
-    // rc=fs_write(&file, &current_session_log_, sizeof(current_session_log_id));
-
-    for (int i = 0; i < current_session_log_counter; i++)
-    {
-        rc = fs_write(&file, &current_session_log_points[i], sizeof(struct hpi_ecg_bioz_sensor_data_t));
-    }
-
-    rc = fs_close(&file);
-    rc = fs_sync(&file);
-
-    rc = fs_statvfs(mp->mnt_point, &sbuf);
-    if (rc < 0)
-    {
-        printk("FAIL: statvfs: %d\n", rc);
-        // goto out;
-    }
-}
-
 void record_wipe_all(void)
 {
     int err;
@@ -231,33 +188,22 @@ void record_wipe_all(void)
     fs_closedir(&dir);
 }
 
-static int hpi_settings_set(const char *name, size_t len,
-                            settings_read_cb read_cb, void *cb_arg)
+void write_test_data(void)
 {
-    const char *next;
-    int rc;
+    struct hpi_hr_trend_one_hour_t hr_data;
+    
+    hr_data.hr_max = 100;
+    hr_data.hr_min = 60;
+    hr_data.hr_mean = 80;
 
-    if (settings_name_steq(name, "brightness", &next) && !next) {
-        if (len != sizeof(hpi_settings_brightness)) {
-            return -EINVAL;
-        }
-
-        rc = read_cb(cb_arg, &hpi_settings_brightness, sizeof(hpi_settings_brightness));
-        if (rc >= 0) {
-            return 0;
-        }
-
-        return rc;
+    for (int i = 0; i < 60; i++)
+    {
+        hr_data.hr_points->hr = 80;
+        hr_data.hr_points->timestamp = sys_clock_cycle_get_32();
     }
 
-
-    return -ENOENT;
+    hpi_rec_write_hour(sys_clock_cycle_get_32(), hr_data);
 }
-
-struct settings_handler hpi_settings_conf = {
-    .name = "hpi_set",
-    .h_set = hpi_settings_set
-};
 
 void fs_module_init(void)
 {
@@ -285,23 +231,20 @@ void fs_module_init(void)
            sbuf.f_bsize, sbuf.f_frsize,
            sbuf.f_blocks, sbuf.f_bfree);
     
-    /*rc = lsdir("/lfs");
+    rc = lsdir("/lfs");
     if (rc < 0)
     {
         LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         // goto out;
-    }*/
+    }
 
-    //rc = settings_subsys_init();
-	if (rc) {
-		printk("settings subsys initialization: fail (err %d)\n", rc);
-		return;
-	}
-    //settings_register(&hpi_settings_conf);
-    //settings_load();
+    rc = lsdir("/lfs/hr");
+    if (rc < 0)
+    {
+        LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+        // goto out;
+    }
 
-    //hpi_settings_brightness++;
-    //settings_save_one("hpi_set/brightness", &hpi_settings_brightness, sizeof(hpi_settings_brightness));
-    //printk("Brightness: %d\n", hpi_settings_brightness);
-	//printk("settings subsys initialization: OK.\n");
+    write_test_data();
 }
+

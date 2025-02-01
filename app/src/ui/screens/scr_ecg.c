@@ -24,7 +24,7 @@ static lv_chart_series_t *ser_ecg;
 static lv_obj_t *label_ecg_hr;
 static lv_obj_t *label_ecg_lead_off;
 
-static lv_obj_t *btn_ecg_measure_start;
+static lv_obj_t *btn_hr_settings;
 
 static bool chart_ecg_update = true;
 static float y_max_ecg = 0;
@@ -37,18 +37,18 @@ static float gx = 0;
 // Externs
 extern lv_style_t style_lbl_orange;
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 
 
 
-static void scr_ecg_measure_btn_event_handler(lv_event_t *e)
+static void scr_hr_settings_btn_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
-        lv_obj_add_flag(btn_ecg_measure_start, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(btn_hr_settings, LV_OBJ_FLAG_HIDDEN);
         hw_max30001_ecg_enable(true);
         //lv_example_msgbox_2();
     }
@@ -95,7 +95,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_hr_cap = lv_label_create(scr_ecg);
     lv_label_set_text(label_hr_cap, "HR");
     lv_obj_align_to(label_hr_cap, label_ecg_hr, LV_ALIGN_OUT_LEFT_MID, -5, -5);
-    lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_hr_cap, &style_red_medium, 0);
 
     // Bottom signal label
     lv_obj_t *label_signal = lv_label_create(scr_ecg);
@@ -110,12 +110,12 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
     lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
 
-    btn_ecg_measure_start = lv_btn_create(scr_ecg);
-    lv_obj_add_event_cb(btn_ecg_measure_start, scr_ecg_measure_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_ecg_measure_start, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_set_height(btn_ecg_measure_start, 80);
+    btn_hr_settings = lv_btn_create(scr_ecg);
+    lv_obj_add_event_cb(btn_hr_settings, scr_hr_settings_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_align(btn_hr_settings, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_set_height(btn_hr_settings, 80);
 
-    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_ecg_measure_start);
+    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_hr_settings);
     lv_label_set_text(label_btn_bpt_measure, LV_SYMBOL_PLAY " Measure ECG");
     lv_obj_center(label_btn_bpt_measure);
 

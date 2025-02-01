@@ -28,7 +28,7 @@ static bool chart_hrv_update = true;
 static volatile float prev_rtor = 0;
 
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 
 void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
@@ -72,7 +72,7 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_hr_cap = lv_label_create(scr_hrv_scatter);
     lv_label_set_text(label_hr_cap, "RR Int");
     lv_obj_align_to(label_hr_cap, label_hrv_rri, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_hr_cap, &style_red_medium, 0);
 
     // RR Int bpm label
     lv_obj_t *label_hr_sub = lv_label_create(scr_hrv_scatter);
@@ -89,7 +89,7 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_sdnn_cap = lv_label_create(scr_hrv_scatter);
     lv_label_set_text(label_sdnn_cap, "SDNN");
     lv_obj_align_to(label_sdnn_cap, label_hrv_sdnn, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_sdnn_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_sdnn_cap, &style_red_medium, 0);
 
     // SDNN bpm label
     lv_obj_t *label_sdnn_sub = lv_label_create(scr_hrv_scatter);

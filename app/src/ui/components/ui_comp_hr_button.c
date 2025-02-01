@@ -100,7 +100,7 @@ lv_obj_t *ui_settings_button_create(lv_obj_t *comp_parent, int y_offset)
     lv_label_set_text(ui_hr_number, LV_SYMBOL_SETTINGS);
     lv_obj_set_style_text_color(ui_hr_number, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_hr_number, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_hr_number, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_hr_number, &lv_font_montserrat_48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     return btn_settings;
 }

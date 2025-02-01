@@ -5,6 +5,7 @@
 #include <arm_math.h>
 
 #include <zephyr/logging/log.h>
+#include <zephyr/zbus/zbus.h>
 
 LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -22,6 +23,9 @@ LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 #define CES_CMDIF_TYPE_DATA 0x02
 #define CES_CMDIF_PKT_STOP 0x0B
 #define DATA_LEN 22
+
+#define LOG_SAMPLE_RATE_SPS 125
+#define SAMPLE_BUFF_WATERMARK 8
 
 char DataPacket[DATA_LEN];
 const char DataPacketFooter[2] = {0, CES_CMDIF_PKT_STOP};
@@ -43,25 +47,25 @@ enum hpi5_data_format
 static bool settings_log_data_enabled = true; // true;
 static int settings_data_format = DATA_FMT_OPENVIEW;
 
+struct hpi_hr_trend_one_hour_t hr_data[24];
+struct hpi_hr_trend_one_hour_t hr_data_current_hour;
+
+// struct hpi_ecg_bioz_sensor_data_t log_buffer[LOG_BUFFER_LENGTH];
+
+uint16_t current_session_log_counter = 0;
+uint16_t current_session_log_id = 0;
+char session_id_str[5];
+
+K_MUTEX_DEFINE(mutex_hr_change);
+// Externs
+
+ZBUS_CHAN_DECLARE(hr_chan);
+
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_sample;
 extern struct k_msgq q_plot_ecg_bioz;
 extern struct k_msgq q_plot_ppg;
 extern struct k_msgq q_plot_hrv;
-
-#define SAMPLING_FREQ 104 // in Hz.
-
-#define LOG_SAMPLE_RATE_SPS 125
-#define LOG_WRITE_INTERVAL 10      // Write to file every 10 seconds
-#define LOG_BUFFER_LENGTH 1250 + 1 // 125Hz * 10 seconds
-
-#define SAMPLE_BUFF_WATERMARK 8
-
-struct hpi_ecg_bioz_sensor_data_t log_buffer[LOG_BUFFER_LENGTH];
-
-uint16_t current_session_log_counter = 0;
-uint16_t current_session_log_id = 0;
-char session_id_str[5];
 
 void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_t raw_ir, int32_t temp, uint8_t hr,
               uint8_t bpt_status, uint8_t spo2, bool _bioZSkipSample)
@@ -110,6 +114,51 @@ void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_
     }
 }
 
+static void hpi_data_set_hr_max(uint16_t hr)
+{
+    k_mutex_lock(&mutex_hr_change, K_FOREVER);
+    hr_data_current_hour.hr_max = hr;
+    k_mutex_unlock(&mutex_hr_change);
+}
+
+static void hpi_data_set_hr_min(uint16_t hr)
+{
+    k_mutex_lock(&mutex_hr_change, K_FOREVER);
+    hr_data_current_hour.hr_min = hr;
+    k_mutex_unlock(&mutex_hr_change);
+}
+
+static void hpi_data_set_hr_mean(uint16_t hr)
+{
+    k_mutex_lock(&mutex_hr_change, K_FOREVER);
+    hr_data_current_hour.hr_mean = hr;
+    k_mutex_unlock(&mutex_hr_change);
+}
+
+static uint16_t hpi_data_get_hr_max(void)
+{
+    k_mutex_lock(&mutex_hr_change, K_FOREVER);
+    uint16_t hr = hr_data_current_hour.hr_max;
+    k_mutex_unlock(&mutex_hr_change);
+    return hr;
+}
+
+static uint16_t hpi_data_get_hr_min(void)
+{
+    k_mutex_lock(&mutex_hr_change, K_FOREVER);
+    uint16_t hr = hr_data_current_hour.hr_min;
+    k_mutex_unlock(&mutex_hr_change);
+    return hr;
+}
+
+static uint16_t hpi_data_get_hr_mean(void)
+{
+    k_mutex_lock(&mutex_hr_change, K_FOREVER);
+    uint16_t hr = hr_data_current_hour.hr_mean;
+    k_mutex_unlock(&mutex_hr_change);
+    return hr;
+}
+
 void send_data_text(int32_t ecg_sample, int32_t bioz_sample, int32_t raw_red)
 {
     char data[100];
@@ -141,12 +190,13 @@ void send_data_text_1(int32_t in_sample)
 
 #define IIR_FILT_TAPS 5
 
-static const float32_t filt_low_b[IIR_FILT_TAPS] = {0.418163345761899, 0.836326691523798, 0.418163345761899, 0.0, 0.0}; //{ 1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
-static const float32_t filt_low_a[IIR_FILT_TAPS] = {1.0, 0.462938025291041, 0.209715357756555, 0.0, 0.0};
+//static const float32_t filt_low_b[IIR_FILT_TAPS] = {0.418163345761899, 0.836326691523798, 0.418163345761899, 0.0, 0.0}; //{ 1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
+//static const float32_t filt_low_a[IIR_FILT_TAPS] = {1.0, 0.462938025291041, 0.209715357756555, 0.0, 0.0};
 
-static const float32_t filt_notch_b[IIR_FILT_TAPS] = {0.811831745907865, 2.537684304617564, 3.606784274651312, 2.537684304617564, 0.811831745907865};
-static const float32_t filt_notch_a[IIR_FILT_TAPS] = {1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
+//static const float32_t filt_notch_b[IIR_FILT_TAPS] = {0.811831745907865, 2.537684304617564, 3.606784274651312, 2.537684304617564, 0.811831745907865};
+//static const float32_t filt_notch_a[IIR_FILT_TAPS] = {1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
 
+/*
 struct iir_filter_t
 {
     float32_t input_history[IIR_FILT_TAPS];
@@ -177,7 +227,7 @@ float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
     filter_instance->output_history[(c % N)] = y;
     filter_instance->filter_cycle = (c + 1) % N;
     return y;
-}
+}*/
 
 void data_thread(void)
 {
@@ -235,15 +285,18 @@ void data_thread(void)
     // q31_t firCoeffs[NUM_TAPS] = {0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD,
     //                 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD};
 
-    arm_fir_instance_f32 sFIR;
+    /*arm_fir_instance_f32 sFIR;
     float32_t firState[NUM_TAPS + BLOCK_SIZE - 1];
 
     float32_t input[BLOCK_SIZE];
     float32_t output[BLOCK_SIZE];
     uint32_t start, end;
+    arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
+    */
 
-    /* Initialize the FIR filter */
-    // arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
+    hr_data_current_hour.hr_max = 0;
+    hr_data_current_hour.hr_min = 999;
+    hr_data_current_hour.hr_mean = 0;
 
     LOG_INF("Data Thread starting");
 
@@ -305,14 +358,31 @@ void data_thread(void)
             if (settings_send_usb_enabled)
             {
             }
+
+            // If HR is available, set min, max and mean and publish over ZBUS
+            if (ppg_sensor_sample.hr > 0)
+            {
+                if(ppg_sensor_sample.hr > hpi_data_get_hr_max())
+                {
+                    hpi_data_set_hr_max(ppg_sensor_sample.hr);
+                }
+
+                if(ppg_sensor_sample.hr < hpi_data_get_hr_min())
+                {
+                    hpi_data_set_hr_min(ppg_sensor_sample.hr);
+                }
+
+                struct hpi_hr_t hr_chan_value = {
+                    .hr = ppg_sensor_sample.hr,
+                    .hr_max = hpi_data_get_hr_max(),
+                    .hr_min = hpi_data_get_hr_min(),
+                    .hr_mean = hpi_data_get_hr_mean(),
+                    .hr_ready_flag = true,
+                };
+                zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+            }
         }
 
-        if (settings_log_data_enabled)
-        {
-            // log_data(sensor_sample.ecg_sample, sensor_sample.bioz_sample, sensor_sample.raw_red, sensor_sample.raw_ir,
-            //          sensor_sample.temp, 0, 0, 0, sensor_sample._bioZSkipSample);
-            // record_session_add_point(ecg_bioz_sensor_sample.ecg_sample, ecg_bioz_sensor_sample.bioz_sample);
-        }
         k_sleep(K_MSEC(1));
     }
 }

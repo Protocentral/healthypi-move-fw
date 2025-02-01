@@ -20,7 +20,7 @@ static lv_obj_t *label_temp_c;
 
 // Externs
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 
 static void draw_event_cb(lv_event_t *e)

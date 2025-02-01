@@ -32,7 +32,7 @@ static float y_min_hrv = 10000;
 static float gx = 0;
 
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 
 static void anim_x_cb(void * var, int32_t v)

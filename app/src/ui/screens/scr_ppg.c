@@ -37,7 +37,7 @@ float y3_min = 10000;
 static float gx = 0;
 
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 
 #define PPG_SIGNAL_RED 0
@@ -149,7 +149,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
-    
+
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 3, LV_PART_ITEMS);
 
@@ -157,7 +157,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_ppg_no_signal, LV_SYMBOL_UP "\nPlace device \non wrist \nto start PPG");
     lv_obj_align_to(label_ppg_no_signal, NULL, LV_ALIGN_CENTER, -20, -40);
     lv_obj_set_style_text_align(label_ppg_no_signal, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_ppg_no_signal, &style_lbl_red, 0);
+    lv_obj_add_style(label_ppg_no_signal, &style_red_medium, 0);
     lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
 
     // HR Number label
@@ -175,7 +175,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_hr_cap = lv_label_create(scr_ppg);
     lv_label_set_text(label_hr_cap, "HR");
     lv_obj_align_to(label_hr_cap, label_ppg_hr, LV_ALIGN_OUT_LEFT_MID, -5, -5);
-    lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_hr_cap, &style_red_medium, 0);
 
     /*LV_IMG_DECLARE(heart);
     lv_obj_t *img1 = lv_img_create(scr_ppg);
@@ -198,7 +198,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_spo2_cap = lv_label_create(scr_ppg);
     lv_label_set_text(label_spo2_cap, "SpO2");
     lv_obj_align_to(label_spo2_cap, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, -5);
-    lv_obj_add_style(label_spo2_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_spo2_cap, &style_red_medium, 0);
 
     lv_obj_t *btn_settings = lv_btn_create(scr_ppg);
     lv_obj_set_width(btn_settings, 80);
@@ -220,7 +220,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_label_set_text(ui_hr_number, LV_SYMBOL_SETTINGS);
     lv_obj_set_style_text_color(ui_hr_number, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_hr_number, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_hr_number, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
+    //lv_obj_set_style_text_font(ui_hr_number, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // PPG Sensor Status label
     label_status = lv_label_create(scr_ppg);

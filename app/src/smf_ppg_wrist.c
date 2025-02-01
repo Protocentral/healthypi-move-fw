@@ -106,11 +106,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
 
-            /*struct hpi_hr_t hr_chan_value = {
-                .hr = edata->hr,
-                .hr_ready_flag = true,
-            };*/
-            // zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+
         }
     }
 }

@@ -10,7 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_TEMP
+#define HPI_DEFAULT_START_SCREEN SCR_HR
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
@@ -19,12 +19,13 @@ K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
-static bool hpi_boot_all_passed = true;
 
+K_SEM_DEFINE(sem_disp_ready, 0, 1);
+
+static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
 static int last_hr_refresh = 0;
 static int last_time_refresh = 0;
-
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
 
 static const struct smf_state display_states[];
@@ -44,7 +45,12 @@ enum display_state
 static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct rtc_time m_disp_sys_time;
-static uint8_t m_disp_hr = 0;
+
+static uint16_t m_disp_hr = 0;
+static uint16_t m_disp_hr_max = 0;
+static uint16_t m_disp_hr_min = 0;
+static uint16_t m_disp_hr_mean = 0;
+
 static uint32_t m_disp_steps = 0;
 static float m_disp_temp = 0;
 
@@ -56,9 +62,6 @@ int scr_ppg_hr_spo2_refresh_counter = 0;
 // int hr_refresh_counter = 0;
 // int time_refresh_counter = 0;
 int m_disp_inact_refresh_counter = 0;
-
-extern struct k_sem sem_crown_key_pressed;
-
 static uint32_t splash_scr_start_time = 0;
 
 // Externs
@@ -73,7 +76,7 @@ extern struct k_msgq q_plot_ecg_bioz;
 extern struct k_msgq q_plot_ppg;
 extern struct k_msgq q_plot_hrv;
 
-K_SEM_DEFINE(sem_disp_ready, 0, 1);
+extern struct k_sem sem_crown_key_pressed;
 
 struct s_disp_object
 {
@@ -365,6 +368,9 @@ static void st_display_active_run(void *o)
     case SCR_TEMP:
         hpi_temp_disp_update_temp_f((float)m_disp_temp);
         break;
+    case SCR_HR:
+        hpi_hr_disp_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+        break;
     default:
         break;
     }
@@ -513,6 +519,9 @@ static void disp_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
+    m_disp_hr_max = hpi_hr->hr_max;
+    m_disp_hr_min = hpi_hr->hr_min;
+    m_disp_hr_mean = hpi_hr->hr_mean;
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
