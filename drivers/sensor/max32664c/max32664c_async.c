@@ -136,8 +136,8 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 }
 
 static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
-                                        uint32_t *num_samples, uint16_t *spo2, uint8_t spo2_conf, uint16_t *hr, uint8_t hr_conf, uint16_t *rtor, 
-                                        uint8_t rtor_conf, uint8_t *scd_state, uint8_t *activity_class,
+                                        uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor, 
+                                        uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class,
                                         uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
@@ -211,9 +211,9 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 *hr = (hr_val / 10);
 
-                uint8_t hr_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 3 + MAX32664C_SENSOR_DATA_OFFSET];
+                *hr_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 3 + MAX32664C_SENSOR_DATA_OFFSET];
 
-                uint8_t spo2_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 10 + MAX32664C_SENSOR_DATA_OFFSET];
+                *spo2_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 10 + MAX32664C_SENSOR_DATA_OFFSET];
 
                 uint16_t spo2_val = (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 11 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 spo2_val |= (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 12 + MAX32664C_SENSOR_DATA_OFFSET];
@@ -225,7 +225,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 *rtor = (rtor_val / 10);
 
-                uint8_t rtor_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 6 + MAX32664C_SENSOR_DATA_OFFSET];
+                *rtor_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 6 + MAX32664C_SENSOR_DATA_OFFSET];
 
                 *scd_state = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 19 + MAX32664C_SENSOR_DATA_OFFSET];
 

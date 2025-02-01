@@ -72,7 +72,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     label_hr_bpm = lv_label_create(scr_hr);
     lv_label_set_text(label_hr_bpm, "00");
     lv_obj_add_style(label_hr_bpm, &style_white_large, 0);
-    lv_obj_align_to(label_hr_bpm, img1, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    lv_obj_align_to(label_hr_bpm, img1, LV_ALIGN_OUT_BOTTOM_MID, 0, 30);
 
     // HR Sub bpm label
     lv_obj_t *label_hr_sub = lv_label_create(scr_hr);
@@ -82,13 +82,13 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     label_hr_last_update = lv_label_create(scr_hr);
     lv_label_set_text(label_hr_last_update, LV_SYMBOL_REFRESH " 00:00");
     //lv_obj_add_style(label_hr_last_update, &style_lbl_white_small, 0);
-    lv_obj_align_to(label_hr_last_update, label_hr_sub, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    lv_obj_align_to(label_hr_last_update, label_hr_sub, LV_ALIGN_OUT_BOTTOM_MID, 0, 25);
 
     // HR Min/Max label
     lv_obj_t *label_hr_min_max_title = lv_label_create(scr_hr);
     lv_label_set_text(label_hr_min_max_title, "Hourly HR Range");
     lv_obj_add_style(label_hr_min_max_title, &style_white_medium, 0);
-    lv_obj_align_to(label_hr_min_max_title, label_hr_sub, LV_ALIGN_OUT_BOTTOM_MID, 0, 50);
+    lv_obj_align_to(label_hr_min_max_title, label_hr_last_update, LV_ALIGN_OUT_BOTTOM_MID, 0, 50);
 
     label_hr_min_max = lv_label_create(scr_hr);
     lv_label_set_text(label_hr_min_max, "80 - 113 bpm");

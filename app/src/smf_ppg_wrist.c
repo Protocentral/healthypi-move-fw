@@ -96,6 +96,8 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.spo2 = edata->spo2;
                 ppg_sensor_sample.rtor = edata->rtor;
                 ppg_sensor_sample.scd_state = edata->scd_state;
+                ppg_sensor_sample.hr_confidence = edata->hr_confidence;
+                ppg_sensor_sample.spo2_confidence = edata->spo2_confidence;
             }
 
             if(ppg_sensor_sample.scd_state!=3)

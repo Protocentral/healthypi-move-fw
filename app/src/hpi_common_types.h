@@ -54,8 +54,11 @@ struct hpi_ppg_sensor_data_t
 
     uint8_t ppg_num_samples;
 
-    uint8_t hr;
+    uint16_t hr;
+    uint8_t hr_confidence;
+
     uint8_t spo2;
+    uint8_t spo2_confidence;
 
     uint8_t bp_sys;
     uint8_t bp_dia;
@@ -63,6 +66,8 @@ struct hpi_ppg_sensor_data_t
     uint8_t bpt_progress;
 
     uint16_t rtor;
+    uint8_t rtor_confidence;
+    
     uint8_t scd_state;
 };
 
@@ -83,7 +88,7 @@ struct hpi_hr_t
     uint16_t hr_max;
     uint16_t hr_min;
     uint16_t hr_mean;
-    
+
     bool hr_ready_flag;
 };
 

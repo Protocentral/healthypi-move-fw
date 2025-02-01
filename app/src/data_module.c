@@ -360,7 +360,7 @@ void data_thread(void)
             }
 
             // If HR is available, set min, max and mean and publish over ZBUS
-            if (ppg_sensor_sample.hr > 0)
+            if (ppg_sensor_sample.hr_confidence>40)
             {
                 if(ppg_sensor_sample.hr > hpi_data_get_hr_max())
                 {
