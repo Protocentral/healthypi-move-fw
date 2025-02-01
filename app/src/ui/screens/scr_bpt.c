@@ -8,7 +8,7 @@
 #include <app_version.h>
 #include <zephyr/logging/log.h>
 
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "hw_module.h"
 
 #include "ui/move_ui.h"
@@ -45,12 +45,10 @@ bool bpt_meas_started = false;
 // Externs
 extern lv_style_t style_lbl_orange;
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_lbl_white_14;
 extern lv_style_t style_lbl_black_small;
-
-extern int curr_screen;
 
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
@@ -112,7 +110,7 @@ static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
         // lv_obj__flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
 
         bpt_meas_started = true;
-        hw_bpt_start_est();
+        //hw_bpt_start_est();
     }
 }
 
@@ -161,7 +159,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     label_bp_sys_cap = lv_label_create(scr_bpt);
     lv_label_set_text(label_bp_sys_cap, "BP(Sys/Dia)");
     lv_obj_align_to(label_bp_sys_cap, label_bp_val, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_bp_sys_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_bp_sys_cap, &style_red_medium, 0);
     lv_obj_add_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
 
     // Draw Progress bar
@@ -210,7 +208,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_btn_bpt_measure, "Measure BP");
     lv_obj_center(label_btn_bpt_measure);
 
-    curr_screen = SCR_BPT;
+    hpi_disp_set_curr_screen(SCR_BPT);
     hpi_show_screen(scr_bpt, m_scroll_dir);
 }
 

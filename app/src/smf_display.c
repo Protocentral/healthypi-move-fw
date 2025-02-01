@@ -6,9 +6,11 @@
 #include <zephyr/zbus/zbus.h>
 
 #include <display_sh8601.h>
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
+
+#define HPI_DEFAULT_START_SCREEN SCR_HR
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
@@ -17,12 +19,13 @@ K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
-static bool hpi_boot_all_passed = true;
 
+K_SEM_DEFINE(sem_disp_ready, 0, 1);
+
+static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
 static int last_hr_refresh = 0;
 static int last_time_refresh = 0;
-
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
 
 static const struct smf_state display_states[];
@@ -42,10 +45,15 @@ enum display_state
 static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct rtc_time m_disp_sys_time;
-static uint8_t m_disp_hr = 0;
-static uint32_t m_disp_steps = 0;
 
-extern int curr_screen;
+static uint16_t m_disp_hr = 0;
+static uint16_t m_disp_hr_max = 0;
+static uint16_t m_disp_hr_min = 0;
+static uint16_t m_disp_hr_mean = 0;
+
+static uint32_t m_disp_steps = 0;
+static float m_disp_temp = 0;
+
 int scr_ppg_hr_spo2_refresh_counter = 0;
 
 // extern uint16_t disp_thread_refresh_int_ms;
@@ -54,9 +62,6 @@ int scr_ppg_hr_spo2_refresh_counter = 0;
 // int hr_refresh_counter = 0;
 // int time_refresh_counter = 0;
 int m_disp_inact_refresh_counter = 0;
-
-extern struct k_sem sem_crown_key_pressed;
-
 static uint32_t splash_scr_start_time = 0;
 
 // Externs
@@ -71,7 +76,7 @@ extern struct k_msgq q_plot_ecg_bioz;
 extern struct k_msgq q_plot_ppg;
 extern struct k_msgq q_plot_hrv;
 
-K_SEM_DEFINE(sem_disp_ready, 0, 1);
+extern struct k_sem sem_crown_key_pressed;
 
 struct s_disp_object
 {
@@ -170,20 +175,12 @@ static void st_display_boot_exit(void *o)
     lv_disp_trig_activity(NULL);
 }
 
-static void st_display_active_entry(void *o)
-{
-    LOG_DBG("Display SM Active Entry");
-    //draw_scr_home(SCROLL_RIGHT);
-    draw_scr_ppg(SCROLL_RIGHT);
-    
-}
-
 static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sample)
 {
-    if (curr_screen == SCR_PLOT_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_PLOT_PPG)
     {
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
-        //hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
+        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
         if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
         {
@@ -196,10 +193,10 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
 
         lv_disp_trig_activity(NULL);
     }
-    else if ((curr_screen == SCR_HOME)) // || (curr_screen == SCR_CLOCK_SMALL))
+    else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
     {
     }
-    else if (curr_screen == SCR_PLOT_HRV)
+    else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV)
     {
         if (ppg_sensor_sample.rtor != 0) // && ppg_sensor_sample.rtor != prev_rtor)
         {
@@ -209,7 +206,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }
-    else if (curr_screen == SCR_PLOT_HRV_SCATTER)
+    else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV_SCATTER)
     {
         if (ppg_sensor_sample.rtor != 0) //&& ppg_sensor_sample.rtor != prev_rtor)
         {
@@ -219,7 +216,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }
-    else if (curr_screen == SUBSCR_BPT_CALIBRATE)
+    else if (hpi_disp_get_curr_screen() == SUBSCR_BPT_CALIBRATE)
     {
 
         // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
@@ -255,7 +252,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
         }*/
     }
     /*
-    if (curr_screen == SUBSCR_BPT_MEASURE)
+    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
     {
     if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
     {
@@ -290,7 +287,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
                     bpt_meas_started = false;
                     hpi_disp_update_bp(global_bp_sys, global_bp_dia);
 
-                    if (curr_screen == SUBSCR_BPT_MEASURE)
+                    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
                     {
                         lv_obj_clear_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
                         lv_obj_clear_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
@@ -310,15 +307,31 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
 {
-    if (curr_screen == SCR_PLOT_ECG)
+    if (hpi_disp_get_curr_screen() == SCR_PLOT_ECG)
     {
         //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
         hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
     }
-    else if (curr_screen == SCR_PLOT_EDA)
+    else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
         hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
+    }
+}
+
+static void st_display_active_entry(void *o)
+{
+    LOG_DBG("Display SM Active Entry");
+    // draw_scr_home(SCROLL_RIGHT);
+    // draw_scr_ppg(SCROLL_RIGHT);
+    // draw_scr_ecg(SCROLL_RIGHT);
+    if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
+    {
+        hpi_move_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
+    }
+    else
+    {
+        hpi_move_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
     }
 }
 
@@ -333,25 +346,14 @@ static void st_display_active_run(void *o)
         hpi_disp_process_ppg_data(ppg_sensor_sample);
     }
 
-    /*if (k_msgq_get(&q_plot_hrv, &hrv_sample, K_NO_WAIT) == 0)
-    {
-        if (curr_screen == SCR_PLOT_HRV)
-        {
-            hpi_disp_hrv_update_sdnn(hrv_sample.rmssd);
-        }
-        else if (curr_screen == SCR_PLOT_HRV_SCATTER)
-        {
-            hpi_disp_hrv_scatter_update_sdnn(hrv_sample.rmssd);
-        }
-    }*/
-
     if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
     {
         hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
     }
 
-    if (curr_screen == SCR_HOME)
+    switch (hpi_disp_get_curr_screen())
     {
+    case SCR_HOME:
         // ui_hr_button_update(m_disp_hr);
 
         // if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
@@ -362,6 +364,15 @@ static void st_display_active_run(void *o)
             ui_hr_button_update(m_disp_hr);
             ui_steps_button_update(m_disp_steps);
         }
+        break;
+    case SCR_TEMP:
+        hpi_temp_disp_update_temp_f((float)m_disp_temp);
+        break;
+    case SCR_HR:
+        hpi_hr_disp_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+        break;
+    default:
+        break;
     }
 
     // if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
@@ -391,7 +402,7 @@ static void st_display_active_run(void *o)
         }
         else
         {
-            if (curr_screen == SCR_HOME)
+            if (hpi_disp_get_curr_screen()== SCR_HOME)
             {
                 hpi_display_sleep_on();
             }
@@ -508,6 +519,9 @@ static void disp_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
+    m_disp_hr_max = hpi_hr->hr_max;
+    m_disp_hr_min = hpi_hr->hr_min;
+    m_disp_hr_mean = hpi_hr->hr_mean;
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
@@ -522,6 +536,7 @@ ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
+    m_disp_temp = hpi_temp->temp_f;
     // printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);

@@ -10,7 +10,7 @@
 #include <app_version.h>
 #include <zephyr/logging/log.h>
 
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "ui/move_ui.h"
 
 // GUI Labels
@@ -22,11 +22,9 @@ static lv_obj_t *label_vitals_temp;
 static lv_obj_t *label_vitals_bp_val;
 
 extern lv_style_t style_lbl_white;
-extern lv_style_t style_lbl_red;
+extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_lbl_red_small;
-
-extern int curr_screen;
 
 void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
 {
@@ -49,7 +47,7 @@ void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_hr_cap = lv_label_create(scr_vitals_home);
     lv_label_set_text(label_hr_cap, "HR");
     lv_obj_align_to(label_hr_cap, label_vitals_hr, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_hr_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_hr_cap, &style_red_medium, 0);
 
     /*LV_IMG_DECLARE(heart);
     lv_obj_t *img1 = lv_img_create(scr_vitals_home);
@@ -74,7 +72,7 @@ void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_spo2_cap = lv_label_create(scr_vitals_home);
     lv_label_set_text(label_spo2_cap, "SpO2");
     lv_obj_align_to(label_spo2_cap, label_spo2, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_spo2_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_spo2_cap, &style_red_medium, 0);
 
     /*LV_IMG_DECLARE(o2);
     lv_obj_t *img2 = lv_img_create(scr_vitals_home);
@@ -98,7 +96,7 @@ void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_bp_sys_cap = lv_label_create(scr_vitals_home);
     lv_label_set_text(label_bp_sys_cap, "BP(Sys/Dia)");
     lv_obj_align_to(label_bp_sys_cap, label_vitals_bp_val, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_bp_sys_cap, &style_lbl_red, 0);
+    lv_obj_add_style(label_bp_sys_cap, &style_red_medium, 0);
 
     // Temp Number label
     label_vitals_temp = lv_label_create(scr_vitals_home);
@@ -117,7 +115,7 @@ void draw_scr_vitals_home(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(label_temp_cap, label_vitals_temp, LV_ALIGN_OUT_LEFT_MID, -10, 0);
     lv_obj_add_style(label_temp_cap, &style_lbl_red_small, 0);
 
-    curr_screen = SCR_VITALS;
+    //curr_screen = SCR_VITALS;
 
     lv_obj_add_event_cb(scr_vitals_home, disp_screen_event, LV_EVENT_GESTURE, NULL);
     hpi_show_screen(scr_vitals_home, m_scroll_dir);

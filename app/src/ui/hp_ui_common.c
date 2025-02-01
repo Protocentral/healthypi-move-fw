@@ -15,7 +15,7 @@
 
 #include "hw_module.h"
 #include "power_ctrl.h"
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "ui/move_ui.h"
 
 #include <display_sh8601.h>
@@ -29,10 +29,7 @@ LV_IMG_DECLARE(logo_round_white);
 
 // LVGL Styles
 static lv_style_t style_sub;
-static lv_style_t style_hr;
-static lv_style_t style_spo2;
-static lv_style_t style_rr;
-static lv_style_t style_temp;
+
 static lv_style_t style_scr_back;
 static lv_style_t style_batt_sym;
 static lv_style_t style_batt_percent;
@@ -43,22 +40,27 @@ static lv_style_t style_scr_back;
 
 // Global LVGL Styles
 lv_style_t style_scr_black;
-lv_style_t style_lbl_red;
+lv_style_t style_red_medium;
 lv_style_t style_lbl_red_small;
 lv_style_t style_lbl_white;
 lv_style_t style_lbl_white_small;
+lv_style_t style_white_medium;
+
 lv_style_t style_lbl_orange;
 lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
+lv_style_t style_white_large;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
-int curr_screen = SCR_VITALS;
+static int curr_screen = SCR_HOME;
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
 lv_obj_t *cui_battery_percent;
+
+K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Externs
 extern const struct device *display_dev;
@@ -182,8 +184,14 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_TODAY:
         draw_scr_today(m_scroll_dir);
         break;
+    case SCR_HR:
+        draw_scr_hr(m_scroll_dir);
+        break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
+        break;
+    case SCR_TEMP:
+        draw_scr_temp(m_scroll_dir);
         break;
     case SCR_PLOT_ECG:
         draw_scr_ecg(m_scroll_dir);
@@ -322,60 +330,32 @@ void display_init_styles(void)
     lv_style_set_text_color(&style_batt_percent, lv_color_white());
     lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_24);
 
-    // HR Number label style
-    lv_style_init(&style_hr);
-    lv_style_set_text_color(&style_hr, lv_palette_main(LV_PALETTE_ORANGE));
-    lv_style_set_text_font(&style_hr, &lv_font_montserrat_42);
+     lv_style_init(&style_lbl_white_small);
+    lv_style_set_text_color(&style_lbl_white_small, lv_color_white());
+    lv_style_set_text_font(&style_lbl_white_small, &lv_font_montserrat_20);
 
-    // SpO2 label style
-    lv_style_init(&style_spo2);
-    lv_style_set_text_color(&style_spo2, lv_palette_main(LV_PALETTE_YELLOW));
-    lv_style_set_text_font(&style_spo2, &lv_font_montserrat_42);
+    lv_style_init(&style_white_medium);
+    lv_style_set_text_color(&style_white_medium, lv_color_white());
+    lv_style_set_text_font(&style_white_medium, &lv_font_montserrat_34);
 
-    // RR label style
-    lv_style_init(&style_rr);
-    lv_style_set_text_color(&style_rr, lv_palette_main(LV_PALETTE_BLUE));
-    lv_style_set_text_font(&style_rr, &lv_font_montserrat_42);
-
-    // Temp label style
-    lv_style_init(&style_temp);
-    lv_style_set_text_color(&style_temp, lv_palette_main(LV_PALETTE_ORANGE));
-    lv_style_set_text_font(&style_temp, &lv_font_montserrat_20);
-
-    // Icon welcome screen style
-    lv_style_init(&style_icon);
-    lv_style_set_text_color(&style_icon, lv_palette_main(LV_PALETTE_YELLOW));
-    lv_style_set_text_font(&style_icon, &lv_font_montserrat_42);
-
-    // Info welcome screen style
-    lv_style_init(&style_info);
-    lv_style_set_text_color(&style_info, lv_color_white());
-    lv_style_set_text_font(&style_info, &lv_font_montserrat_16);
+    lv_style_init(&style_white_large);
+    lv_style_set_text_color(&style_white_large, lv_color_white());
+    lv_style_set_text_font(&style_white_large, &ui_font_Number_big);
 
     // Label Red
-    lv_style_init(&style_lbl_red);
-    lv_style_set_text_color(&style_lbl_red, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_lbl_red, &lv_font_montserrat_20);
+    lv_style_init(&style_red_medium);
+    lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
+    lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_34);
 
     // Label White
     lv_style_init(&style_lbl_white);
     lv_style_set_text_color(&style_lbl_white, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_42);
+    lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_48);
 
     // Label Orange
     lv_style_init(&style_lbl_orange);
     lv_style_set_text_color(&style_lbl_orange, lv_palette_main(LV_PALETTE_YELLOW));
     lv_style_set_text_font(&style_lbl_orange, &lv_font_montserrat_20);
-
-    // Label White Small
-    lv_style_init(&style_lbl_white_small);
-    lv_style_set_text_color(&style_lbl_white_small, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_small, &lv_font_montserrat_20);
-
-    // Label Black Small
-    lv_style_init(&style_lbl_white_small);
-    lv_style_set_text_color(&style_lbl_white_small, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_small, &lv_font_montserrat_20);
 
     // Label Red Small
     lv_style_init(&style_lbl_red_small);
@@ -428,14 +408,8 @@ void display_init_styles(void)
 void draw_header_minimal(lv_obj_t *parent, int top_offset)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
-
-    lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-
-    /*lv_obj_t *img_logo = lv_img_create(parent);
-    lv_img_set_src(img_logo, &logo_round_white);
-    lv_obj_set_size(img_logo, 25, 25);
-    lv_obj_align_to(img_logo, NULL, LV_ALIGN_TOP_MID, -35, (top_offset+5));
-    */
+    lv_obj_set_scroll_dir(parent, LV_DIR_VER);
+    //lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
 
     // Battery Level
     label_batt_level = lv_label_create(parent);
@@ -461,11 +435,19 @@ void draw_bg(lv_obj_t *parent)
     lv_obj_add_style(parent, &style_scr_black, 0);
 }
 
-K_MUTEX_DEFINE(mutex_curr_screen);
+
 
 void hpi_disp_set_curr_screen(int screen)
 {
     k_mutex_lock(&mutex_curr_screen, K_FOREVER);
     curr_screen = screen;
     k_mutex_unlock(&mutex_curr_screen);
+}
+
+int hpi_disp_get_curr_screen(void)
+{
+    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
+    int screen = curr_screen;
+    k_mutex_unlock(&mutex_curr_screen);
+    return screen;
 }

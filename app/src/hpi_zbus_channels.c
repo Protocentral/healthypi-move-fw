@@ -3,7 +3,7 @@
 #include <zephyr/drivers/rtc.h>
 
 #include "hw_module.h"
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 
 ZBUS_CHAN_DEFINE(batt_chan,                 /* Name */
                  struct batt_status, /* Message type */

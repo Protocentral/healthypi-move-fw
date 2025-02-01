@@ -42,8 +42,10 @@ enum hpi_disp_screens
 
     SCR_HOME,
     SCR_TODAY,
+    SCR_HR,
     SCR_PLOT_PPG,
     SCR_PLOT_ECG,
+    SCR_TEMP,
     SCR_PLOT_EDA,
     SCR_BPT,
 
@@ -96,6 +98,10 @@ void ui_battery_update(uint8_t percent);
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 
+// HR Screen functions
+void draw_scr_hr(enum scroll_dir m_scroll_dir);
+void hpi_hr_disp_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean);
+
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
@@ -137,7 +143,9 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir);
 void draw_header_minimal(lv_obj_t *parent, int top_offset);
 void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir);
 void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir);
+
 void hpi_disp_set_curr_screen(int screen);
+int hpi_disp_get_curr_screen(void);
 
 void hpi_disp_set_brightness(uint8_t brightness_percent);
 uint8_t hpi_disp_get_brightness(void);
@@ -160,11 +168,12 @@ void ui_steps_button_update(uint16_t steps);
 void draw_bg(lv_obj_t *parent);
 
 void draw_scr_ppg(enum scroll_dir m_scroll_dir);
+void draw_scr_temp(enum scroll_dir m_scroll_dir);
 
 void draw_scr_vitals_home(enum scroll_dir m_scroll_dir);
 
 void hpi_disp_update_batt_level(int batt_level, bool charging);
-void hpi_disp_update_temp(int temp);
+void hpi_temp_disp_update_temp_f(float temp_f);
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void disp_screen_event(lv_event_t *e);

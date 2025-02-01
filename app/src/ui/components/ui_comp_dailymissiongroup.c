@@ -19,7 +19,7 @@
 #include <zephyr/drivers/rtc.h>
 
 #include "hw_module.h"
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 #include "ui/move_ui.h"
 
 /*void ui_event_comp_dailymissiongroup_daily_mission_arc(lv_event_t *e)

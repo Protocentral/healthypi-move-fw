@@ -1,7 +1,7 @@
 #ifndef fs_module_h
 #define fs_module_h
 
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 
 void fs_module_init(void);
 void init_settings(void);

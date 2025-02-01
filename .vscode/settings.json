@@ -27,7 +27,10 @@
         "fuel_gauge.h": "c",
         "npm1300_charger.h": "c",
         "usbd.h": "c",
-        "pwm.h": "c"
+        "pwm.h": "c",
+        "max32664c.h": "c",
+        "input-event-codes.h": "c",
+        "input.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

@@ -115,9 +115,13 @@ struct max32664c_encoded_data
 	uint32_t ir_samples[32];
 
 	uint16_t hr;
+	uint8_t hr_confidence;
+
 	uint16_t spo2;
+	uint8_t spo2_confidence;
 
 	uint16_t rtor;
+	uint8_t rtor_confidence;
 
 	uint8_t scd_state;
 

@@ -9,7 +9,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/rtc.h>
 
-#include "sampling_module.h"
+#include "hpi_common_types.h"
 
 #include "ui/move_ui.h"
 
@@ -27,7 +27,6 @@ extern lv_obj_t *ui_step_group;
 extern lv_obj_t *ui_dailymission_group;
 
 extern struct rtc_time global_system_time;
-extern int curr_screen;
 
 static void scr_clock_small_hr_event_handler(lv_event_t *e)
 {
@@ -57,7 +56,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     lv_label_set_text(ui_label_hour, "-- : ");
     lv_obj_set_style_text_color(ui_label_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_label_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_label_hour, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
+    //lv_obj_set_style_text_font(ui_label_hour, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_label_min = lv_label_create(scr_clock_small);
     lv_obj_set_width(ui_label_min, LV_SIZE_CONTENT);  /// 1
@@ -66,7 +65,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
     lv_label_set_text(ui_label_min, "--");
     lv_obj_set_style_text_color(ui_label_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_label_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_label_min, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
+    //lv_obj_set_style_text_font(ui_label_min, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_label_date = lv_label_create(scr_clock_small);
     lv_obj_set_width(ui_label_date, LV_SIZE_CONTENT);  /// 1
@@ -101,6 +100,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir)
 
     lv_obj_add_event_cb(btn_hr_disp, scr_clock_small_hr_event_handler, LV_EVENT_ALL, NULL);
 
+    //hpi_disp_set_curr_screen(SCR_CLOCK_SMALL);
     //curr_screen = SCR_CLOCK_SMALL;
     hpi_show_screen(scr_clock_small, m_scroll_dir);
 }

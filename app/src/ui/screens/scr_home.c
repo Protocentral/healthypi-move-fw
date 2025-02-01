@@ -23,7 +23,6 @@ static lv_obj_t *ui_home_label_hour;
 static lv_obj_t *ui_home_label_min;
 static lv_obj_t *ui_home_label_date;
 
-extern int curr_screen;
 extern struct rtc_time global_system_time;
 
 void ui_home_time_display_update(struct rtc_time in_time)
