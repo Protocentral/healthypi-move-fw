@@ -189,6 +189,6 @@ LV_IMG_DECLARE(img_clock_48px);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(ui_font_Number_big);
-// LV_FONT_DECLARE( ui_font_Number_extra);
+LV_FONT_DECLARE( ui_font_Number_extra);
 // LV_FONT_DECLARE( ui_font_Subtitle);
 // LV_FONT_DECLARE( ui_font_Title);

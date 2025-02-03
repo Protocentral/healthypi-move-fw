@@ -33,8 +33,6 @@ static lv_style_t style_sub;
 static lv_style_t style_scr_back;
 static lv_style_t style_batt_sym;
 static lv_style_t style_batt_percent;
-static lv_style_t style_info;
-static lv_style_t style_icon;
 static lv_style_t style_btn;
 static lv_style_t style_scr_back;
 
@@ -52,12 +50,19 @@ lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
 lv_style_t style_white_large;
 
+
+
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
 static int curr_screen = SCR_HOME;
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
+
+static lv_obj_t *lbl_hour;
+static lv_obj_t *lbl_min;
+static lv_obj_t *ui_label_date;
+
 lv_obj_t *cui_battery_percent;
 
 K_MUTEX_DEFINE(mutex_curr_screen);
@@ -330,7 +335,7 @@ void display_init_styles(void)
     lv_style_set_text_color(&style_batt_percent, lv_color_white());
     lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_24);
 
-     lv_style_init(&style_lbl_white_small);
+    lv_style_init(&style_lbl_white_small);
     lv_style_set_text_color(&style_lbl_white_small, lv_color_white());
     lv_style_set_text_font(&style_lbl_white_small, &lv_font_montserrat_20);
 
@@ -340,7 +345,7 @@ void display_init_styles(void)
 
     lv_style_init(&style_white_large);
     lv_style_set_text_color(&style_white_large, lv_color_white());
-    lv_style_set_text_font(&style_white_large, &ui_font_Number_big);
+    lv_style_set_text_font(&style_white_large, &ui_font_Number_extra);
 
     // Label Red
     lv_style_init(&style_red_medium);
@@ -350,7 +355,7 @@ void display_init_styles(void)
     // Label White
     lv_style_init(&style_lbl_white);
     lv_style_set_text_color(&style_lbl_white, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_48);
+    // lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_48);
 
     // Label Orange
     lv_style_init(&style_lbl_orange);
@@ -409,10 +414,10 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
     lv_obj_set_scroll_dir(parent, LV_DIR_VER);
-    //lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
+    // lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
 
     // Battery Level
-    label_batt_level = lv_label_create(parent);
+    /* label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
     lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
     lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
@@ -421,6 +426,43 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_label_set_text(label_batt_level_val, "--");
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
     lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
+    */
+
+    lbl_hour = lv_label_create(parent);
+    lv_obj_set_width(lbl_hour, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(lbl_hour, LV_SIZE_CONTENT); /// 1
+    lv_label_set_text(lbl_hour, "00:");
+    lv_obj_set_style_text_color(lbl_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(lbl_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align_to(lbl_hour, NULL, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
+    lv_obj_set_style_text_font(lbl_hour, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lbl_min = lv_label_create(parent);
+    lv_obj_set_width(lbl_min, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(lbl_min, LV_SIZE_CONTENT); /// 1
+    lv_label_set_text(lbl_min, "00");
+    lv_obj_set_style_text_color(lbl_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(lbl_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align_to(lbl_min, lbl_hour, LV_ALIGN_OUT_RIGHT_TOP, 5, 0);
+    lv_obj_set_style_text_font(lbl_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+}
+
+void hdr_time_display_update(struct rtc_time in_time)
+{
+    if (lbl_min == NULL || lbl_hour == NULL)
+        return;
+
+    char buf[5];
+    char date_buf[20];
+
+    char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+    sprintf(buf, "%02d:", in_time.tm_hour);
+    lv_label_set_text(lbl_hour, buf);
+
+    sprintf(buf, "%02d", in_time.tm_min);
+    lv_label_set_text(lbl_hour, buf);
 }
 
 void draw_bg(lv_obj_t *parent)
@@ -434,8 +476,6 @@ void draw_bg(lv_obj_t *parent)
     lv_obj_clear_flag(logo_bg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_add_style(parent, &style_scr_black, 0);
 }
-
-
 
 void hpi_disp_set_curr_screen(int screen)
 {
