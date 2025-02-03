@@ -162,7 +162,7 @@ void hpi_hr_disp_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_
     char buf[32];
     if (hr == 0)
     {
-        sprintf(buf, "--");
+        sprintf(buf, "00");
     }
     else
     {

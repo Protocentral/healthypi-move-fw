@@ -95,6 +95,8 @@ void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
 
+void hdr_time_display_update(struct rtc_time in_time);
+
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 

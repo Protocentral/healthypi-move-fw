@@ -443,7 +443,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_label_set_text(lbl_min, "00");
     lv_obj_set_style_text_color(lbl_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(lbl_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align_to(lbl_min, lbl_hour, LV_ALIGN_OUT_RIGHT_TOP, 5, 0);
+    lv_obj_align_to(lbl_min, lbl_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
     lv_obj_set_style_text_font(lbl_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
 }
 
@@ -452,17 +452,18 @@ void hdr_time_display_update(struct rtc_time in_time)
     if (lbl_min == NULL || lbl_hour == NULL)
         return;
 
-    char buf[5];
-    char date_buf[20];
+    char buf[6];
+    //char date_buf[20];
 
-    char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    /*char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+                            */
 
     sprintf(buf, "%02d:", in_time.tm_hour);
     lv_label_set_text(lbl_hour, buf);
 
     sprintf(buf, "%02d", in_time.tm_min);
-    lv_label_set_text(lbl_hour, buf);
+    lv_label_set_text(lbl_min, buf);
 }
 
 void draw_bg(lv_obj_t *parent)

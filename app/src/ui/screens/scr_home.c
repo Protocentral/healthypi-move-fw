@@ -65,7 +65,7 @@ void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
     lv_obj_clear_flag(scr_home, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
     draw_bg(scr_home);
-    draw_header_minimal(scr_home, 320);
+    //draw_header_minimal(scr_home, 320);
 
     home_step_disp = ui_steps_button_create(scr_home);
     lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -100, 210);

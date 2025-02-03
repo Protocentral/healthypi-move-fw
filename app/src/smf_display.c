@@ -384,6 +384,14 @@ static void st_display_active_run(void *o)
         last_batt_refresh = k_uptime_get_32();
     }
 
+    if(k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+    {
+        last_time_refresh = k_uptime_get_32();
+        hdr_time_display_update(m_disp_sys_time);
+    }
+
+
+
     // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
     //     batt_refresh_counter = 0;
     // }
