@@ -43,6 +43,7 @@ enum hpi_disp_screens
     SCR_HOME,
     SCR_TODAY,
     SCR_HR,
+    SCR_SPO2,
     SCR_PLOT_PPG,
     SCR_PLOT_ECG,
     SCR_TEMP,

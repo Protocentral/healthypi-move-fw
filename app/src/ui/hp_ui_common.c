@@ -345,7 +345,7 @@ void display_init_styles(void)
 
     lv_style_init(&style_white_large);
     lv_style_set_text_color(&style_white_large, lv_color_white());
-    lv_style_set_text_font(&style_white_large, &ui_font_Number_extra);
+    lv_style_set_text_font(&style_white_large, &ui_font_Number_big); //&ui_font_Number_extra);
 
     // Label Red
     lv_style_init(&style_red_medium);
