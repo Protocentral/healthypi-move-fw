@@ -364,7 +364,7 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected)
     // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
     // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
     // printk("Charge status: %d\n", chg_status);
-    struct batt_status batt_s = {
+    struct hpi_batt_status_t batt_s = {
         .batt_level = (uint8_t)soc,
         .batt_charging = (chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0,
     };

@@ -103,3 +103,9 @@ struct hpi_temp_t
     double temp_f;
     double temp_c;
 };
+
+struct hpi_batt_status_t
+{
+    uint8_t batt_level;
+    bool batt_charging;
+};

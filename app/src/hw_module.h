@@ -40,8 +40,3 @@ enum gpio_keypad_key
     GPIO_KEYPAD_KEY_RIGHT,
 };
 
-struct batt_status
-{
-    uint8_t batt_level;
-    bool batt_charging;
-};

@@ -507,7 +507,7 @@ void smf_display_thread(void)
 
 static void disp_batt_status_listener(const struct zbus_channel *chan)
 {
-    const struct batt_status *batt_s = zbus_chan_const_msg(chan);
+    const struct hpi_batt_status_t *batt_s = zbus_chan_const_msg(chan);
 
     // LOG_DBG("Ch Batt: %d, Charge: %d", batt_s->batt_level, batt_s->batt_charging);
     m_disp_batt_level = batt_s->batt_level;
