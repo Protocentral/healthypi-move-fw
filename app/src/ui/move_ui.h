@@ -103,7 +103,8 @@ void draw_scr_today(enum scroll_dir m_scroll_dir);
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
-void hpi_hr_disp_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean);
+void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean);
+void hpi_disp_hr_update_trend(uint16_t *hr_avg_trend, uint16_t *hr_max_trend, uint16_t *hr_min_trend);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);

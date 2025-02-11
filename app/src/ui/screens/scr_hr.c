@@ -107,8 +107,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
     lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 10, 5, 3, 2, true, 60);
 
-    
-
     // ser_hr_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
     // lv_obj_set_style_line_width(chart_hr_trend, 3, LV_PART_ITEMS);
     // ser_hr_trend = lv_chart_add_series(chart_hr_trend, lv_palette_darken(LV_PALETTE_GREEN, 2), LV_CHART_AXIS_SECONDARY_Y);
@@ -140,10 +138,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     ser_hr_max_trend->y_points[21] = 100;
     ser_hr_max_trend->y_points[22] = 110;
     ser_hr_max_trend->y_points[23] = 113;
-
-  
-
-    //ser_hr_min_trend
 
     ser_hr_min_trend->y_points[0] = 40;
     ser_hr_min_trend->y_points[1] = 52;
@@ -209,7 +203,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_hr, m_scroll_dir);
 }
 
-void hpi_hr_disp_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean)
+void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean)
 {
     if (label_hr_bpm == NULL)
         return;
@@ -229,4 +223,18 @@ void hpi_hr_disp_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_
     char buf_min_max[32];
     sprintf(buf_min_max, "%d - %d bpm", min, max);
     lv_label_set_text(label_hr_min_max, buf_min_max);
+}
+
+void hpi_disp_hr_update_trend(uint16_t *hr_avg_trend, uint16_t *hr_max_trend, uint16_t *hr_min_trend)
+{
+    if (chart_hr_trend == NULL)
+        return;
+
+    for (int i = 0; i < 24; i++)
+    {
+        ser_hr_max_trend->y_points[i] = hr_max_trend[i];
+        ser_hr_min_trend->y_points[i] = hr_min_trend[i];
+    }
+
+    lv_chart_refresh(chart_hr_trend);
 }

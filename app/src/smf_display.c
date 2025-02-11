@@ -369,7 +369,7 @@ static void st_display_active_run(void *o)
         hpi_temp_disp_update_temp_f((float)m_disp_temp);
         break;
     case SCR_HR:
-        hpi_hr_disp_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+        hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
         break;
     default:
         break;
