@@ -518,6 +518,8 @@ static void hw_add_boot_msg(char *msg, bool status)
     k_msgq_put(&q_disp_boot_msg, &boot_msg, K_NO_WAIT);
 }
 
+
+
 static int hw_enable_pmic_callback(void)
 {
     static struct gpio_callback event_cb;
@@ -787,12 +789,69 @@ struct rtc_time hw_get_current_time(void)
     return global_system_time;
 }
 
+#define DEFAULT_DATE 240428 // YYMMDD 28th April 2024
+#define DEFAULT_TIME 121212 // HHMMSS 12:12:12
+
+#define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
+#define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
+
+/**
+ * @brief Starts the Blood Pressure Trend (BPT) estimation process.
+ *
+ * This function sets the date and time for the BPT estimation, then sets the 
+ * operation mode to BPT and starts the estimation process.
+ */
+void hw_bpt_start_est(void)
+{
+    struct sensor_value load_cal;
+    load_cal.val1 = 0x00000000;
+    // sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
+
+    struct sensor_value data_time_val;
+    data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
+    data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
+    k_sleep(K_MSEC(100));
+
+    struct sensor_value mode_set;
+    mode_set.val1 = MAX32664_OP_MODE_BPT;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+
+    k_sleep(K_MSEC(1000));
+    // ppg_data_start();
+}
+
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;
     sensor_sample_fetch(imu_dev);
     sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_X, &steps);
     return (uint32_t)steps.val1;
+}
+
+void hpi_bpt_start_cal(void)
+{
+    LOG_INF("Starting BPT Calibration\n");
+
+    struct sensor_value data_time_val;
+    data_time_val.val1 = DEFAULT_DATE; // Date
+    data_time_val.val2 = DEFAULT_TIME; // Time
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
+    k_sleep(K_MSEC(100));
+
+    struct sensor_value bp_cal_val;
+    bp_cal_val.val1 = 0x00787A7D; // Sys vals
+    bp_cal_val.val2 = 0x00505152; // Dia vals
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_BP_CAL, &bp_cal_val);
+    k_sleep(K_MSEC(100));
+
+    // Start BPT Calibration
+    struct sensor_value mode_val;
+    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_START;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
+    k_sleep(K_MSEC(100));
+
+    // ppg_data_start();
 }
 
 void hw_thread(void)
