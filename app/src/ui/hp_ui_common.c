@@ -192,6 +192,9 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_HR:
         draw_scr_hr(m_scroll_dir);
         break;
+    case SCR_SPO2:
+        draw_scr_spo2(m_scroll_dir);
+        break;
     case SCR_PLOT_PPG:
         draw_scr_ppg(m_scroll_dir);
         break;

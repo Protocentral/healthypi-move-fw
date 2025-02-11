@@ -77,7 +77,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *img1 = lv_img_create(scr_hr);
     lv_img_set_src(img1, &img_heart_48px);
-    lv_obj_set_size(img1, 48, 48);
+    lv_obj_set_size(img1, 35, 35);
     lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 
     // HR Sub bpm label
@@ -183,12 +183,12 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     label_hr_min_max = lv_label_create(scr_hr);
     lv_label_set_text(label_hr_min_max, "80 - 113 bpm");
     lv_obj_add_style(label_hr_min_max, &style_white_medium, 0);
-    lv_obj_align_to(label_hr_min_max, chart_hr_trend, LV_ALIGN_BOTTOM_MID, 0, 110);
+    lv_obj_align_to(label_hr_min_max, NULL, LV_ALIGN_CENTER, 0, 150);
 
     label_hr_last_update = lv_label_create(scr_hr);
     lv_label_set_text(label_hr_last_update, "Last Hour");
     lv_obj_add_style(label_hr_last_update, &style_lbl_white_small, 0);
-    lv_obj_align_to(label_hr_last_update, label_hr_min_max, LV_ALIGN_OUT_TOP_MID , 0, 5);
+    lv_obj_align_to(label_hr_last_update, label_hr_min_max, LV_ALIGN_OUT_TOP_MID , 0, 0);
 
 
     btn_hr_settings = lv_btn_create(scr_hr);
@@ -199,7 +199,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_btn_bpt_measure, LV_SYMBOL_SETTINGS " Settings");
     lv_obj_center(label_btn_bpt_measure);
 
-    lv_obj_align_to(btn_hr_settings, label_hr_min_max, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    lv_obj_align_to(btn_hr_settings, label_hr_min_max, LV_ALIGN_OUT_BOTTOM_MID, 0, 30);
 
     lv_obj_t *lbl_gap = lv_label_create(scr_hr);
     lv_label_set_text(lbl_gap, " ");
