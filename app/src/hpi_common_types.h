@@ -46,7 +46,32 @@ struct hpi_ecg_bioz_sensor_data_t
     bool _bioZSkipSample;
 };
 
-struct hpi_ppg_sensor_data_t
+struct hpi_ppg_wr_data_t
+{
+    uint32_t raw_red[PPG_POINTS_PER_SAMPLE];
+    uint32_t raw_ir[PPG_POINTS_PER_SAMPLE];
+    uint32_t raw_green[PPG_POINTS_PER_SAMPLE];
+
+    uint8_t ppg_num_samples;
+
+    uint16_t hr;
+    uint8_t hr_confidence;
+
+    uint8_t spo2;
+    uint8_t spo2_confidence;
+
+    uint8_t bp_sys;
+    uint8_t bp_dia;
+    uint8_t bpt_status;
+    uint8_t bpt_progress;
+
+    uint16_t rtor;
+    uint8_t rtor_confidence;
+    
+    uint8_t scd_state;
+};
+
+struct hpi_ppg_fi_data_t
 {
     uint32_t raw_red[PPG_POINTS_PER_SAMPLE];
     uint32_t raw_ir[PPG_POINTS_PER_SAMPLE];

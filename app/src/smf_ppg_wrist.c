@@ -14,7 +14,7 @@ static const struct smf_state ppg_samp_states[];
 
 K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
 K_MUTEX_DEFINE(mutex_scd);
-K_MSGQ_DEFINE(q_ppg_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
@@ -49,7 +49,7 @@ struct s_object
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 {
     const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
-    struct hpi_ppg_sensor_data_t ppg_sensor_sample;
+    struct hpi_ppg_wr_data_t ppg_sensor_sample;
 
     // static uint8_t prev_hr_val = 0;
     //  uint8_t hr_chan_value=0;
@@ -106,7 +106,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 //k_sem_give(&sem_ppg_wrist_off_skin);
             }
 
-            k_msgq_put(&q_ppg_sample, &ppg_sensor_sample, K_MSEC(1));
+            k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
 
 
         }

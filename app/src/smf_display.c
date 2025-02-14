@@ -10,12 +10,14 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HR
+#define HPI_DEFAULT_START_SCREEN SCR_BPT
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
-K_MSGQ_DEFINE(q_plot_ppg, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 64, 1);
+
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
@@ -71,9 +73,9 @@ extern const struct device *touch_dev;
 extern struct k_sem sem_disp_smf_start;
 extern struct k_sem sem_disp_boot_complete;
 extern struct k_msgq q_ecg_bioz_sample;
-extern struct k_msgq q_ppg_sample;
+extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_plot_ecg_bioz;
-extern struct k_msgq q_plot_ppg;
+extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_hrv;
 
 extern struct k_sem sem_crown_key_pressed;
@@ -175,7 +177,16 @@ static void st_display_boot_exit(void *o)
     lv_disp_trig_activity(NULL);
 }
 
-static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sample)
+static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
+{
+    if(hpi_disp_get_curr_screen()==SCR_BPT)
+    {
+        hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
+
+    }
+}
+
+static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
     if (hpi_disp_get_curr_screen() == SCR_PLOT_PPG)
     {
@@ -254,7 +265,7 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
     /*
     if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
     {
-    if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
+    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
     {
         if (bpt_meas_started == true)
         {
@@ -305,6 +316,8 @@ static void hpi_disp_process_ppg_data(struct hpi_ppg_sensor_data_t ppg_sensor_sa
         */
 }
 
+
+
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
 {
     if (hpi_disp_get_curr_screen() == SCR_PLOT_ECG)
@@ -338,18 +351,28 @@ static void st_display_active_entry(void *o)
 static void st_display_active_run(void *o)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
-    struct hpi_ppg_sensor_data_t ppg_sensor_sample;
+    struct hpi_ppg_wr_data_t ppg_sensor_sample;
+    struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
     // LOG_DBG("Display SM Active Run");
 
-    if (k_msgq_get(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT) == 0)
+    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
     {
-        hpi_disp_process_ppg_data(ppg_sensor_sample);
+        hpi_disp_process_ppg_wr_data(ppg_sensor_sample);
     }
 
     if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
     {
         hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
     }
+
+    if(k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
+    }
+
+
+
+
 
     switch (hpi_disp_get_curr_screen())
     {
@@ -358,12 +381,12 @@ static void st_display_active_run(void *o)
 
         // if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
 
-        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+        /*if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
         {
             ui_home_time_display_update(m_disp_sys_time);
             ui_hr_button_update(m_disp_hr);
             ui_steps_button_update(m_disp_steps);
-        }
+        }*/
         break;
     case SCR_TEMP:
         hpi_temp_disp_update_temp_f((float)m_disp_temp);

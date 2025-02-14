@@ -803,10 +803,12 @@ struct rtc_time hw_get_current_time(void)
  */
 void hw_bpt_start_est(void)
 {
+    
     struct sensor_value load_cal;
     load_cal.val1 = 0x00000000;
-    // sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
+    //sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
 
+    LOG_INF("Starting BPT Estimation");
     struct sensor_value data_time_val;
     data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
     data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
@@ -829,7 +831,7 @@ static uint32_t acc_get_steps(void)
     return (uint32_t)steps.val1;
 }
 
-void hpi_bpt_start_cal(void)
+void hpi_hw_bpt_start_cal(void)
 {
     LOG_INF("Starting BPT Calibration\n");
 

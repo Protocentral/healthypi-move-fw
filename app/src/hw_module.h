@@ -10,7 +10,7 @@ void hw_pwr_display_enable(void);
 
 void send_usb_cdc(const char *buf, size_t len);
 
-void hw_bpt_start_cal(void);
+void hpi_hw_bpt_start_cal(void);
 void hw_bpt_get_calib(void);
 void hw_bpt_start_est(void);
 void hw_bpt_stop(void);
