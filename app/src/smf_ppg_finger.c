@@ -71,7 +71,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
     const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buf;
 
     struct hpi_ppg_wr_data_t ppg_sensor_sample;
-    printk("FNS: %d ", edata->num_samples);
+    //printk("FNS: %d ", edata->num_samples);
     if (edata->num_samples > 0)
     {
         ppg_sensor_sample.ppg_num_samples = edata->num_samples;
