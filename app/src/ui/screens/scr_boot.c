@@ -42,24 +42,23 @@ void draw_scr_boot(void)
     lv_obj_set_style_bg_color(scr_boot, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(scr_boot, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+    lv_obj_t *label_hpi = lv_label_create(scr_boot);
+    lv_label_set_text(label_hpi, "HealthyPi Move");
+    lv_obj_align(label_hpi, LV_ALIGN_TOP_MID, 0, 20);
+
     lv_obj_t *label_boot = lv_label_create(scr_boot);
-    lv_label_set_text(label_boot, "Booting...");
-    lv_obj_align(label_boot, LV_ALIGN_TOP_MID, 0, 4);
-    //lv_obj_add_style(label_boot, &style_lbl_white, 0);
+    lv_label_set_text(label_boot, "Booting v" APP_VERSION_STRING);
+    lv_obj_align_to(label_boot,label_hpi, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
 
     ta_boot = lv_textarea_create(scr_boot);
-    
-    //lv_textarea_set_one_line(ta, true);
-    lv_obj_align(ta_boot, LV_ALIGN_TOP_MID, 0, 40);
-    lv_obj_set_size(ta_boot, 240, 260);
+    lv_obj_align_to(ta_boot,label_boot, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
+    lv_obj_set_size(ta_boot, 240, 220);
     lv_obj_set_style_bg_opa(ta_boot, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-
 
     lv_obj_t *btn_proceed = lv_btn_create(scr_boot);
     lv_obj_add_event_cb(btn_proceed, scr_boot_proceed_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_align(btn_proceed, LV_ALIGN_BOTTOM_MID, 0, -30);
-    //lv_obj_set_height(btn_proceed, 80);
-
+    
     lv_obj_t *label_btn_proceed = lv_label_create(btn_proceed);
     lv_label_set_text(label_btn_proceed, "Proceed");
     lv_obj_center(label_btn_proceed);
@@ -69,7 +68,6 @@ void draw_scr_boot(void)
     lv_label_set_recolor(ta_boot, true);
 
     hpi_disp_set_curr_screen(SCR_SPL_BOOT);
-
     hpi_show_screen(scr_boot, SCROLL_RIGHT);
 }
 

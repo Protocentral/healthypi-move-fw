@@ -25,7 +25,8 @@ LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 // LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(pc_logo_bg3);
-LV_IMG_DECLARE(logo_round_white);
+//LV_IMG_DECLARE(logo_round_white);
+
 
 // LVGL Styles
 static lv_style_t style_sub;
