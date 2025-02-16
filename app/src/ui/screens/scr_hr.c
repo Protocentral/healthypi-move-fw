@@ -76,8 +76,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(label_hr_bpm, NULL, LV_ALIGN_TOP_MID, 0, 90);
 
     lv_obj_t *img1 = lv_img_create(scr_hr);
-    lv_img_set_src(img1, &img_heart_48px);
-    lv_obj_set_size(img1, 35, 35);
+    lv_img_set_src(img1, &img_heart_35);
     lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 
     // HR Sub bpm label

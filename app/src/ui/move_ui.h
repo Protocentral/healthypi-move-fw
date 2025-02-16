@@ -189,6 +189,7 @@ void disp_screen_event(lv_event_t *e);
 // LV_IMG_DECLARE(ui_img_daily_mission_png); // assets/daily_mission.png
 
 LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
+LV_IMG_DECLARE(img_heart_35);
 LV_IMG_DECLARE(img_steps_48px);
 LV_IMG_DECLARE(img_calories_48px);
 LV_IMG_DECLARE(img_clock_48px);

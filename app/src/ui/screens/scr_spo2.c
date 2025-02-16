@@ -71,9 +71,9 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_spo2_percent, &style_white_medium, 0);
     lv_obj_align_to(label_spo2_percent, NULL, LV_ALIGN_TOP_MID, 0, 90);
 
+    LV_IMG_DECLARE(icon_spo2_30x35);
     lv_obj_t *img1 = lv_img_create(scr_spo2);
-    lv_img_set_src(img1, &img_heart_48px);
-    lv_obj_set_size(img1, 48, 48);
+    lv_img_set_src(img1, &icon_spo2_30x35);
     lv_obj_align_to(img1, label_spo2_percent, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 
     // Spo2 Sub bpm label
