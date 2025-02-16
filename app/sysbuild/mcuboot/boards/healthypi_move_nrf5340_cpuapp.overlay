@@ -1,6 +1,0 @@
-/ {
-	chosen {
-		nordic,pm-ext-flash = &w25q01jv;
-	};
-};
-
