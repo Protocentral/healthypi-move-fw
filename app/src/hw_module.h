@@ -10,7 +10,7 @@ void hw_pwr_display_enable(void);
 
 void send_usb_cdc(const char *buf, size_t len);
 
-void hw_bpt_start_cal(void);
+void hpi_hw_bpt_start_cal(void);
 void hw_bpt_get_calib(void);
 void hw_bpt_start_est(void);
 void hw_bpt_stop(void);
@@ -40,8 +40,3 @@ enum gpio_keypad_key
     GPIO_KEYPAD_KEY_RIGHT,
 };
 
-struct batt_status
-{
-    uint8_t batt_level;
-    bool batt_charging;
-};

@@ -245,6 +245,6 @@ void fs_module_init(void)
         // goto out;
     }
 
-    write_test_data();
+    //write_test_data();
 }
 

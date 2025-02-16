@@ -3,6 +3,8 @@
 #include <lvgl.h>
 #include <zephyr/drivers/rtc.h>
 
+#include "hpi_common_types.h"
+
 // Settings
 
 #define SAMPLE_RATE 125
@@ -13,7 +15,7 @@
 #define DISPLAY_DEFAULT_BRIGHTNESS 50
 
 #define DISP_WINDOW_SIZE_EDA 250
-#define PPG_DISP_WINDOW_SIZE 128 // To be verified
+#define PPG_DISP_WINDOW_SIZE 512 // To be verified
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
 
@@ -43,6 +45,7 @@ enum hpi_disp_screens
     SCR_HOME,
     SCR_TODAY,
     SCR_HR,
+    SCR_SPO2,
     SCR_PLOT_PPG,
     SCR_PLOT_ECG,
     SCR_TEMP,
@@ -95,12 +98,15 @@ void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
 void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
 
+void hdr_time_display_update(struct rtc_time in_time);
+
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
-void hpi_hr_disp_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean);
+void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean);
+void hpi_disp_hr_update_trend(uint16_t *hr_avg_trend, uint16_t *hr_max_trend, uint16_t *hr_min_trend);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -108,7 +114,7 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 void hpi_ecg_disp_update_hr(int hr);
 
 // PPG screen functions
-void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_sensor_data_t ppg_sensor_sample);
+void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);
 void hpi_ppg_disp_update_spo2(int spo2);
 void hpi_ppg_disp_update_status(uint8_t status);
@@ -121,7 +127,7 @@ void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead
 // void draw_scr_bpt_calibrate(void);
 void draw_scr_bpt(enum scroll_dir m_scroll_dir);
 // void draw_scr_bpt_measure(void);
-void hpi_disp_bpt_draw_plotPPG(int32_t *data_ppg, int num_samples);
+void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
 
 // HRV screen functions
@@ -189,6 +195,6 @@ LV_IMG_DECLARE(img_clock_48px);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(ui_font_Number_big);
-// LV_FONT_DECLARE( ui_font_Number_extra);
+LV_FONT_DECLARE( ui_font_Number_extra);
 // LV_FONT_DECLARE( ui_font_Subtitle);
 // LV_FONT_DECLARE( ui_font_Title);

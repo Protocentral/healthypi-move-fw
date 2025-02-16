@@ -6,7 +6,7 @@
 #include "hpi_common_types.h"
 
 ZBUS_CHAN_DEFINE(batt_chan,                 /* Name */
-                 struct batt_status, /* Message type */
+                 struct hpi_batt_status_t, /* Message type */
                  NULL,                                 /* Validator */
                  NULL,                                 /* User Data */
                  ZBUS_OBSERVERS(disp_batt_lis),  //ZBUS_OBSERVERS_EMPTY, /* observers */

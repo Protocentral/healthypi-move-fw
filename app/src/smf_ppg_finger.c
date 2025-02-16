@@ -10,17 +10,10 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_INF);
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 40
 
-#define DEFAULT_DATE 240428 // YYMMDD 28th April 2024
-#define DEFAULT_TIME 121212 // HHMMSS 12:12:12
-
-#define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
-#define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
-
-
 SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), SENSOR_CHAN_VOLTAGE);
 
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
-K_MSGQ_DEFINE(q_ppg_finger_sample, sizeof(struct hpi_ppg_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_ppg_fi_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 RTIO_DEFINE(max32664d_read_rtio_poll_ctx, 1, 1);
 
@@ -65,7 +58,7 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                 ppg_sensor_sample.bpt_status = edata->bpt_status;
                 ppg_sensor_sample.bpt_progress = edata->bpt_progress;
 
-                k_msgq_put(&q_ppg_finger_sample, &ppg_sensor_sample, K_MSEC(1));
+                k_msgq_put(&q_ppg_fi_sample, &ppg_sensor_sample, K_MSEC(1));
                 // k_sem_give(&sem_ppg_finger_sample_trigger);
 
                 // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
@@ -77,8 +70,8 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
 {
     const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buf;
 
-    struct hpi_ppg_sensor_data_t ppg_sensor_sample;
-    // printk("NS: %d ", edata->num_samples);
+    struct hpi_ppg_wr_data_t ppg_sensor_sample;
+    //printk("FNS: %d ", edata->num_samples);
     if (edata->num_samples > 0)
     {
         ppg_sensor_sample.ppg_num_samples = edata->num_samples;
@@ -96,7 +89,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
         ppg_sensor_sample.bpt_status = edata->bpt_status;
         ppg_sensor_sample.bpt_progress = edata->bpt_progress;
 
-        k_msgq_put(&q_ppg_finger_sample, &ppg_sensor_sample, K_MSEC(1));
+        k_msgq_put(&q_ppg_fi_sample, &ppg_sensor_sample, K_MSEC(1));
         // k_sem_give(&sem_ppg_finger_sample_trigger);
 
         // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
@@ -105,6 +98,9 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
 
 void ppg_finger_sampling_trigger_thread(void)
 {
+    int ret;
+    uint8_t fing_data_buf[512];
+
     k_sem_take(&sem_ppg_finger_thread_start, K_FOREVER);
 
     // k_sem_give(&sem_ppg_finger_sample_trigger);
@@ -112,6 +108,13 @@ void ppg_finger_sampling_trigger_thread(void)
     LOG_INF("PPG Finger Sampling starting");
     for (;;)
     {
+        ret= sensor_read(&max32664d_iodev, &max32664d_read_rtio_poll_ctx, fing_data_buf, sizeof(fing_data_buf));
+        if (ret < 0)
+        {
+            LOG_ERR("Error reading sensor data");
+            continue;
+        }
+        sensor_ppg_finger_decode(fing_data_buf, sizeof(fing_data_buf));        
         // k_sem_take(&sem_ppg_finger_sample_trigger, K_FOREVER);
 
         //sensor_read_async_mempool(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
@@ -119,57 +122,6 @@ void ppg_finger_sampling_trigger_thread(void)
 
         k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
     }
-}
-
-void hpi_bpt_start_cal(void)
-{
-    LOG_INF("Starting BPT Calibration\n");
-
-    struct sensor_value data_time_val;
-    data_time_val.val1 = DEFAULT_DATE; // Date
-    data_time_val.val2 = DEFAULT_TIME; // Time
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
-    k_sleep(K_MSEC(100));
-
-    struct sensor_value bp_cal_val;
-    bp_cal_val.val1 = 0x00787A7D; // Sys vals
-    bp_cal_val.val2 = 0x00505152; // Dia vals
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_BP_CAL, &bp_cal_val);
-    k_sleep(K_MSEC(100));
-
-    // Start BPT Calibration
-    struct sensor_value mode_val;
-    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_START;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
-    k_sleep(K_MSEC(100));
-
-    // ppg_data_start();
-}
-
-/**
- * @brief Starts the Blood Pressure Trend (BPT) estimation process.
- *
- * This function sets the date and time for the BPT estimation, then sets the 
- * operation mode to BPT and starts the estimation process.
- */
-void hpi_bpt_start_est(void)
-{
-    struct sensor_value load_cal;
-    load_cal.val1 = 0x00000000;
-    // sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
-
-    struct sensor_value data_time_val;
-    data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
-    data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
-    k_sleep(K_MSEC(100));
-
-    struct sensor_value mode_set;
-    mode_set.val1 = MAX32664_OP_MODE_BPT;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
-
-    k_sleep(K_MSEC(1000));
-    // ppg_data_start();
 }
 
 void hpi_bpt_stop(void)
@@ -189,6 +141,8 @@ void hpi_bpt_get_calib(void)
 static void st_ppg_fing_idle_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Idle Entry");
+
+    hw_bpt_start_est();
 }
 
 static void st_ppg_fing_idle_run(void *o)

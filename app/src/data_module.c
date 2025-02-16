@@ -62,9 +62,12 @@ K_MUTEX_DEFINE(mutex_hr_change);
 ZBUS_CHAN_DECLARE(hr_chan);
 
 extern struct k_msgq q_ecg_bioz_sample;
-extern struct k_msgq q_ppg_sample;
+extern struct k_msgq q_ppg_wrist_sample;
+extern struct k_msgq q_ppg_fi_sample;
+
 extern struct k_msgq q_plot_ecg_bioz;
-extern struct k_msgq q_plot_ppg;
+extern struct k_msgq q_plot_ppg_wrist;
+extern struct k_msgq q_plot_ppg_fi;
 extern struct k_msgq q_plot_hrv;
 
 void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_t raw_ir, int32_t temp, uint8_t hr,
@@ -232,7 +235,8 @@ float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
 void data_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
-    struct hpi_ppg_sensor_data_t ppg_sensor_sample;
+    struct hpi_ppg_wr_data_t ppg_wr_sensor_sample;
+    struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
     int16_t ppg_sample_buffer[64];
     int ppg_sample_buffer_count = 0;
@@ -343,8 +347,20 @@ void data_thread(void)
             }
         }
 
+        if(k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
+        {
+            if (settings_send_ble_enabled)
+            {
+                //ble_ppg_notify(ppg_fi_sensor_sample.raw_ir, ppg_fi_sensor_sample.ppg_num_samples);
+            }
+            if (settings_plot_enabled)
+            {
+                k_msgq_put(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT);
+            }
+        }
+
         // Check if PPG data is available
-        if (k_msgq_get(&q_ppg_sample, &ppg_sensor_sample, K_NO_WAIT) == 0)
+        if (k_msgq_get(&q_ppg_wrist_sample, &ppg_wr_sensor_sample, K_NO_WAIT) == 0)
         {
             if (settings_send_ble_enabled)
             {
@@ -352,7 +368,7 @@ void data_thread(void)
             }
             if (settings_plot_enabled)
             {
-                k_msgq_put(&q_plot_ppg, &ppg_sensor_sample, K_NO_WAIT);
+                k_msgq_put(&q_plot_ppg_wrist, &ppg_wr_sensor_sample, K_NO_WAIT);
             }
 
             if (settings_send_usb_enabled)
@@ -360,20 +376,20 @@ void data_thread(void)
             }
 
             // If HR is available, set min, max and mean and publish over ZBUS
-            if (ppg_sensor_sample.hr_confidence>40)
+            if (ppg_wr_sensor_sample.hr_confidence>40)
             {
-                if(ppg_sensor_sample.hr > hpi_data_get_hr_max())
+                if(ppg_wr_sensor_sample.hr > hpi_data_get_hr_max())
                 {
-                    hpi_data_set_hr_max(ppg_sensor_sample.hr);
+                    hpi_data_set_hr_max(ppg_wr_sensor_sample.hr);
                 }
 
-                if(ppg_sensor_sample.hr < hpi_data_get_hr_min())
+                if(ppg_wr_sensor_sample.hr < hpi_data_get_hr_min())
                 {
-                    hpi_data_set_hr_min(ppg_sensor_sample.hr);
+                    hpi_data_set_hr_min(ppg_wr_sensor_sample.hr);
                 }
 
                 struct hpi_hr_t hr_chan_value = {
-                    .hr = ppg_sensor_sample.hr,
+                    .hr = ppg_wr_sensor_sample.hr,
                     .hr_max = hpi_data_get_hr_max(),
                     .hr_min = hpi_data_get_hr_min(),
                     .hr_mean = hpi_data_get_hr_mean(),
