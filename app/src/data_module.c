@@ -47,8 +47,8 @@ enum hpi5_data_format
 static bool settings_log_data_enabled = true; // true;
 static int settings_data_format = DATA_FMT_OPENVIEW;
 
-struct hpi_hr_trend_one_hour_t hr_data[24];
-struct hpi_hr_trend_one_hour_t hr_data_current_hour;
+struct hpi_hr_trend_day_t hr_data[24];
+struct hpi_hr_trend_day_t hr_data_current_hour;
 
 // struct hpi_ecg_bioz_sensor_data_t log_buffer[LOG_BUFFER_LENGTH];
 
@@ -117,49 +117,37 @@ void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_
     }
 }
 
-static void hpi_data_set_hr_max(uint16_t hr)
+static int hpi_get_trend_stats(uint16_t *in_array, uint16_t in_array_len, uint16_t *out_max, uint16_t *out_min, uint16_t *out_mean)
 {
-    k_mutex_lock(&mutex_hr_change, K_FOREVER);
-    hr_data_current_hour.hr_max = hr;
-    k_mutex_unlock(&mutex_hr_change);
-}
+    if (in_array_len == 0)
+    {
+        return -1;
+    }
 
-static void hpi_data_set_hr_min(uint16_t hr)
-{
-    k_mutex_lock(&mutex_hr_change, K_FOREVER);
-    hr_data_current_hour.hr_min = hr;
-    k_mutex_unlock(&mutex_hr_change);
-}
+    uint16_t max = in_array[0];
+    uint16_t min = in_array[0];
+    uint32_t sum = 0;
 
-static void hpi_data_set_hr_mean(uint16_t hr)
-{
-    k_mutex_lock(&mutex_hr_change, K_FOREVER);
-    hr_data_current_hour.hr_mean = hr;
-    k_mutex_unlock(&mutex_hr_change);
-}
+    for (int i = 0; i < in_array_len; i++)
+    {
+        if (in_array[i] > max)
+        {
+            max = in_array[i];
+        }
+        if (in_array[i] < min)
+        {
+            min = in_array[i];
+        }
+        sum += in_array[i];
+    }
 
-static uint16_t hpi_data_get_hr_max(void)
-{
-    k_mutex_lock(&mutex_hr_change, K_FOREVER);
-    uint16_t hr = hr_data_current_hour.hr_max;
-    k_mutex_unlock(&mutex_hr_change);
-    return hr;
-}
+    *out_max = max;
+    *out_min = min;
+    *out_mean = sum / in_array_len;
 
-static uint16_t hpi_data_get_hr_min(void)
-{
-    k_mutex_lock(&mutex_hr_change, K_FOREVER);
-    uint16_t hr = hr_data_current_hour.hr_min;
-    k_mutex_unlock(&mutex_hr_change);
-    return hr;
-}
+    return 0;
 
-static uint16_t hpi_data_get_hr_mean(void)
-{
-    k_mutex_lock(&mutex_hr_change, K_FOREVER);
-    uint16_t hr = hr_data_current_hour.hr_mean;
-    k_mutex_unlock(&mutex_hr_change);
-    return hr;
+
 }
 
 void send_data_text(int32_t ecg_sample, int32_t bioz_sample, int32_t raw_red)
@@ -298,10 +286,6 @@ void data_thread(void)
     arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
     */
 
-    hr_data_current_hour.hr_max = 0;
-    hr_data_current_hour.hr_min = 999;
-    hr_data_current_hour.hr_mean = 0;
-
     LOG_INF("Data Thread starting");
 
     // printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
@@ -378,21 +362,10 @@ void data_thread(void)
             // If HR is available, set min, max and mean and publish over ZBUS
             if (ppg_wr_sensor_sample.hr_confidence>40)
             {
-                if(ppg_wr_sensor_sample.hr > hpi_data_get_hr_max())
-                {
-                    hpi_data_set_hr_max(ppg_wr_sensor_sample.hr);
-                }
-
-                if(ppg_wr_sensor_sample.hr < hpi_data_get_hr_min())
-                {
-                    hpi_data_set_hr_min(ppg_wr_sensor_sample.hr);
-                }
+                
 
                 struct hpi_hr_t hr_chan_value = {
                     .hr = ppg_wr_sensor_sample.hr,
-                    .hr_max = hpi_data_get_hr_max(),
-                    .hr_min = hpi_data_get_hr_min(),
-                    .hr_mean = hpi_data_get_hr_mean(),
                     .hr_ready_flag = true,
                 };
                 zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));

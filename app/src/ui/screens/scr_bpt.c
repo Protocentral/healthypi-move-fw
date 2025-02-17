@@ -52,6 +52,7 @@ extern lv_style_t style_lbl_black_small;
 
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
+
 static float gx = 0;
 
 static bool chart_ppg_update = true;
@@ -103,14 +104,14 @@ static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
         // bpt_meas_last_progress = 0;
         // bpt_meas_last_status = 0;
 
-        //lv_obj_add_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_add_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_add_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_clear_flag(chart_bpt, LV_OBJ_FLAG_HIDDEN);
-        // lv_obj__flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_add_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_add_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_add_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_clear_flag(chart_bpt, LV_OBJ_FLAG_HIDDEN);
+        //  lv_obj__flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
 
         bpt_meas_started = true;
-        //hw_bpt_start_est();
+        // hw_bpt_start_est();
         hpi_hw_bpt_start_cal();
     }
 }
@@ -128,12 +129,12 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_bp, &style_lbl_white_14, 0);
 
     chart_bpt = lv_chart_create(scr_bpt);
-    lv_obj_set_size(chart_bpt, 390, 100);
+    lv_obj_set_size(chart_bpt, 390, 170);
     lv_obj_set_style_bg_color(chart_bpt, lv_color_black(), LV_STATE_DEFAULT);
 
     lv_obj_set_style_size(chart_bpt, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_bpt, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart_bpt, PPG_DISP_WINDOW_SIZE);
+    lv_chart_set_point_count(chart_bpt, BPT_DISP_WINDOW_SIZE);
     // lv_chart_set_type(chart_bpt, LV_CHART_TYPE_LINE);   /*Show lines and points too*
     lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
     // lv_chart_set_range(chart_bpt, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
@@ -202,7 +203,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *btn_bpt_measure_start = lv_btn_create(scr_bpt);
     lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_measure_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_bpt_measure_start, LV_ALIGN_CENTER, 0, 30);
+    lv_obj_align(btn_bpt_measure_start, LV_ALIGN_CENTER, 0, 100);
     lv_obj_set_height(btn_bpt_measure_start, 80);
 
     lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_bpt_measure_start);
@@ -225,11 +226,11 @@ void hpi_disp_bpt_update_progress(int progress)
 
     if (progress == 100)
     {
-       // lv_obj_add_flag(chart_bpt, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_clear_flag(label_cal_status, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_add_flag(chart_bpt, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_clear_flag(label_cal_status, LV_OBJ_FLAG_HIDDEN);
 
-        //lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
+        // lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -272,8 +273,8 @@ static void hpi_bpt_disp_do_set_scale(int disp_window_size)
 {
     if (gx >= (disp_window_size))
     {
-        if (chart_ppg_update == true)
-            lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
+
+        lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
 
         gx = 0;
 
@@ -295,21 +296,27 @@ void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
     {
         for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
         {
+            float data_ppg_i = (float)(data_ppg[i] * 0.1); // * 0.100);
 
-            if (data_ppg[i] < y_min_ppg)
+            if (data_ppg_i == 0)
             {
-                y_min_ppg = data_ppg[i];
+                return;
             }
 
-            if (data_ppg[i] > y_max_ppg)
+            if (data_ppg_i < y_min_ppg)
             {
-                y_max_ppg = data_ppg[i];
+                y_min_ppg = data_ppg_i;
             }
 
-            lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg[i]);
+            if (data_ppg_i > y_max_ppg)
+            {
+                y_max_ppg = data_ppg_i;
+            }
+
+            lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg_i);
+
+            hpi_bpt_disp_add_samples(1);
+            hpi_bpt_disp_do_set_scale(BPT_DISP_WINDOW_SIZE);
         }
-
-        hpi_bpt_disp_add_samples(1);
-        hpi_bpt_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
     }
 }

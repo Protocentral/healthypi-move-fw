@@ -806,7 +806,7 @@ void hw_bpt_start_est(void)
     
     struct sensor_value load_cal;
     load_cal.val1 = 0x00000000;
-    //sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
 
     LOG_INF("Starting BPT Estimation");
     struct sensor_value data_time_val;
@@ -816,7 +816,7 @@ void hw_bpt_start_est(void)
     k_sleep(K_MSEC(100));
 
     struct sensor_value mode_set;
-    mode_set.val1 = MAX32664_OP_MODE_BPT;
+    mode_set.val1 = MAX32664D_OP_MODE_BPT;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
 
     k_sleep(K_MSEC(1000));
@@ -849,7 +849,7 @@ void hpi_hw_bpt_start_cal(void)
 
     // Start BPT Calibration
     struct sensor_value mode_val;
-    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_START;
+    mode_val.val1 = MAX32664D_OP_MODE_BPT_CAL_START;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
     k_sleep(K_MSEC(100));
 

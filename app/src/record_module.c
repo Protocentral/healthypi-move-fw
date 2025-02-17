@@ -14,7 +14,7 @@
 
 LOG_MODULE_REGISTER(record_module, LOG_LEVEL_DBG);
 
-void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_one_hour_t hr_data)
+void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_day_t hr_data)
 {
     struct fs_file_t file;
     struct fs_statvfs sbuf;
@@ -40,7 +40,7 @@ void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_one_hour_t hr_d
         ret = fs_write(&file, &current_session_log_points[i], sizeof(struct hpi_ecg_bioz_sensor_data_t));
     }*/
 
-    ret = fs_write(&file, &hr_data, sizeof(struct hpi_hr_trend_one_hour_t));
+    ret = fs_write(&file, &hr_data, sizeof(struct hpi_hr_trend_day_t));
 
     ret = fs_close(&file);
     ret = fs_sync(&file);

@@ -10,7 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HOME
+#define HPI_DEFAULT_START_SCREEN SCR_BPT
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
@@ -531,9 +531,6 @@ static void disp_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
-    m_disp_hr_max = hpi_hr->hr_max;
-    m_disp_hr_min = hpi_hr->hr_min;
-    m_disp_hr_mean = hpi_hr->hr_mean;
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 

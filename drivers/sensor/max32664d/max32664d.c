@@ -567,10 +567,10 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 
 	// Load calib vector
 	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
-	m_i2c_write(dev, m_bpt_cal_vector, sizeof(m_bpt_cal_vector));
+	//m_i2c_write(dev, m_bpt_cal_vector, sizeof(m_bpt_cal_vector));
 
 	// Set date and time
-	m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
+	//m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
 
 	// Set SpO2 calibration coeffs (A, B, C)
 	m_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
@@ -579,7 +579,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set interrupt threshold
-	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x04, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Enable AGC
 	m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x01, MAX32664_DEFAULT_CMD_DELAY);
@@ -604,7 +604,7 @@ static int max32664_set_mode_bpt_cal(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set interrupt threshold
-	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x04, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664_DEFAULT_CMD_DELAY);
 	k_sleep(K_MSEC(400));
 
 	// Enable AFE
@@ -654,11 +654,11 @@ int max32664_get_sample_fifo(const struct device *dev)
 			// printk("F: %d | ", fifo_count);
 			data->num_samples = fifo_count;
 
-			if (data->op_mode == MAX32664_OP_MODE_RAW)
+			if (data->op_mode == MAX32664D_OP_MODE_RAW)
 			{
 				sample_len = 12;
 			}
-			else if (data->op_mode == MAX32664_OP_MODE_BPT)
+			else if (data->op_mode == MAX32664D_OP_MODE_BPT)
 			{
 				sample_len = 23;
 			}
@@ -683,7 +683,7 @@ int max32664_get_sample_fifo(const struct device *dev)
 
 				// bytes 7,8,9, 10,11,12 are ignored
 
-				if (data->op_mode == MAX32664_OP_MODE_BPT)
+				if (data->op_mode == MAX32664D_OP_MODE_BPT)
 				{
 					data->bpt_status = buf[(sample_len * i) + 13];
 					data->bpt_progress = buf[(sample_len * i) + 14];
@@ -731,16 +731,16 @@ static int max32664_channel_get(const struct device *dev,
 								enum sensor_channel chan,
 								struct sensor_value *val)
 {
-	// struct max32664_data *data = dev->data;
+	struct max32664_data *data = dev->data;
 
-	/*int fifo_chan;
+	int fifo_chan;
 
 	switch (chan)
 	{
-	case SENSOR_CHAN_PPG_RED_1:
+	/*case SENSOR_CHAN_PPG_RED:
 		val->val1 = data->samples_led_red[0];
 		break;
-	case SENSOR_CHAN_PPG_IR_1:
+	case SENSOR_CHAN_PPG_IR:
 		val->val1 = data->samples_led_ir[0];
 		break;
 	case SENSOR_CHAN_PPG_RED_2:
@@ -798,12 +798,11 @@ static int max32664_channel_get(const struct device *dev,
 		val->val1 = data->bpt_dia;
 		break;
 	case SENSOR_CHAN_PPG_HR_ABOVE_RESTING:
-		val->val1 = data->hr_above_resting;
-		break;
+		val->v*/
 	default:
 		LOG_ERR("Unsupported sensor channel");
 		return -ENOTSUP;
-	}*/
+	}
 
 	return 0;
 }
@@ -817,24 +816,24 @@ static int max32664_attr_set(const struct device *dev,
 	switch (attr)
 	{
 	case MAX32664_ATTR_OP_MODE:
-		if (val->val1 == MAX32664_OP_MODE_RAW)
+		if (val->val1 == MAX32664D_OP_MODE_RAW)
 		{
 			max32664_set_mode_raw(dev);
-			data->op_mode = MAX32664_OP_MODE_RAW;
+			data->op_mode = MAX32664D_OP_MODE_RAW;
 		}
-		else if (val->val1 == MAX32664_OP_MODE_BPT)
+		else if (val->val1 == MAX32664D_OP_MODE_BPT)
 		{
 			max32664_set_mode_bpt_est(dev);
-			data->op_mode = MAX32664_OP_MODE_BPT;
+			data->op_mode = MAX32664D_OP_MODE_BPT;
 		}
-		else if (val->val1 == MAX32664_OP_MODE_BPT_CAL_START)
+		else if (val->val1 == MAX32664D_OP_MODE_BPT_CAL_START) 
 		{
 			max32664_set_mode_bpt_cal(dev);
-			data->op_mode = MAX32664_OP_MODE_BPT_CAL_START;
+			data->op_mode = MAX32664D_OP_MODE_BPT_CAL_START;
 		}
-		else if (val->val1 == MAX32664_OP_MODE_BPT_CAL_GET_VECTOR)
+		else if (val->val1 == MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR)
 		{
-			data->op_mode = MAX32664_OP_MODE_BPT_CAL_GET_VECTOR;
+			data->op_mode = MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR;
 		}
 		else
 		{

@@ -7,6 +7,7 @@ HealthyPi specific common data types
 #define ECG_POINTS_PER_SAMPLE 8
 #define BIOZ_POINTS_PER_SAMPLE 8
 #define PPG_POINTS_PER_SAMPLE 8
+#define BPT_PPG_POINTS_PER_SAMPLE 32
 
 enum hpi_ppg_status 
 {
@@ -22,13 +23,10 @@ struct hpi_hr_trend_point_t
     uint32_t timestamp;
 };
 
-struct hpi_hr_trend_one_hour_t
+struct hpi_hr_trend_day_t
 {
-    struct hpi_hr_trend_point_t hr_points[60];
+    struct hpi_hr_trend_point_t hr_points[1440];
     uint32_t time_last_update;
-    uint16_t hr_max;
-    uint16_t hr_min;
-    uint16_t hr_mean;
 };
 
 struct hpi_ecg_bioz_sensor_data_t
@@ -73,9 +71,8 @@ struct hpi_ppg_wr_data_t
 
 struct hpi_ppg_fi_data_t
 {
-    uint32_t raw_red[PPG_POINTS_PER_SAMPLE];
-    uint32_t raw_ir[PPG_POINTS_PER_SAMPLE];
-    uint32_t raw_green[PPG_POINTS_PER_SAMPLE];
+    uint32_t raw_red[BPT_PPG_POINTS_PER_SAMPLE];
+    uint32_t raw_ir[BPT_PPG_POINTS_PER_SAMPLE];
 
     uint8_t ppg_num_samples;
 
@@ -110,10 +107,6 @@ struct hpi_computed_hrv_t
 struct hpi_hr_t
 {
     uint16_t hr;
-    uint16_t hr_max;
-    uint16_t hr_min;
-    uint16_t hr_mean;
-
     bool hr_ready_flag;
 };
 

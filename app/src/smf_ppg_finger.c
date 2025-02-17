@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_INF);
 SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), SENSOR_CHAN_VOLTAGE);
 
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
-K_MSGQ_DEFINE(q_ppg_fi_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
+K_MSGQ_DEFINE(q_ppg_fi_sample, sizeof(struct hpi_ppg_fi_data_t), 64, 1);
 
 RTIO_DEFINE(max32664d_read_rtio_poll_ctx, 1, 1);
 
@@ -68,9 +68,9 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
 
 static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
 {
-    const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buf;
+    const struct max32664d_encoded_data *edata = (const struct max32664d_encoded_data *)buf;
 
-    struct hpi_ppg_wr_data_t ppg_sensor_sample;
+    struct hpi_ppg_fi_data_t ppg_sensor_sample;
     //printk("FNS: %d ", edata->num_samples);
     if (edata->num_samples > 0)
     {
@@ -81,6 +81,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
             ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
             ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
         }
+
         ppg_sensor_sample.hr = edata->hr;
         ppg_sensor_sample.spo2 = edata->spo2;
 
@@ -96,7 +97,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
     }
 }
 
-void ppg_finger_sampling_trigger_thread(void)
+void ppg_finger_sampling_thread(void)
 {
     int ret;
     uint8_t fing_data_buf[512];
@@ -134,7 +135,7 @@ void hpi_bpt_stop(void)
 void hpi_bpt_get_calib(void)
 {
     struct sensor_value mode_val;
-    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_GET_VECTOR;
+    mode_val.val1 = MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
@@ -229,4 +230,4 @@ static void smf_ppg_finger_thread(void)
 
 
 K_THREAD_DEFINE(ppg_finger_thread_id, SMF_PPG_FINGER_THREAD_STACKSIZE, smf_ppg_finger_thread, NULL, NULL, NULL, SMF_PPG_FINGER_THREAD_PRIORITY, 0, 500);
-K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, PPG_FINGER_SAMPLING_THREAD_STACKSIZE, ppg_finger_sampling_trigger_thread, NULL, NULL, NULL, PPG_FINGER_SAMPLING_THREAD_PRIORITY, 0, 500);
+K_THREAD_DEFINE(ppg_finger_sampling_trigger_thread_id, PPG_FINGER_SAMPLING_THREAD_STACKSIZE, ppg_finger_sampling_thread, NULL, NULL, NULL, PPG_FINGER_SAMPLING_THREAD_PRIORITY, 0, 500);
