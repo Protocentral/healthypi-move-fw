@@ -60,6 +60,7 @@ K_MUTEX_DEFINE(mutex_hr_change);
 // Externs
 
 ZBUS_CHAN_DECLARE(hr_chan);
+ZBUS_CHAN_DECLARE(bpt_chan);
 
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_wrist_sample;
@@ -146,8 +147,6 @@ static int hpi_get_trend_stats(uint16_t *in_array, uint16_t in_array_len, uint16
     *out_mean = sum / in_array_len;
 
     return 0;
-
-
 }
 
 void send_data_text(int32_t ecg_sample, int32_t bioz_sample, int32_t raw_red)
@@ -181,11 +180,11 @@ void send_data_text_1(int32_t in_sample)
 
 #define IIR_FILT_TAPS 5
 
-//static const float32_t filt_low_b[IIR_FILT_TAPS] = {0.418163345761899, 0.836326691523798, 0.418163345761899, 0.0, 0.0}; //{ 1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
-//static const float32_t filt_low_a[IIR_FILT_TAPS] = {1.0, 0.462938025291041, 0.209715357756555, 0.0, 0.0};
+// static const float32_t filt_low_b[IIR_FILT_TAPS] = {0.418163345761899, 0.836326691523798, 0.418163345761899, 0.0, 0.0}; //{ 1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
+// static const float32_t filt_low_a[IIR_FILT_TAPS] = {1.0, 0.462938025291041, 0.209715357756555, 0.0, 0.0};
 
-//static const float32_t filt_notch_b[IIR_FILT_TAPS] = {0.811831745907865, 2.537684304617564, 3.606784274651312, 2.537684304617564, 0.811831745907865};
-//static const float32_t filt_notch_a[IIR_FILT_TAPS] = {1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
+// static const float32_t filt_notch_b[IIR_FILT_TAPS] = {0.811831745907865, 2.537684304617564, 3.606784274651312, 2.537684304617564, 0.811831745907865};
+// static const float32_t filt_notch_a[IIR_FILT_TAPS] = {1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
 
 /*
 struct iir_filter_t
@@ -328,7 +327,7 @@ void data_thread(void)
             }
         }
 
-        if(k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
+        if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
         {
             if (settings_send_ble_enabled)
             {
@@ -338,6 +337,17 @@ void data_thread(void)
             {
                 k_msgq_put(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT);
             }
+
+            /* struct hpi_bpt_t bpt_data = {
+                .sys = ppg_fi_sensor_sample.bp_sys,
+                .dia = ppg_fi_sensor_sample.bp_dia,
+                .hr = ppg_fi_sensor_sample.hr,
+                .status = ppg_fi_sensor_sample.bpt_status,
+                .progress = ppg_fi_sensor_sample.bpt_progress,
+                //.timestamp = 
+            };
+            zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
+            */
         }
 
         // Check if PPG data is available
@@ -357,10 +367,8 @@ void data_thread(void)
             }
 
             // If HR is available, set min, max and mean and publish over ZBUS
-            if (ppg_wr_sensor_sample.hr_confidence>40)
+            if (ppg_wr_sensor_sample.hr_confidence > 40)
             {
-                
-
                 struct hpi_hr_t hr_chan_value = {
                     .hr = ppg_wr_sensor_sample.hr,
                     .hr_ready_flag = true,

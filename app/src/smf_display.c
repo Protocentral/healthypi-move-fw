@@ -51,8 +51,18 @@ static uint16_t m_disp_hr_max = 0;
 static uint16_t m_disp_hr_min = 0;
 static uint16_t m_disp_hr_mean = 0;
 
+static uint8_t m_disp_spo2 = 0;
+static uint32_t m_disp_spo2_last_refresh = 0;
+
 static uint32_t m_disp_steps = 0;
 static float m_disp_temp = 0;
+
+static uint16_t m_disp_bp_sys = 0;
+static uint16_t m_disp_bp_dia = 0;
+static uint32_t m_disp_bp_last_refresh = 0;
+
+static uint8_t m_disp_bpt_status = 0;
+static uint8_t m_disp_bpt_progress = 0;
 
 static uint32_t splash_scr_start_time = 0;
 
@@ -169,6 +179,16 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
+    if (hpi_disp_get_curr_screen() == SCR_BPT)
+    {
+        hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
+
+        if(k_uptime_get_32() - m_disp_bp_last_refresh > 1000)
+        {
+            m_disp_bp_last_refresh = k_uptime_get_32();
+            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+        }
+    }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
@@ -350,10 +370,7 @@ static void st_display_active_run(void *o)
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
-        if (hpi_disp_get_curr_screen() == SCR_BPT)
-        {
-            hpi_disp_bpt_draw_plotPPG(ppg_fi_sensor_sample);
-        }
+       hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
     }
 
     switch (hpi_disp_get_curr_screen())
@@ -533,6 +550,15 @@ static void disp_hr_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
+static void disp_spo2_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
+    m_disp_spo2 = hpi_spo2->spo2;
+    m_disp_hr = hpi_spo2->hr;
+    // printk("ZB Spo2: %d\n", hpi_spo2->spo2);
+}
+ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
+
 static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
@@ -548,6 +574,18 @@ static void disp_temp_listener(const struct zbus_channel *chan)
     // printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
+
+static void disp_bpt_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_bpt_t *hpi_bpt = zbus_chan_const_msg(chan);
+    m_disp_bp_sys = hpi_bpt->sys;
+    m_disp_bp_dia = hpi_bpt->dia;
+    m_disp_bpt_status = hpi_bpt->status;
+    m_disp_bpt_progress = hpi_bpt->progress;
+    // printk("ZB BPT: %d / %d / %d\n", hpi_bpt->sys, hpi_bpt->dia, hpi_bpt->hr);
+    // hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
+}
+ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 32768
 #define SMF_DISPLAY_THREAD_PRIORITY 5

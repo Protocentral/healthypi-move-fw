@@ -122,6 +122,26 @@ struct hpi_temp_t
     double temp_c;
 };
 
+struct hpi_bpt_t
+{
+    uint32_t timestamp;
+
+    uint16_t sys;
+    uint16_t dia;
+    uint16_t hr;
+
+    uint8_t status;
+    uint8_t progress;
+};
+
+struct hpi_spo2_t
+{
+    uint32_t timestamp;
+
+    uint16_t spo2;
+    uint16_t hr;
+};
+
 struct hpi_batt_status_t
 {
     uint8_t batt_level;
