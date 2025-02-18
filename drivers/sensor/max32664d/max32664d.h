@@ -9,13 +9,12 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
 
-#define MAX32664_I2C_ADDRESS 0x55
-#define MAX32664_HUB_STAT_DRDY_MASK 0x08
+#define MAX32664D_HUB_STAT_DRDY_MASK 0x08
 
 #define MAX32664_DEFAULT_CMD_DELAY 10
 
-uint8_t m_read_hub_status(const struct device *dev);
-int max32664_get_fifo_count(const struct device *dev);
+uint8_t max32664d_read_hub_status(const struct device *dev);
+int max32664d_get_fifo_count(const struct device *dev);
 int _max32664_fifo_get_samples(const struct device *dev, uint8_t *buf, int len);
 int max32664_get_sample_fifo(const struct device *dev);
 
@@ -108,7 +107,7 @@ struct max32664_config
 	struct gpio_dt_spec mfio_gpio;
 };
 
-struct max32664_data
+struct max32664d_data
 {
 	uint8_t num_channels;
 	uint8_t num_samples;
@@ -189,6 +188,6 @@ struct max32664_enc_calib_data
 	uint8_t calib_vector[824];
 };
 
-int max32664_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 
 int max32664_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);

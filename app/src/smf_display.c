@@ -169,10 +169,6 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_BPT)
-    {
-        hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
-    }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
@@ -354,7 +350,10 @@ static void st_display_active_run(void *o)
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
-        hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
+        if (hpi_disp_get_curr_screen() == SCR_BPT)
+        {
+            hpi_disp_bpt_draw_plotPPG(ppg_fi_sensor_sample);
+        }
     }
 
     switch (hpi_disp_get_curr_screen())

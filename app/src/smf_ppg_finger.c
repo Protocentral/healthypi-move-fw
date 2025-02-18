@@ -10,12 +10,12 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_INF);
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 40
 
-SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), SENSOR_CHAN_VOLTAGE);
+SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), {SENSOR_CHAN_VOLTAGE});
 
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
 K_MSGQ_DEFINE(q_ppg_fi_sample, sizeof(struct hpi_ppg_fi_data_t), 64, 1);
 
-RTIO_DEFINE(max32664d_read_rtio_poll_ctx, 1, 1);
+RTIO_DEFINE(max32664d_read_rtio_poll_ctx, 8, 8);
 
 enum ppg_samp_state
 {
@@ -33,13 +33,13 @@ struct s_object
 extern const struct device *const max32664d_dev;
 extern struct k_sem sem_ppg_finger_sm_start;
 
-/*
+
 static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                                                   uint32_t buf_len, void *userdata)
 {
-        const struct max32664_encoded_data *edata = (const struct max32664_encoded_data *)buf;
+        const struct max32664d_encoded_data *edata = (const struct max32664d_encoded_data *)buf;
 
-        struct hpi_ppg_sensor_data_t ppg_sensor_sample;
+        struct hpi_ppg_fi_data_t ppg_sensor_sample;
         // printk("NS: %d ", edata->num_samples);
         if (edata->num_samples > 0)
         {
@@ -64,19 +64,25 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                 // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
         }
 }
-*/
+
 
 static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
 {
     const struct max32664d_encoded_data *edata = (const struct max32664d_encoded_data *)buf;
-
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
-    //printk("FNS: %d ", edata->num_samples);
-    if (edata->num_samples > 0)
-    {
-        ppg_sensor_sample.ppg_num_samples = edata->num_samples;
 
-        for (int i = 0; i < edata->num_samples; i++)
+    uint16_t _n_samples = edata->num_samples;
+    //printk("FNS: %d ", edata->num_samples);
+    if(_n_samples>16)
+    {
+        _n_samples=16;
+    }
+
+    if (_n_samples > 0)
+    {
+        ppg_sensor_sample.ppg_num_samples = _n_samples;
+
+        for (int i = 0; i < _n_samples; i++)
         {
             ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
             ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
@@ -100,7 +106,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
 void ppg_finger_sampling_thread(void)
 {
     int ret;
-    uint8_t fing_data_buf[512];
+    uint8_t fing_data_buf[768];
 
     k_sem_take(&sem_ppg_finger_thread_start, K_FOREVER);
 

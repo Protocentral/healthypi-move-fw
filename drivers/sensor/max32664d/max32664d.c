@@ -82,7 +82,7 @@ static int max32664_do_enter_app(const struct device *dev);
 
 static int m_read_op_mode(const struct device *dev)
 {
-	// struct max32664_data *data = dev->data;
+	// struct max32664d_data *data = dev->data;
 	const struct max32664_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 
@@ -120,7 +120,7 @@ static int m_read_mcu_id(const struct device *dev)
 	return 0;
 }
 
-uint8_t m_read_hub_status(const struct device *dev)
+uint8_t max32664d_read_hub_status(const struct device *dev)
 {
 	/*
 	Table 7. Sensor Hub Status Byte
@@ -274,7 +274,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
 	return 0;
 }
 
-int max32664_get_fifo_count(const struct device *dev)
+int max32664d_get_fifo_count(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
@@ -412,9 +412,9 @@ static int max32664_do_enter_app(const struct device *dev)
 		return -ENODEV;
 	}
 
-	m_read_hub_status(dev);
+	max32664d_read_hub_status(dev);
 	k_sleep(K_MSEC(200));
-	m_read_hub_status(dev);
+	max32664d_read_hub_status(dev);
 
 	return 0;
 }
@@ -549,7 +549,7 @@ static int max32664_load_calib(const struct device *dev)
 {
 	LOG_DBG("Loading calibration vector...\n");
 
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 
 	// Load calib vector
 	m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
@@ -579,7 +579,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set interrupt threshold
-	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x04, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x0F, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Enable AGC
 	m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x01, MAX32664_DEFAULT_CMD_DELAY);
@@ -638,15 +638,15 @@ static int max32664_stop_estimation(const struct device *dev)
 
 int max32664_get_sample_fifo(const struct device *dev)
 {
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 	const struct max32664_config *config = dev->config;
 
 	uint8_t wr_buf[2] = {0x12, 0x01};
 
-	uint8_t hub_stat = m_read_hub_status(dev);
-	if (hub_stat & MAX32664_HUB_STAT_DRDY_MASK)
+	uint8_t hub_stat = max32664d_read_hub_status(dev);
+	if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)
 	{
-		int fifo_count = max32664_get_fifo_count(dev);
+		int fifo_count = max32664d_get_fifo_count(dev);
 
 		if (fifo_count > 0)
 		{
@@ -721,7 +721,7 @@ int max32664_get_sample_fifo(const struct device *dev)
 static int max32664_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
 {
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 	data->num_samples = 0;
 
 	return max32664_get_sample_fifo(dev);
@@ -731,7 +731,7 @@ static int max32664_channel_get(const struct device *dev,
 								enum sensor_channel chan,
 								struct sensor_value *val)
 {
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 
 	int fifo_chan;
 
@@ -812,7 +812,7 @@ static int max32664_attr_set(const struct device *dev,
 							 enum sensor_attribute attr,
 							 const struct sensor_value *val)
 {
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 	switch (attr)
 	{
 	case MAX32664_ATTR_OP_MODE:
@@ -875,7 +875,7 @@ static const struct sensor_driver_api max32664_driver_api = {
 	.channel_get = max32664_channel_get,
 
 #ifdef CONFIG_SENSOR_ASYNC_API
-	.submit = max32664_submit,
+	.submit = max32664d_submit,
 	.get_decoder = max32664_get_decoder,
 #endif
 };
@@ -883,7 +883,7 @@ static const struct sensor_driver_api max32664_driver_api = {
 static int max32664_chip_init(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
-	// struct max32664_data *data = dev->data;
+	// struct max32664d_data *data = dev->data;
 
 	if (!device_is_ready(config->i2c.bus))
 	{
@@ -926,7 +926,7 @@ static int max32664_pm_action(const struct device *dev,
  * instantiation macros for the instance.
  */
 #define MAX32664_DEFINE(inst)                                       \
-	static struct max32664_data max32664_data_##inst;               \
+	static struct max32664d_data max32664_data_##inst;               \
 	static const struct max32664_config max32664_config_##inst =    \
 		{                                                           \
 			.i2c = I2C_DT_SPEC_INST_GET(inst),                      \

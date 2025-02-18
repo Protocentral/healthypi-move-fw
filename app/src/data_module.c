@@ -226,9 +226,6 @@ void data_thread(void)
     struct hpi_ppg_wr_data_t ppg_wr_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
-    int16_t ppg_sample_buffer[64];
-    int ppg_sample_buffer_count = 0;
-
     // int32_t resp_sample_buffer[64];
     // int resp_sample_buffer_count = 0;
 
@@ -335,7 +332,7 @@ void data_thread(void)
         {
             if (settings_send_ble_enabled)
             {
-                //ble_ppg_notify(ppg_fi_sensor_sample.raw_ir, ppg_fi_sensor_sample.ppg_num_samples);
+                ble_ppg_notify(ppg_fi_sensor_sample.raw_ir, ppg_fi_sensor_sample.ppg_num_samples);
             }
             if (settings_plot_enabled)
             {

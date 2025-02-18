@@ -129,7 +129,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_bp, &style_lbl_white_14, 0);
 
     chart_bpt = lv_chart_create(scr_bpt);
-    lv_obj_set_size(chart_bpt, 390, 170);
+    lv_obj_set_size(chart_bpt, 390, 150);
     lv_obj_set_style_bg_color(chart_bpt, lv_color_black(), LV_STATE_DEFAULT);
 
     lv_obj_set_style_size(chart_bpt, 0, LV_PART_INDICATOR);
@@ -292,11 +292,13 @@ void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
     uint32_t *data_ppg = ppg_sensor_sample.raw_red;
 
+    uint16_t n_sample = ppg_sensor_sample.ppg_num_samples;
+
     if (chart_ppg_update == true)
     {
-        for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
+        for (int i = 0; i < n_sample; i++)
         {
-            float data_ppg_i = (float)(data_ppg[i] * 0.1); // * 0.100);
+            float data_ppg_i = (float)(data_ppg[i]*1.000); // * 0.100);
 
             if (data_ppg_i == 0)
             {

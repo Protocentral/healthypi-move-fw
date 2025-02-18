@@ -2,7 +2,7 @@
 
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(MAX32664_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(max32664d_async, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "max32664d.h"
 
@@ -11,7 +11,7 @@ LOG_MODULE_REGISTER(MAX32664_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 static int max32664_async_calib_fetch(const struct device *dev, uint8_t calib_vector[824])
 {
     const struct max32664_config *config = dev->config;
-    struct max32664_data *data = dev->data;
+    struct max32664d_data *data = dev->data;
 
     static uint8_t rd_buf[1024];
     uint8_t wr_buf[3] = {0x51, 0x04, 0x03};
@@ -41,23 +41,25 @@ static int max32664_async_sample_fetch(const struct device *dev,
                                        uint32_t ir_samples[32], uint32_t red_samples[32], uint8_t *num_samples, uint16_t *spo2,
                                        uint16_t *hr, uint8_t *bpt_status, uint8_t *bpt_progress, uint8_t *bpt_sys, uint8_t *bpt_dia)
 {
-    struct max32664_data *data = dev->data;
+    struct max32664d_data *data = dev->data;
     const struct max32664_config *config = dev->config;
 
     uint8_t wr_buf[2] = {0x12, 0x01};
     static uint8_t buf[2048];
 
-    uint8_t hub_stat = m_read_hub_status(dev);
-    /*while(!(hub_stat & MAX32664_HUB_STAT_DRDY_MASK))
-    {
-        hub_stat = m_read_hub_status(dev);
-    }*/
+    static int sample_len=23;
 
-    if (hub_stat & MAX32664_HUB_STAT_DRDY_MASK)
+    uint8_t hub_stat = max32664d_read_hub_status(dev);
+    while(!(hub_stat & MAX32664D_HUB_STAT_DRDY_MASK))
+    {
+        hub_stat = max32664d_read_hub_status(dev);
+    }
+
+    if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)
     //if(1)
     {
         // printk("DRDY ");
-        int fifo_count = max32664_get_fifo_count(dev);
+        int fifo_count = max32664d_get_fifo_count(dev);
         printk("F: %d | ", fifo_count);
 
         if (fifo_count > 32)
@@ -69,8 +71,6 @@ static int max32664_async_sample_fetch(const struct device *dev,
 
         if (fifo_count > 0)
         {
-            int sample_len=0;
-
             if (data->op_mode == MAX32664D_OP_MODE_RAW)
             {
                 sample_len = 12;
@@ -81,7 +81,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
             }
 
             i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-            k_sleep(K_USEC(300));
+            //k_sleep(K_USEC(300));
             i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664D_SENSOR_DATA_OFFSET));
 
             for (int i = 0; i < fifo_count; i++)
@@ -123,31 +123,31 @@ static int max32664_async_sample_fetch(const struct device *dev,
                 // data->hr_above_resting = buf[(sample_len * i) + 23];*/
             }
         }
-        else
+        /*else
         {
             printk("FIFO empty\n");
             return 4;
-        }
+        }*/
     }
-    else
+    /*else
     {
         // printk("FIFO empty\n");
         return 4;
-    }
+    }*/
 
     return 0;
 }
 
-int max32664_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
     uint32_t min_buf_len = sizeof(struct max32664d_encoded_data);
     int rc;
     uint8_t *buf;
     uint32_t buf_len;
+
     struct max32664d_encoded_data *edata;
     struct max32664_enc_calib_data *calib_data;
-
-    struct max32664_data *data = dev->data;
+    struct max32664d_data *data = dev->data;
 
     /* Get the buffer for the frame, it may be allocated dynamically by the rtio context */
     rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_len, min_buf_len, &buf, &buf_len);
@@ -173,16 +173,15 @@ int max32664_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
         rc = max32664_async_calib_fetch(dev, calib_data->calib_vector);
     }
-
     else
     {
-        // printk("Invalid operation mode\n");
-        // return 4;
+        LOG_ERR("Invalid operation mode\n");
+        //return 4;
     }
 
     if (rc != 0)
     {
-        // LOG_ERR("Failed to fetch samples");
+        //LOG_ERR("Failed: %d", rc);
         rtio_iodev_sqe_err(iodev_sqe, rc);
         return rc;
     }
