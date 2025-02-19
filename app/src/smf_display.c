@@ -582,7 +582,8 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
     m_disp_bp_dia = hpi_bpt->dia;
     m_disp_bpt_status = hpi_bpt->status;
     m_disp_bpt_progress = hpi_bpt->progress;
-    // printk("ZB BPT: %d / %d / %d\n", hpi_bpt->sys, hpi_bpt->dia, hpi_bpt->hr);
+    printk("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
+    printk("ZB BPT: %d / %d\n", hpi_bpt->sys, hpi_bpt->dia);
     // hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);

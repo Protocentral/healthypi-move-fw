@@ -338,7 +338,7 @@ void data_thread(void)
                 k_msgq_put(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT);
             }
 
-            /* struct hpi_bpt_t bpt_data = {
+            struct hpi_bpt_t bpt_data = {
                 .sys = ppg_fi_sensor_sample.bp_sys,
                 .dia = ppg_fi_sensor_sample.bp_dia,
                 .hr = ppg_fi_sensor_sample.hr,
@@ -347,7 +347,7 @@ void data_thread(void)
                 //.timestamp = 
             };
             zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
-            */
+            
         }
 
         // Check if PPG data is available

@@ -53,7 +53,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
     while(!(hub_stat & MAX32664D_HUB_STAT_DRDY_MASK))
     {
         hub_stat = max32664d_read_hub_status(dev);
-    }
+    }   
 
     if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)
     //if(1)
