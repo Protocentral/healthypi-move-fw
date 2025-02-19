@@ -183,7 +183,7 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
-        if(k_uptime_get_32() - m_disp_bp_last_refresh > 1000)
+        if (k_uptime_get_32() - m_disp_bp_last_refresh > 1000)
         {
             m_disp_bp_last_refresh = k_uptime_get_32();
             hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
@@ -370,7 +370,7 @@ static void st_display_active_run(void *o)
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
-       hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
+        hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
     }
 
     switch (hpi_disp_get_curr_screen())

@@ -10,6 +10,12 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_INF);
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 40
 
+#define DEFAULT_DATE 240428 // YYMMDD 28th April 2024
+#define DEFAULT_TIME 121212 // HHMMSS 12:12:12
+
+#define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
+#define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
+
 SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), {SENSOR_CHAN_VOLTAGE});
 
 K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
@@ -33,7 +39,7 @@ struct s_object
 extern const struct device *const max32664d_dev;
 extern struct k_sem sem_ppg_finger_sm_start;
 
-
+/*
 static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                                                   uint32_t buf_len, void *userdata)
 {
@@ -62,8 +68,7 @@ static void sensor_ppg_finger_processing_callback(int result, uint8_t *buf,
                 // k_sem_give(&sem_ppg_finger_sample_trigger);
 
                 // printk("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
-        }
-}
+ */
 
 
 static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
@@ -129,6 +134,33 @@ void ppg_finger_sampling_thread(void)
 
         k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
     }
+}
+
+/**
+ * @brief Starts the Blood Pressure Trend (BPT) estimation process.
+ *
+ * This function sets the date and time for the BPT estimation, then sets the 
+ * operation mode to BPT and starts the estimation process.
+ */
+void hw_bpt_start_est(void)
+{
+    struct sensor_value load_cal;
+    load_cal.val1 = 0x00000000;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
+
+    LOG_INF("Starting BPT Estimation");
+    struct sensor_value data_time_val;
+    data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
+    data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
+    k_sleep(K_MSEC(100));
+
+    struct sensor_value mode_set;
+    mode_set.val1 = MAX32664D_OP_MODE_BPT;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
+
+    k_sleep(K_MSEC(1000));
+    // ppg_data_start();
 }
 
 void hpi_bpt_stop(void)

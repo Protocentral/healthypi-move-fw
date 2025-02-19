@@ -112,7 +112,7 @@ static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
 
         bpt_meas_started = true;
         // hw_bpt_start_est();
-        hpi_hw_bpt_start_cal();
+        //hpi_hw_bpt_start_cal();
     }
 }
 
