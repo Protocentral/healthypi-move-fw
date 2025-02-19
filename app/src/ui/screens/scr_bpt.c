@@ -39,8 +39,13 @@ static lv_obj_t *label_bp_val;
 // static lv_obj_t *label_bp_dia_val;
 
 static bool bpt_meas_done_flag = false;
-
 bool bpt_meas_started = false;
+static float y_max_ppg = 0;
+static float y_min_ppg = 10000;
+
+static float gx = 0;
+
+static bool chart_ppg_update = true;
 
 // Externs
 extern lv_style_t style_lbl_orange;
@@ -50,12 +55,7 @@ extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_lbl_white_14;
 extern lv_style_t style_lbl_black_small;
 
-static float y_max_ppg = 0;
-static float y_min_ppg = 10000;
-
-static float gx = 0;
-
-static bool chart_ppg_update = true;
+extern struct k_sem sem_ppg_fi_bpt_est_start;
 
 // BPT variables
 /*
@@ -113,6 +113,7 @@ static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
         bpt_meas_started = true;
         // hw_bpt_start_est();
         //hpi_hw_bpt_start_cal();
+        k_sem_give(&sem_ppg_fi_bpt_est_start);
     }
 }
 

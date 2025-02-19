@@ -33,7 +33,7 @@ SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 
 extern struct k_sem sem_ppg_wrist_sm_start;
 
-enum ppg_samp_state
+enum ppg_fi_sm_state
 {
     PPG_SAMP_STATE_ACTIVE,
     PPG_SAMP_STATE_PROBING,

@@ -353,6 +353,39 @@ static int m_i2c_write_cmd_3_rsp_2(const struct device *dev, uint8_t byte1, uint
 	return 0;
 }
 
+static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t *rsp)
+{
+    const struct max32664_config *config = dev->config;
+    uint8_t wr_buf[3];
+
+    uint8_t rd_buf[3] = {0x00, 0x00, 0x00};
+
+    wr_buf[0] = byte1;
+    wr_buf[1] = byte2;
+    wr_buf[2] = byte3;
+
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+
+    k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
+
+    // gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    k_sleep(K_MSEC(500));
+
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    LOG_DBG("CMD: %x %x %x | RSP: %x %x %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
+
+    memcpy(rsp, rd_buf, 3);
+
+    k_sleep(K_MSEC(10));
+
+    return 0;
+}
+
 static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_len)
 {
 	const struct max32664_config *config = dev->config;
@@ -594,6 +627,16 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	k_sleep(K_MSEC(100));
 
 	return 0;
+}
+
+static int max32664d_get_afe_sensor_id(const struct device *dev)
+{
+	uint8_t rsp[3] = {0x00, 0x00, 0x00};
+	m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x03, 0xFF, rsp);
+
+	LOG_DBG("AFE Sensor ID: %x", rsp[1]);
+
+	return rsp[1];
 }
 
 static int max32664_set_mode_bpt_cal(const struct device *dev)
@@ -866,6 +909,21 @@ static int max32664_attr_set(const struct device *dev,
 	}
 
 	return 0;
+}
+
+static int max32664d_attr_get(const struct device *dev,
+	enum sensor_channel chan,
+	enum sensor_attribute attr,
+	struct sensor_value *val)
+{
+	struct max32664d_data *data = dev->data;
+
+	switch (attr)
+	{
+		case MAX32664D_ATTR_SENSOR_ID:
+			val->val1 = max32664d_get_afe_sensor_id(dev);
+			break;
+	}
 }
 
 static const struct sensor_driver_api max32664_driver_api = {
