@@ -70,6 +70,9 @@ static uint32_t splash_scr_start_time = 0;
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
 
+// Screens
+extern lv_obj_t *scr_bpt;
+
 extern struct k_sem sem_disp_smf_start;
 extern struct k_sem sem_disp_boot_complete;
 extern struct k_msgq q_ecg_bioz_sample;
@@ -79,6 +82,9 @@ extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_hrv;
 
 extern struct k_sem sem_crown_key_pressed;
+
+extern struct k_sem sem_ppg_fi_show_loading;
+extern struct k_sem sem_ppg_fi_hide_loading;
 
 struct s_disp_object
 {
@@ -113,6 +119,57 @@ static void st_display_init_entry(void *o)
     hpi_disp_set_brightness(50);
 
     smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SPLASH]);
+}
+
+static lv_obj_t *obj_msgbox;
+
+static void set_angle(void *obj, int32_t v)
+{
+    lv_arc_set_value(obj, v);
+}
+
+static void hpi_disp_show_loading(lv_obj_t *scr_parent, char *message)
+{
+    obj_msgbox = lv_msgbox_create(scr_parent, "Please wait...", NULL, NULL, false);
+    lv_obj_center(obj_msgbox);
+    lv_obj_set_size(obj_msgbox, 250, 250);
+
+    /* setting's content*/
+    lv_obj_t *content = lv_msgbox_get_content(obj_msgbox);
+    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_right(content, -1, LV_PART_SCROLLBAR);
+
+    lv_obj_t *lbl_msg = lv_label_create(content);
+    lv_label_set_text(lbl_msg, message);
+
+    /*Create an Arc*/
+    lv_obj_t *arc = lv_arc_create(content);
+    lv_arc_set_rotation(arc, 270);
+    lv_arc_set_bg_angles(arc, 0, 360);
+    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);  /*Be sure the knob is not displayed*/
+    lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE); /*To not allow adjusting by click*/
+    lv_obj_set_size(arc, 100, 100);
+    lv_obj_center(arc);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, arc);
+    lv_anim_set_exec_cb(&a, set_angle);
+    lv_anim_set_time(&a, 1000);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE); /*Just for the demo*/
+    lv_anim_set_repeat_delay(&a, 500);
+    lv_anim_set_values(&a, 0, 100);
+    lv_anim_start(&a);
+}
+
+static void hpi_disp_hide_loading(void)
+{
+    if (obj_msgbox != NULL)
+    {
+        lv_msgbox_close(obj_msgbox);
+        obj_msgbox = NULL;
+    }
 }
 
 static void st_display_splash_entry(void *o)
@@ -232,41 +289,7 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }
-    else if (hpi_disp_get_curr_screen() == SUBSCR_BPT_CALIBRATE)
-    {
-
-        // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
-        //  hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-        /*if (bpt_cal_done_flag == false)
-        {
-            if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
-            {
-                bpt_cal_last_status = ppg_sensor_sample.bpt_status;
-                printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-            }
-            if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
-            {
-                bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
-                hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-            }
-            if (ppg_sensor_sample.bpt_progress == 100)
-            {
-                hw_bpt_stop();
-
-                if (ppg_sensor_sample.bpt_status == 2)
-                {
-                    printk("Calibration done");
-                }
-                bpt_cal_done_flag = true;
-
-                hw_bpt_get_calib();
-
-                // ppg_data_stop();
-            }
-            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-            lv_disp_trig_activity(NULL);
-        }*/
-    }
+   
     /*
     if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
     {
@@ -351,6 +374,55 @@ static void st_display_active_entry(void *o)
     }
 }
 
+static void st_disp_do_bpt_stuff(void)
+{
+    if (k_sem_take(&sem_ppg_fi_show_loading, K_NO_WAIT) == 0)
+    {
+        hpi_disp_show_loading(scr_bpt, "Starting estimation");
+    }
+
+    if (k_sem_take(&sem_ppg_fi_hide_loading, K_NO_WAIT) == 0)
+    {
+        hpi_disp_hide_loading();
+    }
+
+    //k_msleep(2000);
+
+
+
+    // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
+    //  hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
+    /*if (bpt_cal_done_flag == false)
+    {
+        if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
+        {
+            bpt_cal_last_status = ppg_sensor_sample.bpt_status;
+            printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
+        }
+        if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
+        {
+            bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
+            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+        }
+        if (ppg_sensor_sample.bpt_progress == 100)
+        {
+            hw_bpt_stop();
+
+            if (ppg_sensor_sample.bpt_status == 2)
+            {
+                printk("Calibration done");
+            }
+            bpt_cal_done_flag = true;
+
+            hw_bpt_get_calib();
+
+            // ppg_data_stop();
+        }
+        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
+        lv_disp_trig_activity(NULL);
+    }*/
+}
+
 static void st_display_active_run(void *o)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
@@ -373,6 +445,7 @@ static void st_display_active_run(void *o)
         hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
     }
 
+    // Do common screen updates
     switch (hpi_disp_get_curr_screen())
     {
     case SCR_HOME:
@@ -392,6 +465,9 @@ static void st_display_active_run(void *o)
         break;
     case SCR_HR:
         hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+        break;
+    case SCR_BPT:
+        st_disp_do_bpt_stuff();
         break;
     default:
         break;
