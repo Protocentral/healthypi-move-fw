@@ -163,6 +163,13 @@ static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
     }
 }
 
+void hpi_hw_pmic_off(void)
+{
+    LOG_INF("Entering Ship Mode");
+    k_msleep(1000);
+    regulator_parent_ship_mode(regulators);
+}
+
 void send_usb_cdc(const char *buf, size_t len)
 {
     int rb_len;

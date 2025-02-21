@@ -16,6 +16,8 @@ void hw_bpt_start_est(void);
 void hw_bpt_stop(void);
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year);
 
+void hpi_hw_pmic_off(void);
+
 void hpi_pwr_display_sleep(void);
 void hpi_pwr_display_wake(void);
 

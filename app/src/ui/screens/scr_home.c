@@ -57,7 +57,7 @@ void hpi_home_hr_update(int hr)
     // lv_label_set_text(home_hr_disp, buf);
 }
 
-void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
+void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
     scr_home = lv_obj_create(NULL);
 
@@ -79,7 +79,7 @@ void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
     // lv_obj_set_width(ui_label_hour, LV_SIZE_CONTENT);  /// 1
     // lv_obj_set_height(ui_label_hour, LV_SIZE_CONTENT); /// 1
     lv_obj_align_to(ui_home_label_hour, NULL, LV_ALIGN_TOP_MID, -90, 70);
-    lv_label_set_text(ui_home_label_hour, "00 : ");
+    lv_label_set_text(ui_home_label_hour, "00:");
     lv_obj_set_style_text_color(ui_home_label_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_home_label_hour, &ui_font_Number_big, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -87,7 +87,7 @@ void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
     ui_home_label_min = lv_label_create(scr_home);
     // lv_obj_set_width(ui_label_min, LV_SIZE_CONTENT);  /// 1
     // lv_obj_set_height(ui_label_min, LV_SIZE_CONTENT); /// 1
-    lv_obj_align_to(ui_home_label_min, ui_home_label_hour, LV_ALIGN_TOP_RIGHT, -40, 0);
+    lv_obj_align_to(ui_home_label_min, ui_home_label_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
     lv_label_set_text(ui_home_label_min, "00");
     lv_obj_set_style_text_color(ui_home_label_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -102,10 +102,11 @@ void draw_scr_home_digital(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_opa(ui_home_label_date, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_home_label_date, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_home_time_display_update(hw_get_current_time());
+    //ui_home_time_display_update(hw_get_current_time());
 
     hpi_disp_set_curr_screen(SCR_HOME);
     hpi_show_screen(scr_home, m_scroll_dir);
+    
 }
 
 void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
@@ -203,7 +204,7 @@ void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
     // scr_home_set_time(global_system_time);
 }
 
-void draw_scr_home(enum scroll_dir m_scroll_dir)
+/*void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
     draw_scr_home_digital(m_scroll_dir);
-}
+}*/

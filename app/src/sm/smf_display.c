@@ -10,8 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_BPT
-
+#define HPI_DEFAULT_START_SCREEN SCR_HOME
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -289,7 +288,7 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }
-   
+
     /*
     if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
     {
@@ -386,9 +385,7 @@ static void st_disp_do_bpt_stuff(void)
         hpi_disp_hide_loading();
     }
 
-    //k_msleep(2000);
-
-
+    // k_msleep(2000);
 
     // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
     //  hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
@@ -482,20 +479,15 @@ static void st_display_active_run(void *o)
         last_batt_refresh = k_uptime_get_32();
     }
 
-    if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+    // Home screen doesn't have a header display
+    if (hpi_disp_get_curr_screen() != SCR_HOME)
     {
-        last_time_refresh = k_uptime_get_32();
-        hdr_time_display_update(m_disp_sys_time);
+        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+        {
+            last_time_refresh = k_uptime_get_32();
+            hdr_time_display_update(m_disp_sys_time);
+        }
     }
-
-    // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-    //     batt_refresh_counter = 0;
-    // }
-
-    /*else
-    {
-        batt_refresh_counter++;
-    }*/
 
     // Add button handlers
     /*if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)

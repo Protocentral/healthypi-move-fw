@@ -25,15 +25,13 @@ LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 // LV_IMG_DECLARE(pc_logo_bg3);
 LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(pc_logo_bg3);
-//LV_IMG_DECLARE(logo_round_white);
-
+// LV_IMG_DECLARE(logo_round_white);
 
 // LVGL Styles
 static lv_style_t style_sub;
 
 static lv_style_t style_scr_back;
-static lv_style_t style_batt_sym;
-static lv_style_t style_batt_percent;
+
 static lv_style_t style_btn;
 static lv_style_t style_scr_back;
 
@@ -44,14 +42,14 @@ lv_style_t style_lbl_red_small;
 lv_style_t style_lbl_white;
 lv_style_t style_lbl_white_small;
 lv_style_t style_white_medium;
+lv_style_t style_batt_sym;
+lv_style_t style_batt_percent;
 
 lv_style_t style_lbl_orange;
 lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
 lv_style_t style_white_large;
-
-
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
@@ -60,8 +58,8 @@ static int curr_screen = SCR_HOME;
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
 
-static lv_obj_t *lbl_hour;
-static lv_obj_t *lbl_min;
+static lv_obj_t *lbl_hdr_hour;
+static lv_obj_t *lbl_hdr_min;
 static lv_obj_t *ui_label_date;
 
 lv_obj_t *cui_battery_percent;
@@ -271,7 +269,6 @@ void disp_screen_event(lv_event_t *e)
         }
         else
         {
-
             printk("Loading screen %d\n", curr_screen - 1);
             hpi_move_load_screen(curr_screen - 1, SCROLL_RIGHT);
         }
@@ -281,7 +278,10 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printk("Down at %d\n", curr_screen);
 
-        hpi_move_load_scr_settings(SCROLL_DOWN);
+        if (hpi_disp_get_curr_screen() == SCR_HOME)
+        {
+            hpi_move_load_scr_settings(SCROLL_DOWN);
+        }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
     {
@@ -290,7 +290,7 @@ void disp_screen_event(lv_event_t *e)
 
         if (curr_screen == SCR_SPL_SETTINGS)
         {
-            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+            hpi_move_load_screen(SCR_HOME, SCROLL_UP);
         }
     }
 }
@@ -432,42 +432,42 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
     */
 
-    lbl_hour = lv_label_create(parent);
-    lv_obj_set_width(lbl_hour, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(lbl_hour, LV_SIZE_CONTENT); /// 1
-    lv_label_set_text(lbl_hour, "00:");
-    lv_obj_set_style_text_color(lbl_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(lbl_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align_to(lbl_hour, NULL, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
-    lv_obj_set_style_text_font(lbl_hour, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lbl_hdr_hour = lv_label_create(parent);
+    lv_obj_set_width(lbl_hdr_hour, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(lbl_hdr_hour, LV_SIZE_CONTENT); /// 1
+    lv_label_set_text(lbl_hdr_hour, "00:");
+    lv_obj_set_style_text_color(lbl_hdr_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(lbl_hdr_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align_to(lbl_hdr_hour, NULL, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
+    lv_obj_set_style_text_font(lbl_hdr_hour, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lbl_min = lv_label_create(parent);
-    lv_obj_set_width(lbl_min, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(lbl_min, LV_SIZE_CONTENT); /// 1
-    lv_label_set_text(lbl_min, "00");
-    lv_obj_set_style_text_color(lbl_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(lbl_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align_to(lbl_min, lbl_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
-    lv_obj_set_style_text_font(lbl_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lbl_hdr_min = lv_label_create(parent);
+    lv_obj_set_width(lbl_hdr_min, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(lbl_hdr_min, LV_SIZE_CONTENT); /// 1
+    lv_label_set_text(lbl_hdr_min, "00");
+    lv_obj_set_style_text_color(lbl_hdr_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(lbl_hdr_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align_to(lbl_hdr_min, lbl_hdr_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
+    lv_obj_set_style_text_font(lbl_hdr_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
 }
 
 void hdr_time_display_update(struct rtc_time in_time)
 {
-    if (lbl_min == NULL || lbl_hour == NULL)
+    if (lbl_hdr_min == NULL || lbl_hdr_hour == NULL)
         return;
 
     char buf[6];
-    //char date_buf[20];
+    // char date_buf[20];
 
     /*char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
                             */
 
-    sprintf(buf, "%02d:", in_time.tm_hour);
-    lv_label_set_text(lbl_hour, buf);
+    sprintf(buf, "%d", in_time.tm_hour);
+    lv_label_set_text(lbl_hdr_hour, buf);
 
-    sprintf(buf, "%02d", in_time.tm_min);
-    lv_label_set_text(lbl_min, buf);
+    sprintf(buf, "%d", in_time.tm_min);
+    lv_label_set_text(lbl_hdr_min, buf);
 }
 
 void draw_bg(lv_obj_t *parent)
