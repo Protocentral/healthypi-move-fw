@@ -96,8 +96,8 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     ui_home_label_date = lv_label_create(scr_home);
     lv_obj_set_width(ui_home_label_date, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(ui_home_label_date, LV_SIZE_CONTENT); /// 1
-    lv_obj_align_to(ui_home_label_date, ui_home_label_hour, LV_ALIGN_OUT_BOTTOM_MID, -35, 0);
-    lv_label_set_text(ui_home_label_date, "--");
+    lv_label_set_text(ui_home_label_date, "-- -- ----");
+    lv_obj_align_to(ui_home_label_date, ui_home_label_hour, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
     lv_obj_set_style_text_color(ui_home_label_date, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_date, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_home_label_date, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);

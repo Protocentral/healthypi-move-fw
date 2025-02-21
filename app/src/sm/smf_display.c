@@ -479,12 +479,19 @@ static void st_display_active_run(void *o)
         last_batt_refresh = k_uptime_get_32();
     }
 
-    // Home screen doesn't have a header display
-    if (hpi_disp_get_curr_screen() != SCR_HOME)
+    // Update Time
+
+    if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
     {
-        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+        last_time_refresh = k_uptime_get_32();
+
+        // Home screen doesn't have a header display
+        if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
-            last_time_refresh = k_uptime_get_32();
+            ui_home_time_display_update(m_disp_sys_time);
+        }
+        else
+        {
             hdr_time_display_update(m_disp_sys_time);
         }
     }

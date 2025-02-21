@@ -463,10 +463,10 @@ void hdr_time_display_update(struct rtc_time in_time)
                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
                             */
 
-    sprintf(buf, "%d", in_time.tm_hour);
+    sprintf(buf, "%02d:", in_time.tm_hour);
     lv_label_set_text(lbl_hdr_hour, buf);
 
-    sprintf(buf, "%d", in_time.tm_min);
+    sprintf(buf, "%02d", in_time.tm_min);
     lv_label_set_text(lbl_hdr_min, buf);
 }
 
