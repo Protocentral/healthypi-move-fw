@@ -52,3 +52,49 @@ void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_day_t hr_data)
         // goto out;
     }*/
 }
+
+void hpi_rec_reset_day(void)
+{
+    struct fs_file_t file;
+    struct fs_statvfs sbuf;
+    int ret = 0;
+
+    fs_file_t_init(&file);
+    fs_mkdir("/lfs/hr");
+
+    char fname[30] = "/lfs/hr/hr_7";
+
+    // Open file in WR mode to wipe contents
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_WRITE);
+    
+    
+}
+
+void hpi_rec_add_hr_point(struct hpi_hr_trend_point_t m_hr_trend_point, int day)
+{
+    struct hpi_hr_trend_day_t hr_data;
+
+    struct fs_file_t file;
+    struct fs_statvfs sbuf;
+    int ret = 0;
+
+    fs_file_t_init(&file);
+    fs_mkdir("/lfs/hr");
+
+    char fname[30];
+    sprintf(fname, "/lfs/hr/hr%d", day);
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(hr_data));
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+
+    if (ret < 0)
+    {
+        printk("FAIL: open %s: %d", fname, ret);
+    }
+
+    ret = fs_write(&file, &m_hr_trend_point, sizeof(struct hpi_hr_trend_point_t));
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}

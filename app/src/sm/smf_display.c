@@ -442,7 +442,7 @@ static void st_display_active_run(void *o)
         hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
     }
 
-    // Do common screen updates
+    // Do screen specific updates
     switch (hpi_disp_get_curr_screen())
     {
     case SCR_HOME:
@@ -450,12 +450,12 @@ static void st_display_active_run(void *o)
 
         // if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
 
-        /*if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
         {
-            ui_home_time_display_update(m_disp_sys_time);
+            //ui_home_time_display_update(m_disp_sys_time);
             ui_hr_button_update(m_disp_hr);
             ui_steps_button_update(m_disp_steps);
-        }*/
+        }
         break;
     case SCR_TEMP:
         hpi_temp_disp_update_temp_f((float)m_disp_temp);

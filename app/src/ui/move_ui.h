@@ -108,7 +108,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir);
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
 void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean);
-void hpi_disp_hr_update_trend(uint16_t *hr_avg_trend, uint16_t *hr_max_trend, uint16_t *hr_min_trend);
+void hpi_disp_hr_load_trend(void);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -161,8 +161,6 @@ uint8_t hpi_disp_get_brightness(void);
 // Component objects
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);
 void ui_hr_button_update(uint8_t hr_bpm);
-
-lv_obj_t *ui_settings_button_create(lv_obj_t *comp_parent, int y_offset);
 
 lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent);
 void ui_spo2_button_update(uint8_t spo2);

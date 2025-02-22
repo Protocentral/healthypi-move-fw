@@ -23,7 +23,11 @@ static lv_obj_t *ui_home_label_hour;
 static lv_obj_t *ui_home_label_min;
 static lv_obj_t *ui_home_label_date;
 
+static lv_obj_t *label_batt_level_val;
+
 extern struct rtc_time global_system_time;
+
+extern lv_style_t style_batt_percent;
 
 void ui_home_time_display_update(struct rtc_time in_time)
 {
@@ -68,11 +72,11 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     //draw_header_minimal(scr_home, 320);
 
     home_step_disp = ui_steps_button_create(scr_home);
-    lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -100, 210);
+    lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -80, 210);
     lv_obj_set_style_border_opa(home_step_disp, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     home_hr_disp = ui_hr_button_create(scr_home);
-    lv_obj_align_to(home_hr_disp, NULL, LV_ALIGN_TOP_MID, 100, 210);
+    lv_obj_align_to(home_hr_disp, NULL, LV_ALIGN_TOP_MID, 80, 210);
     lv_obj_set_style_border_opa(home_hr_disp, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_home_label_hour = lv_label_create(scr_home);
@@ -96,11 +100,16 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     ui_home_label_date = lv_label_create(scr_home);
     lv_obj_set_width(ui_home_label_date, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(ui_home_label_date, LV_SIZE_CONTENT); /// 1
-    lv_label_set_text(ui_home_label_date, "-- -- ----");
-    lv_obj_align_to(ui_home_label_date, ui_home_label_hour, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    lv_label_set_text(ui_home_label_date, "-- --- ----");
+    lv_obj_align_to(ui_home_label_date, NULL, LV_ALIGN_TOP_MID, -20, 150);
     lv_obj_set_style_text_color(ui_home_label_date, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_date, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_home_label_date, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    label_batt_level_val = lv_label_create(scr_home);
+    lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL "  --");
+    lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
+    lv_obj_align_to(label_batt_level_val, NULL, LV_ALIGN_BOTTOM_MID, 0, -25);
 
     //ui_home_time_display_update(hw_get_current_time());
 
@@ -120,11 +129,11 @@ void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
     draw_header_minimal(scr_home, 75);
 
     home_step_disp = ui_steps_button_create(scr_home);
-    lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -50, 100);
+    lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -80, 100);
     lv_obj_set_style_border_opa(home_step_disp, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     home_hr_disp = ui_hr_button_create(scr_home);
-    lv_obj_align_to(home_hr_disp, NULL, LV_ALIGN_TOP_MID, 50, 210);
+    lv_obj_align_to(home_hr_disp, NULL, LV_ALIGN_TOP_MID, 80, 210);
     lv_obj_set_style_border_opa(home_hr_disp, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     meter_clock = lv_meter_create(scr_home);

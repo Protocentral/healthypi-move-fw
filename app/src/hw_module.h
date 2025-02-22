@@ -32,6 +32,8 @@ int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
 int hw_max30001_ecg_enable(bool enable);
 int hw_max30001_bioz_enable(bool enable);
 
+uint32_t hw_get_system_time(void);
+
 enum gpio_keypad_key
 {
     GPIO_KEYPAD_KEY_NONE = 0,

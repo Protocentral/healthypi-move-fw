@@ -19,8 +19,8 @@ enum hpi_ppg_status
 
 struct hpi_hr_trend_point_t
 {
-    uint16_t hr;
     uint32_t timestamp;
+    uint16_t hr;
 };
 
 struct hpi_hr_trend_day_t

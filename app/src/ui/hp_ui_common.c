@@ -432,7 +432,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
     */
 
-    lbl_hdr_hour = lv_label_create(parent);
+    /*lbl_hdr_hour = lv_label_create(parent);
     lv_obj_set_width(lbl_hdr_hour, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(lbl_hdr_hour, LV_SIZE_CONTENT); /// 1
     lv_label_set_text(lbl_hdr_hour, "00:");
@@ -449,6 +449,7 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
     lv_obj_set_style_text_opa(lbl_hdr_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_align_to(lbl_hdr_min, lbl_hdr_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
     lv_obj_set_style_text_font(lbl_hdr_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    */
 }
 
 void hdr_time_display_update(struct rtc_time in_time)

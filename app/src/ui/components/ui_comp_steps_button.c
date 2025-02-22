@@ -13,8 +13,8 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 {
     lv_obj_t *cui_buttonround;
     cui_buttonround = lv_btn_create(comp_parent);
-    lv_obj_set_width(cui_buttonround, 100);
-    lv_obj_set_height(cui_buttonround, 100);
+    lv_obj_set_width(cui_buttonround, 110);
+    lv_obj_set_height(cui_buttonround, 110);
     lv_obj_set_x(cui_buttonround, 0);
     lv_obj_set_y(cui_buttonround, 0);
     lv_obj_set_align(cui_buttonround, LV_ALIGN_CENTER);
@@ -25,9 +25,9 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
     lv_obj_set_style_bg_opa(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     // lv_obj_set_style_bg_img_src(cui_buttonround, &ui_img_measure_png, LV_PART_MAIN | LV_STATE_DEFAULT);
     // lv_obj_set_style_bg_img_src(cui_buttonround, &heart, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_outline_color(cui_buttonround, lv_palette_main(LV_PALETTE_BLUE), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_color(cui_buttonround, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_opa(cui_buttonround, 255, LV_PART_MAIN | LV_STATE_PRESSED | LV_STATE_DEFAULT);
-    lv_obj_set_style_outline_width(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_outline_width(cui_buttonround, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
     //lv_obj_set_style_shadow_color(cui_buttonround, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
     //lv_obj_set_style_shadow_opa(cui_buttonround, 255, LV_PART_MAIN | LV_STATE_PRESSED);
