@@ -108,8 +108,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
-    // lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 10);
-    // lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
@@ -196,9 +194,9 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(btn_hr_settings, scr_hr_settings_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_hr_settings, 80);
 
-    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_hr_settings);
-    lv_label_set_text(label_btn_bpt_measure, LV_SYMBOL_SETTINGS " Settings");
-    lv_obj_center(label_btn_bpt_measure);
+    lv_obj_t *lbl_btn_settings = lv_label_create(btn_hr_settings);
+    lv_label_set_text(lbl_btn_settings, LV_SYMBOL_SETTINGS " Settings");
+    lv_obj_center(lbl_btn_settings);
 
     lv_obj_t *btn_hr_live = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_hr_live, scr_ht_btn_live_event_handler, LV_EVENT_ALL, NULL);
@@ -207,15 +205,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_btn_bpt_measure1 = lv_label_create(btn_hr_live);
     lv_label_set_text(label_btn_bpt_measure1, LV_SYMBOL_PLAY " Live");
     lv_obj_center(label_btn_bpt_measure1);
-
-    // lv_obj_align_to(btn_hr_settings, label_hr_min_max, LV_ALIGN_OUT_BOTTOM_MID, 0, 30);
-
-    /*lv_obj_t *lbl_gap = lv_label_create(scr_hr);
-    lv_label_set_text(lbl_gap, " ");
-    lv_obj_align_to(lbl_gap, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
-    */
-
-    // hpi_disp_hr_load_trend
 
     hpi_disp_set_curr_screen(SCR_HR);
     hpi_show_screen(scr_hr, m_scroll_dir);

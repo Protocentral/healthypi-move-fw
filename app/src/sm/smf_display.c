@@ -10,7 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HOME
+#define HPI_DEFAULT_START_SCREEN SCR_SPO2
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -249,7 +249,7 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_PLOT_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_PPG)
     {
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
         // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
@@ -268,7 +268,7 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
     else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
     {
     }
-    else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV)
+    /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV)
     {
         if (ppg_sensor_sample.rtor != 0) // && ppg_sensor_sample.rtor != prev_rtor)
         {
@@ -287,7 +287,7 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
             // hpi_disp_hrv_scatter_update_rtor(ppg_sensor_sample.rtor);
             // prev_rtor = ppg_sensor_sample.rtor;
         }
-    }
+    }*/
 
     /*
     if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
@@ -360,9 +360,7 @@ static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg
 static void st_display_active_entry(void *o)
 {
     LOG_DBG("Display SM Active Entry");
-    // draw_scr_home(SCROLL_RIGHT);
-    // draw_scr_ppg(SCROLL_RIGHT);
-    // draw_scr_ecg(SCROLL_RIGHT);
+
     if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
     {
         hpi_move_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);

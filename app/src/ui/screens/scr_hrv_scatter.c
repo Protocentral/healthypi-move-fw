@@ -103,7 +103,7 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
     lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
     lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
-    hpi_disp_set_curr_screen(SCR_PLOT_HRV_SCATTER);
+    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV_SCATTER);
 
     // Add screen to display
     hpi_show_screen(scr_hrv_scatter, m_scroll_dir);

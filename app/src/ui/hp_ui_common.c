@@ -64,6 +64,8 @@ static lv_obj_t *ui_label_date;
 
 lv_obj_t *cui_battery_percent;
 
+int tmp_scr_parent = 0;
+
 K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Externs
@@ -156,25 +158,90 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
     }
 }
 
-void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir)
+void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 {
-    lv_obj_add_event_cb(parent, disp_screen_event, LV_EVENT_GESTURE, NULL);
+    lv_obj_add_event_cb(m_screen, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
     if (m_scroll_dir == SCROLL_LEFT)
     {
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
     }
     else if (m_scroll_dir == SCROLL_RIGHT)
     {
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
+    }
+    else if (m_scroll_dir == SCROLL_UP)
+    {
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, true);
+    }
+    else if (m_scroll_dir == SCROLL_DOWN)
+    {
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, true);
     }
     else
     {
-        lv_scr_load_anim(parent, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
     }
 }
 
-void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scroll_dir)
+void disp_spl_scr_event(lv_event_t *e)
+{
+    lv_event_code_t event_code = lv_event_get_code(e);
+    // lv_obj_t *target = lv_event_get_target(e);
+    int *scr_parent = lv_event_get_user_data(e);
+
+    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printk("Spl down at %d\n", curr_screen);
+
+        hpi_move_load_screen(*scr_parent, SCROLL_UP);
+    }
+}
+
+void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
+{
+    LOG_DBG("Adding event to screen %d", scr_parent);
+
+    tmp_scr_parent = scr_parent;
+
+    lv_obj_add_event_cb(m_screen, disp_spl_scr_event, LV_EVENT_GESTURE, &tmp_scr_parent);
+
+    if (m_scroll_dir == SCROLL_UP)
+    {
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, true);
+    }
+    else if (m_scroll_dir == SCROLL_DOWN)
+    {
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, true);
+    }
+    else
+    {
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
+    }
+}
+
+void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
+{
+    LOG_DBG("Loading screen %d Parent: %d", m_screen, scr_parent);
+    switch (m_screen)
+    {
+
+    case SCR_SPL_PLOT_PPG:
+        draw_scr_spl_plot_ppg(m_scroll_dir, scr_parent);
+        break;
+    case SCR_SPL_PLOT_HRV:
+        draw_scr_hrv(m_scroll_dir);
+        break;
+    case SCR_SPL_PLOT_HRV_SCATTER:
+        draw_scr_hrv_scatter(m_scroll_dir);
+        break;
+    default:
+        printk("Invalid screen: %d", m_screen);
+    }
+}
+
+void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
     switch (m_screen)
     {
@@ -194,9 +261,10 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
     case SCR_SPO2:
         draw_scr_spo2(m_scroll_dir);
         break;
-    case SCR_PLOT_PPG:
-        draw_scr_ppg(m_scroll_dir);
+    case SCR_BPT:
+        draw_scr_bpt(m_scroll_dir);
         break;
+
     case SCR_TEMP:
         draw_scr_temp(m_scroll_dir);
         break;
@@ -205,15 +273,6 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
         break;
     case SCR_PLOT_EDA:
         draw_scr_eda(m_scroll_dir);
-        break;
-    case SCR_PLOT_HRV:
-        draw_scr_hrv(m_scroll_dir);
-        break;
-    case SCR_PLOT_HRV_SCATTER:
-        draw_scr_hrv_scatter(m_scroll_dir);
-        break;
-    case SCR_BPT:
-        draw_scr_bpt(m_scroll_dir);
         break;
 
     /*
@@ -234,6 +293,23 @@ void hpi_move_load_screen(enum hpi_disp_screens m_screen, enum scroll_dir m_scro
 void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir)
 {
     draw_scr_settings(m_scroll_dir);
+}
+
+void disp_spl_screen_event(lv_event_t *e)
+{
+    lv_event_code_t event_code = lv_event_get_code(e);
+    // lv_obj_t *target = lv_event_get_target(e);
+
+    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printk("Down at %d\n", curr_screen);
+
+        if (curr_screen == SCR_SPL_SETTINGS)
+        {
+            hpi_move_load_screen(SCR_HOME, SCROLL_DOWN);
+        }
+    }
 }
 
 void disp_screen_event(lv_event_t *e)
