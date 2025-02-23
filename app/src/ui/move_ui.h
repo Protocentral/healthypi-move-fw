@@ -17,7 +17,7 @@
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 256 // To be verified
 #define HRV_DISP_WINDOW_SIZE 128
-#define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 4
+#define ECG_DISP_WINDOW_SIZE 256 // SAMPLE_RATE * 4
 #define BPT_DISP_WINDOW_SIZE 256
  // SAMPLE_RATE * 4
 
@@ -48,11 +48,10 @@ enum hpi_disp_screens
     SCR_TODAY,
     SCR_HR,
     SCR_SPO2,
-    //SCR_PLOT_PPG,
     SCR_PLOT_ECG,
+    SCR_BPT,
     SCR_TEMP,
     SCR_PLOT_EDA,
-    SCR_BPT,
 
     SCR_LIST_END,
     // Should not go here
@@ -69,6 +68,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_BOOT,
     SCR_SPL_SETTINGS,
     SCR_SPL_PLOT_PPG,
+    SCR_SPL_PLOT_ECG,
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
    
@@ -190,7 +190,10 @@ void ui_steps_button_update(uint16_t steps);
 
 void draw_bg(lv_obj_t *parent);
 
+// Draw special screens
 void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+
 void draw_scr_temp(enum scroll_dir m_scroll_dir);
 
 void draw_scr_vitals_home(enum scroll_dir m_scroll_dir);

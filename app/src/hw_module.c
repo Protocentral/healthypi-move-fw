@@ -476,35 +476,6 @@ int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
     return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
 }
 
-int hw_max30001_ecg_enable(bool enable)
-{
-    struct sensor_value ecg_mode_set;
-    if (enable == true)
-    {
-        ecg_mode_set.val1 = 1;
-    }
-    else
-    {
-        ecg_mode_set.val1 = 0;
-    }
-
-    sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-}
-
-int hw_max30001_bioz_enable(bool enable)
-{
-    struct sensor_value bioz_mode_set;
-    if (enable == true)
-    {
-        bioz_mode_set.val1 = 1;
-    }
-    else
-    {
-        bioz_mode_set.val1 = 0;
-    }
-    return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
-}
-
 static void pmic_event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
     if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))

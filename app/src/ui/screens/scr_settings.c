@@ -10,7 +10,6 @@ LOG_MODULE_REGISTER(scr_settings, LOG_LEVEL_INF);
 
 lv_obj_t *scr_settings;
 
-static lv_obj_t *lbl_brightness_slider;
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
 

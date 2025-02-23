@@ -38,8 +38,6 @@ struct fs_mount_t *mp =
 #endif
     ;
 
-static uint8_t hpi_settings_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
-
 /*
 static int littlefs_flash_erase(unsigned int id)
 {

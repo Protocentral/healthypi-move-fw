@@ -10,7 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_SPO2
+#define HPI_DEFAULT_START_SCREEN SCR_PLOT_ECG
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
