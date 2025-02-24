@@ -9,13 +9,12 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
 
-#define MAX32664_I2C_ADDRESS 0x55
-#define MAX32664_HUB_STAT_DRDY_MASK 0x08
+#define MAX32664D_HUB_STAT_DRDY_MASK 0x08
 
 #define MAX32664_DEFAULT_CMD_DELAY 10
 
-uint8_t m_read_hub_status(const struct device *dev);
-int max32664_get_fifo_count(const struct device *dev);
+uint8_t max32664d_read_hub_status(const struct device *dev);
+int max32664d_get_fifo_count(const struct device *dev);
 int _max32664_fifo_get_samples(const struct device *dev, uint8_t *buf, int len);
 int max32664_get_sample_fifo(const struct device *dev);
 
@@ -23,18 +22,8 @@ void max32664_do_enter_bl(const struct device *dev);
 
 enum max32664_channel
 {
-	SENSOR_CHAN_PPG_RED_1 = SENSOR_CHAN_PRIV_START + 4,
-	SENSOR_CHAN_PPG_IR_1,
-	SENSOR_CHAN_PPG_RED_2,
-	SENSOR_CHAN_PPG_IR_2,
-	SENSOR_CHAN_PPG_RED_3,
-	SENSOR_CHAN_PPG_IR_3,
-	SENSOR_CHAN_PPG_RED_4,
-	SENSOR_CHAN_PPG_IR_4,
-	SENSOR_CHAN_PPG_IR_5,
-	SENSOR_CHAN_PPG_RED_5,
-	SENSOR_CHAN_PPG_IR_6,
-	SENSOR_CHAN_PPG_RED_6,
+	SENSOR_CHAN_PPG_RED = SENSOR_CHAN_PRIV_START + 4,
+	SENSOR_CHAN_PPG_IR,
 
 	SENSOR_PPG_NUM_SAMPLES,
 
@@ -46,9 +35,6 @@ enum max32664_channel
 	SENSOR_CHAN_PPG_BPT_PROGRESS,
 	SENSOR_CHAN_PPG_HR_ABOVE_RESTING,
 	SENSOR_CHAN_PPG_SPO2_R_VAL,
-
-	SENSOR_CHAN_PPG_RED,
-	SENSOR_CHAN_PPG_IR,
 };
 
 enum max32664_attribute
@@ -63,16 +49,18 @@ enum max32664_attribute
 	MAX32664_ATTR_ENTER_BOOTLOADER = 0x08,
 	MAX32664_ATTR_DO_FW_UPDATE = 0x09,
 
+	MAX32664D_ATTR_SENSOR_ID = 0x10,
+
 };
 
-enum max32664_mode
+enum max32664d_mode
 {
-	MAX32664_OP_MODE_RAW = 0,
-	MAX32664_OP_MODE_CAL,
-	MAX32664_OP_MODE_BPT,
-	MAX32664_OP_MODE_BPT_CAL_START,
-	MAX32664_OP_MODE_BPT_CAL_GET_VECTOR,
-	MAX32664_OP_MODE_IDLE,
+	MAX32664D_OP_MODE_RAW = 0,
+	MAX32664D_OP_MODE_CAL,
+	MAX32664D_OP_MODE_BPT,
+	MAX32664D_OP_MODE_BPT_CAL_START,
+	MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR,
+	MAX32664D_OP_MODE_IDLE,
 };
 
 enum max32664_reg_families_t
@@ -121,7 +109,7 @@ struct max32664_config
 	struct gpio_dt_spec mfio_gpio;
 };
 
-struct max32664_data
+struct max32664d_data
 {
 	uint8_t num_channels;
 	uint8_t num_samples;
@@ -177,7 +165,7 @@ struct max32664_decoder_header
 	uint8_t hr_above_resting;
 };*/
 
-struct max32664_encoded_data
+struct max32664d_encoded_data
 {
 	struct max32664_decoder_header header;
 	uint8_t num_samples;
@@ -202,6 +190,6 @@ struct max32664_enc_calib_data
 	uint8_t calib_vector[824];
 };
 
-int max32664_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 
 int max32664_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);

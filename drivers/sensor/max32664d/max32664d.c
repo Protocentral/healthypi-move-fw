@@ -82,7 +82,7 @@ static int max32664_do_enter_app(const struct device *dev);
 
 static int m_read_op_mode(const struct device *dev)
 {
-	// struct max32664_data *data = dev->data;
+	// struct max32664d_data *data = dev->data;
 	const struct max32664_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 
@@ -120,7 +120,7 @@ static int m_read_mcu_id(const struct device *dev)
 	return 0;
 }
 
-uint8_t m_read_hub_status(const struct device *dev)
+uint8_t max32664d_read_hub_status(const struct device *dev)
 {
 	/*
 	Table 7. Sensor Hub Status Byte
@@ -274,7 +274,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
 	return 0;
 }
 
-int max32664_get_fifo_count(const struct device *dev)
+int max32664d_get_fifo_count(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
@@ -353,6 +353,39 @@ static int m_i2c_write_cmd_3_rsp_2(const struct device *dev, uint8_t byte1, uint
 	return 0;
 }
 
+static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t *rsp)
+{
+	const struct max32664_config *config = dev->config;
+	uint8_t wr_buf[3];
+
+	uint8_t rd_buf[3] = {0x00, 0x00, 0x00};
+
+	wr_buf[0] = byte1;
+	wr_buf[1] = byte2;
+	wr_buf[2] = byte3;
+
+	gpio_pin_set_dt(&config->mfio_gpio, 0);
+	k_sleep(K_USEC(300));
+	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+
+	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
+
+	// gpio_pin_set_dt(&config->mfio_gpio, 0);
+	k_sleep(K_USEC(300));
+	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	k_sleep(K_MSEC(500));
+
+	gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+	LOG_DBG("CMD: %x %x %x | RSP: %x %x %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
+
+	memcpy(rsp, rd_buf, 3);
+
+	k_sleep(K_MSEC(10));
+
+	return 0;
+}
+
 static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_len)
 {
 	const struct max32664_config *config = dev->config;
@@ -412,22 +445,22 @@ static int max32664_do_enter_app(const struct device *dev)
 		return -ENODEV;
 	}
 
-	m_read_hub_status(dev);
+	max32664d_read_hub_status(dev);
 	k_sleep(K_MSEC(200));
-	m_read_hub_status(dev);
+	max32664d_read_hub_status(dev);
 
 	return 0;
 }
 
 static void bpt_time_to_byte_le(uint32_t time, uint8_t *byte_time)
 {
-	
+
 	byte_time[0] = (time & 0x000000FF);
 	byte_time[1] = (time & 0x0000FF00) >> 8;
 	byte_time[2] = (time & 0x00FF0000) >> 16;
 	byte_time[3] = (time & 0xFF000000) >> 24;
 
-	//printk("Hex Time: %x %x %x %x\n", byte_time[0], byte_time[1], byte_time[2], byte_time[3]);
+	// printk("Hex Time: %x %x %x %x\n", byte_time[0], byte_time[1], byte_time[2], byte_time[3]);
 }
 
 static int m_set_date_time(const struct device *dev, uint32_t date, uint32_t time)
@@ -549,7 +582,7 @@ static int max32664_load_calib(const struct device *dev)
 {
 	LOG_DBG("Loading calibration vector...\n");
 
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 
 	// Load calib vector
 	m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
@@ -579,7 +612,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set interrupt threshold
-	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x0F, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Enable AGC
 	m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x01, MAX32664_DEFAULT_CMD_DELAY);
@@ -596,6 +629,16 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	return 0;
 }
 
+static int max32664d_get_afe_sensor_id(const struct device *dev)
+{
+	uint8_t rsp[3] = {0x00, 0x00, 0x00};
+	m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x03, 0xFF, rsp);
+
+	LOG_DBG("AFE Sensor ID: %x %x %x", rsp[0], rsp[1], rsp[2]);
+
+	return rsp[1];
+}
+
 static int max32664_set_mode_bpt_cal(const struct device *dev)
 {
 	LOG_DBG("MAX32664 Starting BPT calibration...");
@@ -604,7 +647,7 @@ static int max32664_set_mode_bpt_cal(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set interrupt threshold
-	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x04, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664_DEFAULT_CMD_DELAY);
 	k_sleep(K_MSEC(400));
 
 	// Enable AFE
@@ -638,27 +681,27 @@ static int max32664_stop_estimation(const struct device *dev)
 
 int max32664_get_sample_fifo(const struct device *dev)
 {
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 	const struct max32664_config *config = dev->config;
 
 	uint8_t wr_buf[2] = {0x12, 0x01};
 
-	uint8_t hub_stat = m_read_hub_status(dev);
-	if (hub_stat & MAX32664_HUB_STAT_DRDY_MASK)
+	uint8_t hub_stat = max32664d_read_hub_status(dev);
+	if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)
 	{
-		int fifo_count = max32664_get_fifo_count(dev);
+		int fifo_count = max32664d_get_fifo_count(dev);
 
 		if (fifo_count > 0)
 		{
-			int sample_len=12;
+			int sample_len = 12;
 			// printk("F: %d | ", fifo_count);
 			data->num_samples = fifo_count;
 
-			if (data->op_mode == MAX32664_OP_MODE_RAW)
+			if (data->op_mode == MAX32664D_OP_MODE_RAW)
 			{
 				sample_len = 12;
 			}
-			else if (data->op_mode == MAX32664_OP_MODE_BPT)
+			else if (data->op_mode == MAX32664D_OP_MODE_BPT)
 			{
 				sample_len = 23;
 			}
@@ -683,7 +726,7 @@ int max32664_get_sample_fifo(const struct device *dev)
 
 				// bytes 7,8,9, 10,11,12 are ignored
 
-				if (data->op_mode == MAX32664_OP_MODE_BPT)
+				if (data->op_mode == MAX32664D_OP_MODE_BPT)
 				{
 					data->bpt_status = buf[(sample_len * i) + 13];
 					data->bpt_progress = buf[(sample_len * i) + 14];
@@ -721,7 +764,7 @@ int max32664_get_sample_fifo(const struct device *dev)
 static int max32664_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
 {
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 	data->num_samples = 0;
 
 	return max32664_get_sample_fifo(dev);
@@ -731,16 +774,16 @@ static int max32664_channel_get(const struct device *dev,
 								enum sensor_channel chan,
 								struct sensor_value *val)
 {
-	// struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 
-	/*int fifo_chan;
+	int fifo_chan;
 
 	switch (chan)
 	{
-	case SENSOR_CHAN_PPG_RED_1:
+	/*case SENSOR_CHAN_PPG_RED:
 		val->val1 = data->samples_led_red[0];
 		break;
-	case SENSOR_CHAN_PPG_IR_1:
+	case SENSOR_CHAN_PPG_IR:
 		val->val1 = data->samples_led_ir[0];
 		break;
 	case SENSOR_CHAN_PPG_RED_2:
@@ -798,12 +841,11 @@ static int max32664_channel_get(const struct device *dev,
 		val->val1 = data->bpt_dia;
 		break;
 	case SENSOR_CHAN_PPG_HR_ABOVE_RESTING:
-		val->val1 = data->hr_above_resting;
-		break;
+		val->v*/
 	default:
 		LOG_ERR("Unsupported sensor channel");
 		return -ENOTSUP;
-	}*/
+	}
 
 	return 0;
 }
@@ -813,28 +855,28 @@ static int max32664_attr_set(const struct device *dev,
 							 enum sensor_attribute attr,
 							 const struct sensor_value *val)
 {
-	struct max32664_data *data = dev->data;
+	struct max32664d_data *data = dev->data;
 	switch (attr)
 	{
 	case MAX32664_ATTR_OP_MODE:
-		if (val->val1 == MAX32664_OP_MODE_RAW)
+		if (val->val1 == MAX32664D_OP_MODE_RAW)
 		{
 			max32664_set_mode_raw(dev);
-			data->op_mode = MAX32664_OP_MODE_RAW;
+			data->op_mode = MAX32664D_OP_MODE_RAW;
 		}
-		else if (val->val1 == MAX32664_OP_MODE_BPT)
+		else if (val->val1 == MAX32664D_OP_MODE_BPT)
 		{
 			max32664_set_mode_bpt_est(dev);
-			data->op_mode = MAX32664_OP_MODE_BPT;
+			data->op_mode = MAX32664D_OP_MODE_BPT;
 		}
-		else if (val->val1 == MAX32664_OP_MODE_BPT_CAL_START)
+		else if (val->val1 == MAX32664D_OP_MODE_BPT_CAL_START)
 		{
 			max32664_set_mode_bpt_cal(dev);
-			data->op_mode = MAX32664_OP_MODE_BPT_CAL_START;
+			data->op_mode = MAX32664D_OP_MODE_BPT_CAL_START;
 		}
-		else if (val->val1 == MAX32664_OP_MODE_BPT_CAL_GET_VECTOR)
+		else if (val->val1 == MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR)
 		{
-			data->op_mode = MAX32664_OP_MODE_BPT_CAL_GET_VECTOR;
+			data->op_mode = MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR;
 		}
 		else
 		{
@@ -869,14 +911,30 @@ static int max32664_attr_set(const struct device *dev,
 	return 0;
 }
 
+static int max32664d_attr_get(const struct device *dev,
+							  enum sensor_channel chan,
+							  enum sensor_attribute attr,
+							  struct sensor_value *val)
+{
+	struct max32664d_data *data = dev->data;
+
+	switch (attr)
+	{
+	case MAX32664D_ATTR_SENSOR_ID:
+		val->val1 = max32664d_get_afe_sensor_id(dev);
+		break;
+	}
+}
+
 static const struct sensor_driver_api max32664_driver_api = {
 	.attr_set = max32664_attr_set,
+	.attr_get = max32664d_attr_get,
 
 	.sample_fetch = max32664_sample_fetch,
 	.channel_get = max32664_channel_get,
 
 #ifdef CONFIG_SENSOR_ASYNC_API
-	.submit = max32664_submit,
+	.submit = max32664d_submit,
 	.get_decoder = max32664_get_decoder,
 #endif
 };
@@ -884,7 +942,7 @@ static const struct sensor_driver_api max32664_driver_api = {
 static int max32664_chip_init(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
-	// struct max32664_data *data = dev->data;
+	// struct max32664d_data *data = dev->data;
 
 	if (!device_is_ready(config->i2c.bus))
 	{
@@ -927,7 +985,7 @@ static int max32664_pm_action(const struct device *dev,
  * instantiation macros for the instance.
  */
 #define MAX32664_DEFINE(inst)                                       \
-	static struct max32664_data max32664_data_##inst;               \
+	static struct max32664d_data max32664_data_##inst;              \
 	static const struct max32664_config max32664_config_##inst =    \
 		{                                                           \
 			.i2c = I2C_DT_SPEC_INST_GET(inst),                      \

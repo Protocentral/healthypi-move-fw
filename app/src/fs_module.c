@@ -38,8 +38,6 @@ struct fs_mount_t *mp =
 #endif
     ;
 
-static uint8_t hpi_settings_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
-
 /*
 static int littlefs_flash_erase(unsigned int id)
 {
@@ -190,11 +188,7 @@ void record_wipe_all(void)
 
 void write_test_data(void)
 {
-    struct hpi_hr_trend_one_hour_t hr_data;
-    
-    hr_data.hr_max = 100;
-    hr_data.hr_min = 60;
-    hr_data.hr_mean = 80;
+    struct hpi_hr_trend_day_t hr_data;
 
     for (int i = 0; i < 60; i++)
     {

@@ -39,6 +39,7 @@ static float gx = 0;
 extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
+extern lv_style_t style_white_medium;
 
 #define PPG_SIGNAL_RED 0
 #define PPG_SIGNAL_IR 1
@@ -126,7 +127,7 @@ static void ppg_settings_button_cb(lv_event_t *e)
     hpi_disp_ppg_settings_open();
 }
 
-void draw_scr_ppg(enum scroll_dir m_scroll_dir)
+void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
 {
     scr_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
@@ -136,11 +137,11 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // Bottom signal label
     lv_obj_t *label_signal = lv_label_create(scr_ppg);
     lv_label_set_text(label_signal, "PPG");
-    lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
+    lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 5);
+    //lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     chart_ppg = lv_chart_create(scr_ppg);
-    lv_obj_set_size(chart_ppg, 390, 100);
+    lv_obj_set_size(chart_ppg, 390, 130);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
     lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
@@ -151,7 +152,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
 
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_ppg, 3, LV_PART_ITEMS);
+    lv_obj_set_style_line_width(chart_ppg, 5, LV_PART_ITEMS);
 
     label_ppg_no_signal = lv_label_create(scr_ppg);
     lv_label_set_text(label_ppg_no_signal, LV_SYMBOL_UP "\nPlace device \non wrist \nto start PPG");
@@ -163,8 +164,8 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // HR Number label
     label_ppg_hr = lv_label_create(scr_ppg);
     lv_label_set_text(label_ppg_hr, "--");
-    lv_obj_align_to(label_ppg_hr, NULL, LV_ALIGN_CENTER, -100, 40);
-    lv_obj_add_style(label_ppg_hr, &style_lbl_white, 0);
+    lv_obj_align_to(label_ppg_hr, chart_ppg, LV_ALIGN_OUT_BOTTOM_MID, -100, 60);
+    lv_obj_add_style(label_ppg_hr, &style_white_medium, 0);
 
     // HR Sub bpm label
     lv_obj_t *label_hr_sub = lv_label_create(scr_ppg);
@@ -174,7 +175,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // HR caption label
     lv_obj_t *label_hr_cap = lv_label_create(scr_ppg);
     lv_label_set_text(label_hr_cap, "HR");
-    lv_obj_align_to(label_hr_cap, label_ppg_hr, LV_ALIGN_OUT_LEFT_MID, -5, -5);
+    lv_obj_align_to(label_hr_cap, label_ppg_hr, LV_ALIGN_OUT_TOP_MID, 0, -20);
     lv_obj_add_style(label_hr_cap, &style_red_medium, 0);
 
     /*LV_IMG_DECLARE(heart);
@@ -186,8 +187,8 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // SpO2 Number label
     label_ppg_spo2 = lv_label_create(scr_ppg);
     lv_label_set_text(label_ppg_spo2, "--");
-    lv_obj_align_to(label_ppg_spo2, NULL, LV_ALIGN_CENTER, 100, 40);
-    lv_obj_add_style(label_ppg_spo2, &style_lbl_white, 0);
+    lv_obj_align_to(label_ppg_spo2, chart_ppg,  LV_ALIGN_OUT_BOTTOM_MID, 100, 60);
+    lv_obj_add_style(label_ppg_spo2, &style_white_medium, 0);
 
     // SpO2 Sub % label
     lv_obj_t *label_spo2_sub = lv_label_create(scr_ppg);
@@ -197,7 +198,7 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     // SpO2 caption label
     lv_obj_t *label_spo2_cap = lv_label_create(scr_ppg);
     lv_label_set_text(label_spo2_cap, "SpO2");
-    lv_obj_align_to(label_spo2_cap, label_ppg_spo2, LV_ALIGN_OUT_LEFT_MID, -5, -5);
+    lv_obj_align_to(label_spo2_cap, label_ppg_spo2,LV_ALIGN_OUT_TOP_MID, 0, -20);
     lv_obj_add_style(label_spo2_cap, &style_red_medium, 0);
 
     lv_obj_t *btn_settings = lv_btn_create(scr_ppg);
@@ -229,8 +230,8 @@ void draw_scr_ppg(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_style(label_status, &style_lbl_white_small, 0);
 
-    hpi_disp_set_curr_screen(SCR_PLOT_PPG);
-    hpi_show_screen(scr_ppg, m_scroll_dir);
+    hpi_disp_set_curr_screen(SCR_SPL_PLOT_PPG);
+    hpi_show_screen_spl(scr_ppg, m_scroll_dir, scr_parent);
 }
 
 void hpi_ppg_disp_update_hr(int hr)

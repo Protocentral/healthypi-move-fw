@@ -61,9 +61,9 @@ char curr_string[40];
 
 // Peripheral Device Pointers
 static const struct device *max30208_dev = DEVICE_DT_GET_ANY(maxim_max30208);
-static const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
-static const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
 
+const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
+const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
 const struct device *imu_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
@@ -138,7 +138,7 @@ extern struct k_msgq q_session_cmd_msg;
 extern struct k_sem sem_disp_ready;
 extern struct k_msgq q_disp_boot_msg;
 
-static void gpio_keys_cb_handler(struct input_event *evt)
+static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
     // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d type=%d\n",
     //        evt->dev->name, evt->code, evt->value, evt->type);
@@ -161,6 +161,13 @@ static void gpio_keys_cb_handler(struct input_event *evt)
             break;
         }
     }
+}
+
+void hpi_hw_pmic_off(void)
+{
+    LOG_INF("Entering Ship Mode");
+    k_msleep(1000);
+    regulator_parent_ship_mode(regulators);
 }
 
 void send_usb_cdc(const char *buf, size_t len)
@@ -239,6 +246,12 @@ static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_
             LOG_DBG("ringbuf -> tty fifo %d bytes", send_len);
         }
     }
+}
+
+uint32_t hw_get_system_time(void)
+{
+   uint32_t time = k_uptime_get_32();
+   return time;
 }
 
 uint8_t read_battery_level(void)
@@ -461,35 +474,6 @@ int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
     mode_set.val1 = op_mode;
     mode_set.val2 = algo_mode;
     return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
-}
-
-int hw_max30001_ecg_enable(bool enable)
-{
-    struct sensor_value ecg_mode_set;
-    if (enable == true)
-    {
-        ecg_mode_set.val1 = 1;
-    }
-    else
-    {
-        ecg_mode_set.val1 = 0;
-    }
-
-    sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
-}
-
-int hw_max30001_bioz_enable(bool enable)
-{
-    struct sensor_value bioz_mode_set;
-    if (enable == true)
-    {
-        bioz_mode_set.val1 = 1;
-    }
-    else
-    {
-        bioz_mode_set.val1 = 0;
-    }
-    return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
 }
 
 static void pmic_event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
@@ -789,71 +773,12 @@ struct rtc_time hw_get_current_time(void)
     return global_system_time;
 }
 
-#define DEFAULT_DATE 240428 // YYMMDD 28th April 2024
-#define DEFAULT_TIME 121212 // HHMMSS 12:12:12
-
-#define DEFAULT_FUTURE_DATE 240429 // YYMMDD 29th April 2024
-#define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
-
-/**
- * @brief Starts the Blood Pressure Trend (BPT) estimation process.
- *
- * This function sets the date and time for the BPT estimation, then sets the 
- * operation mode to BPT and starts the estimation process.
- */
-void hw_bpt_start_est(void)
-{
-    
-    struct sensor_value load_cal;
-    load_cal.val1 = 0x00000000;
-    //sensor_attr_set(max32664_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_LOAD_CALIB, &load_cal);
-
-    LOG_INF("Starting BPT Estimation");
-    struct sensor_value data_time_val;
-    data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
-    data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
-    k_sleep(K_MSEC(100));
-
-    struct sensor_value mode_set;
-    mode_set.val1 = MAX32664_OP_MODE_BPT;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
-
-    k_sleep(K_MSEC(1000));
-    // ppg_data_start();
-}
-
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;
     sensor_sample_fetch(imu_dev);
     sensor_channel_get(imu_dev, SENSOR_CHAN_ACCEL_X, &steps);
     return (uint32_t)steps.val1;
-}
-
-void hpi_hw_bpt_start_cal(void)
-{
-    LOG_INF("Starting BPT Calibration\n");
-
-    struct sensor_value data_time_val;
-    data_time_val.val1 = DEFAULT_DATE; // Date
-    data_time_val.val2 = DEFAULT_TIME; // Time
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_DATE_TIME, &data_time_val);
-    k_sleep(K_MSEC(100));
-
-    struct sensor_value bp_cal_val;
-    bp_cal_val.val1 = 0x00787A7D; // Sys vals
-    bp_cal_val.val2 = 0x00505152; // Dia vals
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_BP_CAL, &bp_cal_val);
-    k_sleep(K_MSEC(100));
-
-    // Start BPT Calibration
-    struct sensor_value mode_val;
-    mode_val.val1 = MAX32664_OP_MODE_BPT_CAL_START;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
-    k_sleep(K_MSEC(100));
-
-    // ppg_data_start();
 }
 
 void hw_thread(void)

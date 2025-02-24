@@ -1,4 +1,6 @@
 #include <zephyr/kernel.h>
+#include <zephyr/drivers/spi.h>
+#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
@@ -9,109 +11,27 @@
 #include <zephyr/logging/log.h>
 
 #include "hpi_common_types.h"
-#include "hw_module.h"
 
 #include "ui/move_ui.h"
+#include "hw_module.h"
 
 lv_obj_t *scr_bpt;
-// lv_obj_t *scr_bpt_calibrate;
-// lv_obj_t *scr_bpt_measure;
 
-lv_obj_t *label_cal_status;
-lv_obj_t *btn_bpt_cal_start;
-lv_obj_t *btn_bpt_cal_exit;
-lv_obj_t *btn_bpt_measure_exit;
+extern lv_style_t style_scr_black;
 
-static lv_obj_t *chart_bpt;
-static lv_chart_series_t *ser_bpt;
+extern struct k_sem sem_bpt_est_start;
 
-bool bpt_start_flag = false;
-lv_obj_t *label_btn_bpt;
-lv_obj_t *bar_bpt_progress;
-lv_obj_t *label_progress;
-lv_obj_t *btn_bpt_start_cal;
-
-lv_obj_t *btn_bpt_measure_start;
-
-lv_obj_t *label_bp_sys_sub;
-lv_obj_t *label_bp_sys_cap;
-static lv_obj_t *label_bp_val;
-// static lv_obj_t *label_bp_dia_val;
-
-static bool bpt_meas_done_flag = false;
-
-bool bpt_meas_started = false;
-
-// Externs
-extern lv_style_t style_lbl_orange;
-extern lv_style_t style_lbl_white;
-extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
-extern lv_style_t style_lbl_white_14;
-extern lv_style_t style_lbl_black_small;
-
-static float y_max_ppg = 0;
-static float y_min_ppg = 10000;
-static float gx = 0;
-
-static bool chart_ppg_update = true;
-
-// BPT variables
-/*
-static bool bpt_cal_done_flag = false;
-static int bpt_meas_last_progress = 0;
-static int bpt_meas_last_status = 0;
-static int bpt_cal_last_status = 0;
-static uint8_t bpt_cal_last_progress = 0;
-*/
-
-/*static void scr_bpt_btn_measure_exit_event_handler(lv_event_t *e)
+static void scr_bpt_measure_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
-        // bpt_meas_done_flag = false;
-        // bpt_meas_last_progress = 0;
-        // bpt_meas_last_status = 0;
-        // bpt_meas_started = false;
+        hpi_move_load_scr_spl(SCR_SPL_PLOT_BPT_PPG, SCROLL_UP, (uint8_t)SCR_BPT);
+        k_sem_give(&sem_bpt_est_start);
 
-        draw_scr_bpt_home(SCROLL_DOWN);
-    }
-}
-
-static void scr_bpt_calib_btn_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        draw_scr_bpt_calibrate();
-    }
-}
-*/
-
-static void scr_bpt_measure_btn_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        // lv_obj_add_flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
-
-        bpt_meas_done_flag = false;
-        // bpt_meas_last_progress = 0;
-        // bpt_meas_last_status = 0;
-
-        //lv_obj_add_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_add_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_add_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_clear_flag(chart_bpt, LV_OBJ_FLAG_HIDDEN);
-        // lv_obj__flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
-
-        bpt_meas_started = true;
-        //hw_bpt_start_est();
-        hpi_hw_bpt_start_cal();
+        // hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
+        // k_sem_give(&sem_ecg_start);
     }
 }
 
@@ -119,197 +39,42 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
 {
     scr_bpt = lv_obj_create(NULL);
     draw_header_minimal(scr_bpt, 10);
+    // draw_bg(scr_ecg);
 
-    // Draw Blood Pressure label
+    static lv_style_t style;
+    lv_style_init(&style);
+    lv_style_set_flex_flow(&style, LV_FLEX_FLOW_ROW_WRAP);
+    lv_style_set_flex_main_place(&style, LV_FLEX_ALIGN_SPACE_EVENLY);
+    lv_style_set_flex_cross_place(&style, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *label_bp = lv_label_create(scr_bpt);
-    lv_label_set_text(label_bp, "Blood Pressure");
-    lv_obj_align(label_bp, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_add_style(label_bp, &style_lbl_white_14, 0);
+    /*Create a container with COLUMN flex direction*/
+    lv_obj_t *cont_col = lv_obj_create(scr_bpt);
+    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
+    // lv_obj_set_width(cont_col, lv_pct(100));
+    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
+    lv_obj_add_style(cont_col, &style_scr_black, 0);
+    lv_obj_add_style(cont_col, &style, 0);
 
-    chart_bpt = lv_chart_create(scr_bpt);
-    lv_obj_set_size(chart_bpt, 390, 100);
-    lv_obj_set_style_bg_color(chart_bpt, lv_color_black(), LV_STATE_DEFAULT);
+    lv_obj_t *label_signal = lv_label_create(cont_col);
+    lv_label_set_text(label_signal, "Blood Pressure");
 
-    lv_obj_set_style_size(chart_bpt, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_border_width(chart_bpt, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart_bpt, PPG_DISP_WINDOW_SIZE);
-    // lv_chart_set_type(chart_bpt, LV_CHART_TYPE_LINE);   /*Show lines and points too*
-    lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    // lv_chart_set_range(chart_bpt, LV_CHART_AXIS_SECONDARY_Y, 0, 1000);
-    lv_chart_set_div_line_count(chart_bpt, 0, 0);
-    lv_chart_set_update_mode(chart_bpt, LV_CHART_UPDATE_MODE_CIRCULAR);
-    // lv_style_set_border_width(&styles->bg, LV_STATE_DEFAULT, BORDER_WIDTH);
-    lv_obj_align_to(chart_bpt, label_bp, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
-    ser_bpt = lv_chart_add_series(chart_bpt, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
+    LV_IMG_DECLARE(bp_70);
+    lv_obj_t *img1 = lv_img_create(cont_col);
+    lv_img_set_src(img1, &bp_70);
+    //lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 
-    // BP Systolic Number label
-    label_bp_val = lv_label_create(scr_bpt);
-    lv_label_set_text(label_bp_val, "-- / --");
-    lv_obj_align_to(label_bp_val, NULL, LV_ALIGN_CENTER, -30, -25);
-    lv_obj_add_style(label_bp_val, &style_lbl_white, 0);
-    lv_obj_add_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_t *btn_bpt_measure = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_measure_handler, LV_EVENT_ALL, NULL);
+    //lv_obj_align(btn_hr_settings, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_set_height(btn_bpt_measure, 80);
 
-    // BP Systolic Sub mmHg label
-    label_bp_sys_sub = lv_label_create(scr_bpt);
-    lv_label_set_text(label_bp_sys_sub, " mmHg");
-    lv_obj_align_to(label_bp_sys_sub, label_bp_val, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-    lv_obj_add_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-
-    // BP Systolic caption label
-    label_bp_sys_cap = lv_label_create(scr_bpt);
-    lv_label_set_text(label_bp_sys_cap, "BP(Sys/Dia)");
-    lv_obj_align_to(label_bp_sys_cap, label_bp_val, LV_ALIGN_OUT_TOP_MID, -5, -5);
-    lv_obj_add_style(label_bp_sys_cap, &style_red_medium, 0);
-    lv_obj_add_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-
-    // Draw Progress bar
-    bar_bpt_progress = lv_bar_create(scr_bpt);
-    lv_obj_set_size(bar_bpt_progress, 200, 5);
-    lv_obj_align_to(bar_bpt_progress, chart_bpt, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
-    lv_bar_set_value(bar_bpt_progress, 0, LV_ANIM_OFF);
-
-    // Draw Progress bar label
-    label_progress = lv_label_create(scr_bpt);
-    lv_label_set_text(label_progress, "Progress: --");
-    lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
-
-    // Draw button to start BP measurement
-
-    /*btn_bpt_measure_start = lv_btn_create(scr_bpt);
-    lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_btn_measure_start_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_measure_start, NULL, LV_ALIGN_CENTER, -20, 0);
-    lv_obj_set_height(btn_bpt_measure_start, 80);
-
-    lv_obj_t *label_btn_bpt = lv_label_create(btn_bpt_measure_start);
-    lv_label_set_text(label_btn_bpt, "Start");
-    lv_obj_center(label_btn_bpt);
-    */
-
-    /*btn_bpt_measure_exit = lv_btn_create(scr_bpt_measure);
-    lv_obj_add_event_cb(btn_bpt_measure_exit, scr_bpt_btn_measure_exit_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align_to(btn_bpt_measure_exit, NULL, LV_ALIGN_BOTTOM_MID, -110, -40);
-    lv_obj_set_height(btn_bpt_measure_exit, 55);
-    lv_obj_set_width(btn_bpt_measure_exit, 240);
-    lv_obj_set_style_bg_color(btn_bpt_measure_exit, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
-
-    lv_obj_t *label_btn_bpt_exit = lv_label_create(btn_bpt_measure_exit);
-    lv_label_set_text(label_btn_bpt_exit, "Exit");
-    lv_obj_add_style(label_btn_bpt_exit, &style_lbl_white_small, 0);
-    lv_obj_center(label_btn_bpt_exit);
-    // Hide exit button by default
-    lv_obj_add_flag(btn_bpt_measure_exit, LV_OBJ_FLAG_HIDDEN);*/
-
-    lv_obj_t *btn_bpt_measure_start = lv_btn_create(scr_bpt);
-    lv_obj_add_event_cb(btn_bpt_measure_start, scr_bpt_measure_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_bpt_measure_start, LV_ALIGN_CENTER, 0, 30);
-    lv_obj_set_height(btn_bpt_measure_start, 80);
-
-    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_bpt_measure_start);
-    lv_label_set_text(label_btn_bpt_measure, "Measure BP");
+    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_bpt_measure);
+    lv_label_set_text(label_btn_bpt_measure, LV_SYMBOL_PLAY " Measure");
     lv_obj_center(label_btn_bpt_measure);
 
     hpi_disp_set_curr_screen(SCR_BPT);
     hpi_show_screen(scr_bpt, m_scroll_dir);
-}
-
-void hpi_disp_bpt_update_progress(int progress)
-{
-    if (label_progress == NULL || bar_bpt_progress == NULL)
-    {
-        return;
-    }
-
-    lv_bar_set_value(bar_bpt_progress, progress, LV_ANIM_OFF);
-    lv_label_set_text_fmt(label_progress, "Progress: %d %%", progress);
-
-    if (progress == 100)
-    {
-       // lv_obj_add_flag(chart_bpt, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_clear_flag(label_cal_status, LV_OBJ_FLAG_HIDDEN);
-
-        //lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
-        //lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
-    }
-}
-
-void hpi_disp_bpt_update_status(int status)
-{
-    if (label_cal_status == NULL)
-    {
-        return;
-    }
-
-    if (status == 1)
-    {
-        lv_label_set_text(label_cal_status, "Calibration\nDone");
-    }
-    else
-    {
-        lv_label_set_text(label_cal_status, "Calibration\nFailed");
-    }
-}
-
-void hpi_disp_update_bp(int sys, int dia)
-{
-    if (label_bp_val == NULL)
-        return;
-
-    char buf[32];
-    if (sys == 0 || dia == 0)
-    {
-        sprintf(buf, "-- / --");
-    }
-    else
-    {
-        sprintf(buf, "%d / %d", sys, dia);
-    }
-
-    lv_label_set_text(label_bp_val, buf);
-}
-
-static void hpi_bpt_disp_do_set_scale(int disp_window_size)
-{
-    if (gx >= (disp_window_size))
-    {
-        if (chart_ppg_update == true)
-            lv_chart_set_range(chart_bpt, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
-
-        gx = 0;
-
-        y_max_ppg = -900000;
-        y_min_ppg = 900000;
-    }
-}
-
-static void hpi_bpt_disp_add_samples(int num_samples)
-{
-    gx += num_samples;
-}
-
-void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
-{
-    uint32_t *data_ppg = ppg_sensor_sample.raw_red;
-
-    if (chart_ppg_update == true)
-    {
-        for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
-        {
-
-            if (data_ppg[i] < y_min_ppg)
-            {
-                y_min_ppg = data_ppg[i];
-            }
-
-            if (data_ppg[i] > y_max_ppg)
-            {
-                y_max_ppg = data_ppg[i];
-            }
-
-            lv_chart_set_next_value(chart_bpt, ser_bpt, data_ppg[i]);
-        }
-
-        hpi_bpt_disp_add_samples(1);
-        hpi_bpt_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
-    }
 }

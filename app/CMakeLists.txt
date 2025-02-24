@@ -12,7 +12,9 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/components/*.c
                         src/ui/images/*.c
                         src/ui/fonts/*.c
-                        src/ui/screens/*.c)    
+                        src/ui/screens/*.c
+                        src/sm/*.c
+                        )    
                         
 target_sources(app PRIVATE ${app_sources})
 
