@@ -19,12 +19,17 @@ lv_obj_t *scr_bpt;
 
 extern lv_style_t style_scr_black;
 
+extern struct k_sem sem_bpt_est_start;
+
 static void scr_bpt_measure_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
+        hpi_move_load_scr_spl(SCR_SPL_PLOT_BPT_PPG, SCROLL_UP, (uint8_t)SCR_BPT);
+        k_sem_give(&sem_bpt_est_start);
+
         // hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
         // k_sem_give(&sem_ecg_start);
     }
@@ -53,7 +58,6 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(cont_col, &style_scr_black, 0);
     lv_obj_add_style(cont_col, &style, 0);
 
-   
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Blood Pressure");
 

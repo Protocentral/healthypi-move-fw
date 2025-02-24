@@ -64,7 +64,6 @@ void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_add_style(cont_col, &style_scr_black, 0);
     lv_obj_add_style(cont_col, &style, 0);
 
-    // Bottom signal label
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "ECG");
 

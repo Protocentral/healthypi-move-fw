@@ -69,6 +69,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SETTINGS,
     SCR_SPL_PLOT_PPG,
     SCR_SPL_PLOT_ECG,
+    SCR_SPL_PLOT_BPT_PPG,
     SCR_SPL_ECG_COMPLETE,
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
@@ -146,6 +147,8 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir);
 // void draw_scr_bpt_measure(void);
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
+
+void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);

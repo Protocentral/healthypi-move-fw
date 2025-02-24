@@ -215,25 +215,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_bpt, m_scroll_dir);
 }
 
-void hpi_disp_bpt_update_progress(int progress)
-{
-    if (label_progress == NULL || bar_bpt_progress == NULL)
-    {
-        return;
-    }
 
-    lv_bar_set_value(bar_bpt_progress, progress, LV_ANIM_OFF);
-    lv_label_set_text_fmt(label_progress, "Progress: %d %%", progress);
-
-    if (progress == 100)
-    {
-        // lv_obj_add_flag(chart_bpt, LV_OBJ_FLAG_HIDDEN);
-        // lv_obj_clear_flag(label_cal_status, LV_OBJ_FLAG_HIDDEN);
-
-        // lv_obj_add_flag(btn_bpt_cal_start, LV_OBJ_FLAG_HIDDEN);
-        // lv_obj_clear_flag(btn_bpt_cal_exit, LV_OBJ_FLAG_HIDDEN);
-    }
-}
 
 void hpi_disp_bpt_update_status(int status)
 {
