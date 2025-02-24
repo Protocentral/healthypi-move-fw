@@ -233,6 +233,9 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_PLOT_ECG:
         draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
         break;
+    case SCR_SPL_ECG_COMPLETE:
+        draw_scr_ecg_complete(m_scroll_dir);
+        break;
     case SCR_SPL_PLOT_HRV:
         draw_scr_hrv(m_scroll_dir);
         break;
@@ -271,7 +274,7 @@ void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_TEMP:
         draw_scr_temp(m_scroll_dir);
         break;
-    case SCR_PLOT_ECG:
+    case SCR_ECG:
         draw_scr_ecg(m_scroll_dir);
         break;
     case SCR_PLOT_EDA:

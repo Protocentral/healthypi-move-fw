@@ -15,44 +15,36 @@
 #include "ui/move_ui.h"
 #include "hw_module.h"
 
-lv_obj_t *scr_ecg;
-
-static lv_obj_t *btn_hr_settings;
-
-static bool chart_ecg_update = true;
-static float y_max_ecg = 0;
-static float y_min_ecg = 10000;
-
-// static bool ecg_plot_hidden = false;
-
-static float gx = 0;
+lv_obj_t *scr_ecg_complete;
 
 // Externs
 extern lv_style_t style_lbl_orange;
 extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
+extern lv_style_t style_white_medium;
 
 extern lv_style_t style_scr_black;
 
-extern struct k_sem sem_ecg_start;
+extern struct k_sem sem_ecg_complete_ok;
 
-static void scr_ecg_settings_btn_event_handler(lv_event_t *e)
+static void scr_ecg_complete_btn_ok_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
-        k_sem_give(&sem_ecg_start);
+        k_sem_give(&sem_ecg_complete_ok);
+        //hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
+        hpi_move_load_screen(SCR_ECG, SCROLL_UP);
     }
 }
 
-void draw_scr_ecg(enum scroll_dir m_scroll_dir)
+void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir)
 {
-    scr_ecg = lv_obj_create(NULL);
-    draw_header_minimal(scr_ecg, 10);
-    // draw_bg(scr_ecg);
+    scr_ecg_complete = lv_obj_create(NULL);
+    draw_header_minimal(scr_ecg_complete, 10);
+    // draw_bg(scr_ecg_complete);
 
     static lv_style_t style;
     lv_style_init(&style);
@@ -61,7 +53,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_style_set_flex_cross_place(&style, LV_FLEX_ALIGN_CENTER);
 
     /*Create a container with COLUMN flex direction*/
-    lv_obj_t *cont_col = lv_obj_create(scr_ecg);
+    lv_obj_t *cont_col = lv_obj_create(scr_ecg_complete);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     // lv_obj_set_width(cont_col, lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
@@ -71,24 +63,20 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(cont_col, &style_scr_black, 0);
     lv_obj_add_style(cont_col, &style, 0);
 
-   
     lv_obj_t *label_signal = lv_label_create(cont_col);
-    lv_label_set_text(label_signal, "ECG");
+    lv_label_set_text(label_signal, LV_SYMBOL_OK " ECG Complete");
+    lv_obj_add_style(label_signal, &style_white_medium, 0);
 
-    LV_IMG_DECLARE(ecg_70);
-    lv_obj_t *img1 = lv_img_create(cont_col);
-    lv_img_set_src(img1, &ecg_70);
-    //lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *lbl_session_stats = lv_label_create(cont_col);
+    lv_label_set_text_fmt(lbl_session_stats, "ECG recording saved\nStarted at %d ", 1234);
 
-    btn_hr_settings = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_settings_btn_event_handler, LV_EVENT_ALL, NULL);
-    //lv_obj_align(btn_hr_settings, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_set_height(btn_hr_settings, 80);
+    lv_obj_t *btn_ok = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_ok, scr_ecg_complete_btn_ok_event_handler, LV_EVENT_ALL, NULL);
+    
+    lv_obj_t *label_btn_ok = lv_label_create(btn_ok);
+    lv_label_set_text(label_btn_ok, LV_SYMBOL_CLOSE "Close");
+    lv_obj_center(label_btn_ok);
 
-    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_hr_settings);
-    lv_label_set_text(label_btn_bpt_measure, LV_SYMBOL_PLAY " Measure");
-    lv_obj_center(label_btn_bpt_measure);
-
-    hpi_disp_set_curr_screen(SCR_ECG);
-    hpi_show_screen(scr_ecg, m_scroll_dir);
+    hpi_disp_set_curr_screen(SCR_SPL_ECG_COMPLETE);
+    hpi_show_screen_spl(scr_ecg_complete, m_scroll_dir, SCR_ECG);
 }

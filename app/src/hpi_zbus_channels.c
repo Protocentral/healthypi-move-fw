@@ -60,3 +60,11 @@ ZBUS_CHAN_DEFINE(spo2_chan,                 /* Name */
                  ZBUS_OBSERVERS(disp_spo2_lis),
                  ZBUS_MSG_INIT(0)                      /* Initial value {0} */
 );
+
+ZBUS_CHAN_DEFINE(ecg_timer_chan,                 /* Name */
+                 struct hpi_ecg_timer_t,
+                 NULL,                                 /* Validator */
+                 NULL,                                 /* User Data */
+                 ZBUS_OBSERVERS(disp_ecg_timer_lis),
+                 ZBUS_MSG_INIT(0)                      /* Initial value {0} */
+);

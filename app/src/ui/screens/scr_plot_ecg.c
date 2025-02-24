@@ -22,9 +22,10 @@ static lv_chart_series_t *ser_ecg;
 
 static lv_obj_t *label_ecg_hr;
 static lv_obj_t *label_hr_bpm;
+static lv_obj_t *label_timer;
 static lv_obj_t *label_ecg_lead_off;
 
-static bool chart_ecg_update = true;
+static bool chart_ecg_update = false;
 static float y_max_ecg = 0;
 static float y_min_ecg = 10000;
 
@@ -40,6 +41,7 @@ extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
+// void scr_plot_ecg_update_timer(
 void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
 {
     scr_plot_ecg = lv_obj_create(NULL);
@@ -66,20 +68,25 @@ void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "ECG");
 
-    lv_obj_t *cont_hr = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_hr, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    // Draw countdown timer container
+    lv_obj_t *cont_timer = lv_obj_create(cont_col);
+    lv_obj_set_size(cont_timer, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cont_timer, LV_FLEX_FLOW_ROW);
+    lv_obj_add_style(cont_timer, &style_scr_black, 0);
+    lv_obj_set_flex_align(cont_timer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *img1 = lv_img_create(cont_hr);
-    lv_img_set_src(img1, &img_heart_35);
-    label_hr_bpm = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_bpm, "00");
-    lv_obj_add_style(label_hr_bpm, &style_white_medium, 0);
-    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_sub, " bpm");
-    
+    // Draw Countdown Timer
+    LV_IMG_DECLARE(timer_32);
+    lv_obj_t *img_timer = lv_img_create(cont_timer);
+    lv_img_set_src(img_timer, &timer_32);
+
+    label_timer = lv_label_create(cont_timer);
+    lv_label_set_text(label_timer, "00");
+    lv_obj_add_style(label_timer, &style_white_medium, 0);
+    lv_obj_t *label_timer_sub = lv_label_create(cont_timer);
+    lv_label_set_text(label_timer_sub, " secs");
+    lv_obj_add_style(label_timer_sub, &style_white_medium, 0);
+
     // Create Chart 1 - ECG
     chart_ecg = lv_chart_create(cont_col);
     lv_obj_set_size(chart_ecg, 390, 140);
@@ -102,8 +109,24 @@ void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
     lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);*/
 
-    hpi_disp_set_curr_screen(SCR_PLOT_ECG);
+    lv_obj_t *cont_hr = lv_obj_create(cont_col);
+    lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
+    lv_obj_add_style(cont_hr, &style_scr_black, 0);
+    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+
+    // Draw BPM
+    lv_obj_t *img1 = lv_img_create(cont_hr);
+    lv_img_set_src(img1, &img_heart_35);
+    label_hr_bpm = lv_label_create(cont_hr);
+    lv_label_set_text(label_hr_bpm, "00");
+    lv_obj_add_style(label_hr_bpm, &style_white_medium, 0);
+    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
+    lv_label_set_text(label_hr_sub, " bpm");
+
+    hpi_disp_set_curr_screen(SCR_SPL_PLOT_ECG);
     hpi_show_screen_spl(scr_plot_ecg, m_scroll_dir, scr_parent);
+    chart_ecg_update = true;
 }
 
 void hpi_ecg_disp_do_set_scale(int disp_window_size)
@@ -143,6 +166,14 @@ void hpi_ecg_disp_update_hr(int hr)
     }
 
     lv_label_set_text(label_ecg_hr, buf);
+}
+
+void hpi_ecg_disp_update_timer(int time_left)
+{
+    if (label_timer == NULL)
+        return;
+
+    lv_label_set_text_fmt(label_timer, "%d" , time_left);
 }
 
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)

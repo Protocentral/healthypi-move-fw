@@ -147,3 +147,8 @@ struct hpi_batt_status_t
     uint8_t batt_level;
     bool batt_charging;
 };
+
+struct hpi_ecg_timer_t
+{
+    uint16_t timer_val;
+};

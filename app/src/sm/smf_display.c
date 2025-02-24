@@ -10,7 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_PLOT_ECG
+#define HPI_DEFAULT_START_SCREEN SCR_ECG
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -20,6 +20,8 @@ K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
+K_SEM_DEFINE(sem_ecg_complete, 0, 1);
+K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
@@ -59,6 +61,8 @@ static float m_disp_temp = 0;
 static uint16_t m_disp_bp_sys = 0;
 static uint16_t m_disp_bp_dia = 0;
 static uint32_t m_disp_bp_last_refresh = 0;
+
+static int m_disp_ecg_timer = 0;
 
 static uint8_t m_disp_bpt_status = 0;
 static uint8_t m_disp_bpt_progress = 0;
@@ -235,7 +239,7 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_BPT)
+    /*if (hpi_disp_get_curr_screen() == SCR_BPT)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
@@ -244,7 +248,7 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
             m_disp_bp_last_refresh = k_uptime_get_32();
             hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
         }
-    }
+    }*/
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
@@ -345,11 +349,11 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_PLOT_ECG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_ECG)
     {
         //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
-        hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
+        // hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
     }
     else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
@@ -450,7 +454,7 @@ static void st_display_active_run(void *o)
 
         if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
         {
-            //ui_home_time_display_update(m_disp_sys_time);
+            // ui_home_time_display_update(m_disp_sys_time);
             ui_hr_button_update(m_disp_hr);
             ui_steps_button_update(m_disp_steps);
         }
@@ -464,6 +468,19 @@ static void st_display_active_run(void *o)
     case SCR_BPT:
         st_disp_do_bpt_stuff();
         break;
+    case SCR_SPL_PLOT_ECG:
+        hpi_ecg_disp_update_hr(m_disp_hr);
+        hpi_ecg_disp_update_timer(m_disp_ecg_timer);
+        if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+        {
+            hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
+        }
+        break;
+    case SCR_SPL_ECG_COMPLETE:
+        if(k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
+        {
+            hpi_move_load_screen(SCR_ECG, SCROLL_UP);
+        }
     default:
         break;
     }
@@ -660,6 +677,13 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
     // hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
+
+static void disp_ecg_timer_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_ecg_timer_t *ecg_timer = zbus_chan_const_msg(chan);
+    m_disp_ecg_timer = ecg_timer->timer_val;
+}
+ZBUS_LISTENER_DEFINE(disp_ecg_timer_lis, disp_ecg_timer_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 32768
 #define SMF_DISPLAY_THREAD_PRIORITY 5
