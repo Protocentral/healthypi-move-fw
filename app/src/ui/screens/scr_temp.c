@@ -12,11 +12,10 @@
 lv_obj_t *scr_temp;
 
 static lv_obj_t *chart_temp_trend;
-static lv_chart_series_t *ser_temp_trend;
+//static lv_chart_series_t *ser_temp_trend;
 
 // GUI Labels
 static lv_obj_t *label_temp_f;
-static lv_obj_t *label_temp_c;
 
 // Externs
 extern lv_style_t style_lbl_white;

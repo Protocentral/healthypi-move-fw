@@ -17,15 +17,7 @@
 
 lv_obj_t *scr_ecg;
 
-static lv_obj_t *btn_hr_settings;
-
-static bool chart_ecg_update = true;
-static float y_max_ecg = 0;
-static float y_min_ecg = 10000;
-
-// static bool ecg_plot_hidden = false;
-
-static float gx = 0;
+static lv_obj_t *btn_ecg_measure;
 
 // Externs
 extern lv_style_t style_lbl_orange;
@@ -80,12 +72,12 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_img_set_src(img1, &ecg_70);
     //lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 
-    btn_hr_settings = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_settings_btn_event_handler, LV_EVENT_ALL, NULL);
+    btn_ecg_measure = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_ecg_measure, scr_ecg_settings_btn_event_handler, LV_EVENT_ALL, NULL);
     //lv_obj_align(btn_hr_settings, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_set_height(btn_hr_settings, 80);
+    lv_obj_set_height(btn_ecg_measure, 80);
 
-    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_hr_settings);
+    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_ecg_measure);
     lv_label_set_text(label_btn_bpt_measure, LV_SYMBOL_PLAY " Measure");
     lv_obj_center(label_btn_bpt_measure);
 

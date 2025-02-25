@@ -18,10 +18,10 @@ static lv_chart_series_t *ser_spo2_min_trend;
 
 // GUI Labels
 static lv_obj_t *label_spo2_percent;
-static lv_obj_t *label_spo2_status;
+//static lv_obj_t *label_spo2_status;
 static lv_obj_t *label_spo2_last_update;
 
-static lv_obj_t *label_spo2_min_max;
+//static lv_obj_t *label_spo2_min_max;
 static lv_obj_t *btn_spo2_settings;
 
 // Externs
