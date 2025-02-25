@@ -9,7 +9,7 @@
 //  #include "max32664cc_msbl.h"
 //  #include "max32664cd_msbl.h"
 
-#include "max32664c_msbl_30_13_31.h"
+//#include "max32664c_msbl_30_13_31.h"
 
 LOG_MODULE_REGISTER(MAX32664C_BL, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -19,7 +19,7 @@ uint8_t max32664c_fw_auth_vector[16] = {0};
 #define MAX32664C_FW_UPDATE_WRITE_SIZE 8208 // Page size 8192 + 16 bytes for CRC
 #define MAX32664C_FW_UPDATE_START_ADDR 0x4C
 
-#define MAX32664C_FW_BIN_INCLUDE 1
+#define MAX32664C_FW_BIN_INCLUDE 0
 #define MAX32664C_WR_SIM_ONLY 0
 
 static int m_read_bl_ver(const struct device *dev)

@@ -24,7 +24,14 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
-# Relocate SMP server code
-
 # This places images in the external flash memory
 zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/hw_module.c LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/images/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+
+zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__mgmt LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__transport LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__util LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__smp LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__grp__img_mgmt LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__grp__os_mgmt LOCATION EXTFLASH_TEXT NOCOPY)
