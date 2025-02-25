@@ -11,11 +11,26 @@ manifest:
   projects:
     - name: sdk-nrf
       remote: nrf
-      path: nrf
+      path: ncs
       revision: v2.9.0
       import:
-        path-prefix: external
-#      clone-depth: 1
+        - ci-tools
+        - hal_altera
+        - hal_cypress
+        - hal_infineon
+        - hal_microchip
+        - hal_nxp
+        - hal_openisa
+        - hal_silabs
+        - hal_xtensa
+        - hal_ti
+        - loramac-node
+        - net-tools
+        - edtt
+        - trusted-firmware-m
+        - sof
+      clone-depth: 1
+
 #    - name: max30001
 #      repo-path: protocentral_max30001_zephyr_driver
 #      remote: protocentral

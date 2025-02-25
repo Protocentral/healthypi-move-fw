@@ -2,6 +2,8 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
+add_subdirectory(drivers)
+
 macro(app_set_runner_args)
   if(CONFIG_BOARD_HEALTHYPI_MOVE_NRF5340_CPUAPP)
     # Use alternative QSPI configuration file when flashing Thingy53
@@ -35,6 +37,8 @@ set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 #zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/hw_module.c LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/images/*.c LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}../drivers/display/sensor/max32664d/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+
 
 zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__mgmt LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__transport LOCATION EXTFLASH_TEXT NOCOPY)

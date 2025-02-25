@@ -78,8 +78,6 @@ uint8_t m_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3
 											  207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
 											  0, 3, 207, 0, 4, 0, 3, 176, 102, 3};
 
-static int max32664_do_enter_app(const struct device *dev);
-
 static int m_read_op_mode(const struct device *dev)
 {
 	// struct max32664d_data *data = dev->data;
@@ -102,23 +100,7 @@ static int m_read_op_mode(const struct device *dev)
 	return rd_buf[1];
 }
 
-static int m_read_mcu_id(const struct device *dev)
-{
-	const struct max32664_config *config = dev->config;
-	uint8_t rd_buf[2] = {0x00, 0x00};
-	uint8_t wr_buf[2] = {0xFF, 0x00};
 
-	k_sleep(K_USEC(300));
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
-
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
-
-	LOG_DBG("MCU ID = %x %x\n", rd_buf[0], rd_buf[1]);
-
-	return 0;
-}
 
 uint8_t max32664d_read_hub_status(const struct device *dev)
 {
@@ -364,7 +346,7 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 	return 0;
 }
 
-static int max32664_do_enter_app(const struct device *dev)
+int max32664d_do_enter_app(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 
@@ -906,7 +888,7 @@ static int max32664_chip_init(const struct device *dev)
 	gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
-	return max32664_do_enter_app(dev);
+	return max32664d_do_enter_app(dev);
 }
 
 #ifdef CONFIG_PM_DEVICE
