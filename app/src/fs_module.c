@@ -13,6 +13,10 @@
 #include "ui/move_ui.h"
 #include "record_module.h"
 
+#ifdef CONFIG_MCUMGR_GRP_FS
+#include <zephyr/device.h>
+#endif
+
 LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_INF);
 
 K_SEM_DEFINE(sem_fs_module, 0, 1);

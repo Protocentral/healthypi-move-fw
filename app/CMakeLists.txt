@@ -22,5 +22,9 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
+
+# Relocate SMP server code
+
+# This places images in the external flash memory
+zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/hw_module.c LOCATION EXTFLASH_TEXT NOCOPY)

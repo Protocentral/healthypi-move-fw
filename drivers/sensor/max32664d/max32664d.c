@@ -18,7 +18,7 @@
 
 LOG_MODULE_REGISTER(MAX32664D, CONFIG_MAX32664D_LOG_LEVEL);
 
-#define MAX32664_FW_BIN_INCLUDE 0
+
 
 // #define DEFAULT_MODE_BPT_ESTIMATION 1
 #define MODE_RAW_SENSOR_DATA 2
@@ -168,54 +168,7 @@ static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 	return 0;
 }
 
-/*static int max32664_load_fw(const struct device *dev, uint8_t *fw_bin_array)
-{
-	uint8_t msbl_num_pages = 0;
-	uint16_t msbl_write_pos = 0;
 
-#if (MAX32664_FW_BIN_INCLUDE == 1)
-	printk("---\nLoading MSBL\n");
-	printk("MSBL Array Size: %d\n", sizeof(maxm86146_msbl));
-
-	msbl_num_pages = fw_bin_array[0x44];
-	printk("MSBL Load: Pages: %d (%x)\n", msbl_num_pages, msbl_num_pages);
-
-	m_read_mcu_id(dev);
-
-	m_write_set_num_pages(dev, msbl_num_pages);
-
-	memcpy(max32664_fw_init_vector, &fw_bin_array[0x28], 11);
-	m_write_init_vector(dev, max32664_fw_init_vector);
-	printk("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x\n", max32664_fw_init_vector[0], max32664_fw_init_vector[1], max32664_fw_init_vector[2], max32664_fw_init_vector[3], max32664_fw_init_vector[4], max32664_fw_init_vector[5], max32664_fw_init_vector[6], max32664_fw_init_vector[7], max32664_fw_init_vector[8], max32664_fw_init_vector[9], max32664_fw_init_vector[10]);
-
-	memcpy(max32664_fw_auth_vector, &fw_bin_array[0x34], 16);
-	m_write_auth_vector(dev, max32664_fw_auth_vector);
-
-	m_erase_app(dev);
-	k_sleep(K_MSEC(2000));
-
-	// Write MSBL
-
-	for (int i = 0; i < msbl_num_pages; i++)
-	{
-		printk("Writing Page: %d of %d\n", (i + 1), msbl_num_pages);
-
-		// memcpy(max32664_fw_page_buf, &fw_bin_array[MAX32664_FW_UPDATE_START_ADDR + (i * MAX32664_FW_UPDATE_WRITE_SIZE)], MAX32664_FW_UPDATE_WRITE_SIZE);
-		uint32_t msbl_page_offset = (MAX32664_FW_UPDATE_START_ADDR + (i * MAX32664_FW_UPDATE_WRITE_SIZE));
-		printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
-		m_fw_write_page(dev, maxm86146_msbl, msbl_page_offset);
-
-		k_sleep(K_MSEC(500));
-	}
-#endif
-
-	max32664_do_enter_app(dev);
-
-	printk("End Load MSBL\n---\n");
-
-	return 0;
-}
-*/
 
 static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4)
 {
