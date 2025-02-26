@@ -6,7 +6,8 @@
 #include "max32664d.h"
 
 //extern const uint8_t *max32664d_msbl;
-#include "max32664d_msbl.h"
+//#include "max32664d_msbl.h"
+extern const uint8_t *max32664d_msbl;
 
 LOG_MODULE_REGISTER(MAX32664_BL, CONFIG_MAX32664D_LOG_LEVEL);
 

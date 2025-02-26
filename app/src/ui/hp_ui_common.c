@@ -187,6 +187,7 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 void disp_spl_scr_event(lv_event_t *e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
+
     // lv_obj_t *target = lv_event_get_target(e);
     int *scr_parent = lv_event_get_user_data(e);
 
@@ -194,6 +195,11 @@ void disp_spl_scr_event(lv_event_t *e)
     {
         lv_indev_wait_release(lv_indev_get_act());
         printk("Spl down at %d\n", curr_screen);
+
+        if (curr_screen == SCR_SPL_PLOT_BPT_PPG)
+        {
+            hpi_bpt_abort();
+        }
 
         hpi_move_load_screen(*scr_parent, SCROLL_UP);
     }

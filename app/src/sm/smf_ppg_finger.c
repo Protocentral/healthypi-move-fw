@@ -23,11 +23,11 @@ static const struct smf_state ppg_fi_states[];
 SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), {SENSOR_CHAN_VOLTAGE});
 
 // K_SEM_DEFINE(sem_ppg_fi_bpt_est_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_finger_thread_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_fi_sampling_start, 0, 1);
 
 K_SEM_DEFINE(sem_ppg_fi_show_loading, 0, 1);
 K_SEM_DEFINE(sem_ppg_fi_hide_loading, 0, 1);
+
+K_SEM_DEFINE(sem_bpt_est_abort, 0, 1);
 
 // New Sems
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
@@ -100,7 +100,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    // printk("FNS: %d ", edata->num_samples);
+    //printk("FNS: %d ", edata->num_samples);
     if (_n_samples > 16)
     {
         _n_samples = 16;
@@ -135,8 +135,6 @@ void ppg_finger_sampling_thread_runner(void *, void *, void *)
 {
     int ret;
     uint8_t fing_data_buf[768];
-
-    k_sem_take(&sem_ppg_finger_thread_start, K_FOREVER);
 
     LOG_INF("PPG Finger Sampling starting");
     for (;;)
@@ -180,7 +178,6 @@ void hw_bpt_start_est(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
 
     k_sleep(K_MSEC(1000));
-    // ppg_data_start();
 }
 
 void hpi_bpt_stop(void)
@@ -197,11 +194,21 @@ void hpi_bpt_get_calib(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_val);
 }
 
+void hpi_bpt_pause_thread(void)
+{
+    k_thread_suspend(ppg_finger_sampling_thread_id);
+}
+
+void hpi_bpt_abort(void)
+{
+    hpi_bpt_pause_thread();
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+}
+
 static void st_ppg_fing_idle_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Idle Entry");
-
-    // hw_bpt_start_est();
+    k_thread_suspend(ppg_finger_sampling_thread_id);
 }
 
 static void st_ppg_fing_idle_run(void *o)
@@ -247,12 +254,18 @@ static void st_ppg_fing_bpt_est_entry(void *o)
 
 static void st_ppg_fing_bpt_est_run(void *o)
 {
+    if(k_sem_take(&sem_bpt_est_abort, K_NO_WAIT) == 0)
+    {
+        hpi_bpt_stop();
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+    }
+
     // LOG_DBG("PPG Finger SM BPT Estimation Running");
 
-    struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+    //struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
-    k_msleep(1000);
-    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+    //k_msleep(1000);
+    //smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 
     /*if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
@@ -299,6 +312,8 @@ static void st_ppg_fing_bpt_cal_run(void *o)
     LOG_DBG("PPG Finger SM BPT Calibration Running");
 
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+
+
     /*if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
         if (ppg_fi_sensor_sample.bpt_status == 1)

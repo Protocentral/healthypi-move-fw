@@ -15,6 +15,8 @@
 #include "ui/move_ui.h"
 #include "hw_module.h"
 
+LOG_MODULE_REGISTER(scr_bpt, LOG_LEVEL_DBG);
+
 lv_obj_t *scr_bpt;
 
 extern lv_style_t style_scr_black;
@@ -27,6 +29,7 @@ static void scr_bpt_measure_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
+        LOG_DBG("Measure click");
         hpi_move_load_scr_spl(SCR_SPL_PLOT_BPT_PPG, SCROLL_UP, (uint8_t)SCR_BPT);
         k_sem_give(&sem_bpt_est_start);
 

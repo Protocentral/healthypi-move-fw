@@ -239,7 +239,7 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    /*if (hpi_disp_get_curr_screen() == SCR_BPT)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_BPT_PPG)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
@@ -248,7 +248,7 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
             m_disp_bp_last_refresh = k_uptime_get_32();
             hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
         }
-    }*/
+    }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
