@@ -16,7 +16,7 @@ uint8_t max32664_fw_auth_vector[16] = {0};
 #define MAX32664_FW_UPDATE_WRITE_SIZE 8208 // Page size 8192 + 16 bytes for CRC
 #define MAX32664_FW_UPDATE_START_ADDR 0x4C
 
-#define MAX32664D_FW_BIN_INCLUDE 1
+#define MAX32664D_FW_BIN_INCLUDE 0
 
 static int m_read_bl_ver(const struct device *dev)
 {

@@ -44,7 +44,7 @@ static void scr_ecg_settings_btn_event_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
-        k_sem_give(&sem_ecg_start);
+        //k_sem_give(&sem_ecg_start);
     }
 }
 
