@@ -32,7 +32,8 @@
         "input-event-codes.h": "c",
         "input.h": "c",
         "*.inc": "c",
-        "hpi_common_types.h": "c"
+        "hpi_common_types.h": "c",
+        "max32664d_msbl.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

@@ -237,23 +237,6 @@ static int m_erase_app(const struct device *dev)
 	return rd_buf[0];
 }
 
-static int m_read_mcu_id(const struct device *dev)
-{
-	const struct maxm86146_config *config = dev->config;
-	uint8_t rd_buf[2] = {0x00, 0x00};
-	uint8_t wr_buf[2] = {0xFF, 0x00};
-
-	k_sleep(K_USEC(300));
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
-
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-	k_sleep(K_MSEC(MAXM86146_DEFAULT_CMD_DELAY));
-
-	printk("MCU ID = %x %x\n", rd_buf[0], rd_buf[1]);
-
-	return 0;
-}
 
 static int maxm86146_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 {

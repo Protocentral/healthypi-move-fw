@@ -19,6 +19,7 @@ int _max32664_fifo_get_samples(const struct device *dev, uint8_t *buf, int len);
 int max32664_get_sample_fifo(const struct device *dev);
 
 void max32664_do_enter_bl(const struct device *dev);
+int max32664d_do_enter_app(const struct device *dev);
 
 enum max32664_channel
 {
@@ -102,7 +103,7 @@ enum max32664_reg_status_t
 	MAX32664_STAT_ERR_UNKNOWN = 0xFF
 };
 
-struct max32664_config
+struct max32664d_config
 {
 	struct i2c_dt_spec i2c;
 	struct gpio_dt_spec reset_gpio;
