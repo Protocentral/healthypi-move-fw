@@ -78,12 +78,14 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
     const struct max30001_encoded_data *edata = (const struct max30001_encoded_data *)buf;
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
 
-    printk("ECG NS: %d ", edata->num_samples_ecg);
-    printk("BioZ NS: %d ", edata->num_samples_bioz);
+    uint8_t ecg_samples = edata->num_samples_ecg;
+    uint8_t bioz_samples = edata->num_samples_bioz;
 
-    if ((edata->num_samples_ecg > 0) || (edata->num_samples_bioz > 0))
+    // printk("ECG NS: %d ", ecg_samples);
+    // printk("BioZ NS: %d ", bioz_samples);
+
+    if ((ecg_samples < 32 && ecg_samples > 0) || (bioz_samples < 32 && bioz_samples > 0))
     {
-        printk("In: %d ", edata->num_samples_ecg);
         ecg_bioz_sensor_sample.ecg_num_samples = edata->num_samples_ecg;
         ecg_bioz_sensor_sample.bioz_num_samples = edata->num_samples_bioz;
 
@@ -101,7 +103,7 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 
         if (ecg_active)
         {
-            //k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_MSEC(1));
+            k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_MSEC(1));
         }
     }
 }

@@ -323,7 +323,7 @@ void data_thread(void)
             }
             if (settings_plot_enabled)
             {
-                //k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
+                k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
             }
         }
 

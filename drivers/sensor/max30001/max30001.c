@@ -376,13 +376,37 @@ static int max30001_channel_get(const struct device *dev,
     return 0;
 }
 
+static int max30001_mode_set_ulp_leadon(const struct device *dev)
+{
+    struct max30001_data *data = dev->data;
+
+    data->chip_cfg.reg_cnfg_gen.bit.en_ulp_lon = 1;
+    data->chip_cfg.reg_cnfg_gen.bit.fmstr = 0;
+
+    return _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
+}
+
 static int max30001_attr_set(const struct device *dev,
                              enum sensor_channel chan,
                              enum sensor_attribute attr,
                              const struct sensor_value *val)
 {
+    struct max30001_data *data = dev->data;
+
     switch (attr)
     {
+    case MAX30001_ATTR_OP_MODE:
+        if (val->val1 == MAX30001_MODE_LON_DETECT)
+        {
+            max30001_mode_set_ulp_leadon(dev);
+            data->chip_op_mode=MAX30001_MODE_LON_DETECT;
+        }
+        else if (val->val1 == MAX30001_MODE_STREAM)
+        {
+            data->chip_op_mode=MAX30001_MODE_STREAM;
+            // max30001_mode_set_stream(dev);
+        }
+        break;
     case MAX30001_ATTR_ECG_ENABLED:
         if (val->val1 == 1)
         {
@@ -573,9 +597,12 @@ static int max30001_chip_init(const struct device *dev)
 
     //_max30001RegWrite(dev, MNGR_INT, 0x190000); // EFIT=4, BFIT=2
     //_max30001RegWrite(dev, MNGR_INT, 0x7B0000); // EFIT=16, BFIT=8
-    _max30001RegWrite(dev, MNGR_INT, 0x3B0000); // EFIT=8, BFIT=4
-    //_max30001RegWrite(dev, MNGR_INT, 0x080000); // EFIT=2, BFIT=2
+    //_max30001RegWrite(dev, MNGR_INT, 0x3B0000); // EFIT=8, BFIT=4
+    _max30001RegWrite(dev, MNGR_INT, 0x080000); // EFIT=2, BFIT=2
     //_max30001RegWrite(dev, MNGR_INT, 0x000000); // EFIT=1, BFIT=1
+    k_sleep(K_MSEC(100));
+
+    _max30001RegWrite(dev, MNGR_DYN, 0xBFFFFF); // Enable fast recovery
     k_sleep(K_MSEC(100));
 
     //_max30001RegWrite(dev, EN_INT, 0x800003); // Disable all interrupts

@@ -6,9 +6,9 @@ LOG_MODULE_REGISTER(MAX30001_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 #include "max30001.h"
 
 static int max30001_async_sample_fetch(const struct device *dev,
-                                       uint32_t *num_samples_ecg, uint32_t *num_samples_bioz, int32_t ecg_samples[32],
+                                       uint8_t *num_samples_ecg, uint8_t *num_samples_bioz, int32_t ecg_samples[32],
                                        int32_t bioz_samples[32], uint16_t *rri, uint16_t *hr,
-                                       uint8_t ecg_lead_off, uint8_t bioz_lead_off)
+                                       uint8_t *ecg_lead_off, uint8_t *bioz_lead_off)
 {
     struct max30001_data *data = dev->data;
     const struct max30001_config *config = dev->config;
@@ -21,8 +21,6 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
     uint8_t buf_ecg[512];
     uint8_t buf_bioz[512];
-
-    int num_bytes = 0;
 
     uint8_t cmd_tx_ecg_fifo_burst = ((ECG_FIFO_BURST << 1) | RREG);
     const struct spi_buf tx_buf_ecg[1] = {{.buf = &cmd_tx_ecg_fifo_burst, .len = 1}};
@@ -57,9 +55,15 @@ static int max30001_async_sample_fetch(const struct device *dev,
         max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
         e_fifo_num_samples = (((max30001_mngr_int & MAX30001_INT_MASK_EFIT) >> MAX30001_INT_SHIFT_EFIT) + 1); // No of samples = EFIT + 1
         e_fifo_num_bytes = ((e_fifo_num_samples * 3));                                                        // 24 bit register + 1 dummy byte
+
+        //printk("ES: %d ", e_fifo_num_samples);
+        
+        if(e_fifo_num_samples > 8)
+        {
+            e_fifo_num_samples = 8;
+        }
         *num_samples_ecg = e_fifo_num_samples;
 
-        // printk("ES: %d ", e_fifo_num_samples);
         //_max30001_read_ecg_fifo(dev, e_fifo_num_bytes);
 
         struct spi_buf rx_ecg_buf[2] = {{.buf = NULL, .len = 1}, {.buf = &buf_ecg, .len = (e_fifo_num_bytes)}}; // 24 bit register + 1 dummy byte

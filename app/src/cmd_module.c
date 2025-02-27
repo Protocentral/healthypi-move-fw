@@ -10,9 +10,9 @@
 #include "fs_module.h"
 // #include "tdcs3.h"
 
-//#define ESP_UART_DEVICE_NODE DT_ALIAS(esp_uart)
+// #define ESP_UART_DEVICE_NODE DT_ALIAS(esp_uart)
 
-LOG_MODULE_REGISTER(hpi_cmd_module);
+LOG_MODULE_REGISTER(hpi_cmd_module, LOG_LEVEL_DBG);
 #define MAX_MSG_SIZE 32
 
 #define CMDIF_BLE_UART_MAX_PKT_SIZE 128 // Max Packet Size in bytes
@@ -34,19 +34,17 @@ extern int global_dev_status;
 
 void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
-
     uint8_t cmd_cmd_id = in_pkt_buf[0];
 
     LOG_DBG("Recd Command: %X", cmd_cmd_id);
 
     switch (cmd_cmd_id)
     {
-
     case HPI_CMD_GET_DEVICE_STATUS:
         LOG_DBG("Recd Get Device Status Command");
-        //cmdif_send_ble_device_status_response();
+        // cmdif_send_ble_device_status_response();
         break;
-     case HPI_CMD_SET_DEVICE_TIME:
+    case HPI_CMD_SET_DEVICE_TIME:
         LOG_DBG("Recd Set Device Time Command");
         hw_rtc_set_time(in_pkt_buf[1], in_pkt_buf[2], in_pkt_buf[3], in_pkt_buf[4], in_pkt_buf[5], in_pkt_buf[6]);
         break;
@@ -76,41 +74,17 @@ void cmdif_send_ble_data(const char *in_data_buf, size_t in_data_len)
     for (int i = 0; i < in_data_len; i++)
     {
         dataPacket[i + 5] = in_data_buf[i];
-        //printk("Data %x: %d\n", i, in_data_buf[i]);
+        // printk("Data %x: %d\n", i, in_data_buf[i]);
     }
 
     dataPacket[in_data_len + 5] = CES_CMDIF_PKT_STOP_1;
     dataPacket[in_data_len + 6] = CES_CMDIF_PKT_STOP_2;
 
-    //printk("Sending UART data: %d\n", in_data_len);
+    // printk("Sending UART data: %d\n", in_data_len);
 
     for (int i = 0; i < (in_data_len + 7); i++)
     {
-        //uart_poll_out(esp_uart_dev, dataPacket[i]);
-    }
-}
-
-void cmdif_send_ble_device_status_response(void)
-{
-    //cmdif_send_ble_status(WISER_CMD_GET_DEVICE_STATUS, global_dev_status);
-}
-
-void cmdif_send_ble_command(uint8_t m_cmd)
-{
-    LOG_DBG("Sending BLE Command: %X", m_cmd);
-    uint8_t cmd_pkt[8];
-    cmd_pkt[0] = CES_CMDIF_PKT_START_1;
-    cmd_pkt[1] = CES_CMDIF_PKT_START_2;
-    cmd_pkt[2] = 0x01;
-    cmd_pkt[3] = 0x00;
-    cmd_pkt[4] = CES_CMDIF_TYPE_CMD;
-    cmd_pkt[5] = m_cmd;
-    cmd_pkt[6] = CES_CMDIF_PKT_STOP_1;
-    cmd_pkt[7] = CES_CMDIF_PKT_STOP_2;
-
-    for (int i = 0; i < 8; i++)
-    {
-        //uart_poll_out(esp_uart_dev, cmd_pkt[i]);
+        // uart_poll_out(esp_uart_dev, dataPacket[i]);
     }
 }
 
@@ -130,7 +104,7 @@ void cmd_thread(void)
             printk("%02X ", rx_cmd_data_obj.data[i]);
         }
         printk("\n");
-        hpi_decode_data_packet(rx_cmd_data_obj.data, rx_cmd_data_obj.data_len); 
+        hpi_decode_data_packet(rx_cmd_data_obj.data, rx_cmd_data_obj.data_len);
 
         k_sleep(K_MSEC(1000));
     }

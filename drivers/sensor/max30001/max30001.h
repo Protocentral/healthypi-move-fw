@@ -80,11 +80,18 @@ enum max30001_channel
 
 enum max30001_attribute
 {
-	MAX30001_ATTR_ECG_ENABLED = 0x01,
-	MAX30001_ATTR_BIOZ_ENABLED = 0x02,
-	MAX30001_ATTR_RTOR_ENABLED = 0x03,
-	MAX30001_ATTR_DCLOFF_ENABLED = 0x04,
-	MAX30001_ATTR_LON_ENABLED = 0x05,
+	MAX30001_ATTR_OP_MODE = 0x01,
+
+	MAX30001_ATTR_ECG_ENABLED = 0x02, 
+	MAX30001_ATTR_BIOZ_ENABLED = 0x03,
+	MAX30001_ATTR_RTOR_ENABLED = 0x04, 
+	MAX30001_ATTR_DCLOFF_ENABLED = 0x05,
+};
+
+enum max30001_op_mode
+{
+	MAX30001_MODE_STREAM,
+	MAX30001_MODE_LON_DETECT,
 };
 
 typedef union max30001_status_reg
@@ -372,6 +379,8 @@ struct max30001_data
 
 	uint8_t ecg_lead_off;
 	uint8_t bioz_lead_off;
+
+	uint8_t chip_op_mode;
 };
 
 struct max30001_encoded_data
@@ -380,8 +389,8 @@ struct max30001_encoded_data
 	int32_t ecg_samples[32];
 	int32_t bioz_samples[32];
 	
-	uint32_t num_samples_ecg;
-	uint32_t num_samples_bioz;
+	uint8_t num_samples_ecg;
+	uint8_t num_samples_bioz;
 
 	uint16_t rri;
 	uint16_t hr;
