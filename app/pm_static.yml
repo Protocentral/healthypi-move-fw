@@ -92,9 +92,12 @@ mcuboot_secondary_2:
 littlefs_storage:
   address: 0x320000
   device: w25q01jv
-  end_address: 0x2320000
+  placement:
+    before:
+    - end
+  end_address: 0x4320000
   region: external_flash
-  size: 0x2000000
+  size: 0x4000000
 # External Flash ENDS
 otp:
   address: 0xff8100
