@@ -32,9 +32,6 @@ static void scr_bpt_measure_handler(lv_event_t *e)
         LOG_DBG("Measure click");
         hpi_move_load_scr_spl(SCR_SPL_PLOT_BPT_PPG, SCROLL_UP, (uint8_t)SCR_BPT);
         k_sem_give(&sem_bpt_est_start);
-
-        // hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
-        // k_sem_give(&sem_ecg_start);
     }
 }
 

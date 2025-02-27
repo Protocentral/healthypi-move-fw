@@ -55,7 +55,7 @@ static void draw_event_cb(lv_event_t *e)
     }
 }
 
-static void scr_ecg_settings_btn_event_handler(lv_event_t *e)
+static void scr_ecg_start_btn_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
@@ -192,7 +192,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(lbl_gap1, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
 
     btn_hr_settings = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_settings_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_hr_settings, 80);
 
     lv_obj_t *lbl_btn_settings = lv_label_create(btn_hr_settings);

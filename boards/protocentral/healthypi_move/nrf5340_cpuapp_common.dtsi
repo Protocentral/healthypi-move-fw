@@ -358,7 +358,7 @@
 		reg = <0x0>;
 		spi-max-frequency = <DT_FREQ_M(4)>;
 		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
-		rtor-enabled;
+		//rtor-enabled;
 		//ecg-enabled;
 		//bioz-enabled;
 		ecg-gain = <2>;

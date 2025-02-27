@@ -37,14 +37,15 @@ extern lv_style_t style_scr_black;
 
 extern struct k_sem sem_ecg_start;
 
-static void scr_ecg_settings_btn_event_handler(lv_event_t *e)
+static void scr_ecg_start_btn_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
         hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
-        //k_sem_give(&sem_ecg_start);
+        k_msleep(500);
+        k_sem_give(&sem_ecg_start);
     }
 }
 
@@ -81,7 +82,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     //lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 
     btn_hr_settings = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_settings_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
     //lv_obj_align(btn_hr_settings, LV_ALIGN_CENTER, 0, -20);
     lv_obj_set_height(btn_hr_settings, 80);
 
