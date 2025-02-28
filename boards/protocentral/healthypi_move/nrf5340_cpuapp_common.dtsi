@@ -320,8 +320,8 @@
 		quad-enable-requirements = "S2B1v1";
 		address-size-32;
 		enter-4byte-addr = < 0xB7 >;
-		sck-frequency = <16000000>;
-		size = <DT_SIZE_M(128)>;
+		sck-frequency = <64000000>;
+		size = <1073741824>;	// In bits
 		has-dpd;
 		t-enter-dpd = <30000>;
 		t-exit-dpd = <30000>;

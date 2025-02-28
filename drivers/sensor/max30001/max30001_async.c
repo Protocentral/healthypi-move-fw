@@ -66,10 +66,10 @@ static int max30001_async_sample_fetch(const struct device *dev,
         *ecg_lead_off = 0;
     }
 
-    while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT)
+    /*while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT)
     {
         max30001_status = max30001_read_status(dev);
-    }
+    }*/
 
     if ((max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
     // while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full

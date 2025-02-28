@@ -95,9 +95,9 @@ littlefs_storage:
   placement:
     before:
     - end
-  end_address: 0x4320000
+  end_address: 0x7320000
   region: external_flash
-  size: 0x4000000
+  size: 0x7000000
 # External Flash ENDS
 otp:
   address: 0xff8100

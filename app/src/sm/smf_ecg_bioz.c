@@ -26,7 +26,7 @@ ZBUS_CHAN_DECLARE(ecg_timer_chan);
 
 #define ECG_SAMPLING_INTERVAL_MS 65
 
-#define ECG_RECORD_DURATION_S 60
+#define ECG_RECORD_DURATION_S 30
 
 static int ecg_last_timer_val;
 static int ecg_countdown_val;
@@ -40,6 +40,11 @@ struct s_ecg_bioz_object
 
 struct k_thread ecg_bioz_sampling_thread;
 k_tid_t ecg_bioz_sampling_thread_id;
+
+#define ECG_RECORD_BUFFER_SIZE 75 
+
+
+int32_t ecg_data_buffer[3840]; //128*30 = 3840 
 
 #define ECG_BIOZ_SAMPLING_THREAD_STACKSIZE 4096
 #define ECG_BIOZ_SAMPLING_THREAD_PRIORITY 7
@@ -213,7 +218,6 @@ static void st_ecg_bioz_leadon_detect_entry(void *o)
 
 static void st_ecg_bioz_leadon_detect_run(void *o)
 {
-
     smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
 }
 
