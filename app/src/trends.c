@@ -7,6 +7,7 @@
 #include <zephyr/fs/littlefs.h>
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/settings/settings.h>
+#include <zephyr/zbus/zbus.h>
 
 #include "hpi_common_types.h"
 #include "fs_module.h"
@@ -14,16 +15,27 @@
 
 LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 
-struct hpi_hr_trend_point_t hr_trends[60]; // 60 points per hour, one per minute
+// Size of one trend point = 12 bytes
+// Size of one hour = 12 * 60 = 720 bytes
+// Size of one day = 720 * 24 = 17280 bytes
+// Size of one week = 17280 * 7 = 120960 bytes
+// Size of one month = 120960 * 4 = 483840 bytes
 
-struct hpi_hr_trend_day_t hr_data[24];
-struct hpi_hr_trend_day_t hr_data_current_hour;
+#define HR_TREND_POINT_SIZE 12
+#define HR_TREND_MINUTE_PTS 60
+#define HR_TREND_WEEK_PTS   10080 // 60 * 24 * 7  
 
+struct hpi_hr_trend_point_t hr_trend_minute[HR_TREND_MINUTE_PTS]; // 60 points max per minute
+
+static uint16_t m_hr_curr_minute[60];  // Assumed max 60 points per minute
+static uint8_t m_hr_curr_minute_counter = 0;
+
+
+K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 
 void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_day_t hr_data)
 {
     struct fs_file_t file;
-    struct fs_statvfs sbuf;
     int ret = 0;
 
     fs_file_t_init(&file);
@@ -62,7 +74,6 @@ void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_day_t hr_data)
 void hpi_rec_reset_day(void)
 {
     struct fs_file_t file;
-    struct fs_statvfs sbuf;
     int ret = 0;
 
     fs_file_t_init(&file);
@@ -108,23 +119,73 @@ void write_test_data(void)
 
     for (int i = 0; i < 60; i++)
     {
-        //hr_data.hr_points->hr = 80;
+        // hr_data.hr_points->hr = 80;
         hr_data.hr_points->timestamp = sys_clock_cycle_get_32();
     }
 
     hpi_rec_write_hour(sys_clock_cycle_get_32(), hr_data);
 }
 
-void hpi_work_trend_hr_record(struct k_work *work)
+static void trend_hr_listener(const struct zbus_channel *chan)
 {
-    // Code here to write hr trends structure to file every 10 mins
+    const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
+    m_hr_curr_minute[m_hr_curr_minute_counter] = hpi_hr->hr;
+}
+ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
+
+void trend_sample_thread(void)
+{
+    for(;;)
+    {
+        if(m_hr_curr_minute_counter<60)
+        {
+            m_hr_curr_minute_counter++;
+        }
+        else
+        {
+            m_hr_curr_minute_counter = 0;
+
+            struct hpi_hr_trend_point_t hr_trend_point;
+            hr_trend_point.timestamp = sys_clock_cycle_get_32();
+            uint16_t hr_sum = 0;
+            for(int i = 0; i < 60; i++)
+            {
+                if(m_hr_curr_minute[i] > hr_trend_point.hr_max)
+                {
+                    hr_trend_point.hr_max = m_hr_curr_minute[i];
+                }
+                if(m_hr_curr_minute[i] < hr_trend_point.hr_min)
+                {
+                    hr_trend_point.hr_min = m_hr_curr_minute[i];
+                }
+                hr_sum += m_hr_curr_minute[i];
+            }
+
+            hr_trend_point.hr_avg = hr_sum / 60;
+            hr_trend_point.hr_latest = m_hr_curr_minute[59];
+
+            k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
+        }
+        k_msleep(1000);
+    }
+
 }
 
-K_WORK_DEFINE(work_trend_hr_record, hpi_work_trend_hr_record);
-
-void hpi_trend_record_timer_handler(struct k_timer *dummy)
+void trend_record_thread(void)
 {
-    k_work_submit(&work_trend_hr_record);
+    struct hpi_hr_trend_point_t _hr_trend_minute;
+    for (;;)
+    {
+        if(k_msgq_get(&q_hr_trend, &_hr_trend_minute, K_NO_WAIT) == 0)
+        {
+            //hpi_rec_add_hr_point(hr_trend_minute, 7);
+        }
+        LOG_DBG("Trend thread running");
+        k_sleep(K_SECONDS(30));
+    }
 }
 
-K_TIMER_DEFINE(my_timer, hpi_trend_record_timer_handler, NULL);
+#define TREND_RECORD_THREAD_STACK_SIZE 1024
+#define TREND_RECORD_THREAD_PRIORITY 5
+
+K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 0);

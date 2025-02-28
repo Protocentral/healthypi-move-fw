@@ -11,7 +11,6 @@
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
-#include "record_module.h"
 
 #ifdef CONFIG_MCUMGR_GRP_FS
 #include <zephyr/device.h>

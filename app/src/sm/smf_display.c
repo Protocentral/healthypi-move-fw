@@ -10,7 +10,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_ECG
+#define HPI_DEFAULT_START_SCREEN SCR_TODAY
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -485,9 +485,10 @@ static void st_display_active_run(void *o)
 
     if (k_uptime_get_32() - last_batt_refresh > HPI_DISP_BATT_REFR_INT)
     {
-        if (hpi_disp_get_curr_screen() == SCR_SPL_SETTINGS)
+        if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
-            hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            //hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
             last_batt_refresh = k_uptime_get_32();
         }
     }
@@ -631,12 +632,12 @@ static void disp_sys_time_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_sys_time_lis, disp_sys_time_listener);
 
-static void disp_hr_listener(const struct zbus_channel *chan)
+static void trend_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
 }
-ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
+ZBUS_LISTENER_DEFINE(disp_hr_lis, trend_hr_listener);
 
 static void disp_spo2_listener(const struct zbus_channel *chan)
 {
