@@ -19,12 +19,14 @@ K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 
 
 K_SEM_DEFINE(sem_ecg_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_ok, 0, 1);
+K_SEM_DEFINE(sem_ecg_lon, 0, 1);
+K_SEM_DEFINE(sem_ecg_loff, 0, 1);
 
 ZBUS_CHAN_DECLARE(ecg_timer_chan);
 
 #define ECG_SAMPLING_INTERVAL_MS 65
 
-#define ECG_RECORD_DURATION_S 30
+#define ECG_RECORD_DURATION_S 60
 
 static int ecg_last_timer_val;
 static int ecg_countdown_val;
@@ -83,6 +85,17 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 
     // printk("ECG NS: %d ", ecg_samples);
     // printk("BioZ NS: %d ", bioz_samples);
+
+    if (edata->chip_op_mode == MAX30001_OP_MODE_LON_DETECT)
+    {
+        if (edata->lon_state == 1)
+        {
+            LOG_DBG("LeadOn");
+            // k_sem_give(&sem_ecg_start);
+        }
+
+        return;
+    }
 
     if ((ecg_samples < 32 && ecg_samples > 0) || (bioz_samples < 32 && bioz_samples > 0))
     {
@@ -163,6 +176,13 @@ static int hw_max30001_ecg_disable(void)
     return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
 }
 
+static int hpi_max30001_lon_detect_enable(void)
+{
+    struct sensor_value mode_set;
+    mode_set.val1 = MAX30001_OP_MODE_LON_DETECT;
+    return sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_OP_MODE, &mode_set);
+}
+
 static void st_ecg_bioz_idle_entry(void *o)
 {
     LOG_DBG("ECG/BioZ SM Idle Entry");
@@ -193,6 +213,7 @@ static void st_ecg_bioz_leadon_detect_entry(void *o)
 
 static void st_ecg_bioz_leadon_detect_run(void *o)
 {
+
     smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
 }
 
@@ -208,6 +229,7 @@ static void st_ecg_bioz_stream_entry(void *o)
     k_thread_resume(ecg_bioz_sampling_thread_id);
 
     hw_max30001_ecg_enable();
+    //hpi_max30001_lon_detect_enable();
 
     ecg_countdown_val = ECG_RECORD_DURATION_S;
 }

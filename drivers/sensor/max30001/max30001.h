@@ -18,8 +18,8 @@
 #define MAX30001_STATUS_MASK_BOVF 0x40000
 
 #define MAX30001_STATUS_MASK_DCLOFF 0x100000
-
 #define MAX30001_STATUS_MASK_RRINT 0x000400
+#define MAX30001_STATUS_MASK_LONINT 0x800
 
 #define MAX30001_INT_MASK_EFIT 0xF80000
 #define MAX30001_INT_MASK_BFIT 0x070000
@@ -90,8 +90,8 @@ enum max30001_attribute
 
 enum max30001_op_mode
 {
-	MAX30001_MODE_STREAM,
-	MAX30001_MODE_LON_DETECT,
+	MAX30001_OP_MODE_STREAM,
+	MAX30001_OP_MODE_LON_DETECT,
 };
 
 typedef union max30001_status_reg
@@ -397,6 +397,9 @@ struct max30001_encoded_data
 
 	uint8_t ecg_lead_off;
 	uint8_t bioz_lead_off;
+
+	uint8_t lon_state;
+	uint8_t chip_op_mode;
 };
 
 int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);

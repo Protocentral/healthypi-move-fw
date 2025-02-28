@@ -1,9 +1,29 @@
 #include <zephyr/drivers/sensor.h>
 
 #include <zephyr/logging/log.h>
+
 LOG_MODULE_REGISTER(MAX30001_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "max30001.h"
+
+static int max30001_async_sample_fetch_lon_detect(const struct device *dev, uint8_t *lon_state)
+{
+    uint32_t max30001_status = 0;
+
+    max30001_status = max30001_read_status(dev);
+
+    //printk("Status: %x\n", max30001_status);
+    if ((max30001_status & MAX30001_STATUS_MASK_LONINT) == MAX30001_STATUS_MASK_LONINT)
+    {
+        //printk("LONINT\n");
+        *lon_state = 1;
+    } else
+    {
+        *lon_state = 0;
+    }
+
+    return 0;
+}
 
 static int max30001_async_sample_fetch(const struct device *dev,
                                        uint8_t *num_samples_ecg, uint8_t *num_samples_bioz, int32_t ecg_samples[32],
@@ -36,18 +56,20 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
     if ((max30001_status & MAX30001_STATUS_MASK_DCLOFF) == MAX30001_STATUS_MASK_DCLOFF)
     {
-        // LOG_INF("Leads Off\n");
+        printk("LOff");
         data->ecg_lead_off = 1;
-        ecg_lead_off = 1;
+        *ecg_lead_off = 1;
     }
     else
     {
         data->ecg_lead_off = 0;
-        ecg_lead_off = 0;
+        *ecg_lead_off = 0;
     }
 
-    while (!(max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT)
-        ;
+    while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT)
+    {
+        max30001_status = max30001_read_status(dev);
+    }
 
     if ((max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
     // while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
@@ -56,9 +78,9 @@ static int max30001_async_sample_fetch(const struct device *dev,
         e_fifo_num_samples = (((max30001_mngr_int & MAX30001_INT_MASK_EFIT) >> MAX30001_INT_SHIFT_EFIT) + 1); // No of samples = EFIT + 1
         e_fifo_num_bytes = ((e_fifo_num_samples * 3));                                                        // 24 bit register + 1 dummy byte
 
-        //printk("ES: %d ", e_fifo_num_samples);
-        
-        if(e_fifo_num_samples > 8)
+        // printk("ES: %d ", e_fifo_num_samples);
+
+        if (e_fifo_num_samples > 8)
         {
             e_fifo_num_samples = 8;
         }
@@ -178,6 +200,8 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
 int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
+    struct max30001_data *data = dev->data;
+
     uint32_t m_min_buf_len = sizeof(struct max30001_encoded_data);
 
     uint8_t *buf;
@@ -195,11 +219,24 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         return ret;
     }
 
-    m_edata = (struct max30001_encoded_data *)buf;
-    m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-    ret = max30001_async_sample_fetch(dev, &m_edata->num_samples_ecg, &m_edata->num_samples_bioz,
-                                      m_edata->ecg_samples, m_edata->bioz_samples, &m_edata->rri, &m_edata->hr, &m_edata->ecg_lead_off, &m_edata->bioz_lead_off);
+    if (data->chip_op_mode == MAX30001_OP_MODE_LON_DETECT)
+    {
+        m_edata = (struct max30001_encoded_data *)buf;
+        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
 
+        m_edata->chip_op_mode = MAX30001_OP_MODE_LON_DETECT;
+
+        ret = max30001_async_sample_fetch_lon_detect(dev, &m_edata->lon_state);
+    }
+    else
+    {
+        m_edata = (struct max30001_encoded_data *)buf;
+        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
+
+        m_edata->chip_op_mode = MAX30001_OP_MODE_STREAM;
+        ret = max30001_async_sample_fetch(dev, &m_edata->num_samples_ecg, &m_edata->num_samples_bioz,
+                                          m_edata->ecg_samples, m_edata->bioz_samples, &m_edata->rri, &m_edata->hr, &m_edata->ecg_lead_off, &m_edata->bioz_lead_off);
+    }
     if (ret != 0)
     {
         rtio_iodev_sqe_err(iodev_sqe, ret);

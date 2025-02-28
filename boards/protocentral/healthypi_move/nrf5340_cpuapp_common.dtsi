@@ -363,8 +363,8 @@
 		//bioz-enabled;
 		ecg-gain = <2>;
 		//ecg-invert;
-		//ecg-dcloff-enable;
-		//ecg-dcloff-current = <1>; // 5 nA
+		ecg-dcloff-enable;
+		ecg-dcloff-current = <1>; // 5 nA
 		zephyr,deferred-init;
 	};
 };

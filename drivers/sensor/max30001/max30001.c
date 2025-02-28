@@ -262,6 +262,9 @@ static void max30001_enable_rtor(const struct device *dev)
 static void max30001_enable_dcloff(const struct device *dev)
 {
     LOG_DBG("Enabling MAX30001 DCLOFF...\n");
+
+
+
 }
 
 static void max30001_disable_rtor(const struct device *dev)
@@ -380,10 +383,35 @@ static int max30001_mode_set_ulp_leadon(const struct device *dev)
 {
     struct max30001_data *data = dev->data;
 
-    data->chip_cfg.reg_cnfg_gen.bit.en_ulp_lon = 1;
-    data->chip_cfg.reg_cnfg_gen.bit.fmstr = 0;
+     // General Configuration
+     //data->chip_cfg.reg_cnfg_gen.bit.en_ulp_lon = 0;
+    // data->chip_cfg.reg_cnfg_gen.bit.fmstr = 0;
+ 
+     // data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 0;
+ 
+     data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 0;
+     data->chip_cfg.reg_cnfg_gen.bit.en_bloff = 0;
+     data->chip_cfg.reg_cnfg_gen.bit.en_rbias = 0;
+     data->chip_cfg.reg_cnfg_gen.bit.vth = 0;
+     data->chip_cfg.reg_cnfg_gen.bit.imag = 0;
+     data->chip_cfg.reg_cnfg_gen.bit.fmstr = 0;
 
-    return _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
+     data->chip_cfg.reg_cnfg_gen.bit.rbiasv = 1;
+     data->chip_cfg.reg_cnfg_gen.bit.rbiasp = 0;
+     data->chip_cfg.reg_cnfg_gen.bit.rbiasn = 0;
+
+    // Disable all channels
+    data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 0;
+    data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 0;
+    data->chip_cfg.reg_cnfg_gen.bit.en_pace = 0;
+
+    // Enable ULP LON
+    data->chip_cfg.reg_cnfg_gen.bit.en_ulp_lon = 1;
+
+    _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
+
+    uint32_t max30001_status = max30001_read_status(dev);
+    return 0;
 }
 
 static int max30001_attr_set(const struct device *dev,
@@ -396,14 +424,14 @@ static int max30001_attr_set(const struct device *dev,
     switch (attr)
     {
     case MAX30001_ATTR_OP_MODE:
-        if (val->val1 == MAX30001_MODE_LON_DETECT)
+        if (val->val1 == MAX30001_OP_MODE_LON_DETECT)
         {
             max30001_mode_set_ulp_leadon(dev);
-            data->chip_op_mode=MAX30001_MODE_LON_DETECT;
+            data->chip_op_mode=MAX30001_OP_MODE_LON_DETECT;
         }
-        else if (val->val1 == MAX30001_MODE_STREAM)
+        else if (val->val1 == MAX30001_OP_MODE_STREAM)
         {
-            data->chip_op_mode=MAX30001_MODE_STREAM;
+            data->chip_op_mode=MAX30001_OP_MODE_STREAM;
             // max30001_mode_set_stream(dev);
         }
         break;
@@ -597,13 +625,13 @@ static int max30001_chip_init(const struct device *dev)
 
     //_max30001RegWrite(dev, MNGR_INT, 0x190000); // EFIT=4, BFIT=2
     //_max30001RegWrite(dev, MNGR_INT, 0x7B0000); // EFIT=16, BFIT=8
-    //_max30001RegWrite(dev, MNGR_INT, 0x3B0000); // EFIT=8, BFIT=4
-    _max30001RegWrite(dev, MNGR_INT, 0x080000); // EFIT=2, BFIT=2
+    _max30001RegWrite(dev, MNGR_INT, 0x3B0000); // EFIT=8, BFIT=4
+    //_max30001RegWrite(dev, MNGR_INT, 0x080000); // EFIT=2, BFIT=2
     //_max30001RegWrite(dev, MNGR_INT, 0x000000); // EFIT=1, BFIT=1
     k_sleep(K_MSEC(100));
 
-    _max30001RegWrite(dev, MNGR_DYN, 0xBFFFFF); // Enable fast recovery
-    k_sleep(K_MSEC(100));
+    //_max30001RegWrite(dev, MNGR_DYN, 0xBFFFFF); // Enable fast recovery
+    //k_sleep(K_MSEC(100));
 
     //_max30001RegWrite(dev, EN_INT, 0x800003); // Disable all interrupts
 
