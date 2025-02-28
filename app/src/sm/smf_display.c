@@ -261,8 +261,8 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
         if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
         {
             hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
-            hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-            // hpi_disp_update_hr(m_disp_hr);
+            // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            //  hpi_disp_update_hr(m_disp_hr);
             hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
             hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
         }
@@ -483,17 +483,16 @@ static void st_display_active_run(void *o)
         break;
     }
 
-    // if (batt_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
-    //{
-
     if (k_uptime_get_32() - last_batt_refresh > HPI_DISP_BATT_REFR_INT)
     {
-        hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-        last_batt_refresh = k_uptime_get_32();
+        if (hpi_disp_get_curr_screen() == SCR_SPL_SETTINGS)
+        {
+            hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            last_batt_refresh = k_uptime_get_32();
+        }
     }
 
     // Update Time
-
     if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
     {
         last_time_refresh = k_uptime_get_32();
@@ -510,24 +509,25 @@ static void st_display_active_run(void *o)
     }
 
     // Add button handlers
-    /*if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
-        if (m_display_active == false)
+        /*if (m_display_active == false)
         {
-            lv_disp_trig_activity(NULL);
+            
+        }
+        else
+        {*/
+        lv_disp_trig_activity(NULL);
+        if (hpi_disp_get_curr_screen() == SCR_HOME)
+        {
+            //hpi_display_sleep_on();
         }
         else
         {
-            if (hpi_disp_get_curr_screen()== SCR_HOME)
-            {
-                hpi_display_sleep_on();
-            }
-            else
-            {
-                hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
-            }
+            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
         }
-    }*/
+        //}
+    }
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
