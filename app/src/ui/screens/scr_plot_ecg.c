@@ -23,7 +23,7 @@ static lv_chart_series_t *ser_ecg;
 static lv_obj_t *label_ecg_hr;
 static lv_obj_t *label_hr_bpm;
 static lv_obj_t *label_timer;
-static lv_obj_t *label_ecg_lead_off;
+//static lv_obj_t *label_ecg_lead_off;
 
 static bool chart_ecg_update = false;
 static float y_max_ecg = 0;

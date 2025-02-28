@@ -27,7 +27,7 @@ static uint16_t hr_trend_min[HR_TREND_POINTS] = {40, 45, 50, 55, 60, 65, 70, 75,
 
 // GUI Labels
 static lv_obj_t *label_hr_bpm;
-static lv_obj_t *label_hr_status;
+//static lv_obj_t *label_hr_status;
 static lv_obj_t *label_hr_last_update;
 
 static lv_obj_t *label_hr_min_max;
