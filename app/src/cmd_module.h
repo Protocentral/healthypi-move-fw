@@ -5,10 +5,6 @@
 #define CES_CMDIF_PKT_STOP_1 0x00
 #define CES_CMDIF_PKT_STOP_2 0x0B
 
-void cmdif_send_ble_progress(uint8_t m_stage, uint16_t m_total_time, uint16_t m_curr_time, uint16_t m_current, uint16_t m_imped);
-void cmdif_send_ble_command(uint8_t m_cmd);
-void cmdif_send_ble_device_status_response(void);
-
 void cmdif_send_ble_data(const char *buf, size_t len);
 
 enum cmdsm_state

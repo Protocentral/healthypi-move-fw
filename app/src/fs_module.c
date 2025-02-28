@@ -13,6 +13,10 @@
 #include "ui/move_ui.h"
 #include "record_module.h"
 
+#ifdef CONFIG_MCUMGR_GRP_FS
+#include <zephyr/device.h>
+#endif
+
 LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_INF);
 
 K_SEM_DEFINE(sem_fs_module, 0, 1);
@@ -25,7 +29,7 @@ FS_LITTLEFS_DECLARE_DEFAULT_CONFIG(storage);
 static struct fs_mount_t lfs_storage_mnt = {
     .type = FS_LITTLEFS,
     .fs_data = &storage,
-    .storage_dev = (void *)FIXED_PARTITION_ID(storage_partition),
+    .storage_dev = (void *)FIXED_PARTITION_ID(littlefs_storage),
     .mnt_point = "/lfs",
 };
 #endif /* PARTITION_NODE */
@@ -38,6 +42,7 @@ struct fs_mount_t *mp =
 #endif
     ;
 
+#define FILE_TRANSFER_BLE_PACKET_SIZE    	64 // (16*7)
 /*
 static int littlefs_flash_erase(unsigned int id)
 {
@@ -197,6 +202,82 @@ void write_test_data(void)
     }
 
     hpi_rec_write_hour(sys_clock_cycle_get_32(), hr_data);
+}
+
+uint32_t transfer_get_file_length(char *m_file_name)
+{
+    printk("Getting file length for file %s\n", m_file_name);
+
+    uint32_t file_len = 0;
+    int rc = 0;
+
+    struct fs_dirent dirent;
+    rc = fs_stat(m_file_name, &dirent);
+    printk("\n%s stat: %d\n", m_file_name, rc);
+    if (rc >= 0)
+    {
+        printk("\nfn '%s' siz %u\n", dirent.name, dirent.size);
+        file_len = dirent.size;
+    }
+
+    printk("File length: %d\n", file_len);
+
+    return file_len;
+}
+
+void transfer_send_file(uint16_t file_id)
+{
+    printk("Sending file %u\n", file_id);
+    uint8_t m_buffer[FILE_TRANSFER_BLE_PACKET_SIZE + 1];
+
+    char m_file_name[30];
+    snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
+
+    uint32_t file_len = transfer_get_file_length(m_file_name);
+    uint32_t number_writes = file_len / FILE_TRANSFER_BLE_PACKET_SIZE;
+
+    uint32_t i = 0;
+    struct fs_file_t m_file;
+    int rc = 0;
+
+    if (file_len % FILE_TRANSFER_BLE_PACKET_SIZE != 0)
+    {
+        number_writes++; // Last write will be smaller than 64 bytes
+    }
+
+    printk("File name: %s Size:%d NW: %d \n", m_file_name, file_len, number_writes);
+
+    fs_file_t_init(&m_file);
+    
+    rc = fs_open(&m_file, m_file_name, FS_O_READ);
+
+    if (rc != 0)
+    {
+        printk("Error opening file %d\n", rc);
+        return;
+    }
+
+    for (i = 0; i < number_writes; i++)
+    {
+        rc = fs_read(&m_file, m_buffer, FILE_TRANSFER_BLE_PACKET_SIZE);
+        if (rc < 0)
+        {
+            printk("Error reading file %d\n", rc);
+            return;
+        }
+
+        cmdif_send_ble_data(m_buffer, rc); //FILE_TRANSFER_BLE_PACKET_SIZE);
+        k_sleep(K_MSEC(50));
+    }
+
+    rc = fs_close(&m_file);
+    if (rc != 0)
+    {
+        printk("Error closing file %d\n", rc);
+        return;
+    }
+
+    printk("File sent\n");
 }
 
 void fs_module_init(void)

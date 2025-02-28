@@ -239,7 +239,7 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    /*if (hpi_disp_get_curr_screen() == SCR_BPT)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_BPT_PPG)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
@@ -248,7 +248,7 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
             m_disp_bp_last_refresh = k_uptime_get_32();
             hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
         }
-    }*/
+    }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
@@ -351,9 +351,7 @@ static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg
 {
     if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_ECG)
     {
-        //((float)((ecg_bioz_sensor_sample.ecg_sample / 1000.0000)), ecg_bioz_sensor_sample.ecg_lead_off);
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
-        // hpi_ecg_disp_update_hr(ecg_bioz_sensor_sample.hr);
     }
     else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
@@ -477,7 +475,7 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_SPL_ECG_COMPLETE:
-        if(k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
             hpi_move_load_screen(SCR_ECG, SCROLL_UP);
         }

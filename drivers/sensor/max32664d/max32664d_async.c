@@ -10,7 +10,7 @@ LOG_MODULE_REGISTER(max32664d_async, CONFIG_SENSOR_LOG_LEVEL);
 
 static int max32664_async_calib_fetch(const struct device *dev, uint8_t calib_vector[824])
 {
-    const struct max32664_config *config = dev->config;
+    const struct max32664d_config *config = dev->config;
     struct max32664d_data *data = dev->data;
 
     static uint8_t rd_buf[1024];
@@ -42,7 +42,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
                                        uint16_t *hr, uint8_t *bpt_status, uint8_t *bpt_progress, uint8_t *bpt_sys, uint8_t *bpt_dia)
 {
     struct max32664d_data *data = dev->data;
-    const struct max32664_config *config = dev->config;
+    const struct max32664d_config *config = dev->config;
 
     uint8_t wr_buf[2] = {0x12, 0x01};
     static uint8_t buf[2048];

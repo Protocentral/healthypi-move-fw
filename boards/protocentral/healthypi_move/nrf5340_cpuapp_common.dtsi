@@ -24,7 +24,6 @@
 		zephyr,ieee802154 = &ieee802154;
 
 		zephyr,display= &sh8601;
-		nordic,pm-ext-flash = &w25q01jv;
 	};
 
 	gpiokeys: gpio_keys {
@@ -316,11 +315,13 @@
 	w25q01jv: w25q01jveiq@0 {
 		compatible = "nordic,qspi-nor";
 		reg = <0>;
-		//writeoc = "pp2o";
-		//readoc = "read2o";
-		//quad-enable-requirements = "S2B1v5";
+		writeoc = "pp4o";
+		readoc = "read4io";
+		quad-enable-requirements = "S2B1v1";
+		address-size-32;
+		enter-4byte-addr = < 0xB7 >;
 		sck-frequency = <64000000>;
-		size = <DT_SIZE_M(128)>;
+		size = <1073741824>;	// In bits
 		has-dpd;
 		t-enter-dpd = <30000>;
 		t-exit-dpd = <30000>;
@@ -357,13 +358,13 @@
 		reg = <0x0>;
 		spi-max-frequency = <DT_FREQ_M(4)>;
 		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
-		rtor-enabled;
+		//rtor-enabled;
 		//ecg-enabled;
 		//bioz-enabled;
 		ecg-gain = <2>;
 		//ecg-invert;
-		//ecg-dcloff-enable;
-		//ecg-dcloff-current = <1>; // 5 nA
+		ecg-dcloff-enable;
+		ecg-dcloff-current = <1>; // 5 nA
 		zephyr,deferred-init;
 	};
 };

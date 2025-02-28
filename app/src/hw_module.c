@@ -250,8 +250,8 @@ static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_
 
 uint32_t hw_get_system_time(void)
 {
-   uint32_t time = k_uptime_get_32();
-   return time;
+    uint32_t time = k_uptime_get_32();
+    return time;
 }
 
 uint8_t read_battery_level(void)
@@ -502,8 +502,6 @@ static void hw_add_boot_msg(char *msg, bool status)
     k_msgq_put(&q_disp_boot_msg, &boot_msg, K_NO_WAIT);
 }
 
-
-
 static int hw_enable_pmic_callback(void)
 {
     static struct gpio_callback event_cb;
@@ -709,6 +707,12 @@ void hw_init(void)
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
         hw_add_boot_msg("MAX32664D", true);
+
+        // To force bootloader mode
+        /*struct sensor_value mode_set;
+        mode_set.val1 = 1;
+        sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
+        */
 
         k_sem_give(&sem_ppg_finger_sm_start);
     }

@@ -27,7 +27,7 @@ lv_obj_t *ui_label_date;
 
 lv_obj_t *ui_step_group;
 
-extern struct rtc_time global_system_time;
+//extern struct rtc_time global_system_time;
 
 static void scr_clock_hr_event_handler(lv_event_t *e)
 {
@@ -78,7 +78,7 @@ void draw_scr_clockface(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_opa(ui_label_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_label_min, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
+    //ui_time_display_update(global_system_time.tm_hour, global_system_time.tm_min, false);
 
     ui_step_group = ui_steps_button_create(scr_clock);
     lv_obj_set_x(ui_step_group, -60);

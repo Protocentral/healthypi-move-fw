@@ -18,8 +18,6 @@
 
 LOG_MODULE_REGISTER(MAX32664D, CONFIG_MAX32664D_LOG_LEVEL);
 
-#define MAX32664_FW_BIN_INCLUDE 0
-
 // #define DEFAULT_MODE_BPT_ESTIMATION 1
 #define MODE_RAW_SENSOR_DATA 2
 
@@ -78,12 +76,10 @@ uint8_t m_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3
 											  207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
 											  0, 3, 207, 0, 4, 0, 3, 176, 102, 3};
 
-static int max32664_do_enter_app(const struct device *dev);
-
 static int m_read_op_mode(const struct device *dev)
 {
 	// struct max32664d_data *data = dev->data;
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 
 	uint8_t wr_buf[2] = {0x02, 0x00};
@@ -104,7 +100,7 @@ static int m_read_op_mode(const struct device *dev)
 
 static int m_read_mcu_id(const struct device *dev)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 	uint8_t wr_buf[2] = {0xFF, 0x00};
 
@@ -128,7 +124,7 @@ uint8_t max32664d_read_hub_status(const struct device *dev)
 	Field Reserved HostAccelUfInt FifoInOverInt FifoOutOvrInt DataRdyInt Err2 Err1 Err0
 	*/
 	// struct max32664_data *data = dev->data;
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 	uint8_t wr_buf[2] = {0x00, 0x00};
 
@@ -147,7 +143,7 @@ uint8_t max32664d_read_hub_status(const struct device *dev)
 
 static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 
 	uint8_t wr_buf[2] = {0xFF, 0x03};
 
@@ -168,58 +164,9 @@ static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 	return 0;
 }
 
-/*static int max32664_load_fw(const struct device *dev, uint8_t *fw_bin_array)
-{
-	uint8_t msbl_num_pages = 0;
-	uint16_t msbl_write_pos = 0;
-
-#if (MAX32664_FW_BIN_INCLUDE == 1)
-	printk("---\nLoading MSBL\n");
-	printk("MSBL Array Size: %d\n", sizeof(maxm86146_msbl));
-
-	msbl_num_pages = fw_bin_array[0x44];
-	printk("MSBL Load: Pages: %d (%x)\n", msbl_num_pages, msbl_num_pages);
-
-	m_read_mcu_id(dev);
-
-	m_write_set_num_pages(dev, msbl_num_pages);
-
-	memcpy(max32664_fw_init_vector, &fw_bin_array[0x28], 11);
-	m_write_init_vector(dev, max32664_fw_init_vector);
-	printk("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x\n", max32664_fw_init_vector[0], max32664_fw_init_vector[1], max32664_fw_init_vector[2], max32664_fw_init_vector[3], max32664_fw_init_vector[4], max32664_fw_init_vector[5], max32664_fw_init_vector[6], max32664_fw_init_vector[7], max32664_fw_init_vector[8], max32664_fw_init_vector[9], max32664_fw_init_vector[10]);
-
-	memcpy(max32664_fw_auth_vector, &fw_bin_array[0x34], 16);
-	m_write_auth_vector(dev, max32664_fw_auth_vector);
-
-	m_erase_app(dev);
-	k_sleep(K_MSEC(2000));
-
-	// Write MSBL
-
-	for (int i = 0; i < msbl_num_pages; i++)
-	{
-		printk("Writing Page: %d of %d\n", (i + 1), msbl_num_pages);
-
-		// memcpy(max32664_fw_page_buf, &fw_bin_array[MAX32664_FW_UPDATE_START_ADDR + (i * MAX32664_FW_UPDATE_WRITE_SIZE)], MAX32664_FW_UPDATE_WRITE_SIZE);
-		uint32_t msbl_page_offset = (MAX32664_FW_UPDATE_START_ADDR + (i * MAX32664_FW_UPDATE_WRITE_SIZE));
-		printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
-		m_fw_write_page(dev, maxm86146_msbl, msbl_page_offset);
-
-		k_sleep(K_MSEC(500));
-	}
-#endif
-
-	max32664_do_enter_app(dev);
-
-	printk("End Load MSBL\n---\n");
-
-	return 0;
-}
-*/
-
 static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t wr_buf[4];
 	uint8_t rd_buf[1];
 
@@ -247,7 +194,7 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
 
 static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t wr_buf[5];
 	uint8_t rd_buf[1];
 
@@ -276,7 +223,7 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
 
 int max32664d_get_fifo_count(const struct device *dev)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 	uint8_t wr_buf[2] = {0x12, 0x00};
 
@@ -295,7 +242,7 @@ int max32664d_get_fifo_count(const struct device *dev)
 
 static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint16_t cmd_delay)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t wr_buf[3];
 
 	uint8_t rd_buf[1] = {0x00};
@@ -324,7 +271,7 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
 
 static int m_i2c_write_cmd_3_rsp_2(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t wr_buf[3];
 
 	uint8_t rd_buf[2] = {0x00, 0x00};
@@ -355,7 +302,7 @@ static int m_i2c_write_cmd_3_rsp_2(const struct device *dev, uint8_t byte1, uint
 
 static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t *rsp)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	uint8_t wr_buf[3];
 
 	uint8_t rd_buf[3] = {0x00, 0x00, 0x00};
@@ -388,7 +335,7 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
 static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_len)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 
 	uint8_t rd_buf[1] = {0x00};
 
@@ -411,9 +358,9 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 	return 0;
 }
 
-static int max32664_do_enter_app(const struct device *dev)
+int max32664d_do_enter_app(const struct device *dev)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 
 	LOG_DBG("Entering app mode");
 
@@ -682,7 +629,7 @@ static int max32664_stop_estimation(const struct device *dev)
 int max32664_get_sample_fifo(const struct device *dev)
 {
 	struct max32664d_data *data = dev->data;
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 
 	uint8_t wr_buf[2] = {0x12, 0x01};
 
@@ -941,7 +888,7 @@ static const struct sensor_driver_api max32664_driver_api = {
 
 static int max32664_chip_init(const struct device *dev)
 {
-	const struct max32664_config *config = dev->config;
+	const struct max32664d_config *config = dev->config;
 	// struct max32664d_data *data = dev->data;
 
 	if (!device_is_ready(config->i2c.bus))
@@ -953,7 +900,7 @@ static int max32664_chip_init(const struct device *dev)
 	gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
-	return max32664_do_enter_app(dev);
+	return max32664d_do_enter_app(dev);
 }
 
 #ifdef CONFIG_PM_DEVICE
@@ -986,7 +933,7 @@ static int max32664_pm_action(const struct device *dev,
  */
 #define MAX32664_DEFINE(inst)                                       \
 	static struct max32664d_data max32664_data_##inst;              \
-	static const struct max32664_config max32664_config_##inst =    \
+	static const struct max32664d_config max32664d_config_##inst =  \
 		{                                                           \
 			.i2c = I2C_DT_SPEC_INST_GET(inst),                      \
 			.reset_gpio = GPIO_DT_SPEC_INST_GET(inst, reset_gpios), \
@@ -997,7 +944,7 @@ static int max32664_pm_action(const struct device *dev,
 								 max32664_chip_init,                \
 								 PM_DEVICE_DT_INST_GET(inst),       \
 								 &max32664_data_##inst,             \
-								 &max32664_config_##inst,           \
+								 &max32664d_config_##inst,          \
 								 POST_KERNEL,                       \
 								 CONFIG_SENSOR_INIT_PRIORITY,       \
 								 &max32664_driver_api)
