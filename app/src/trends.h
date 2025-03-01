@@ -2,7 +2,7 @@
 
 struct hpi_hr_trend_point_t
 {
-    uint32_t timestamp;
+    int64_t timestamp;
     uint16_t hr_max;
     uint16_t hr_min;
     uint16_t hr_avg;

@@ -13,7 +13,7 @@
 
 #include <time.h>
 #include <zephyr/posix/time.h>
-
+#include <zephyr/sys/timeutil.h>
 
 #include "hpi_common_types.h"
 #include "fs_module.h"
@@ -36,7 +36,7 @@ struct hpi_hr_trend_point_t hr_trend_minute[HR_TREND_MINUTE_PTS]; // 60 points m
 static uint16_t m_hr_curr_minute[60];  // Assumed max 60 points per minute
 static uint8_t m_hr_curr_minute_counter = 0;
 
-static struct tm *m_trend_time;
+static int64_t m_trend_time_ts;
 
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 
@@ -146,7 +146,7 @@ void trend_sample_thread(void)
             m_hr_curr_minute_counter = 0;
 
             struct hpi_hr_trend_point_t hr_trend_point;
-            hr_trend_point.timestamp = timeutil_timegm64(m_trend_time);
+            hr_trend_point.timestamp = m_trend_time_ts;
             uint16_t hr_sum = 0;
             hr_trend_point.hr_max = 0;
             hr_trend_point.hr_min = 255;
@@ -199,9 +199,11 @@ static void trend_sys_time_listener(const struct zbus_channel *chan)
 {
     const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
     //sys_time 
-    m_trend_time = rtc_time_to_tm(sys_time);
-    uint64_t ts = timeutil_timegm64(m_trend_time);
-    LOG_DBG("Time: %d", ts);
+    struct tm* _sys_tm_time = rtc_time_to_tm(sys_time);
+    //LOG_DBG("Time: %d-%d-%d %d:%d:%d", m_trend_time->tm_year, m_trend_time->tm_mon, m_trend_time->tm_mday, m_trend_time->tm_hour, m_trend_time->tm_min, m_trend_time->tm_sec);
+    m_trend_time_ts = timeutil_timegm64(_sys_tm_time);
+
+    LOG_DBG("Sys TS: %" PRIx64, m_trend_time_ts);
     
     //m_disp_sys_time = *sys_time;
 }
