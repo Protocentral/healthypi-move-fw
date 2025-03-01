@@ -28,7 +28,7 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 // Size of one month = 120960 * 4 = 483840 bytes
 
 #define HR_TREND_POINT_SIZE 12
-#define HR_TREND_MINUTE_PTS 3
+#define HR_TREND_MINUTE_PTS 10
 #define HR_TREND_WEEK_PTS   10080 // 60 * 24 * 7 
 
 //Store raw HR values for the current minute
@@ -39,7 +39,10 @@ static uint8_t m_hr_curr_minute_counter = 0;
 static int64_t m_trend_time_ts;
 static struct tm m_today_time_tm;
 
+// Trend points
+static struct hpi_hr_trend_point_t m_hr_trend_point_buffer[64];
 
+uint8_t test_array[1024] = {0};
 
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 
@@ -52,7 +55,7 @@ static void hpi_rec_write_hr_point_to_file(struct hpi_hr_trend_point_t m_hr_tren
     //fs_mkdir("/lfs/hr");
 
     char fname[30];
-    sprintf(fname, "/lfs/trend");
+    sprintf(fname, "/lfs/trend2");
 
     LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_hr_trend_point));
 
@@ -62,8 +65,16 @@ static void hpi_rec_write_hr_point_to_file(struct hpi_hr_trend_point_t m_hr_tren
     {
         printk("FAIL: open %s: %d", fname, ret);
     }
+    
+    ret = fs_write(&file, test_array, sizeof(test_array));
 
-    ret = fs_write(&file, &m_hr_trend_point, sizeof(struct hpi_hr_trend_point_t));
+    for(int i = 0; i < 64; i++)
+    {
+       m_hr_trend_point_buffer[i] = m_hr_trend_point;
+    }
+
+    ret = fs_write(&file, m_hr_trend_point_buffer, sizeof(m_hr_trend_point_buffer));
+    //ret = fs_write(&file, test_array, sizeof(test_array));
 
     ret = fs_close(&file);
     ret = fs_sync(&file);
@@ -141,11 +152,11 @@ static void trend_sys_time_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
 
-#define THREAD_SAMPLE_THREAD_STACK_SIZE 1024
+#define THREAD_SAMPLE_THREAD_STACK_SIZE 2048
 #define THREAD_SAMPLE_THREAD_PRIORITY 5
 
-#define TREND_RECORD_THREAD_STACK_SIZE 1024
+#define TREND_RECORD_THREAD_STACK_SIZE 2048
 #define TREND_RECORD_THREAD_PRIORITY 5
 
-K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 0);
-K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 2000);
+K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 2000);

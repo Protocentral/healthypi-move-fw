@@ -80,6 +80,9 @@ mcuboot_primary_2_pad:
 mcuboot_primary_2_app:
   address: 0x120200
   device: w25q01jv
+  placement:
+    before:
+    - end
   end_address: 0x220000
   region: external_flash
   size: 0xFFE00
@@ -92,9 +95,6 @@ mcuboot_secondary_2:
 littlefs_storage:
   address: 0x320000
   device: w25q01jv
-  placement:
-    before:
-    - end
   end_address: 0x7320000
   region: external_flash
   size: 0x7000000
