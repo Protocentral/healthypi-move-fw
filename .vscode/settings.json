@@ -34,7 +34,8 @@
         "*.inc": "c",
         "hpi_common_types.h": "c",
         "max32664d_msbl.h": "c",
-        "trends.h": "c"
+        "trends.h": "c",
+        "kernel.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

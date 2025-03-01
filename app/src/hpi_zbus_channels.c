@@ -17,7 +17,7 @@ ZBUS_CHAN_DEFINE(sys_time_chan,                 /* Name */
                  struct rtc_time, /* Message type */
                  NULL,                                 /* Validator */
                  NULL,                                 /* User Data */
-                 ZBUS_OBSERVERS(disp_sys_time_lis),
+                 ZBUS_OBSERVERS(disp_sys_time_lis, trend_sys_time_lis),
                  ZBUS_MSG_INIT(0)                      /* Initial value {0} */
 );
 

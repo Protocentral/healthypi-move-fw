@@ -47,6 +47,8 @@ static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct rtc_time m_disp_sys_time;
 
+
+
 static uint16_t m_disp_hr = 0;
 static uint16_t m_disp_hr_max = 0;
 static uint16_t m_disp_hr_min = 0;
@@ -629,6 +631,8 @@ static void disp_sys_time_listener(const struct zbus_channel *chan)
 {
     const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
     m_disp_sys_time = *sys_time;
+
+    //rtc_time_to_tm
 }
 ZBUS_LISTENER_DEFINE(disp_sys_time_lis, disp_sys_time_listener);
 

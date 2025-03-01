@@ -9,6 +9,12 @@
 #include <zephyr/settings/settings.h>
 #include <zephyr/zbus/zbus.h>
 
+#include <zephyr/drivers/rtc.h>
+
+#include <time.h>
+#include <zephyr/posix/time.h>
+
+
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "trends.h"
@@ -30,6 +36,7 @@ struct hpi_hr_trend_point_t hr_trend_minute[HR_TREND_MINUTE_PTS]; // 60 points m
 static uint16_t m_hr_curr_minute[60];  // Assumed max 60 points per minute
 static uint8_t m_hr_curr_minute_counter = 0;
 
+static struct tm *m_trend_time;
 
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 
@@ -126,13 +133,6 @@ void write_test_data(void)
     hpi_rec_write_hour(sys_clock_cycle_get_32(), hr_data);
 }
 
-static void trend_hr_listener(const struct zbus_channel *chan)
-{
-    const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
-    m_hr_curr_minute[m_hr_curr_minute_counter] = hpi_hr->hr;
-}
-ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
-
 void trend_sample_thread(void)
 {
     for(;;)
@@ -146,15 +146,17 @@ void trend_sample_thread(void)
             m_hr_curr_minute_counter = 0;
 
             struct hpi_hr_trend_point_t hr_trend_point;
-            hr_trend_point.timestamp = sys_clock_cycle_get_32();
+            hr_trend_point.timestamp = timeutil_timegm64(m_trend_time);
             uint16_t hr_sum = 0;
+            hr_trend_point.hr_max = 0;
+            hr_trend_point.hr_min = 255;
             for(int i = 0; i < 60; i++)
             {
                 if(m_hr_curr_minute[i] > hr_trend_point.hr_max)
                 {
                     hr_trend_point.hr_max = m_hr_curr_minute[i];
                 }
-                if(m_hr_curr_minute[i] < hr_trend_point.hr_min)
+                if((m_hr_curr_minute[i] < hr_trend_point.hr_min) && (m_hr_curr_minute[i] != 0))
                 {
                     hr_trend_point.hr_min = m_hr_curr_minute[i];
                 }
@@ -168,7 +170,6 @@ void trend_sample_thread(void)
         }
         k_msleep(1000);
     }
-
 }
 
 void trend_record_thread(void)
@@ -178,14 +179,39 @@ void trend_record_thread(void)
     {
         if(k_msgq_get(&q_hr_trend, &_hr_trend_minute, K_NO_WAIT) == 0)
         {
+            LOG_DBG("Recd HR point: %d | %d | %d | %d", _hr_trend_minute.timestamp, _hr_trend_minute.hr_max, _hr_trend_minute.hr_min, _hr_trend_minute.hr_avg);
             //hpi_rec_add_hr_point(hr_trend_minute, 7);
         }
+
         LOG_DBG("Trend thread running");
-        k_sleep(K_SECONDS(30));
+        k_sleep(K_SECONDS(2));
     }
 }
+
+static void trend_hr_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
+    m_hr_curr_minute[m_hr_curr_minute_counter] = hpi_hr->hr;
+}
+ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
+
+static void trend_sys_time_listener(const struct zbus_channel *chan)
+{
+    const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
+    //sys_time 
+    m_trend_time = rtc_time_to_tm(sys_time);
+    uint64_t ts = timeutil_timegm64(m_trend_time);
+    LOG_DBG("Time: %d", ts);
+    
+    //m_disp_sys_time = *sys_time;
+}
+ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
+
+#define THREAD_SAMPLE_THREAD_STACK_SIZE 1024
+#define THREAD_SAMPLE_THREAD_PRIORITY 5
 
 #define TREND_RECORD_THREAD_STACK_SIZE 1024
 #define TREND_RECORD_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 0);
