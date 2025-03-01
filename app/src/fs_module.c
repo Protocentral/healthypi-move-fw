@@ -11,7 +11,6 @@
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
-#include "record_module.h"
 
 #ifdef CONFIG_MCUMGR_GRP_FS
 #include <zephyr/device.h>
@@ -191,18 +190,6 @@ void record_wipe_all(void)
     fs_closedir(&dir);
 }
 
-void write_test_data(void)
-{
-    struct hpi_hr_trend_day_t hr_data;
-
-    for (int i = 0; i < 60; i++)
-    {
-        hr_data.hr_points->hr = 80;
-        hr_data.hr_points->timestamp = sys_clock_cycle_get_32();
-    }
-
-    hpi_rec_write_hour(sys_clock_cycle_get_32(), hr_data);
-}
 
 uint32_t transfer_get_file_length(char *m_file_name)
 {

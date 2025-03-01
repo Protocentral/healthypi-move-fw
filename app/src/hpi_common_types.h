@@ -17,17 +17,8 @@ enum hpi_ppg_status
     HPI_PPG_STATUS_ON_SKIN,
 };
 
-struct hpi_hr_trend_point_t
-{
-    uint32_t timestamp;
-    uint16_t hr;
-};
 
-struct hpi_hr_trend_day_t
-{
-    struct hpi_hr_trend_point_t hr_points[1440];
-    uint32_t time_last_update;
-};
+
 
 struct hpi_ecg_bioz_sensor_data_t
 {

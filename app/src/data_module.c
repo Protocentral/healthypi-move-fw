@@ -47,8 +47,7 @@ enum hpi5_data_format
 static bool settings_log_data_enabled = true; // true;
 static int settings_data_format = DATA_FMT_OPENVIEW;
 
-struct hpi_hr_trend_day_t hr_data[24];
-struct hpi_hr_trend_day_t hr_data_current_hour;
+
 
 // struct hpi_ecg_bioz_sensor_data_t log_buffer[LOG_BUFFER_LENGTH];
 

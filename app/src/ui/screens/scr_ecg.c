@@ -68,13 +68,13 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "ECG");
 
-    LV_IMG_DECLARE(ecg_70);
+    LV_IMG_DECLARE(ecg_120);
     lv_obj_t *img1 = lv_img_create(cont_col);
-    lv_img_set_src(img1, &ecg_70);
+    lv_img_set_src(img1, &ecg_120);
     //lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 
-    btn_hr_settings = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
+    btn_ecg_measure = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_ecg_measure, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
     //lv_obj_align(btn_hr_settings, LV_ALIGN_CENTER, 0, -20);
     lv_obj_set_height(btn_ecg_measure, 80);
 
