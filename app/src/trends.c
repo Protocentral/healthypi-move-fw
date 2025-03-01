@@ -28,84 +28,33 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 // Size of one month = 120960 * 4 = 483840 bytes
 
 #define HR_TREND_POINT_SIZE 12
-#define HR_TREND_MINUTE_PTS 60
-#define HR_TREND_WEEK_PTS   10080 // 60 * 24 * 7  
+#define HR_TREND_MINUTE_PTS 3
+#define HR_TREND_WEEK_PTS   10080 // 60 * 24 * 7 
 
-struct hpi_hr_trend_point_t hr_trend_minute[HR_TREND_MINUTE_PTS]; // 60 points max per minute
-
+//Store raw HR values for the current minute
 static uint16_t m_hr_curr_minute[60];  // Assumed max 60 points per minute
 static uint8_t m_hr_curr_minute_counter = 0;
 
+// Time variables
 static int64_t m_trend_time_ts;
+static struct tm m_today_time_tm;
+
+
 
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 
-void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_day_t hr_data)
+static void hpi_rec_write_hr_point_to_file(struct hpi_hr_trend_point_t m_hr_trend_point)
 {
     struct fs_file_t file;
     int ret = 0;
 
     fs_file_t_init(&file);
-    fs_mkdir("/lfs/hr");
+    //fs_mkdir("/lfs/hr");
 
     char fname[30];
-    sprintf(fname, "/lfs/hr/hr_%d", filenumber);
+    sprintf(fname, "/lfs/trend");
 
-    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(hr_data));
-
-    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
-
-    if (ret < 0)
-    {
-        printk("FAIL: open %s: %d", fname, ret);
-    }
-
-    /*for (int i = 0; i < current_session_log_counter; i++)
-    {
-        ret = fs_write(&file, &current_session_log_points[i], sizeof(struct hpi_ecg_bioz_sensor_data_t));
-    }*/
-
-    ret = fs_write(&file, &hr_data, sizeof(struct hpi_hr_trend_day_t));
-
-    ret = fs_close(&file);
-    ret = fs_sync(&file);
-
-    /*ret = fs_statvfs(mp->mnt_point, &sbuf);
-    if (ret < 0)
-    {
-        printk("FAIL: statvfs: %d\n", ret);
-        // goto out;
-    }*/
-}
-
-void hpi_rec_reset_day(void)
-{
-    struct fs_file_t file;
-    int ret = 0;
-
-    fs_file_t_init(&file);
-    fs_mkdir("/lfs/hr");
-
-    char fname[30] = "/lfs/hr/hr_7";
-
-    // Open file in WR mode to wipe contents
-    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_WRITE);
-}
-
-void hpi_rec_add_hr_point(struct hpi_hr_trend_point_t m_hr_trend_point, int day)
-{
-    struct hpi_hr_trend_day_t hr_data;
-
-    struct fs_file_t file;
-    int ret = 0;
-
-    fs_file_t_init(&file);
-    fs_mkdir("/lfs/hr");
-
-    char fname[30];
-    sprintf(fname, "/lfs/hr/hr%d", day);
-
-    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(hr_data));
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_hr_trend_point));
 
     ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
 
@@ -120,24 +69,11 @@ void hpi_rec_add_hr_point(struct hpi_hr_trend_point_t m_hr_trend_point, int day)
     ret = fs_sync(&file);
 }
 
-void write_test_data(void)
-{
-    struct hpi_hr_trend_day_t hr_data;
-
-    for (int i = 0; i < 60; i++)
-    {
-        // hr_data.hr_points->hr = 80;
-        hr_data.hr_points->timestamp = sys_clock_cycle_get_32();
-    }
-
-    hpi_rec_write_hour(sys_clock_cycle_get_32(), hr_data);
-}
-
 void trend_sample_thread(void)
 {
     for(;;)
     {
-        if(m_hr_curr_minute_counter<60)
+        if(m_hr_curr_minute_counter<HR_TREND_MINUTE_PTS)
         {
             m_hr_curr_minute_counter++;
         }
@@ -150,7 +86,7 @@ void trend_sample_thread(void)
             uint16_t hr_sum = 0;
             hr_trend_point.hr_max = 0;
             hr_trend_point.hr_min = 255;
-            for(int i = 0; i < 60; i++)
+            for(int i = 0; i < HR_TREND_MINUTE_PTS; i++)
             {
                 if(m_hr_curr_minute[i] > hr_trend_point.hr_max)
                 {
@@ -163,8 +99,8 @@ void trend_sample_thread(void)
                 hr_sum += m_hr_curr_minute[i];
             }
 
-            hr_trend_point.hr_avg = hr_sum / 60;
-            hr_trend_point.hr_latest = m_hr_curr_minute[59];
+            hr_trend_point.hr_avg = hr_sum / HR_TREND_MINUTE_PTS;
+            hr_trend_point.hr_latest = m_hr_curr_minute[HR_TREND_MINUTE_PTS-1];
 
             k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
         }
@@ -179,11 +115,10 @@ void trend_record_thread(void)
     {
         if(k_msgq_get(&q_hr_trend, &_hr_trend_minute, K_NO_WAIT) == 0)
         {
-            LOG_DBG("Recd HR point: %d | %d | %d | %d", _hr_trend_minute.timestamp, _hr_trend_minute.hr_max, _hr_trend_minute.hr_min, _hr_trend_minute.hr_avg);
-            //hpi_rec_add_hr_point(hr_trend_minute, 7);
+            LOG_DBG("Recd HR point: %" PRIx64 "| %d | %d | %d", _hr_trend_minute.timestamp, _hr_trend_minute.hr_max, _hr_trend_minute.hr_min, _hr_trend_minute.hr_avg);
+            hpi_rec_write_hr_point_to_file(_hr_trend_minute);
         }
 
-        LOG_DBG("Trend thread running");
         k_sleep(K_SECONDS(2));
     }
 }
@@ -198,14 +133,11 @@ ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
 static void trend_sys_time_listener(const struct zbus_channel *chan)
 {
     const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
-    //sys_time 
     struct tm* _sys_tm_time = rtc_time_to_tm(sys_time);
-    //LOG_DBG("Time: %d-%d-%d %d:%d:%d", m_trend_time->tm_year, m_trend_time->tm_mon, m_trend_time->tm_mday, m_trend_time->tm_hour, m_trend_time->tm_min, m_trend_time->tm_sec);
     m_trend_time_ts = timeutil_timegm64(_sys_tm_time);
 
-    LOG_DBG("Sys TS: %" PRIx64, m_trend_time_ts);
-    
-    //m_disp_sys_time = *sys_time;
+    //LOG_DBG("Time: %d-%d-%d %d:%d:%d", m_trend_time->tm_year, m_trend_time->tm_mon, m_trend_time->tm_mday, m_trend_time->tm_hour, m_trend_time->tm_min, m_trend_time->tm_sec);
+    //LOG_DBG("Sys TS: %" PRIx64, m_trend_time_ts);    
 }
 ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
 

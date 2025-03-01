@@ -300,12 +300,12 @@ void fs_module_init(void)
         // goto out;
     }
 
-    rc = lsdir("/lfs/hr");
+    /*rc = lsdir("/lfs/hr");
     if (rc < 0)
     {
         LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         // goto out;
-    }
+    }*/
 
     //write_test_data();
 }
