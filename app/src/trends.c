@@ -147,10 +147,22 @@ void hpi_trend_load_day_trend(int64_t day_ts, struct hpi_hr_trend_point_t *hr_tr
 
     fs_file_t_init(&file);
 
+    struct fs_dirent trend_file_ent;
+
     char fname[30];
     sprintf(fname, "/lfs/trhr/%" PRIx64, day_ts);
 
-    LOG_DBG("Read from file... %s", fname);
+    ret = fs_stat(fname, &trend_file_ent);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: stat %s: %d", fname, ret);
+        return;
+    }
+
+    LOG_DBG("Read from file %s | Size: %d", fname, trend_file_ent.size);
+
+    uint16_t trend_points = trend_file_ent.size / sizeof(struct hpi_hr_trend_point_t);
+    LOG_DBG("Num HR Points: %d", trend_points);
 
     ret = fs_open(&file, fname, FS_O_READ);
 
@@ -160,15 +172,23 @@ void hpi_trend_load_day_trend(int64_t day_ts, struct hpi_hr_trend_point_t *hr_tr
     }
 
     struct hpi_hr_trend_point_t hr_trend_point;
-    int i=0;
-    //*num_points = 0;
-    
-    while (fs_read(&file, &hr_trend_point, sizeof(hr_trend_point)) == sizeof(hr_trend_point))
+   
+    for(int i=0;i<trend_points;i++)
+    {
+        ret = fs_read(&file, &hr_trend_point, sizeof(hr_trend_point));
+        if(ret < 0)
+        {
+            LOG_ERR("FAIL: read %s: %d", fname, ret);
+        }
+        LOG_DBG("Read HR point: %" PRIx64 "| %d | %d | %d", hr_trend_point.timestamp, hr_trend_point.hr_max, hr_trend_point.hr_min, hr_trend_point.hr_avg);
+        hr_trend_points[i] = hr_trend_point;
+    }
+    /*while (fs_read(&file, &hr_trend_point, sizeof(hr_trend_point)) == sizeof(hr_trend_point))
     {
         LOG_DBG("Read HR point: %" PRIx64 "| %d | %d | %d", hr_trend_point.timestamp, hr_trend_point.hr_max, hr_trend_point.hr_min, hr_trend_point.hr_avg);
         hr_trend_points[*num_points] = hr_trend_point;
         i++;
-    }
+    }*/
 
     ret = fs_close(&file);
     ret = fs_sync(&file);
