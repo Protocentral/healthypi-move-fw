@@ -91,7 +91,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_align(cui_daily_mission_arc_3, LV_ALIGN_CENTER);
     lv_obj_add_flag(cui_daily_mission_arc_3, LV_OBJ_FLAG_ADV_HITTEST); /// Flags
     lv_arc_set_value(cui_daily_mission_arc_3, 50);
-    lv_arc_set_bg_angles(cui_daily_mission_arc_3, 120, 300);
+    lv_arc_set_bg_angles(cui_daily_mission_arc_3, 90, 300);
     lv_obj_set_style_arc_color(cui_daily_mission_arc_3, lv_palette_lighten(LV_PALETTE_GREEN,3), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc_3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc_3, true, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -135,7 +135,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_align(img_cals, LV_ALIGN_CENTER);
     lv_obj_add_flag(img_cals, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
     lv_obj_clear_flag(img_cals, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    lv_obj_align_to(img_cals, img_steps, LV_ALIGN_OUT_BOTTOM_MID, 2, 5);
+    lv_obj_align_to(img_cals, img_steps, LV_ALIGN_OUT_BOTTOM_MID, 4, 5);
 
     label_today_cals = lv_label_create(today_group);
     lv_label_set_text(label_today_cals, "100");
@@ -152,7 +152,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_align(img_time, LV_ALIGN_CENTER);
     lv_obj_add_flag(img_time, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
     lv_obj_clear_flag(img_time, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    lv_obj_align_to(img_time, img_cals, LV_ALIGN_OUT_BOTTOM_MID, -5, 5);
+    lv_obj_align_to(img_time, img_cals, LV_ALIGN_OUT_BOTTOM_MID, -3, 5);
 
     label_today_active_time = lv_label_create(today_group);
     lv_label_set_text(label_today_active_time, "00:00");
