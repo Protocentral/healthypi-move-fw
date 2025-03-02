@@ -252,4 +252,4 @@ static void smf_ppg_wrist_thread(void)
 #define PPG_WRIST_SAMPLING_THREAD_PRIORITY 7
 
 K_THREAD_DEFINE(smf_ppg_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
-//K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 2000);
+K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 2000);

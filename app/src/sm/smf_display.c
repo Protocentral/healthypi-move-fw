@@ -4,6 +4,7 @@
 #include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <zephyr/zbus/zbus.h>
+#include <time.h>
 
 #include <display_sh8601.h>
 #include "hpi_common_types.h"
@@ -45,7 +46,7 @@ enum display_state
 // Display screen variables
 static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
-static struct rtc_time m_disp_sys_time;
+static struct tm m_disp_sys_time;
 
 static uint16_t m_disp_hr = 0;
 static uint16_t m_disp_hr_max = 0;
@@ -57,7 +58,7 @@ static uint32_t m_disp_spo2_last_refresh = 0;
 
 static uint32_t m_disp_steps = 0;
 static uint16_t m_disp_kcals = 0;
-static uint16_t m_disp_active_time_s = 0;
+static uint16_t m_disp_active_time_s = 10;
 
 static float m_disp_temp = 0;
 
@@ -100,17 +101,17 @@ struct s_disp_object
 
 static uint16_t m_user_height = 170; // Example height in m, adjust as needed
 static uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
-static double m_user_met = 3.5;    // Example MET value based speed = 1.34 m/s , adjust as needed
+static double m_user_met = 3.5;      // Example MET value based speed = 1.34 m/s , adjust as needed
 
 static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
 {
     // KCals = time * MET * 3.5 * weight / (200*60)
-    double _m_time = (((m_user_height/100.000) * 0.414 * steps)/4800.000)*60.000; // Assuming speed of 4.8 km/h
-    LOG_DBG("Calc Time %.3f", _m_time);
+    double _m_time = (((m_user_height / 100.000) * 0.414 * steps) / 4800.000) * 60.000; // Assuming speed of 4.8 km/h
+    // LOG_DBG("Calc Time %.3f", _m_time);
     double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
     //
-    ///LOG_DBG("Calc Kcals %f", _m_kcals, steps);
-    return (uint16_t) _m_kcals;
+    /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
+    return (uint16_t)_m_kcals;
 }
 
 static void st_display_init_entry(void *o)
@@ -479,7 +480,12 @@ static void st_display_active_run(void *o)
         hpi_temp_disp_update_temp_f((float)m_disp_temp);
         break;
     case SCR_HR:
+        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+        {
+            hpi_disp_hr_load_trend();
+        }
         hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+
         break;
     case SCR_BPT:
         st_disp_do_bpt_stuff();
@@ -499,7 +505,7 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_TODAY:
-       
+
         hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
         break;
     default:
@@ -524,11 +530,11 @@ static void st_display_active_run(void *o)
         // Home screen doesn't have a header display
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
-            ui_home_time_display_update(m_disp_sys_time);
+            hpi_scr_home_update_time_date(m_disp_sys_time);
         }
         else
         {
-            hdr_time_display_update(m_disp_sys_time);
+            // hdr_time_display_update(m_disp_sys_time);
         }
     }
 
@@ -650,7 +656,7 @@ ZBUS_LISTENER_DEFINE(disp_batt_lis, disp_batt_status_listener);
 
 static void disp_sys_time_listener(const struct zbus_channel *chan)
 {
-    const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
+    const struct tm *sys_time = zbus_chan_const_msg(chan);
     m_disp_sys_time = *sys_time;
 
     // rtc_time_to_tm

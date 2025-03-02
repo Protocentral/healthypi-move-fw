@@ -8,6 +8,7 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "trends.h"
 
 #define HR_TREND_POINTS 24
 
@@ -18,8 +19,8 @@ static lv_obj_t *chart_hr_trend;
 static lv_chart_series_t *ser_hr_max_trend;
 static lv_chart_series_t *ser_hr_min_trend;
 
-static uint16_t hr_trend_max[HR_TREND_POINTS] = {70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185};
-static uint16_t hr_trend_min[HR_TREND_POINTS] = {40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155};
+static uint16_t hr_trend_max[HR_TREND_POINTS] = {0};
+static uint16_t hr_trend_min[HR_TREND_POINTS] = {0};
 
 // static lv_chart_series_t *ser_hr_trend;
 // static lv_chart_series_t *ser_hr_max_trend;
@@ -235,19 +236,20 @@ void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_
 
 void hpi_disp_hr_load_trend(void)
 {
-    uint16_t hr_max_trend[24];
-    uint16_t hr_min_trend[24];
+    struct hpi_hr_trend_point_t hr_trend_points[HR_TREND_POINTS];
+
+    hpi_trend_load_day_trend(0x67c39f80, hr_trend_points, NULL);
 
     // Load full HR data from file
 
-    if (chart_hr_trend == NULL)
+    /*if (chart_hr_trend == NULL)
         return;
 
     for (int i = 0; i < 24; i++)
     {
-        ser_hr_max_trend->y_points[i] = hr_max_trend[i];
-        ser_hr_min_trend->y_points[i] = hr_min_trend[i];
+        ser_hr_max_trend->y_points[i] = hr_trend_points[i].hr_max;
+        ser_hr_min_trend->y_points[i] = hr_trend_points[i].hr_min;
     }
 
-    lv_chart_refresh(chart_hr_trend);
+    lv_chart_refresh(chart_hr_trend);*/
 }

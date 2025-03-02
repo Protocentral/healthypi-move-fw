@@ -787,9 +787,12 @@ static uint32_t acc_get_steps(void)
 
 void hw_thread(void)
 {
-    struct rtc_time sys_time;
+    struct rtc_time rtc_sys_time;
+    struct tm sys_tm_time;
     uint32_t _steps = 0;
     double _temp_f = 0.0;
+
+    int ret;
 
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
@@ -800,8 +803,14 @@ void hw_thread(void)
         npm_fuel_gauge_update(charger, vbus_connected);
 
         // Read and publish time
-        rtc_get_time(rtc_dev, &sys_time);
-        zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
+        ret = rtc_get_time(rtc_dev, &rtc_sys_time);
+        if (ret < 0)
+        {
+            LOG_ERR("Failed to get RTC time");
+        } 
+        sys_tm_time = *rtc_time_to_tm(&rtc_sys_time);
+
+        zbus_chan_pub(&sys_time_chan, &sys_tm_time, K_SECONDS(1));
 
         // Read and publish steps
         _steps = acc_get_steps();

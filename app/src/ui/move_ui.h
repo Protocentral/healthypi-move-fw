@@ -104,7 +104,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 
 // Home Screen functions
 void draw_scr_home(enum scroll_dir m_scroll_dir);
-void ui_home_time_display_update(struct rtc_time in_time);
+void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
 
 void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
