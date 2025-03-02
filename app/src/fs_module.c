@@ -11,6 +11,7 @@
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
+#include "trends.h"
 
 #ifdef CONFIG_MCUMGR_GRP_FS
 #include <zephyr/device.h>
@@ -21,9 +22,6 @@ LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_INF);
 K_SEM_DEFINE(sem_fs_module, 0, 1);
 #define PARTITION_NODE DT_NODELABEL(lfs1)
 
-#if DT_NODE_EXISTS(PARTITION_NODE)
-FS_FSTAB_DECLARE_ENTRY(PARTITION_NODE);
-#else  /* PARTITION_NODE */
 FS_LITTLEFS_DECLARE_DEFAULT_CONFIG(storage);
 static struct fs_mount_t lfs_storage_mnt = {
     .type = FS_LITTLEFS,
@@ -31,45 +29,13 @@ static struct fs_mount_t lfs_storage_mnt = {
     .storage_dev = (void *)FIXED_PARTITION_ID(littlefs_storage),
     .mnt_point = "/lfs",
 };
-#endif /* PARTITION_NODE */
 
-struct fs_mount_t *mp =
-#if DT_NODE_EXISTS(PARTITION_NODE)
-    &FS_FSTAB_ENTRY(PARTITION_NODE)
-#else
-    &lfs_storage_mnt
-#endif
-    ;
+struct fs_mount_t *mp = &lfs_storage_mnt;
 
-#define FILE_TRANSFER_BLE_PACKET_SIZE    	64 // (16*7)
-/*
-static int littlefs_flash_erase(unsigned int id)
-{
-    const struct flash_area *pfa;
-    int rc;
+#define FILE_TRANSFER_BLE_PACKET_SIZE 64 // (16*7)
 
-    rc = flash_area_open(id, &pfa);
-    if (rc < 0)
-    {
-        LOG_ERR("FAIL: unable to find flash area %u: %d\n",
-                id, rc);
-        return rc;
-    }
-
-    printk("Area %u at 0x%x on %s for %u bytes\n",
-           id, (unsigned int)pfa->fa_off, pfa->fa_dev->name,
-           (unsigned int)pfa->fa_size);
-
-    /* Optional wipe flash contents 
-    if (IS_ENABLED(CONFIG_APP_WIPE_STORAGE))
-    {
-        rc = flash_area_erase(pfa, 0, pfa->fa_size);
-        LOG_ERR("Erasing flash area ... %d", rc);
-    }
-
-    flash_area_close(pfa);
-    return rc;
-}*/
+// Trend buffers
+static struct hpi_hr_trend_point_t m_hr_trend_point_buffer[10];
 
 static int littlefs_mount(struct fs_mount_t *mp)
 {
@@ -85,11 +51,10 @@ static int littlefs_mount(struct fs_mount_t *mp)
     if (rc < 0)
     {
         LOG_DBG("FAIL: mount id %" PRIuPTR " at %s: %d\n",
-               (uintptr_t)mp->storage_dev, mp->mnt_point, rc);
+                (uintptr_t)mp->storage_dev, mp->mnt_point, rc);
         return rc;
     }
     LOG_DBG("%s mount: %d\n", mp->mnt_point, rc);
-
 
     return 0;
 }
@@ -152,10 +117,10 @@ void record_wipe_all(void)
 
     fs_dir_t_init(&dir);
 
-    err = fs_opendir(&dir, "/lfs/log");
+    err = fs_opendir(&dir, "/lfs");
     if (err)
     {
-        printk("Unable to open (err %d)", err);
+        LOG_ERR("Unable to open (err %d)", err);
     }
 
     while (1)
@@ -165,7 +130,7 @@ void record_wipe_all(void)
         err = fs_readdir(&dir, &entry);
         if (err)
         {
-            printk("Unable to read directory");
+            LOG_ERR("Unable to read directory");
             break;
         }
 
@@ -175,21 +140,20 @@ void record_wipe_all(void)
             break;
         }
 
-        printk("%s%s %d\n", entry.name,
-        	      (entry.type == FS_DIR_ENTRY_DIR) ? "/" : "",entry.size);
+        LOG_DBG("%s%s %d\n", entry.name,
+                (entry.type == FS_DIR_ENTRY_DIR) ? "/" : "", entry.size);
 
         // if (strstr(entry.name, "") != NULL)
         //{
-        strcpy(file_name, "/lfs/log/");
+        strcpy(file_name, "/lfs/");
         strcat(file_name, entry.name);
 
-        printk("Deleting %s\n", file_name);
+        LOG_DBG("Deleting %s\n", file_name);
         fs_unlink(file_name);
     }
 
     fs_closedir(&dir);
 }
-
 
 uint32_t transfer_get_file_length(char *m_file_name)
 {
@@ -235,7 +199,7 @@ void transfer_send_file(uint16_t file_id)
     printk("File name: %s Size:%d NW: %d \n", m_file_name, file_len, number_writes);
 
     fs_file_t_init(&m_file);
-    
+
     rc = fs_open(&m_file, m_file_name, FS_O_READ);
 
     if (rc != 0)
@@ -253,7 +217,7 @@ void transfer_send_file(uint16_t file_id)
             return;
         }
 
-        cmdif_send_ble_data(m_buffer, rc); //FILE_TRANSFER_BLE_PACKET_SIZE);
+        cmdif_send_ble_data(m_buffer, rc); // FILE_TRANSFER_BLE_PACKET_SIZE);
         k_sleep(K_MSEC(50));
     }
 
@@ -265,6 +229,86 @@ void transfer_send_file(uint16_t file_id)
     }
 
     printk("File sent\n");
+}
+
+void hpi_tre_wr_hr_point_to_file(struct hpi_hr_trend_point_t m_hr_trend_point)
+{
+    struct fs_file_t file;
+    int ret = 0;
+
+    fs_file_t_init(&file);
+
+    // fs_mkdir("/lfs/hr");
+
+    char fname[30];
+    sprintf(fname, "/lfs/trhr/tr1");
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_hr_trend_point));
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    m_hr_trend_point_buffer[0] = m_hr_trend_point;
+
+    ret = fs_write(&file, m_hr_trend_point_buffer, sizeof(m_hr_trend_point_buffer));
+    // ret = fs_write(&file, test_array, sizeof(test_array));
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}
+
+void hpi_init_fs_struct(void)
+{
+    struct fs_dir_t dir;
+    int ret;
+
+    // record_wipe_all();
+
+    // Create FS directories
+
+    ret = fs_mkdir("/lfs/trhr");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
+
+    ret = fs_mkdir("/lfs/trspo2");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
+
+    ret = fs_mkdir("/lfs/trtemp");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
+
+    ret = fs_mkdir("/lfs/trsteps");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
 }
 
 void fs_module_init(void)
@@ -288,25 +332,26 @@ void fs_module_init(void)
     }
 
     LOG_DBG("%s: bsize = %lu ; frsize = %lu ;"
-           " blocks = %lu ; bfree = %lu\n",
-           mp->mnt_point,
-           sbuf.f_bsize, sbuf.f_frsize,
-           sbuf.f_blocks, sbuf.f_bfree);
-    
+            " blocks = %lu ; bfree = %lu\n",
+            mp->mnt_point,
+            sbuf.f_bsize, sbuf.f_frsize,
+            sbuf.f_blocks, sbuf.f_bfree);
+
+    //record_wipe_all();
+
     rc = lsdir("/lfs");
     if (rc < 0)
     {
-        LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
-        // goto out;
+        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
 
-    /*rc = lsdir("/lfs/hr");
+    rc = lsdir("/lfs/trhr");
     if (rc < 0)
     {
-        LOG_PRINTK("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
-        // goto out;
-    }*/
+        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+    }
 
-    //write_test_data();
+
+
+    hpi_init_fs_struct();
 }
-
