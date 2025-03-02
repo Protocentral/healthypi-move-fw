@@ -14,5 +14,3 @@ struct hpi_hr_trend_day_t
     struct hpi_hr_trend_point_t hr_points[1440];
     uint32_t time_last_update;
 };
-
-void hpi_rec_write_hour(uint32_t filenumber, struct hpi_hr_trend_day_t hr_data);

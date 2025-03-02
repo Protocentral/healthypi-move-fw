@@ -172,8 +172,8 @@
 			npm_pmic_buck1: BUCK1 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-init-microvolt = <3000000>;
-				//regulator-initial-mode = <NPM1300_BUCK_MODE_PWM>;
+				regulator-init-microvolt = <3100000>;
+				regulator-initial-mode = <NPM1300_BUCK_MODE_PWM>;
 			};
 
 			npm_pmic_buck2: BUCK2 {
@@ -320,7 +320,7 @@
 		quad-enable-requirements = "S2B1v1";
 		address-size-32;
 		enter-4byte-addr = < 0xB7 >;
-		sck-frequency = <64000000>;
+		sck-frequency = <32000000>;
 		size = <1073741824>;	// In bits
 		has-dpd;
 		t-enter-dpd = <30000>;

@@ -32,15 +32,15 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 # This places images in the external flash memory
-#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/hw_module.c LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/images/*.c LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sm/*.c LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/components/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/data_module.c LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/max32664d_msbl.c LOCATION EXTFLASH_TEXT NOCOPY)
 
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/screens/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sm/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/data_module.c LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/max32664d_msbl.c LOCATION EXTFLASH_TEXT NOCOPY)
+
+#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/screens/scr_splash.c LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/max32664dmax32664d_bl.c LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_msbl.c LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/max32664c/*.* LOCATION EXTFLASH_TEXT NOCOPY)

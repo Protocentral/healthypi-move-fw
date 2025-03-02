@@ -186,7 +186,7 @@ lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent);
 void ui_spo2_button_update(uint8_t spo2);
 
 lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent);
-void ui_dailymissiongroup_update(uint32_t steps_walk, uint32_t steps_run);
+void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s);
 
 lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent);
 void ui_steps_button_update(uint16_t steps);
@@ -209,15 +209,11 @@ void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8
 
 void disp_screen_event(lv_event_t *e);
 
-// LV_IMG_DECLARE(ui_img_flash_png);
-// LV_IMG_DECLARE(ui_img_heart2_png);        // assets/heart2.png
-// LV_IMG_DECLARE(ui_img_daily_mission_png); // assets/daily_mission.png
-
 LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
 LV_IMG_DECLARE(img_heart_35);
-LV_IMG_DECLARE(img_steps_48px);
-LV_IMG_DECLARE(img_calories_48px);
-LV_IMG_DECLARE(img_clock_48px);
+LV_IMG_DECLARE(img_steps_48);
+LV_IMG_DECLARE(img_calories_48);
+LV_IMG_DECLARE(img_timer_48);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(ui_font_Number_big);

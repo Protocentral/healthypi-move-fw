@@ -34,9 +34,9 @@ void draw_scr_splash(void)
     lv_style_set_bg_color(&style, lv_color_black());
     lv_obj_add_style(scr_splash, &style, 0);
 
-    LV_IMG_DECLARE(pc_logo_text_250);
+    LV_IMG_DECLARE(pc_logo_text_300);
     lv_obj_t *img1 = lv_img_create(scr_splash);
-    lv_img_set_src(img1, &pc_logo_text_250);
+    lv_img_set_src(img1, &pc_logo_text_300);
     lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 
     /*LV_IMG_DECLARE(pc_logo_round_120);

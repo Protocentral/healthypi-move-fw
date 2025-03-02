@@ -11,7 +11,7 @@
 #include "ui/move_ui.h"
 
 #define HPI_DEFAULT_START_SCREEN SCR_TODAY
-LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -47,8 +47,6 @@ static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct rtc_time m_disp_sys_time;
 
-
-
 static uint16_t m_disp_hr = 0;
 static uint16_t m_disp_hr_max = 0;
 static uint16_t m_disp_hr_min = 0;
@@ -58,6 +56,9 @@ static uint8_t m_disp_spo2 = 0;
 static uint32_t m_disp_spo2_last_refresh = 0;
 
 static uint32_t m_disp_steps = 0;
+static uint16_t m_disp_kcals = 0;
+static uint16_t m_disp_active_time_s = 0;
+
 static float m_disp_temp = 0;
 
 static uint16_t m_disp_bp_sys = 0;
@@ -96,6 +97,21 @@ struct s_disp_object
     struct smf_ctx ctx;
 
 } s_disp_obj;
+
+static uint16_t m_user_height = 170; // Example height in m, adjust as needed
+static uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
+static double m_user_met = 3.5;    // Example MET value based speed = 1.34 m/s , adjust as needed
+
+static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
+{
+    // KCals = time * MET * 3.5 * weight / (200*60)
+    double _m_time = (((m_user_height/100.000) * 0.414 * steps)/4800.000)*60.000; // Assuming speed of 4.8 km/h
+    LOG_DBG("Calc Time %.3f", _m_time);
+    double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
+    //
+    ///LOG_DBG("Calc Kcals %f", _m_kcals, steps);
+    return (uint16_t) _m_kcals;
+}
 
 static void st_display_init_entry(void *o)
 {
@@ -481,6 +497,11 @@ static void st_display_active_run(void *o)
         {
             hpi_move_load_screen(SCR_ECG, SCROLL_UP);
         }
+        break;
+    case SCR_TODAY:
+       
+        hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
+        break;
     default:
         break;
     }
@@ -489,7 +510,7 @@ static void st_display_active_run(void *o)
     {
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
-            //hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
             hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
             last_batt_refresh = k_uptime_get_32();
         }
@@ -516,14 +537,14 @@ static void st_display_active_run(void *o)
     {
         /*if (m_display_active == false)
         {
-            
+
         }
         else
         {*/
         lv_disp_trig_activity(NULL);
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
-            //hpi_display_sleep_on();
+            // hpi_display_sleep_on();
         }
         else
         {
@@ -632,7 +653,7 @@ static void disp_sys_time_listener(const struct zbus_channel *chan)
     const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
     m_disp_sys_time = *sys_time;
 
-    //rtc_time_to_tm
+    // rtc_time_to_tm
 }
 ZBUS_LISTENER_DEFINE(disp_sys_time_lis, disp_sys_time_listener);
 
@@ -656,6 +677,8 @@ static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     m_disp_steps = hpi_steps->steps_walk;
+    m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
+
     // ui_steps_button_update(hpi_steps->steps_walk);
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
