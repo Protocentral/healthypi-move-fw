@@ -351,7 +351,5 @@ void fs_module_init(void)
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
 
-
-
     hpi_init_fs_struct();
 }

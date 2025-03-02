@@ -49,12 +49,12 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_align(cui_daily_mission_arc, LV_ALIGN_CENTER);
     lv_obj_add_flag(cui_daily_mission_arc, LV_OBJ_FLAG_ADV_HITTEST); /// Flags
     lv_arc_set_value(cui_daily_mission_arc, 25);
-    lv_arc_set_bg_angles(cui_daily_mission_arc, 90, 270);
-    lv_obj_set_style_arc_color(cui_daily_mission_arc, lv_palette_lighten(LV_PALETTE_BLUE, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_arc_set_bg_angles(cui_daily_mission_arc, 120, 300);
+    lv_obj_set_style_arc_color(cui_daily_mission_arc, lv_palette_lighten(LV_PALETTE_RED, 3), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc, true, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_set_style_arc_color(cui_daily_mission_arc, lv_palette_darken(LV_PALETTE_BLUE, 4), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(cui_daily_mission_arc, lv_palette_darken(LV_PALETTE_RED, 4), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc, true, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
@@ -70,12 +70,12 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_align(cui_daily_mission_arc_2, LV_ALIGN_CENTER);
     lv_obj_add_flag(cui_daily_mission_arc_2, LV_OBJ_FLAG_ADV_HITTEST); /// Flags
     lv_arc_set_value(cui_daily_mission_arc_2, 75);
-    lv_arc_set_bg_angles(cui_daily_mission_arc_2, 90, 270);
-    lv_obj_set_style_arc_color(cui_daily_mission_arc_2, lv_palette_lighten(LV_PALETTE_GREEN,3), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_arc_set_bg_angles(cui_daily_mission_arc_2, 120, 300);
+    lv_obj_set_style_arc_color(cui_daily_mission_arc_2, lv_palette_lighten(LV_PALETTE_YELLOW,3), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc_2, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc_2, true, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_set_style_arc_color(cui_daily_mission_arc_2, lv_palette_darken(LV_PALETTE_GREEN, 3) , LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(cui_daily_mission_arc_2, lv_palette_darken(LV_PALETTE_YELLOW, 3) , LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc_2, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc_2, true, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
@@ -91,12 +91,12 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_align(cui_daily_mission_arc_3, LV_ALIGN_CENTER);
     lv_obj_add_flag(cui_daily_mission_arc_3, LV_OBJ_FLAG_ADV_HITTEST); /// Flags
     lv_arc_set_value(cui_daily_mission_arc_3, 50);
-    lv_arc_set_bg_angles(cui_daily_mission_arc_3, 90, 270);
-    lv_obj_set_style_arc_color(cui_daily_mission_arc_3, lv_palette_lighten(LV_PALETTE_RED,3), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_arc_set_bg_angles(cui_daily_mission_arc_3, 120, 300);
+    lv_obj_set_style_arc_color(cui_daily_mission_arc_3, lv_palette_lighten(LV_PALETTE_GREEN,3), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc_3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc_3, true, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_set_style_arc_color(cui_daily_mission_arc_3, lv_palette_darken(LV_PALETTE_RED, 1), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(cui_daily_mission_arc_3, lv_palette_darken(LV_PALETTE_GREEN, 1), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_opa(cui_daily_mission_arc_3, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(cui_daily_mission_arc_3, true, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
@@ -113,7 +113,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     //lv_obj_set_style_text_color(label_title, lv_color_hex(0x303030), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_t *img_steps = lv_img_create(today_group);
-    lv_img_set_src(img_steps, &img_steps_48px);
+    lv_img_set_src(img_steps, &img_steps_48);
     lv_obj_set_width(img_steps, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(img_steps, LV_SIZE_CONTENT); /// 1
     lv_obj_add_flag(img_steps, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
@@ -123,51 +123,66 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     label_today_steps = lv_label_create(today_group);  
     lv_label_set_text(label_today_steps, "888");
     lv_obj_align_to(label_today_steps, img_steps, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
-    lv_obj_set_style_text_color(label_today_steps, lv_palette_lighten(LV_PALETTE_BLUE, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
+    //lv_obj_set_style_text_color(label_today_steps, lv_palette_lighten(LV_PALETTE_BLUE, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(label_today_steps, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label_today_steps, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
     //lv_obj_add_style(label_today_steps, &style_lbl_white, 0); 
 
     lv_obj_t *img_cals = lv_img_create(today_group);
-    lv_img_set_src(img_cals, &img_calories_48px);
+    lv_img_set_src(img_cals, &img_calories_48);
     lv_obj_set_width(img_cals, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(img_cals, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(img_cals, LV_ALIGN_CENTER);
     lv_obj_add_flag(img_cals, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
     lv_obj_clear_flag(img_cals, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    lv_obj_align_to(img_cals, img_steps, LV_ALIGN_OUT_BOTTOM_MID, 0, 1);
+    lv_obj_align_to(img_cals, img_steps, LV_ALIGN_OUT_BOTTOM_MID, 2, 5);
 
     label_today_cals = lv_label_create(today_group);
     lv_label_set_text(label_today_cals, "100");
     lv_obj_align_to(label_today_cals, img_cals, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
-    lv_obj_set_style_text_color(label_today_cals, lv_palette_lighten(LV_PALETTE_GREEN, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(label_today_cals, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label_today_cals, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
     //lv_obj_add_style(label_today_cals, &style_lbl_white, 0);
 
     lv_obj_t *img_time;
     img_time = lv_img_create(today_group);
-    lv_img_set_src(img_time, &img_clock_48px);
+    lv_img_set_src(img_time, &img_timer_48);
     lv_obj_set_width(img_time, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(img_time, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(img_time, LV_ALIGN_CENTER);
     lv_obj_add_flag(img_time, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
     lv_obj_clear_flag(img_time, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    lv_obj_align_to(img_time, img_cals, LV_ALIGN_OUT_BOTTOM_MID, 0, 1);
+    lv_obj_align_to(img_time, img_cals, LV_ALIGN_OUT_BOTTOM_MID, -5, 5);
 
     label_today_active_time = lv_label_create(today_group);
     lv_label_set_text(label_today_active_time, "00:00");
     lv_obj_align_to(label_today_active_time, img_time, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
-    lv_obj_set_style_text_color(label_today_active_time, lv_palette_lighten(LV_PALETTE_RED, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(label_today_active_time, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label_today_active_time, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     hpi_disp_set_curr_screen(SCR_TODAY);
     hpi_show_screen(scr_today, m_scroll_dir);
 }
 
-void ui_dailymissiongroup_update(uint32_t steps_walk, uint32_t steps_run)
+void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s)
 {
-    if (cui_daily_mission_arc == NULL || cui_daily_mission_arc_2 == NULL)
+    if (label_today_steps == NULL || label_today_cals == NULL || label_today_active_time == NULL)
         return;
 
-    lv_arc_set_value(cui_daily_mission_arc, steps_walk);
-    lv_arc_set_value(cui_daily_mission_arc_2, steps_run);
+    char str_steps[10];
+    char str_cals[10];
+    char str_time[10];
+
+    snprintf(str_steps, 10, "%d", steps);
+    snprintf(str_cals, 10, "%d", kcals);
+
+    uint8_t hours = active_time_s / 3600;
+    uint8_t minutes = (active_time_s % 3600) / 60;
+
+    snprintf(str_time, 10, "%02d:%02d", hours, minutes);
+
+    lv_label_set_text(label_today_steps, str_steps);
+    lv_label_set_text(label_today_cals, str_cals);
+    lv_label_set_text(label_today_active_time, str_time);
 }
+
