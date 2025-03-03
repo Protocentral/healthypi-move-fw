@@ -40,12 +40,6 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
     scr_plot_bpt = lv_obj_create(NULL);
     draw_header_minimal(scr_plot_bpt, 10);
 
-    static lv_style_t style;
-    lv_style_init(&style);
-    lv_style_set_flex_flow(&style, LV_FLEX_FLOW_ROW_WRAP);
-    lv_style_set_flex_main_place(&style, LV_FLEX_ALIGN_SPACE_EVENLY);
-    lv_style_set_flex_cross_place(&style, LV_FLEX_ALIGN_CENTER);
-
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_plot_bpt);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
@@ -56,7 +50,6 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Blood Pressure");

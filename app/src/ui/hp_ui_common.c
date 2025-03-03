@@ -29,11 +29,7 @@ LV_IMG_DECLARE(pc_move_bg_200);
 
 // LVGL Styles
 static lv_style_t style_sub;
-
-static lv_style_t style_scr_back;
-
 static lv_style_t style_btn;
-static lv_style_t style_scr_back;
 
 // Global LVGL Styles
 lv_style_t style_scr_black;
@@ -44,6 +40,8 @@ lv_style_t style_lbl_white_small;
 lv_style_t style_white_medium;
 lv_style_t style_batt_sym;
 lv_style_t style_batt_percent;
+
+lv_style_t style_scr_container;
 
 lv_style_t style_lbl_orange;
 lv_style_t style_lbl_white_tiny;
@@ -395,6 +393,7 @@ static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
     {
         lv_obj_add_style(obj, &style_btn, 0);
     }
+    lv_style_set_bg_color(&style_scr_black, lv_color_black());
 }
 
 void display_init_styles(void)
@@ -477,27 +476,14 @@ void display_init_styles(void)
     lv_style_set_text_color(&style_lbl_black_small, lv_color_black());
     lv_style_set_text_font(&style_lbl_black_small, &lv_font_montserrat_34);
 
-    // Screen background style
-    lv_style_init(&style_scr_back);
-    // lv_style_set_radius(&style, 5);
-    lv_style_set_bg_opa(&style_scr_back, LV_OPA_COVER);
-    lv_style_set_border_width(&style_scr_back, 0);
+    // Container for scrollable screen layout
+    lv_style_init(&style_scr_container);
+    lv_style_set_flex_flow(&style_scr_container, LV_FLEX_FLOW_ROW_WRAP);
+    lv_style_set_flex_main_place(&style_scr_container, LV_FLEX_ALIGN_SPACE_EVENLY);
+    lv_style_set_flex_cross_place(&style_scr_container, LV_FLEX_ALIGN_CENTER);
 
-    static lv_grad_dsc_t grad;
-    grad.dir = LV_GRAD_DIR_VER;
-    grad.stops_count = 2;
-    grad.stops[0].color = lv_color_hex(0x003a57); // lv_palette_lighten(LV_PALETTE_GREY, 1);
-    grad.stops[1].color = lv_color_black();       // lv_palette_main(LV_PALETTE_BLUE);
-
-    // Shift the gradient to the bottom
-    grad.stops[0].frac = 128;
-    grad.stops[1].frac = 192;
-
-    // lv_style_set_bg_color(&style_scr_back, lv_color_black());
-    // lv_style_set_bg_grad(&style_scr_back, &grad);
+    // Black screen background
     lv_style_init(&style_scr_black);
-    lv_style_set_radius(&style_scr_black, 1);
-
     lv_style_set_bg_opa(&style_scr_black, LV_OPA_COVER);
     lv_style_set_border_width(&style_scr_black, 0);
     lv_style_set_bg_color(&style_scr_black, lv_color_black());

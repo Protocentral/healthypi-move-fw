@@ -19,20 +19,13 @@ extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_lbl_white_small;
 
+extern lv_style_t style_scr_black;
+
 void draw_scr_splash(void)
 {
     scr_splash = lv_obj_create(NULL);
 
-    static lv_style_t style;
-    lv_style_init(&style);
-    lv_style_set_radius(&style, 1);
-
-    lv_style_set_bg_opa(&style, LV_OPA_COVER);
-    lv_style_set_border_width(&style, 0);
-
-    // lv_style_set_bg_grad(&style, &grad);
-    lv_style_set_bg_color(&style, lv_color_black());
-    lv_obj_add_style(scr_splash, &style, 0);
+    lv_obj_add_style(scr_splash, &style_scr_black, 0);
 
     LV_IMG_DECLARE(pc_logo_text_300);
     lv_obj_t *img1 = lv_img_create(scr_splash);

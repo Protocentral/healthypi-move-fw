@@ -25,6 +25,8 @@
 #define HPI_DISP_BATT_REFR_INT 1000
 #define HPI_DISP_HR_REFR_INT 1000
 
+#define HPI_DISP_TRENDS_REFRESH_INT 3000
+
 struct hpi_boot_msg_t
 {
     char msg[15];

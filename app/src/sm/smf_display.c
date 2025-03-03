@@ -480,7 +480,7 @@ static void st_display_active_run(void *o)
         hpi_temp_disp_update_temp_f((float)m_disp_temp);
         break;
     case SCR_HR:
-        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
+        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TRENDS_REFRESH_INT)
         {
             hpi_disp_hr_load_trend();
         }

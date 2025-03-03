@@ -42,10 +42,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     // draw_bg(scr_ecg);
 
     static lv_style_t style;
-    lv_style_init(&style);
-    lv_style_set_flex_flow(&style, LV_FLEX_FLOW_ROW_WRAP);
-    lv_style_set_flex_main_place(&style, LV_FLEX_ALIGN_SPACE_EVENLY);
-    lv_style_set_flex_cross_place(&style, LV_FLEX_ALIGN_CENTER);
+    
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt);
