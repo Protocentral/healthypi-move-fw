@@ -2,7 +2,7 @@
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 
 #include "hw_module.h"
 #include "max32664c.h"
@@ -100,15 +100,14 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.spo2_confidence = edata->spo2_confidence;
             }
 
-            if(ppg_sensor_sample.scd_state!=3)
+            /*if(ppg_sensor_sample.scd_state!=3)
             {
                 LOG_DBG("OFF SKIN");
                 //k_sem_give(&sem_ppg_wrist_off_skin);
-            }
+            }*/
+            //LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
 
             k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
-
-
         }
     }
 }

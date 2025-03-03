@@ -158,8 +158,8 @@ void draw_header_minimal(lv_obj_t *parent, int top_offset)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
     lv_obj_set_scroll_dir(parent, LV_DIR_VER);
-    // lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-
+    //lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
+   
     // Battery Level
     /* label_batt_level = lv_label_create(parent);
     lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);

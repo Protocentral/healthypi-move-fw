@@ -11,7 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_TODAY
+#define HPI_DEFAULT_START_SCREEN SCR_BPT
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -28,6 +28,9 @@ static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
 static int last_hr_refresh = 0;
 static int last_time_refresh = 0;
+
+static int last_hr_trend_refresh = 0;
+
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
 
 static const struct smf_state display_states[];
@@ -480,9 +483,10 @@ static void st_display_active_run(void *o)
         hpi_temp_disp_update_temp_f((float)m_disp_temp);
         break;
     case SCR_HR:
-        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TRENDS_REFRESH_INT)
+        if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
             hpi_disp_hr_load_trend();
+            last_hr_trend_refresh = k_uptime_get_32();
         }
         hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
 
