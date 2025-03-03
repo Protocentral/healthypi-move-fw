@@ -114,7 +114,7 @@ void record_wipe_all(void)
 
     fs_dir_t_init(&dir);
 
-    err = fs_opendir(&dir, "/lfs");
+    err = fs_opendir(&dir, "/lfs/trhr");
     if (err)
     {
         LOG_ERR("Unable to open (err %d)", err);
@@ -142,7 +142,7 @@ void record_wipe_all(void)
 
         // if (strstr(entry.name, "") != NULL)
         //{
-        strcpy(file_name, "/lfs/");
+        strcpy(file_name, "/lfs/trhr/");
         strcat(file_name, entry.name);
 
         LOG_DBG("Deleting %s\n", file_name);
@@ -235,7 +235,7 @@ void hpi_init_fs_struct(void)
     struct fs_dir_t dir;
     int ret;
 
-    // record_wipe_all();
+    //record_wipe_all();
 
     // Create FS directories
 

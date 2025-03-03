@@ -163,7 +163,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     hpi_set_chart_points(ser_hr_max_trend, hr_trend_max, HR_TREND_POINTS);
     hpi_set_chart_points(ser_hr_min_trend, hr_trend_min, HR_TREND_POINTS);
 
-    lv_chart_refresh(chart_hr_trend);
+    //lv_chart_refresh(chart_hr_trend);
 
     // HR Min/Max label
     /*lv_obj_t *label_hr_min_max_title = lv_label_create(scr_hr);
@@ -238,18 +238,20 @@ void hpi_disp_hr_load_trend(void)
 {
     struct hpi_hr_trend_point_t hr_trend_points[HR_TREND_POINTS];
 
-    hpi_trend_load_day_trend(0x67c39f80, hr_trend_points, NULL);
+    int m_num_points = 0;
+
+    hpi_trend_load_day_trend(hr_trend_points, &m_num_points);
 
     // Load full HR data from file
 
-    /*if (chart_hr_trend == NULL)
+    if (chart_hr_trend == NULL)
         return;
 
-    for (int i = 0; i < 24; i++)
+    for (int i = 0; i < m_num_points; i++)
     {
         ser_hr_max_trend->y_points[i] = hr_trend_points[i].hr_max;
         ser_hr_min_trend->y_points[i] = hr_trend_points[i].hr_min;
     }
 
-    lv_chart_refresh(chart_hr_trend);*/
+    lv_chart_refresh(chart_hr_trend);
 }
