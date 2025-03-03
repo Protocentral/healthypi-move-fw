@@ -20,10 +20,7 @@ lv_obj_t *scr_ecg;
 static lv_obj_t *btn_ecg_measure;
 
 // Externs
-extern lv_style_t style_lbl_orange;
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 
 extern lv_style_t style_scr_black;
 

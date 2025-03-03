@@ -18,9 +18,8 @@ static lv_obj_t *chart_temp_trend;
 static lv_obj_t *label_temp_f;
 
 // Externs
-extern lv_style_t style_lbl_white;
+
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 
 static void draw_event_cb(lv_event_t *e)
 {
@@ -44,7 +43,6 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_signal = lv_label_create(scr_temp);
     lv_label_set_text(label_signal, "Skin Temperature");
     lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 60);
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     chart_temp_trend = lv_chart_create(scr_temp);
     lv_obj_set_size(chart_temp_trend, 320, 120);
@@ -92,7 +90,6 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     label_temp_f = lv_label_create(scr_temp);
     lv_label_set_text(label_temp_f, "00.00");
     lv_obj_align_to(label_temp_f, NULL, LV_ALIGN_CENTER, 0, 120);
-    lv_obj_add_style(label_temp_f, &style_lbl_white, 0);
 
     lv_obj_t *label_temp_f_sub = lv_label_create(scr_temp);
     lv_label_set_text(label_temp_f_sub, " F");

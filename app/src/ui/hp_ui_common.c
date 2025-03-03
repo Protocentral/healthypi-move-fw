@@ -35,16 +35,13 @@ static lv_style_t style_btn;
 lv_style_t style_scr_black;
 lv_style_t style_red_medium;
 lv_style_t style_lbl_red_small;
-lv_style_t style_lbl_white;
-lv_style_t style_lbl_white_small;
+
 lv_style_t style_white_medium;
 lv_style_t style_batt_sym;
 lv_style_t style_batt_percent;
 
 lv_style_t style_scr_container;
 
-lv_style_t style_lbl_orange;
-lv_style_t style_lbl_white_tiny;
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
 lv_style_t style_white_large;
@@ -68,6 +65,132 @@ K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Externs
 extern const struct device *display_dev;
+
+/*Will be called when the styles of the base theme are already added to add new styles*/
+static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
+{
+    LV_UNUSED(th);
+
+    if (lv_obj_check_type(obj, &lv_btn_class))
+    {
+        lv_obj_add_style(obj, &style_btn, 0);
+    }
+    lv_style_set_bg_color(&style_scr_black, lv_color_black());
+}
+
+void display_init_styles(void)
+{
+    /*Initialize the styles*/
+    lv_style_init(&style_btn);
+    lv_style_set_bg_color(&style_btn, lv_palette_darken(LV_PALETTE_GREY, 4));
+    lv_style_set_border_color(&style_btn, lv_palette_darken(LV_PALETTE_RED, 3));
+    lv_style_set_border_width(&style_btn, 3);
+
+    /*Initialize the new theme from the current theme*/
+    lv_theme_t *th_act = lv_disp_get_theme(NULL);
+    static lv_theme_t th_new;
+    th_new = *th_act;
+
+    /*Set the parent theme and the style apply callback for the new theme*/
+    lv_theme_set_parent(&th_new, th_act);
+    lv_theme_set_apply_cb(&th_new, new_theme_apply_cb);
+
+    /*Assign the new theme to the current display*/
+    lv_disp_set_theme(NULL, &th_new);
+
+    // Subscript (Unit) label style
+    lv_style_init(&style_sub);
+    lv_style_set_text_color(&style_sub, lv_color_white());
+    lv_style_set_text_font(&style_sub, &lv_font_montserrat_16);
+
+    lv_style_init(&style_batt_sym);
+    lv_style_set_text_color(&style_batt_sym, lv_palette_main(LV_PALETTE_GREY));
+    lv_style_set_text_font(&style_batt_sym, &lv_font_montserrat_34);
+
+    lv_style_init(&style_batt_percent);
+    lv_style_set_text_color(&style_batt_percent, lv_color_white());
+    lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_24);
+
+    lv_style_init(&style_white_medium);
+    lv_style_set_text_color(&style_white_medium, lv_color_white());
+    lv_style_set_text_font(&style_white_medium, &lv_font_montserrat_34);
+
+    lv_style_init(&style_white_large);
+    lv_style_set_text_color(&style_white_large, lv_color_white());
+    lv_style_set_text_font(&style_white_large, &ui_font_Number_big); //&ui_font_Number_extra);
+
+    // Label Red
+    lv_style_init(&style_red_medium);
+    lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
+    lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_34);
+
+    // Label Red Small
+    lv_style_init(&style_lbl_red_small);
+    lv_style_set_text_color(&style_lbl_red_small, lv_palette_main(LV_PALETTE_RED));
+    lv_style_set_text_font(&style_lbl_red_small, &lv_font_montserrat_16);
+
+    // Label White 14
+    lv_style_init(&style_lbl_white_14);
+    lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
+    lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_24);
+
+    // Label Black
+    lv_style_init(&style_lbl_black_small);
+    lv_style_set_text_color(&style_lbl_black_small, lv_color_black());
+    lv_style_set_text_font(&style_lbl_black_small, &lv_font_montserrat_34);
+
+    // Container for scrollable screen layout
+    lv_style_init(&style_scr_container);
+    lv_style_set_flex_flow(&style_scr_container, LV_FLEX_FLOW_ROW_WRAP);
+    lv_style_set_flex_main_place(&style_scr_container, LV_FLEX_ALIGN_SPACE_EVENLY);
+    lv_style_set_flex_cross_place(&style_scr_container, LV_FLEX_ALIGN_CENTER);
+
+    // Black screen background
+    lv_style_init(&style_scr_black);
+    lv_style_set_bg_opa(&style_scr_black, LV_OPA_COVER);
+    lv_style_set_border_width(&style_scr_black, 0);
+    lv_style_set_bg_color(&style_scr_black, lv_color_black());
+
+    lv_disp_set_bg_color(NULL, lv_color_black());
+}
+
+void draw_header_minimal(lv_obj_t *parent, int top_offset)
+{
+    lv_obj_add_style(parent, &style_scr_black, 0);
+    lv_obj_set_scroll_dir(parent, LV_DIR_VER);
+    // lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Battery Level
+    /* label_batt_level = lv_label_create(parent);
+    lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
+    lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
+    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
+
+    label_batt_level_val = lv_label_create(parent);
+    lv_label_set_text(label_batt_level_val, "--");
+    lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
+    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
+    */
+
+    /*lbl_hdr_hour = lv_label_create(parent);
+    lv_obj_set_width(lbl_hdr_hour, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(lbl_hdr_hour, LV_SIZE_CONTENT); /// 1
+    lv_label_set_text(lbl_hdr_hour, "00:");
+    lv_obj_set_style_text_color(lbl_hdr_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(lbl_hdr_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align_to(lbl_hdr_hour, NULL, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
+    lv_obj_set_style_text_font(lbl_hdr_hour, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lbl_hdr_min = lv_label_create(parent);
+    lv_obj_set_width(lbl_hdr_min, LV_SIZE_CONTENT);  /// 1
+    lv_obj_set_height(lbl_hdr_min, LV_SIZE_CONTENT); /// 1
+    lv_label_set_text(lbl_hdr_min, "00");
+    lv_obj_set_style_text_color(lbl_hdr_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_opa(lbl_hdr_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align_to(lbl_hdr_min, lbl_hdr_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
+    lv_obj_set_style_text_font(lbl_hdr_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    */
+}
 
 void hpi_display_sleep_on(void)
 {
@@ -384,150 +507,7 @@ void disp_screen_event(lv_event_t *e)
     }
 }
 
-/*Will be called when the styles of the base theme are already added to add new styles*/
-static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
-{
-    LV_UNUSED(th);
 
-    if (lv_obj_check_type(obj, &lv_btn_class))
-    {
-        lv_obj_add_style(obj, &style_btn, 0);
-    }
-    lv_style_set_bg_color(&style_scr_black, lv_color_black());
-}
-
-void display_init_styles(void)
-{
-    /*Initialize the styles*/
-    lv_style_init(&style_btn);
-    lv_style_set_bg_color(&style_btn, lv_palette_darken(LV_PALETTE_GREY, 4));
-    lv_style_set_border_color(&style_btn, lv_palette_darken(LV_PALETTE_RED, 3));
-    lv_style_set_border_width(&style_btn, 3);
-
-    /*Initialize the new theme from the current theme*/
-    lv_theme_t *th_act = lv_disp_get_theme(NULL);
-    static lv_theme_t th_new;
-    th_new = *th_act;
-
-    /*Set the parent theme and the style apply callback for the new theme*/
-    lv_theme_set_parent(&th_new, th_act);
-    lv_theme_set_apply_cb(&th_new, new_theme_apply_cb);
-
-    /*Assign the new theme to the current display*/
-    lv_disp_set_theme(NULL, &th_new);
-
-    // Subscript (Unit) label style
-    lv_style_init(&style_sub);
-    lv_style_set_text_color(&style_sub, lv_color_white());
-    lv_style_set_text_font(&style_sub, &lv_font_montserrat_16);
-
-    lv_style_init(&style_batt_sym);
-    lv_style_set_text_color(&style_batt_sym, lv_palette_main(LV_PALETTE_GREY));
-    lv_style_set_text_font(&style_batt_sym, &lv_font_montserrat_34);
-
-    lv_style_init(&style_batt_percent);
-    lv_style_set_text_color(&style_batt_percent, lv_color_white());
-    lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_24);
-
-    lv_style_init(&style_lbl_white_small);
-    lv_style_set_text_color(&style_lbl_white_small, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_small, &lv_font_montserrat_20);
-
-    lv_style_init(&style_white_medium);
-    lv_style_set_text_color(&style_white_medium, lv_color_white());
-    lv_style_set_text_font(&style_white_medium, &lv_font_montserrat_34);
-
-    lv_style_init(&style_white_large);
-    lv_style_set_text_color(&style_white_large, lv_color_white());
-    lv_style_set_text_font(&style_white_large, &ui_font_Number_big); //&ui_font_Number_extra);
-
-    // Label Red
-    lv_style_init(&style_red_medium);
-    lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_34);
-
-    // Label White
-    lv_style_init(&style_lbl_white);
-    lv_style_set_text_color(&style_lbl_white, lv_color_white());
-    // lv_style_set_text_font(&style_lbl_white, &lv_font_montserrat_48);
-
-    // Label Orange
-    lv_style_init(&style_lbl_orange);
-    lv_style_set_text_color(&style_lbl_orange, lv_palette_main(LV_PALETTE_YELLOW));
-    lv_style_set_text_font(&style_lbl_orange, &lv_font_montserrat_20);
-
-    // Label Red Small
-    lv_style_init(&style_lbl_red_small);
-    lv_style_set_text_color(&style_lbl_red_small, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_lbl_red_small, &lv_font_montserrat_16);
-
-    // Label White Tiny
-    lv_style_init(&style_lbl_white_tiny);
-    lv_style_set_text_color(&style_lbl_white_tiny, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_tiny, &lv_font_montserrat_16);
-
-    // Label White 14
-    lv_style_init(&style_lbl_white_14);
-    lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_24);
-
-    // Label Black
-    lv_style_init(&style_lbl_black_small);
-    lv_style_set_text_color(&style_lbl_black_small, lv_color_black());
-    lv_style_set_text_font(&style_lbl_black_small, &lv_font_montserrat_34);
-
-    // Container for scrollable screen layout
-    lv_style_init(&style_scr_container);
-    lv_style_set_flex_flow(&style_scr_container, LV_FLEX_FLOW_ROW_WRAP);
-    lv_style_set_flex_main_place(&style_scr_container, LV_FLEX_ALIGN_SPACE_EVENLY);
-    lv_style_set_flex_cross_place(&style_scr_container, LV_FLEX_ALIGN_CENTER);
-
-    // Black screen background
-    lv_style_init(&style_scr_black);
-    lv_style_set_bg_opa(&style_scr_black, LV_OPA_COVER);
-    lv_style_set_border_width(&style_scr_black, 0);
-    lv_style_set_bg_color(&style_scr_black, lv_color_black());
-
-    lv_disp_set_bg_color(NULL, lv_color_black());
-}
-
-void draw_header_minimal(lv_obj_t *parent, int top_offset)
-{
-    lv_obj_add_style(parent, &style_scr_black, 0);
-    lv_obj_set_scroll_dir(parent, LV_DIR_VER);
-    // lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Battery Level
-    /* label_batt_level = lv_label_create(parent);
-    lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
-    lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
-
-    label_batt_level_val = lv_label_create(parent);
-    lv_label_set_text(label_batt_level_val, "--");
-    lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
-    */
-
-    /*lbl_hdr_hour = lv_label_create(parent);
-    lv_obj_set_width(lbl_hdr_hour, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(lbl_hdr_hour, LV_SIZE_CONTENT); /// 1
-    lv_label_set_text(lbl_hdr_hour, "00:");
-    lv_obj_set_style_text_color(lbl_hdr_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(lbl_hdr_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align_to(lbl_hdr_hour, NULL, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
-    lv_obj_set_style_text_font(lbl_hdr_hour, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lbl_hdr_min = lv_label_create(parent);
-    lv_obj_set_width(lbl_hdr_min, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(lbl_hdr_min, LV_SIZE_CONTENT); /// 1
-    lv_label_set_text(lbl_hdr_min, "00");
-    lv_obj_set_style_text_color(lbl_hdr_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(lbl_hdr_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align_to(lbl_hdr_min, lbl_hdr_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
-    lv_obj_set_style_text_font(lbl_hdr_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
-    */
-}
 
 void hdr_time_display_update(struct rtc_time in_time)
 {

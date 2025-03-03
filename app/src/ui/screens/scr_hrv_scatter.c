@@ -27,9 +27,7 @@ static bool chart_hrv_update = true;
 
 static volatile float prev_rtor = 0;
 
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 
 void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
 {
@@ -66,7 +64,6 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
     label_hrv_rri = lv_label_create(scr_hrv_scatter);
     lv_label_set_text(label_hrv_rri, "--");
     lv_obj_align_to(label_hrv_rri,  NULL, LV_ALIGN_CENTER, -50, 50);
-    lv_obj_add_style(label_hrv_rri, &style_lbl_white, 0);
 
     // RR Int caption label
     lv_obj_t *label_hr_cap = lv_label_create(scr_hrv_scatter);
@@ -83,7 +80,6 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
     label_hrv_sdnn = lv_label_create(scr_hrv_scatter);
     lv_label_set_text(label_hrv_sdnn, "--");
     lv_obj_align_to(label_hrv_sdnn, NULL, LV_ALIGN_CENTER, 30, 50);
-    lv_obj_add_style(label_hrv_sdnn, &style_lbl_white, 0);
 
     // SDNN caption label
     lv_obj_t *label_sdnn_cap = lv_label_create(scr_hrv_scatter);
@@ -101,7 +97,6 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_signal = lv_label_create(scr_hrv_scatter);
     lv_label_set_text(label_signal, "HRV");
     lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV_SCATTER);
 

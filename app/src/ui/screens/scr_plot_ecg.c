@@ -34,10 +34,7 @@ static float y_min_ecg = 10000;
 static float gx = 0;
 
 // Externs
-extern lv_style_t style_lbl_orange;
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 

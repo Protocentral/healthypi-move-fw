@@ -37,9 +37,7 @@ static lv_obj_t *btn_hr_settings;
 // Externs
 
 extern lv_style_t style_scr_container;
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
 
@@ -180,7 +178,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     label_hr_last_update = lv_label_create(cont_col);
     lv_label_set_text(label_hr_last_update, "Hourly HR Range");
-    lv_obj_add_style(label_hr_last_update, &style_lbl_white_small, 0);
     // lv_obj_align_to(label_hr_last_update, label_hr_min_max, LV_ALIGN_OUT_TOP_MID , 0, 0);
 
     lv_obj_t *lbl_gap1 = lv_label_create(cont_col);

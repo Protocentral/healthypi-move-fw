@@ -29,9 +29,7 @@ static float gx = 0;
 
 // Externs
 extern lv_style_t style_lbl_orange;
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
@@ -53,7 +51,6 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Blood Pressure");
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     lv_obj_t *lbl_measure = lv_label_create(cont_col);
     lv_label_set_text(lbl_measure, "Measuring...");
@@ -67,7 +64,6 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
     label_progress = lv_label_create(cont_col);
     lv_label_set_text(label_progress, "50%");
     lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
-    lv_obj_add_style(label_progress, &style_lbl_white_small, 0);
 
     // Create Chart 1 - ECG
     chart_bpt_ppg = lv_chart_create(cont_col);

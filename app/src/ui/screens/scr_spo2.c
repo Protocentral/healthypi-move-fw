@@ -25,9 +25,7 @@ static lv_obj_t *label_spo2_last_update;
 static lv_obj_t *btn_spo2_settings;
 
 // Externs
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
 
@@ -95,7 +93,6 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "SpO2");
     //lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 60);
-    //lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     lv_obj_t *cont_spo2 = lv_obj_create(cont_col);
     lv_obj_set_size(cont_spo2, lv_pct(100), LV_SIZE_CONTENT);
@@ -115,7 +112,6 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
   
     label_spo2_last_update = lv_label_create(cont_col);
     lv_label_set_text(label_spo2_last_update, LV_SYMBOL_REFRESH " 00:00");
-    lv_obj_add_style(label_spo2_last_update, &style_lbl_white_small, 0);
     lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     chart_spo2_trend = lv_chart_create(cont_col);
@@ -152,9 +148,8 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_spo2_min_max, &style_white_medium, 0);
   
     lv_obj_t *lbl_minmax_title = lv_label_create(cont_col);
-    lv_label_set_text(lbl_minmax_title, "Hourly SpO2 Range");
-    lv_obj_add_style(lbl_minmax_title, &style_lbl_white_small, 0);*/
-
+    lv_label_set_text(lbl_minmax_title, "Hourly SpO2 Range");(*/
+    
     lv_obj_t *btn_measure = lv_btn_create(cont_col);
     //lv_obj_set_height(btn_measure, 80);
     lv_obj_add_event_cb(btn_measure, scr_spo2_measure_btn_event_handler, LV_EVENT_ALL, NULL);

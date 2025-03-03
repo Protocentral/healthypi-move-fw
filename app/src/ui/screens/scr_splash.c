@@ -14,11 +14,7 @@ LOG_MODULE_REGISTER(screen_splash, LOG_LEVEL_WRN);
 lv_obj_t *scr_splash;
 
 // Externs
-extern lv_style_t style_lbl_orange;
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
-
 extern lv_style_t style_scr_black;
 
 void draw_scr_splash(void)
