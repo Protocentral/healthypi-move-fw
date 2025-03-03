@@ -6,6 +6,8 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
 
+#include <zephyr/dfu/mcuboot.h>
+
 #include <stdio.h>
 
 #include <zephyr/drivers/sensor.h>
@@ -721,6 +723,24 @@ void hw_init(void)
     LOG_DBG("SPIM runs at 32MHz !");
 #endif
 
+    // Confirm MCUBoot image if not already confirmed by app
+    if (boot_is_img_confirmed())
+    {
+        LOG_INF("DFU Image confirmed");
+    }
+    else
+    {
+        LOG_INF("DFU Image not confirmed. Confirming...");
+        if (boot_write_img_confirmed())
+        {
+            LOG_ERR("Failed to confirm image");
+        }
+        else
+        {
+            LOG_INF("Marked image as OK");
+        }
+    }
+
     // setup_pmic_callbacks();
 
     device_init(max30208_dev);
@@ -807,7 +827,7 @@ void hw_thread(void)
         if (ret < 0)
         {
             LOG_ERR("Failed to get RTC time");
-        } 
+        }
         sys_tm_time = *rtc_time_to_tm(&rtc_sys_time);
 
         zbus_chan_pub(&sys_time_chan, &sys_tm_time, K_SECONDS(1));

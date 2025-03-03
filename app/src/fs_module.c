@@ -318,7 +318,8 @@ void fs_module_init(void)
     if (rc < 0)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+        LOG_INF("Creating trend directory structure");
+        hpi_init_fs_struct();
+        lsdir("/lfs/trhr");
     }
-
-    //hpi_init_fs_struct();
 }

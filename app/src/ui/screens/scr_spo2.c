@@ -101,7 +101,6 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_all(cont_spo2, 1, LV_PART_MAIN);
     lv_obj_set_flex_align(cont_spo2, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
-   
     lv_obj_t *img1 = lv_img_create(cont_spo2);
     lv_img_set_src(img1, &icon_spo2_30x35);
     lv_obj_align_to(img1, label_spo2_percent, LV_ALIGN_OUT_LEFT_MID, -10, 0);

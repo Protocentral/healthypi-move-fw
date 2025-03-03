@@ -239,10 +239,12 @@ void hpi_disp_hr_load_trend(void)
     // Load full HR data from file
 
     if (chart_hr_trend == NULL)
+    {
         return;
+    }
 
-        int y_max = -1;
-        int y_min = 999;
+    int y_max = -1;
+    int y_min = 999;
 
     for (int i = 0; i < 24; i++)
     {
@@ -254,13 +256,12 @@ void hpi_disp_hr_load_trend(void)
         {
             y_max = hr_hourly_trend_points[i].hr_max;
         }
-        if((hr_hourly_trend_points[i].hr_min < y_min)&&(hr_hourly_trend_points[i].hr_min != 0))
+        if ((hr_hourly_trend_points[i].hr_min < y_min) && (hr_hourly_trend_points[i].hr_min != 0))
         {
             y_min = hr_hourly_trend_points[i].hr_min;
         }
     }
 
     lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
-
     lv_chart_refresh(chart_hr_trend);
 }

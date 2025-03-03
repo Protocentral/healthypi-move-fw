@@ -406,40 +406,6 @@ static void st_disp_do_bpt_stuff(void)
     {
         hpi_disp_hide_loading();
     }
-
-    // k_msleep(2000);
-
-    // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
-    //  hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-    /*if (bpt_cal_done_flag == false)
-    {
-        if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
-        {
-            bpt_cal_last_status = ppg_sensor_sample.bpt_status;
-            printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-        }
-        if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
-        {
-            bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
-            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-        }
-        if (ppg_sensor_sample.bpt_progress == 100)
-        {
-            hw_bpt_stop();
-
-            if (ppg_sensor_sample.bpt_status == 2)
-            {
-                printk("Calibration done");
-            }
-            bpt_cal_done_flag = true;
-
-            hw_bpt_get_calib();
-
-            // ppg_data_stop();
-        }
-        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-        lv_disp_trig_activity(NULL);
-    }*/
 }
 
 static void st_display_active_run(void *o)
