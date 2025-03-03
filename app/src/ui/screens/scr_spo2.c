@@ -110,7 +110,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_spo2_percent, &style_white_medium, 0);
   
     label_spo2_last_update = lv_label_create(cont_col);
-    lv_label_set_text(label_spo2_last_update, LV_SYMBOL_REFRESH " 00:00");
+    lv_label_set_text(label_spo2_last_update, "Latest");
     lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     chart_spo2_trend = lv_chart_create(cont_col);
@@ -180,7 +180,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_spo2, m_scroll_dir);
 }
 
-void hpi_disp_update_spo2(int spo2)
+void hpi_disp_update_spo2(uint8_t spo2)
 {
     if (label_spo2_percent == NULL)
         return;
@@ -192,7 +192,7 @@ void hpi_disp_update_spo2(int spo2)
     }
     else
     {
-        sprintf(buf, "%d",spo2);
+        sprintf(buf, "%d %",spo2);
     }
 
     lv_label_set_text(label_spo2_percent, buf);

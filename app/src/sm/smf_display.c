@@ -455,7 +455,9 @@ static void st_display_active_run(void *o)
             last_hr_trend_refresh = k_uptime_get_32();
         }
         hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
-
+        break;
+    case SCR_SPO2:
+        hpi_disp_update_spo2(m_disp_spo2);
         break;
     case SCR_BPT:
         st_disp_do_bpt_stuff();
@@ -475,7 +477,6 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_TODAY:
-
         hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
         break;
     default:
@@ -644,7 +645,6 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
-    m_disp_hr = hpi_spo2->hr;
     // printk("ZB Spo2: %d\n", hpi_spo2->spo2);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);

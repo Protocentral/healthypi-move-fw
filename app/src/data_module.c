@@ -59,6 +59,7 @@ K_MUTEX_DEFINE(mutex_hr_change);
 // Externs
 
 ZBUS_CHAN_DECLARE(hr_chan);
+ZBUS_CHAN_DECLARE(spo2_chan);
 ZBUS_CHAN_DECLARE(bpt_chan);
 
 extern struct k_msgq q_ecg_bioz_sample;
@@ -373,6 +374,14 @@ void data_thread(void)
                     .hr_ready_flag = true,
                 };
                 zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+            }
+
+            if(ppg_wr_sensor_sample.spo2_confidence>40)
+            {
+                struct hpi_spo2_t spo2_chan_value = {
+                    .spo2 = ppg_wr_sensor_sample.spo2,
+                };
+                zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
             }
         }
 

@@ -596,8 +596,8 @@ void hw_init(void)
     // Turn 1.8v power to sensors ON
     // regulator_disable(ldsw_sens_1_8);
     // k_msleep(100);
-    regulator_enable(ldsw_sens_1_8);
-    k_msleep(100);
+    //regulator_enable(ldsw_sens_1_8);
+    //k_msleep(100);
 
     device_init(max30001_dev);
     k_sleep(K_MSEC(10));
@@ -695,7 +695,7 @@ void hw_init(void)
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
-    device_init(max32664d_dev);
+    /*device_init(max32664d_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
@@ -714,10 +714,10 @@ void hw_init(void)
         /*struct sensor_value mode_set;
         mode_set.val1 = 1;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
-        */
+        
 
         k_sem_give(&sem_ppg_finger_sm_start);
-    }
+    }*/
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     LOG_DBG("SPIM runs at 32MHz !");
