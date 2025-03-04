@@ -127,6 +127,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     //lv_obj_set_style_text_color(label_today_steps, lv_palette_lighten(LV_PALETTE_BLUE, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_color(label_today_steps, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label_today_steps, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(label_today_steps, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
     //lv_obj_add_style(label_today_steps, &style_lbl_white, 0); 
     
     lv_obj_t *lbl_title_steps = lv_label_create(today_group);
@@ -148,6 +149,8 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(label_today_cals, img_cals, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
     lv_obj_set_style_text_color(label_today_cals, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label_today_cals, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(label_today_cals, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
+    
     //lv_obj_add_style(label_today_cals, &style_lbl_white, 0);
 
     lv_obj_t *lbl_title_cals = lv_label_create(today_group);
@@ -186,21 +189,15 @@ void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_ti
     if (label_today_steps == NULL || label_today_cals == NULL || label_today_active_time == NULL)
         return;
 
-    char str_steps[10];
-    char str_cals[10];
     char str_time[10];
-
-    snprintf(str_steps, 10, "%d", steps);
-    snprintf(str_cals, 10, "%d", kcals);
-
     uint8_t hours = active_time_s / 3600;
     uint8_t minutes = (active_time_s % 3600) / 60;
 
-    snprintf(str_time, 10, "%02d:%02d", hours, minutes);
+    sprintf(str_time, 10, "%02d:%02d", hours, minutes);
 
-    lv_label_set_text(label_today_steps, str_steps);
-    lv_label_set_text(label_today_cals, str_cals);
-    lv_label_set_text(label_today_active_time, str_time);
+    lv_label_set_text_fmt(label_today_steps, "%d", steps);
+    lv_label_set_text_fmt(label_today_cals, "%d", kcals);
+    lv_label_set_text_fmt(label_today_active_time, "%s", str_time);
 
     lv_arc_set_value(today_arc_steps, (steps * 100) / m_steps_today_target);
     lv_arc_set_value(today_arc_cals, (kcals * 100) / m_kcals_today_target);

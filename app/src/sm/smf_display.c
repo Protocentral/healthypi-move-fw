@@ -11,7 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_SPO2
+#define HPI_DEFAULT_START_SCREEN SCR_HR
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -30,6 +30,10 @@ static int last_hr_refresh = 0;
 static int last_time_refresh = 0;
 
 static int last_hr_trend_refresh = 0;
+static int last_spo2_trend_refresh = 0;
+static int last_today_trend_refresh = 0;
+static int last_bpt_trend_refresh = 0;
+static int last_temp_trend_refresh = 0;
 
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
 
@@ -434,10 +438,6 @@ static void st_display_active_run(void *o)
     switch (hpi_disp_get_curr_screen())
     {
     case SCR_HOME:
-        // ui_hr_button_update(m_disp_hr);
-
-        // if (time_refresh_counter >= (1000 / disp_thread_refresh_int_ms))
-
         if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
         {
             // ui_home_time_display_update(m_disp_sys_time);
@@ -446,25 +446,34 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_TEMP:
-        hpi_temp_disp_update_temp_f((float)m_disp_temp);
+        if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
+        {            
+            hpi_temp_disp_update_temp_f((float)m_disp_temp);
+            last_temp_trend_refresh = k_uptime_get_32();
+        }
         break;
     case SCR_HR:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
             hpi_disp_hr_load_trend();
+            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
             last_hr_trend_refresh = k_uptime_get_32();
         }
-        hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
         break;
     case SCR_SPO2:
-        hpi_disp_update_spo2(m_disp_spo2);
+        if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_SPO2_REFRESH_INT)
+        {
+            // hpi_trend_load_day_trend();
+            last_spo2_trend_refresh = k_uptime_get_32();
+            hpi_disp_update_spo2(m_disp_spo2);
+        }
         break;
     case SCR_BPT:
-        st_disp_do_bpt_stuff();
+        // st_disp_do_bpt_stuff();
         break;
     case SCR_SPL_PLOT_ECG:
-        hpi_ecg_disp_update_hr(m_disp_hr);
-        hpi_ecg_disp_update_timer(m_disp_ecg_timer);
+        // hpi_ecg_disp_update_hr(m_disp_hr);
+        // hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
             hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
@@ -477,7 +486,11 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_TODAY:
-        hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
+        if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
+        {
+            hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
+            last_today_trend_refresh = k_uptime_get_32();
+        }
         break;
     default:
         break;
@@ -609,8 +622,8 @@ void smf_display_thread(void)
             LOG_ERR("SMF Run error: %d", ret);
             break;
         }
-        k_msleep(lv_task_handler());
-        // k_msleep(100);
+        lv_task_handler();
+        k_msleep(50);
     }
 }
 

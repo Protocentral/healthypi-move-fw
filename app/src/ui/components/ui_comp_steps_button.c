@@ -9,6 +9,16 @@
 
 lv_obj_t *cui_step_label;
 
+static void scr_home_steps_btn_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        hpi_move_load_screen(SCR_TODAY, SCROLL_LEFT);
+    }
+}
+
 lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 {
     lv_obj_t *cui_buttonround;
@@ -29,25 +39,12 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
     lv_obj_set_style_outline_opa(cui_buttonround, 255, LV_PART_MAIN | LV_STATE_PRESSED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_width(cui_buttonround, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_obj_add_event_cb(cui_buttonround, scr_home_steps_btn_handler, LV_EVENT_ALL, NULL);
     //lv_obj_set_style_shadow_color(cui_buttonround, lv_color_hex(0xEE1C18), LV_PART_MAIN | LV_STATE_PRESSED);
     //lv_obj_set_style_shadow_opa(cui_buttonround, 255, LV_PART_MAIN | LV_STATE_PRESSED);
     //lv_obj_set_style_shadow_width(cui_buttonround, 50, LV_PART_MAIN | LV_STATE_PRESSED);
     //lv_obj_set_style_shadow_spread(cui_buttonround, 2, LV_PART_MAIN | LV_STATE_PRESSED);
-
-    /*lv_obj_t *cui_stepgroup;
-    cui_stepgroup = lv_obj_create(comp_parent);
-    lv_obj_set_width(cui_stepgroup, 100);
-    lv_obj_set_height(cui_stepgroup, 26);
-    lv_obj_set_x(cui_stepgroup, 0);
-    lv_obj_set_y(cui_stepgroup, -40);
-    lv_obj_set_align(cui_stepgroup, LV_ALIGN_BOTTOM_MID);
-    lv_obj_set_flex_flow(cui_stepgroup, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cui_stepgroup, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(cui_stepgroup, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    lv_obj_set_style_bg_color(cui_stepgroup, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(cui_stepgroup, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_row(cui_stepgroup, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_column(cui_stepgroup, 8, LV_PART_MAIN | LV_STATE_DEFAULT);*/
 
     lv_obj_t *cui_step;
     cui_step = lv_img_create(cui_buttonround);

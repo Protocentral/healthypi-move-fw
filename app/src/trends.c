@@ -32,7 +32,7 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 #define HR_TREND_DAY_MAX_PTS 1440 // 60 * 24
 
 // Store raw HR values for the current minute
-static uint16_t m_hr_curr_minute[60]; // Assumed max 60 points per minute
+static uint16_t m_hr_curr_minute[60] = {0}; // Assumed max 60 points per minute
 static uint8_t m_hr_curr_minute_counter = 0;
 
 // Time variables
@@ -203,7 +203,7 @@ void hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend_p
     // Print the results
     for (int i = 0; i < NUM_HOURS; i++)
     {
-        printf("Hour %d: %d points\n", i, bucket_counts[i]);
+        //printf("Hour %d: %d points\n", i, bucket_counts[i]);
 
         hr_hourly_trend_points[i].hour_no = i;
         hr_hourly_trend_points[i].hr_avg = 0;
@@ -231,7 +231,7 @@ void hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend_p
             hr_hourly_trend_points[i].hr_avg /= bucket_counts[i];
         }
 
-        LOG_DBG("Hour %d: | %d | %d | %d", hr_hourly_trend_points[i].hour_no, hr_hourly_trend_points[i].hr_max, hr_hourly_trend_points[i].hr_min, hr_hourly_trend_points[i].hr_avg);
+        //LOG_DBG("Hour %d: | %d | %d | %d", hr_hourly_trend_points[i].hour_no, hr_hourly_trend_points[i].hr_max, hr_hourly_trend_points[i].hr_min, hr_hourly_trend_points[i].hr_avg);
     }
 
     ret = fs_close(&file);

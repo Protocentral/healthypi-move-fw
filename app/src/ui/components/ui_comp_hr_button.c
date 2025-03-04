@@ -12,6 +12,16 @@ lv_obj_t *ui_hr_number;
 
 lv_obj_t *btn_settings;
 
+static void scr_home_hr_btn_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        hpi_move_load_screen(SCR_HR, SCROLL_LEFT);
+    }
+}
+
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent)
 {
     btn_hr_disp = lv_btn_create(comp_parent);
@@ -25,6 +35,7 @@ lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent)
     lv_obj_set_style_radius(btn_hr_disp, 100, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(btn_hr_disp, lv_palette_main(LV_PALETTE_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(btn_hr_disp, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_event_cb(btn_hr_disp, scr_home_hr_btn_handler, LV_EVENT_ALL, NULL);
 
     // lv_obj_set_style_bg_img_src(cui_buttonround, &ui_img_measure_png, LV_PART_MAIN | LV_STATE_DEFAULT);
     // lv_obj_set_style_bg_img_src(cui_buttonround, &heart, LV_PART_MAIN | LV_STATE_DEFAULT);

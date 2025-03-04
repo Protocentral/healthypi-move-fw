@@ -110,13 +110,12 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_spo2_percent, "00 %");
     lv_obj_add_style(label_spo2_percent, &style_white_medium, 0);
   
-    label_spo2_last_update = lv_label_create(cont_col);
-    lv_label_set_text(label_spo2_last_update, "Latest");
+    label_spo2_last_update = lv_label_create(cont_col);    lv_label_set_text(label_spo2_last_update, "Latest");
     lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     chart_spo2_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_spo2_trend, 280, 110);
-    lv_chart_set_type(chart_spo2_trend, LV_CHART_TYPE_LINE);
+    lv_chart_set_type(chart_spo2_trend, LV_CHART_TYPE_BAR);
     lv_chart_set_range(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
     lv_chart_set_point_count(chart_spo2_trend, 24);
 
@@ -176,7 +175,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_height(btn_spo2_live, 60);
 
     lv_obj_t *label_btn_spo2_live = lv_label_create(btn_spo2_live);
-    lv_label_set_text(label_btn_spo2_live, LV_SYMBOL_PLAY " Live PPG");
+    lv_label_set_text(label_btn_spo2_live, LV_SYMBOL_PLAY " Raw PPG");
     lv_obj_center(label_btn_spo2_live);
     
     hpi_disp_set_curr_screen(SCR_SPO2);

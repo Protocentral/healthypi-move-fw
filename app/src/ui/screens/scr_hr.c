@@ -37,12 +37,10 @@ static lv_obj_t *label_hr_min_max;
 static lv_obj_t *btn_hr_settings;
 
 // Externs
-
 extern lv_style_t style_scr_container;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
-
 extern lv_style_t style_scr_black;
 
 static void draw_event_cb(lv_event_t *e)
@@ -127,14 +125,17 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     // lv_obj_align_to(label_hr_sub, label_hr_bpm, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
 
     chart_hr_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_hr_trend, 290, 130);
-    lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_LINE);
+    lv_obj_set_size(chart_hr_trend, 300, 130);
+    lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_BAR);
     lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
     lv_chart_set_point_count(chart_hr_trend, 24);
+    //lv_chart_set_zoom_x(chart_hr_trend, 512);
+    lv_obj_set_style_pad_column(chart_hr_trend, 1, LV_PART_MAIN);
 
     // Hide the lines and show the points
-    lv_obj_set_style_line_width(chart_hr_trend, 0, LV_PART_ITEMS);
-    lv_obj_set_style_size(chart_hr_trend, 5, LV_PART_INDICATOR);
+    //lv_obj_set_style_line_width(chart_hr_trend, 20, LV_PART_ITEMS);
+    //lv_obj_set_style_size(chart_hr_trend, 5, LV_PART_INDICATOR);
+    
 
     lv_obj_add_event_cb(chart_hr_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
     // lv_obj_align_to(chart_hr_trend, NULL, LV_ALIGN_CENTER, 15, 0);
@@ -199,7 +200,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_height(btn_hr_live, 80);
 
     lv_obj_t *label_btn_bpt_measure1 = lv_label_create(btn_hr_live);
-    lv_label_set_text(label_btn_bpt_measure1, LV_SYMBOL_PLAY " Live");
+    lv_label_set_text(label_btn_bpt_measure1, LV_SYMBOL_PLAY " Raw PPG");
     lv_obj_center(label_btn_bpt_measure1);
 
     hpi_disp_set_curr_screen(SCR_HR);
@@ -235,8 +236,6 @@ void hpi_disp_hr_load_trend(void)
     int m_num_points = 0;
 
     hpi_trend_load_day_trend(hr_hourly_trend_points, &m_num_points);
-
-    // Load full HR data from file
 
     if (chart_hr_trend == NULL)
     {

@@ -80,7 +80,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     label_batt_level_val = lv_label_create(scr_home);
     lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL "  --");
     lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, NULL, LV_ALIGN_BOTTOM_MID, 0, -25);
+    lv_obj_align_to(label_batt_level_val, NULL, LV_ALIGN_TOP_MID, 0, 25);
 
     // ui_home_time_display_update(hw_get_current_time());
 
