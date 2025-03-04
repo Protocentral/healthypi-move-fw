@@ -34,9 +34,6 @@ struct fs_mount_t *mp = &lfs_storage_mnt;
 
 #define FILE_TRANSFER_BLE_PACKET_SIZE 64 // (16*7)
 
-// Trend buffers
-static struct hpi_hr_trend_point_t m_hr_trend_point_buffer[10];
-
 static int littlefs_mount(struct fs_mount_t *mp)
 {
     int rc;
@@ -117,7 +114,7 @@ void record_wipe_all(void)
 
     fs_dir_t_init(&dir);
 
-    err = fs_opendir(&dir, "/lfs");
+    err = fs_opendir(&dir, "/lfs/trhr");
     if (err)
     {
         LOG_ERR("Unable to open (err %d)", err);
@@ -145,7 +142,7 @@ void record_wipe_all(void)
 
         // if (strstr(entry.name, "") != NULL)
         //{
-        strcpy(file_name, "/lfs/");
+        strcpy(file_name, "/lfs/trhr/");
         strcat(file_name, entry.name);
 
         LOG_DBG("Deleting %s\n", file_name);
@@ -231,42 +228,14 @@ void transfer_send_file(uint16_t file_id)
     printk("File sent\n");
 }
 
-void hpi_tre_wr_hr_point_to_file(struct hpi_hr_trend_point_t m_hr_trend_point)
-{
-    struct fs_file_t file;
-    int ret = 0;
 
-    fs_file_t_init(&file);
-
-    // fs_mkdir("/lfs/hr");
-
-    char fname[30];
-    sprintf(fname, "/lfs/trhr/tr1");
-
-    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_hr_trend_point));
-
-    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
-
-    if (ret < 0)
-    {
-        LOG_ERR("FAIL: open %s: %d", fname, ret);
-    }
-
-    m_hr_trend_point_buffer[0] = m_hr_trend_point;
-
-    ret = fs_write(&file, m_hr_trend_point_buffer, sizeof(m_hr_trend_point_buffer));
-    // ret = fs_write(&file, test_array, sizeof(test_array));
-
-    ret = fs_close(&file);
-    ret = fs_sync(&file);
-}
 
 void hpi_init_fs_struct(void)
 {
     struct fs_dir_t dir;
     int ret;
 
-    // record_wipe_all();
+    //record_wipe_all();
 
     // Create FS directories
 
@@ -349,7 +318,8 @@ void fs_module_init(void)
     if (rc < 0)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+        LOG_INF("Creating trend directory structure");
+        hpi_init_fs_struct();
+        lsdir("/lfs/trhr");
     }
-
-    hpi_init_fs_struct();
 }

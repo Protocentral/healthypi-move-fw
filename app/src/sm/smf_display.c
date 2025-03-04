@@ -4,13 +4,14 @@
 #include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <zephyr/zbus/zbus.h>
+#include <time.h>
 
 #include <display_sh8601.h>
 #include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_TODAY
+#define HPI_DEFAULT_START_SCREEN SCR_BPT
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -27,6 +28,9 @@ static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
 static int last_hr_refresh = 0;
 static int last_time_refresh = 0;
+
+static int last_hr_trend_refresh = 0;
+
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
 
 static const struct smf_state display_states[];
@@ -45,7 +49,7 @@ enum display_state
 // Display screen variables
 static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
-static struct rtc_time m_disp_sys_time;
+static struct tm m_disp_sys_time;
 
 static uint16_t m_disp_hr = 0;
 static uint16_t m_disp_hr_max = 0;
@@ -57,7 +61,7 @@ static uint32_t m_disp_spo2_last_refresh = 0;
 
 static uint32_t m_disp_steps = 0;
 static uint16_t m_disp_kcals = 0;
-static uint16_t m_disp_active_time_s = 0;
+static uint16_t m_disp_active_time_s = 10;
 
 static float m_disp_temp = 0;
 
@@ -100,17 +104,17 @@ struct s_disp_object
 
 static uint16_t m_user_height = 170; // Example height in m, adjust as needed
 static uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
-static double m_user_met = 3.5;    // Example MET value based speed = 1.34 m/s , adjust as needed
+static double m_user_met = 3.5;      // Example MET value based speed = 1.34 m/s , adjust as needed
 
 static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
 {
     // KCals = time * MET * 3.5 * weight / (200*60)
-    double _m_time = (((m_user_height/100.000) * 0.414 * steps)/4800.000)*60.000; // Assuming speed of 4.8 km/h
-    LOG_DBG("Calc Time %.3f", _m_time);
+    double _m_time = (((m_user_height / 100.000) * 0.414 * steps) / 4800.000) * 60.000; // Assuming speed of 4.8 km/h
+    // LOG_DBG("Calc Time %.3f", _m_time);
     double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
     //
-    ///LOG_DBG("Calc Kcals %f", _m_kcals, steps);
-    return (uint16_t) _m_kcals;
+    /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
+    return (uint16_t)_m_kcals;
 }
 
 static void st_display_init_entry(void *o)
@@ -402,40 +406,6 @@ static void st_disp_do_bpt_stuff(void)
     {
         hpi_disp_hide_loading();
     }
-
-    // k_msleep(2000);
-
-    // hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample.raw_red, ppg_sensor_sample.bpt_status, ppg_sensor_sample.bpt_progress);
-    //  hpi_disp_draw_plotPPG((float)(ppg_sensor_sample.raw_red * 1.0000));
-    /*if (bpt_cal_done_flag == false)
-    {
-        if (bpt_cal_last_status != ppg_sensor_sample.bpt_status)
-        {
-            bpt_cal_last_status = ppg_sensor_sample.bpt_status;
-            printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-        }
-        if (bpt_cal_last_progress != ppg_sensor_sample.bpt_progress)
-        {
-            bpt_cal_last_progress = ppg_sensor_sample.bpt_progress;
-            hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-        }
-        if (ppg_sensor_sample.bpt_progress == 100)
-        {
-            hw_bpt_stop();
-
-            if (ppg_sensor_sample.bpt_status == 2)
-            {
-                printk("Calibration done");
-            }
-            bpt_cal_done_flag = true;
-
-            hw_bpt_get_calib();
-
-            // ppg_data_stop();
-        }
-        hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-        lv_disp_trig_activity(NULL);
-    }*/
 }
 
 static void st_display_active_run(void *o)
@@ -479,7 +449,15 @@ static void st_display_active_run(void *o)
         hpi_temp_disp_update_temp_f((float)m_disp_temp);
         break;
     case SCR_HR:
+        if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
+        {
+            hpi_disp_hr_load_trend();
+            last_hr_trend_refresh = k_uptime_get_32();
+        }
         hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+        break;
+    case SCR_SPO2:
+        hpi_disp_update_spo2(m_disp_spo2);
         break;
     case SCR_BPT:
         st_disp_do_bpt_stuff();
@@ -499,7 +477,6 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_TODAY:
-       
         hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
         break;
     default:
@@ -524,11 +501,11 @@ static void st_display_active_run(void *o)
         // Home screen doesn't have a header display
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
-            ui_home_time_display_update(m_disp_sys_time);
+            hpi_scr_home_update_time_date(m_disp_sys_time);
         }
         else
         {
-            hdr_time_display_update(m_disp_sys_time);
+            // hdr_time_display_update(m_disp_sys_time);
         }
     }
 
@@ -650,7 +627,7 @@ ZBUS_LISTENER_DEFINE(disp_batt_lis, disp_batt_status_listener);
 
 static void disp_sys_time_listener(const struct zbus_channel *chan)
 {
-    const struct rtc_time *sys_time = zbus_chan_const_msg(chan);
+    const struct tm *sys_time = zbus_chan_const_msg(chan);
     m_disp_sys_time = *sys_time;
 
     // rtc_time_to_tm
@@ -668,7 +645,6 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
-    m_disp_hr = hpi_spo2->hr;
     // printk("ZB Spo2: %d\n", hpi_spo2->spo2);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);

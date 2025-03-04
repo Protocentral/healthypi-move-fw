@@ -29,9 +29,7 @@ static float gx = 0;
 
 // Externs
 extern lv_style_t style_lbl_orange;
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
@@ -39,12 +37,6 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
 {
     scr_plot_bpt = lv_obj_create(NULL);
     draw_header_minimal(scr_plot_bpt, 10);
-
-    static lv_style_t style;
-    lv_style_init(&style);
-    lv_style_set_flex_flow(&style, LV_FLEX_FLOW_ROW_WRAP);
-    lv_style_set_flex_main_place(&style, LV_FLEX_ALIGN_SPACE_EVENLY);
-    lv_style_set_flex_cross_place(&style, LV_FLEX_ALIGN_CENTER);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_plot_bpt);
@@ -56,11 +48,9 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Blood Pressure");
-    lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     lv_obj_t *lbl_measure = lv_label_create(cont_col);
     lv_label_set_text(lbl_measure, "Measuring...");
@@ -74,7 +64,6 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
     label_progress = lv_label_create(cont_col);
     lv_label_set_text(label_progress, "50%");
     lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
-    lv_obj_add_style(label_progress, &style_lbl_white_small, 0);
 
     // Create Chart 1 - ECG
     chart_bpt_ppg = lv_chart_create(cont_col);

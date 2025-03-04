@@ -69,7 +69,7 @@ mcuboot_primary_2:
   - mcuboot_primary_2_pad
   - mcuboot_primary_2_app
   region: external_flash
-  size: 0x100000
+  size: 0x200000
   span: *id003
 mcuboot_primary_2_pad:
   address: 0x120000
@@ -83,19 +83,19 @@ mcuboot_primary_2_app:
   placement:
     before:
     - end
-  end_address: 0x220000
-  region: external_flash
-  size: 0xFFE00
-mcuboot_secondary_2:
-  address: 0x220000
-  device: w25q01jv
   end_address: 0x320000
   region: external_flash
-  size: 0x100000
-littlefs_storage:
+  size: 0x1FFE00
+mcuboot_secondary_2:
   address: 0x320000
   device: w25q01jv
-  end_address: 0x7320000
+  end_address: 0x520000
+  region: external_flash
+  size: 0x200000
+littlefs_storage:
+  address: 0x520000
+  device: w25q01jv
+  end_address: 0x7520000
   region: external_flash
   size: 0x7000000
 # External Flash ENDS

@@ -6,6 +6,8 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
 
+#include <zephyr/dfu/mcuboot.h>
+
 #include <stdio.h>
 
 #include <zephyr/drivers/sensor.h>
@@ -594,8 +596,8 @@ void hw_init(void)
     // Turn 1.8v power to sensors ON
     // regulator_disable(ldsw_sens_1_8);
     // k_msleep(100);
-    regulator_enable(ldsw_sens_1_8);
-    k_msleep(100);
+    //regulator_enable(ldsw_sens_1_8);
+    //k_msleep(100);
 
     device_init(max30001_dev);
     k_sleep(K_MSEC(10));
@@ -693,7 +695,7 @@ void hw_init(void)
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
-    device_init(max32664d_dev);
+    /*device_init(max32664d_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
@@ -712,14 +714,32 @@ void hw_init(void)
         /*struct sensor_value mode_set;
         mode_set.val1 = 1;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
-        */
+        
 
         k_sem_give(&sem_ppg_finger_sm_start);
-    }
+    }*/
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     LOG_DBG("SPIM runs at 32MHz !");
 #endif
+
+    // Confirm MCUBoot image if not already confirmed by app
+    if (boot_is_img_confirmed())
+    {
+        LOG_INF("DFU Image confirmed");
+    }
+    else
+    {
+        LOG_INF("DFU Image not confirmed. Confirming...");
+        if (boot_write_img_confirmed())
+        {
+            LOG_ERR("Failed to confirm image");
+        }
+        else
+        {
+            LOG_INF("Marked image as OK");
+        }
+    }
 
     // setup_pmic_callbacks();
 
@@ -787,9 +807,12 @@ static uint32_t acc_get_steps(void)
 
 void hw_thread(void)
 {
-    struct rtc_time sys_time;
+    struct rtc_time rtc_sys_time;
+    struct tm sys_tm_time;
     uint32_t _steps = 0;
     double _temp_f = 0.0;
+
+    int ret;
 
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
@@ -800,8 +823,14 @@ void hw_thread(void)
         npm_fuel_gauge_update(charger, vbus_connected);
 
         // Read and publish time
-        rtc_get_time(rtc_dev, &sys_time);
-        zbus_chan_pub(&sys_time_chan, &sys_time, K_SECONDS(1));
+        ret = rtc_get_time(rtc_dev, &rtc_sys_time);
+        if (ret < 0)
+        {
+            LOG_ERR("Failed to get RTC time");
+        }
+        sys_tm_time = *rtc_time_to_tm(&rtc_sys_time);
+
+        zbus_chan_pub(&sys_time_chan, &sys_tm_time, K_SECONDS(1));
 
         // Read and publish steps
         _steps = acc_get_steps();

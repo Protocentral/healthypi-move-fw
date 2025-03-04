@@ -36,9 +36,7 @@ float y3_min = 10000;
 
 static float gx = 0;
 
-extern lv_style_t style_lbl_white;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_medium;
 
 #define PPG_SIGNAL_RED 0
@@ -138,7 +136,6 @@ void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_t *label_signal = lv_label_create(scr_ppg);
     lv_label_set_text(label_signal, "PPG");
     lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 5);
-    //lv_obj_add_style(label_signal, &style_lbl_white_small, 0);
 
     chart_ppg = lv_chart_create(scr_ppg);
     lv_obj_set_size(chart_ppg, 390, 130);
@@ -228,7 +225,6 @@ void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_label_set_text(label_status, "--");
     lv_obj_align_to(label_status, btn_settings, LV_ALIGN_OUT_TOP_MID, 0, -10);
     lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_status, &style_lbl_white_small, 0);
 
     hpi_disp_set_curr_screen(SCR_SPL_PLOT_PPG);
     hpi_show_screen_spl(scr_ppg, m_scroll_dir, scr_parent);

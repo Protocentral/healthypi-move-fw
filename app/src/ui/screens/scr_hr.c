@@ -8,8 +8,11 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "trends.h"
 
-#define HR_TREND_POINTS 24
+LOG_MODULE_REGISTER(hpi_disp_scr_hr, LOG_LEVEL_DBG);
+
+#define HR_SCR_TREND_MAX_POINTS 24
 
 lv_obj_t *scr_hr;
 
@@ -18,8 +21,8 @@ static lv_obj_t *chart_hr_trend;
 static lv_chart_series_t *ser_hr_max_trend;
 static lv_chart_series_t *ser_hr_min_trend;
 
-static uint16_t hr_trend_max[HR_TREND_POINTS] = {70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185};
-static uint16_t hr_trend_min[HR_TREND_POINTS] = {40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155};
+static uint16_t hr_trend_max[HR_SCR_TREND_MAX_POINTS] = {0};
+static uint16_t hr_trend_min[HR_SCR_TREND_MAX_POINTS] = {0};
 
 // static lv_chart_series_t *ser_hr_trend;
 // static lv_chart_series_t *ser_hr_max_trend;
@@ -27,16 +30,16 @@ static uint16_t hr_trend_min[HR_TREND_POINTS] = {40, 45, 50, 55, 60, 65, 70, 75,
 
 // GUI Labels
 static lv_obj_t *label_hr_bpm;
-//static lv_obj_t *label_hr_status;
+// static lv_obj_t *label_hr_status;
 static lv_obj_t *label_hr_last_update;
 
 static lv_obj_t *label_hr_min_max;
 static lv_obj_t *btn_hr_settings;
 
 // Externs
-extern lv_style_t style_lbl_white;
+
+extern lv_style_t style_scr_container;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_lbl_white_small;
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
 
@@ -70,7 +73,7 @@ static void scr_hr_btn_live_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t) SCR_HR);
+        hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t)SCR_HR);
     }
 }
 
@@ -90,12 +93,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     lv_obj_set_scrollbar_mode(scr_hr, LV_SCROLLBAR_MODE_ON);
 
-    static lv_style_t style;
-    lv_style_init(&style);
-    lv_style_set_flex_flow(&style, LV_FLEX_FLOW_ROW_WRAP);
-    lv_style_set_flex_main_place(&style, LV_FLEX_ALIGN_SPACE_EVENLY);
-    lv_style_set_flex_cross_place(&style, LV_FLEX_ALIGN_CENTER);
-
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_hr);
     lv_obj_set_size(cont_col, lv_pct(100), LV_SIZE_CONTENT);
@@ -105,7 +102,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
@@ -133,7 +129,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     chart_hr_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_trend, 290, 130);
     lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_LINE);
-    lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 150);
+    lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
     lv_chart_set_point_count(chart_hr_trend, 24);
 
     // Hide the lines and show the points
@@ -159,10 +155,10 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     ser_hr_max_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
     ser_hr_min_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_GREEN), LV_CHART_AXIS_PRIMARY_Y);
 
-    hpi_set_chart_points(ser_hr_max_trend, hr_trend_max, HR_TREND_POINTS);
-    hpi_set_chart_points(ser_hr_min_trend, hr_trend_min, HR_TREND_POINTS);
+    // hpi_set_chart_points(ser_hr_max_trend, hr_trend_max, HR_SCR_TREND_MAX_POINTS);
+    // hpi_set_chart_points(ser_hr_min_trend, hr_trend_min, HR_SCR_TREND_MAX_POINTS);
 
-    lv_chart_refresh(chart_hr_trend);
+    // lv_chart_refresh(chart_hr_trend);
 
     // HR Min/Max label
     /*lv_obj_t *label_hr_min_max_title = lv_label_create(scr_hr);
@@ -184,7 +180,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     label_hr_last_update = lv_label_create(cont_col);
     lv_label_set_text(label_hr_last_update, "Hourly HR Range");
-    lv_obj_add_style(label_hr_last_update, &style_lbl_white_small, 0);
     // lv_obj_align_to(label_hr_last_update, label_hr_min_max, LV_ALIGN_OUT_TOP_MID , 0, 0);
 
     lv_obj_t *lbl_gap1 = lv_label_create(cont_col);
@@ -235,19 +230,38 @@ void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_
 
 void hpi_disp_hr_load_trend(void)
 {
-    uint16_t hr_max_trend[24];
-    uint16_t hr_min_trend[24];
+    struct hpi_hourly_trend_point_t hr_hourly_trend_points[HR_SCR_TREND_MAX_POINTS];
+
+    int m_num_points = 0;
+
+    hpi_trend_load_day_trend(hr_hourly_trend_points, &m_num_points);
 
     // Load full HR data from file
 
     if (chart_hr_trend == NULL)
+    {
         return;
+    }
+
+    int y_max = -1;
+    int y_min = 999;
 
     for (int i = 0; i < 24; i++)
     {
-        ser_hr_max_trend->y_points[i] = hr_max_trend[i];
-        ser_hr_min_trend->y_points[i] = hr_min_trend[i];
+        // LOG_DBG("HR Point: %" PRIx64 "| %d | %d | %d", hr_trend_points[i].timestamp, hr_trend_points[i].hr_max, hr_trend_points[i].hr_min, hr_trend_points[i].hr_avg);
+        ser_hr_max_trend->y_points[i] = hr_hourly_trend_points[i].hr_max;
+        ser_hr_min_trend->y_points[i] = hr_hourly_trend_points[i].hr_min;
+
+        if (hr_hourly_trend_points[i].hr_max > y_max)
+        {
+            y_max = hr_hourly_trend_points[i].hr_max;
+        }
+        if ((hr_hourly_trend_points[i].hr_min < y_min) && (hr_hourly_trend_points[i].hr_min != 0))
+        {
+            y_min = hr_hourly_trend_points[i].hr_min;
+        }
     }
 
+    lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
     lv_chart_refresh(chart_hr_trend);
 }
