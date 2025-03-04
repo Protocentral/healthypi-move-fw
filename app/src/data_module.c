@@ -367,7 +367,7 @@ void data_thread(void)
             }
 
             // If HR is available, set min, max and mean and publish over ZBUS
-            if (ppg_wr_sensor_sample.hr_confidence > 40)
+            if (ppg_wr_sensor_sample.hr_confidence > 75)
             {
                 struct hpi_hr_t hr_chan_value = {
                     .hr = ppg_wr_sensor_sample.hr,

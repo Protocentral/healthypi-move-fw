@@ -88,6 +88,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
+    
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
@@ -114,10 +115,12 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     chart_spo2_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_spo2_trend, 290, 130);
+    lv_obj_set_size(chart_spo2_trend, 280, 110);
     lv_chart_set_type(chart_spo2_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_range(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
     lv_chart_set_point_count(chart_spo2_trend, 24);
+
+    lv_obj_set_style_pad_left(chart_spo2_trend, 30, LV_PART_MAIN);
 
     // Hide the lines and show the points
     lv_obj_set_style_line_width(chart_spo2_trend, 0, LV_PART_ITEMS);
@@ -133,7 +136,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_chart_set_div_line_count(chart_spo2_trend, 0, 0);
 
     lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
-    lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 10, 5, 3, 2, true, 60);
+    lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 10, 5, 3, 2, true, 80);
 
     ser_spo2_max_trend = lv_chart_add_series(chart_spo2_trend, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
     ser_spo2_min_trend = lv_chart_add_series(chart_spo2_trend, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
@@ -160,13 +163,13 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_t *lbl_gap = lv_label_create(cont_col);
     lv_label_set_text(lbl_gap, " ");
 
-    btn_spo2_settings = lv_btn_create(cont_col);
+    /*btn_spo2_settings = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_spo2_settings, scr_spo2_settings_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_spo2_settings, 60);
 
     lv_obj_t *label_btn_spo2_settings = lv_label_create(btn_spo2_settings);
     lv_label_set_text(label_btn_spo2_settings, LV_SYMBOL_SETTINGS " Settings");
-    lv_obj_center(label_btn_spo2_settings);
+    lv_obj_center(label_btn_spo2_settings);*/
 
     lv_obj_t *btn_spo2_live = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_spo2_live, scr_spo2_btn_live_event_handler, LV_EVENT_ALL, NULL);
@@ -188,7 +191,7 @@ void hpi_disp_update_spo2(uint8_t spo2)
     char buf[32];
     if (spo2 == 0)
     {
-        sprintf(buf, "00");
+        sprintf(buf, "---");
     }
     else
     {
