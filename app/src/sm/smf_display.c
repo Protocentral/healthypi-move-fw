@@ -11,7 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HR
+#define HPI_DEFAULT_START_SCREEN SCR_HOME
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -27,7 +27,10 @@ K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
 static int last_hr_refresh = 0;
+
 static int last_time_refresh = 0;
+static int last_settings_refresh = 0;
+
 
 static int last_hr_trend_refresh = 0;
 static int last_spo2_trend_refresh = 0;
@@ -379,10 +382,10 @@ static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg
     {
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
     }
-    else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
+    /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
         hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
-    }
+    }*/
 }
 
 static void st_display_active_entry(void *o)
@@ -492,18 +495,30 @@ static void st_display_active_run(void *o)
             last_today_trend_refresh = k_uptime_get_32();
         }
         break;
+    case SCR_SPL_SETTINGS:
+        if(k_uptime_get_32() - last_settings_refresh > HPI_DISP_SETTINGS_REFRESH_INT)
+        {
+            //hpi_disp_settings_update_time_date(m_disp_sys_time);
+            last_settings_refresh = k_uptime_get_32();
+        }
+        break;
     default:
         break;
     }
 
     if (k_uptime_get_32() - last_batt_refresh > HPI_DISP_BATT_REFR_INT)
     {
-        if (hpi_disp_get_curr_screen() == SCR_HOME)
+        if ((hpi_disp_get_curr_screen() == SCR_HOME))
         {
             // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
             hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-            last_batt_refresh = k_uptime_get_32();
+            
         }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_SETTINGS)
+        {
+            hpi_disp_settings_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+        }
+        last_batt_refresh = k_uptime_get_32();
     }
 
     // Update Time
@@ -622,8 +637,7 @@ void smf_display_thread(void)
             LOG_ERR("SMF Run error: %d", ret);
             break;
         }
-        lv_task_handler();
-        k_msleep(50);
+        k_msleep(lv_task_handler());
     }
 }
 
@@ -658,7 +672,7 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
-    // printk("ZB Spo2: %d\n", hpi_spo2->spo2);
+    //LOG_DBG("ZB Spo2: %d\n", hpi_spo2->spo2);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
 

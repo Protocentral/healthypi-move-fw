@@ -30,6 +30,8 @@
 #define HPI_DISP_BPT_REFRESH_INT 3000
 #define HPI_DISP_TEMP_REFRESH_INT 3000
 
+#define HPI_DISP_SETTINGS_REFRESH_INT 1000
+
 #define HPI_DISP_TRENDS_REFRESH_INT 10000
 
 
@@ -53,14 +55,14 @@ enum hpi_disp_screens
     SCR_LIST_START,
 
     SCR_HOME,
+    SCR_PLOT_PRE,
     SCR_TODAY,
     SCR_HR,
     SCR_SPO2,
     SCR_ECG,
     SCR_BPT,
     SCR_TEMP,
-    SCR_PLOT_EDA,
-
+    
     SCR_LIST_END,
     // Should not go here
     SCR_CLOCK,
@@ -147,7 +149,7 @@ void hpi_ppg_disp_update_spo2(int spo2);
 void hpi_ppg_disp_update_status(uint8_t status);
 
 // EDA screen functions
-void draw_scr_eda(enum scroll_dir m_scroll_dir);
+void draw_scr_pre(enum scroll_dir m_scroll_dir);
 void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead_off);
 
 // BPT screen functions
@@ -211,6 +213,8 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir);
 void draw_scr_vitals_home(enum scroll_dir m_scroll_dir);
 
 void hpi_disp_home_update_batt_level(int batt_level, bool charging);
+void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
+
 void hpi_temp_disp_update_temp_f(float temp_f);
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);

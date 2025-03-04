@@ -376,16 +376,18 @@ void data_thread(void)
                 zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
             }
 
-            if(ppg_wr_sensor_sample.spo2_confidence>40)
+            if(ppg_wr_sensor_sample.spo2_confidence>60)
             {
                 struct hpi_spo2_t spo2_chan_value = {
                     .spo2 = ppg_wr_sensor_sample.spo2,
                 };
                 zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
             }
+
+            //LOG_DBG("SpO2: %d | Confidence: %d", ppg_wr_sensor_sample.spo2, ppg_wr_sensor_sample.spo2_confidence);
         }
 
-        k_sleep(K_MSEC(1));
+        k_sleep(K_MSEC(40));
     }
 }
 

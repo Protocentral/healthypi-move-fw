@@ -119,8 +119,5 @@ void hpi_temp_disp_update_temp_f(float temp_f)
     if (label_temp_f == NULL)
         return;
 
-    char buf[32];
-    sprintf(buf, "%.2f °F", temp_f);
-
-    lv_label_set_text(label_temp_f, buf);
+    lv_label_set_text_fmt(label_temp_f, "%.2f °F", temp_f);
 }

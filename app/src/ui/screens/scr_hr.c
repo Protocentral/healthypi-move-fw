@@ -172,7 +172,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(lbl_gap, " ");
     lv_obj_align_to(lbl_gap, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
 
-    label_hr_min_max = lv_label_create(cont_col);
+    /*label_hr_min_max = lv_label_create(cont_col);
     lv_label_set_text(label_hr_min_max, "80 - 113 bpm");
     lv_obj_add_style(label_hr_min_max, &style_white_medium, 0);
     // lv_obj_add_style(label_hr_min_max, &style_gap, LV_PART_MAIN);
@@ -182,18 +182,19 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     label_hr_last_update = lv_label_create(cont_col);
     lv_label_set_text(label_hr_last_update, "Hourly HR Range");
     // lv_obj_align_to(label_hr_last_update, label_hr_min_max, LV_ALIGN_OUT_TOP_MID , 0, 0);
+    */
 
     lv_obj_t *lbl_gap1 = lv_label_create(cont_col);
     lv_label_set_text(lbl_gap1, " ");
     lv_obj_align_to(lbl_gap1, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
 
-    btn_hr_settings = lv_btn_create(cont_col);
+    /*btn_hr_settings = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_hr_settings, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_hr_settings, 80);
 
     lv_obj_t *lbl_btn_settings = lv_label_create(btn_hr_settings);
     lv_label_set_text(lbl_btn_settings, LV_SYMBOL_SETTINGS " Settings");
-    lv_obj_center(lbl_btn_settings);
+    lv_obj_center(lbl_btn_settings);*/
 
     lv_obj_t *btn_hr_live = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_hr_live, scr_hr_btn_live_event_handler, LV_EVENT_ALL, NULL);
@@ -224,9 +225,10 @@ void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_
 
     lv_label_set_text(label_hr_bpm, buf);
 
-    char buf_min_max[32];
+    /*char buf_min_max[32];
     sprintf(buf_min_max, "%d - %d bpm", min, max);
     lv_label_set_text(label_hr_min_max, buf_min_max);
+    */
 }
 
 void hpi_disp_hr_load_trend(void)
