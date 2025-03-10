@@ -64,7 +64,7 @@ EMPTY_1:
 mcuboot_primary_2:
   address: 0x120000
   device: w25q01jv
-  end_address: 0x220000
+  end_address: 0x320000
   orig_span: &id003
   - mcuboot_primary_2_pad
   - mcuboot_primary_2_app

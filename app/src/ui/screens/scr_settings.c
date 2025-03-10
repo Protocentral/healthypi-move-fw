@@ -1,7 +1,7 @@
 #include <zephyr/kernel.h>
 #include <lvgl.h>
 #include <stdio.h>
-
+#include <app_version.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(scr_settings, LOG_LEVEL_INF);
 
@@ -98,7 +98,7 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_settings);
-    lv_obj_set_size(cont_col, 320, 300);
+    lv_obj_set_size(cont_col, 300, LV_SIZE_CONTENT);
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 45);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -133,6 +133,59 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
     lv_obj_set_height(btn_shutdown, 80);
     lv_obj_center(lbl_btn_shutdown);
 
+    lv_obj_t *lbl_ver = lv_label_create(cont_col);
+    lv_label_set_text(lbl_ver, "v" APP_VERSION_STRING);
+
     hpi_disp_set_curr_screen(SCR_SPL_SETTINGS);
     hpi_show_screen(scr_settings, m_scroll_dir);
+}
+
+void hpi_disp_settings_update_batt_level(int batt_level, bool charging)
+{
+    if (label_batt_level_val == NULL)
+    {
+        return;
+    }
+
+    if (batt_level < 0)
+    {
+        batt_level = 0;
+    }
+
+    if (batt_level > 75)
+    {
+        if (charging)
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_FULL " %d %", batt_level);
+        else
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " %d %", batt_level);
+    }
+
+    else if (batt_level > 50)
+    {
+        if (charging)
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_3 " %d %", batt_level);
+        else
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_3 " %d %", batt_level);
+    }
+    else if (batt_level > 25)
+    {
+        if (charging)
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_2 " %d %", batt_level);
+        else
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_2 " %d %", batt_level);
+    }
+    else if (batt_level > 10)
+    {
+        if (charging)
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_1 " %d %", batt_level);
+        else
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_1 " %d %", batt_level);
+    }
+    else
+    {
+        if (charging)
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_EMPTY " %d %", batt_level);
+        else
+            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_EMPTY " %d %", batt_level);
+    }
 }

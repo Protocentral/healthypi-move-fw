@@ -115,10 +115,6 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *img_steps = lv_img_create(today_group);
     lv_img_set_src(img_steps, &img_steps_48);
-    lv_obj_set_width(img_steps, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(img_steps, LV_SIZE_CONTENT); /// 1
-    lv_obj_add_flag(img_steps, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
-    lv_obj_clear_flag(img_steps, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_align_to(img_steps, NULL, LV_ALIGN_CENTER, -25, -40);
 
     label_today_steps = lv_label_create(today_group);  
@@ -137,11 +133,6 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *img_cals = lv_img_create(today_group);
     lv_img_set_src(img_cals, &img_calories_48);
-    lv_obj_set_width(img_cals, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(img_cals, LV_SIZE_CONTENT); /// 1
-    lv_obj_set_align(img_cals, LV_ALIGN_CENTER);
-    lv_obj_add_flag(img_cals, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
-    lv_obj_clear_flag(img_cals, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_align_to(img_cals, img_steps, LV_ALIGN_OUT_BOTTOM_MID, 4, 5);
 
     label_today_cals = lv_label_create(today_group);
@@ -161,11 +152,6 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_t *img_time;
     img_time = lv_img_create(today_group);
     lv_img_set_src(img_time, &img_timer_48);
-    lv_obj_set_width(img_time, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(img_time, LV_SIZE_CONTENT); /// 1
-    lv_obj_set_align(img_time, LV_ALIGN_CENTER);
-    lv_obj_add_flag(img_time, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
-    lv_obj_clear_flag(img_time, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_align_to(img_time, img_cals, LV_ALIGN_OUT_BOTTOM_MID, -3, 5);
 
     label_today_active_time = lv_label_create(today_group);

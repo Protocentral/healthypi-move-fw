@@ -29,13 +29,26 @@ static float gx = 0;
 // Externs
 extern lv_style_t style_red_medium;
 
-void draw_scr_eda(enum scroll_dir m_scroll_dir)
+void draw_scr_pre(enum scroll_dir m_scroll_dir)
 {
     scr_eda = lv_obj_create(NULL);
     draw_bg(scr_eda);
     draw_header_minimal(scr_eda, 10);
 
-    chart_eda = lv_chart_create(scr_eda);
+    lv_obj_t *label_signal = lv_label_create(scr_eda);
+    lv_label_set_text(label_signal, "PRE-RELEASE FIRMWARE");
+    lv_obj_set_style_text_color(label_signal, lv_palette_darken(LV_PALETTE_RED, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 75);
+
+    lv_obj_t *label_install = lv_label_create(scr_eda);
+    lv_label_set_recolor(label_install, true);     
+    lv_label_set_text(label_install, "This is pre-release firmware.\nPlease update your firmware through the app.\n\nVisit #42A5F5 move.protocentral.com # \n for details.");
+    lv_obj_set_style_text_font(label_install, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_width(label_install, 380);
+    lv_obj_set_style_text_align(label_install, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_align(label_install, LV_ALIGN_CENTER, 0, 20);
+
+    /*chart_eda = lv_chart_create(scr_eda);
     lv_obj_set_size(chart_eda, 390, 150);
     lv_obj_set_style_bg_color(chart_eda, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_eda, 50, LV_PART_MAIN);
@@ -47,14 +60,10 @@ void draw_scr_eda(enum scroll_dir m_scroll_dir)
     lv_chart_set_update_mode(chart_eda, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_eda, LV_ALIGN_CENTER, 0, -35);
     ser_eda = lv_chart_add_series(chart_eda, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_eda, 3, LV_PART_ITEMS);
+    lv_obj_set_style_line_width(chart_eda, 3, LV_PART_ITEMS);*/
+   
 
-    // Bottom signal label
-    lv_obj_t *label_signal = lv_label_create(scr_eda);
-    lv_label_set_text(label_signal, "EDA/GSR");
-    lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
-
-    hpi_disp_set_curr_screen(SCR_PLOT_EDA);
+    hpi_disp_set_curr_screen(SCR_PLOT_PRE);
     hpi_show_screen(scr_eda, m_scroll_dir);
 }
 

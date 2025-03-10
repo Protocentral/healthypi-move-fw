@@ -388,6 +388,9 @@ void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
+    case SCR_PLOT_PRE:
+        draw_scr_pre(m_scroll_dir);
+        break;
     case SCR_TODAY:
         draw_scr_today(m_scroll_dir);
         break;
@@ -407,8 +410,8 @@ void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ECG:
         draw_scr_ecg(m_scroll_dir);
         break;
-    case SCR_PLOT_EDA:
-        draw_scr_eda(m_scroll_dir);
+    /*case SCR_PLOT_EDA:
+        draw_scr_pre(m_scroll_dir);
         break;
 
     /*
