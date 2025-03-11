@@ -8,7 +8,9 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "ui/components/hpi_lv_chart.h"
 #include "trends.h"
+
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hr, LOG_LEVEL_DBG);
 
@@ -124,11 +126,11 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_sub, " bpm");
     // lv_obj_align_to(label_hr_sub, label_hr_bpm, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
 
-    chart_hr_trend = lv_chart_create(cont_col);
+    chart_hr_trend = hpi_lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_trend, 300, 130);
-    lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_BAR);
-    lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
-    lv_chart_set_point_count(chart_hr_trend, 24);
+    hpi_lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_BAR);
+    hpi_lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 150);
+    hpi_lv_chart_set_point_count(chart_hr_trend, 24);
     //lv_chart_set_zoom_x(chart_hr_trend, 512);
     lv_obj_set_style_pad_column(chart_hr_trend, 1, LV_PART_MAIN);
 
@@ -136,7 +138,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     //lv_obj_set_style_line_width(chart_hr_trend, 20, LV_PART_ITEMS);
     //lv_obj_set_style_size(chart_hr_trend, 5, LV_PART_INDICATOR);
     
-
     lv_obj_add_event_cb(chart_hr_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
     // lv_obj_align_to(chart_hr_trend, NULL, LV_ALIGN_CENTER, 15, 0);
 
@@ -146,8 +147,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     // lv_obj_set_style_border_width(chart_hr_trend_up, 1, LV_PART_MAIN);
     lv_chart_set_div_line_count(chart_hr_trend, 0, 0);
 
-    lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
-    lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 10, 5, 3, 2, true, 60);
+    hpi_lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
+    hpi_lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 10, 5, 3, 2, true, 60);
 
     // ser_hr_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
     // lv_obj_set_style_line_width(chart_hr_trend, 3, LV_PART_ITEMS);
@@ -263,6 +264,6 @@ void hpi_disp_hr_load_trend(void)
         }
     }
 
-    lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+    //lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
     lv_chart_refresh(chart_hr_trend);
 }
