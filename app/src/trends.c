@@ -35,6 +35,9 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 static uint16_t m_hr_curr_minute[60] = {0}; // Assumed max 60 points per minute
 static uint8_t m_hr_curr_minute_counter = 0;
 
+static uint16_t m_temp_curr_minute[60] = {0}; // Assumed max 60 points per minute
+static uint8_t m_temp_curr_minute_counter = 0;
+
 // Time variables
 static int64_t m_trend_time_ts;
 
@@ -244,6 +247,37 @@ static void trend_hr_listener(const struct zbus_channel *chan)
     m_hr_curr_minute[m_hr_curr_minute_counter] = hpi_hr->hr;
 }
 ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
+
+static void trend_temp_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
+
+}
+ZBUS_LISTENER_DEFINE(trend_temp_lis, trend_temp_listener);
+
+static void trend_steps_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
+    // m_disp_steps = hpi_steps->steps_walk;
+    // m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
+    // ui_steps_button_update(hpi_steps->steps_walk);
+}
+ZBUS_LISTENER_DEFINE(trend_steps_lis, trend_steps_listener);
+
+static void trend_spo2_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
+    // m_disp_spo2 = hpi_spo2->spo2;
+    //LOG_DBG("ZB Spo2: %d\n", hpi_spo2->spo2);
+}
+ZBUS_LISTENER_DEFINE(trend_spo2_lis, trend_spo2_listener);
+
+static void trend_bpt_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_bpt_t *hpi_bpt = zbus_chan_const_msg(chan);
+    // m_disp_bp_sys = hpi_bpt->sys;
+}
+ZBUS_LISTENER_DEFINE(trend_bpt_lis, trend_bpt_listener);
 
 static void trend_sys_time_listener(const struct zbus_channel *chan)
 {

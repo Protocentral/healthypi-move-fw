@@ -109,6 +109,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_bottom(cont_hr, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(cont_hr, 0, LV_PART_MAIN);
 
     lv_obj_t *img1 = lv_img_create(cont_hr);
     lv_img_set_src(img1, &img_heart_35);
@@ -125,17 +127,19 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     // lv_obj_align_to(label_hr_sub, label_hr_bpm, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
 
     chart_hr_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_hr_trend, 300, 130);
-    lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_BAR);
+    lv_obj_set_size(chart_hr_trend, 290, 180);
+    //lv_obj_set_style_pad_left(chart_hr_trend, 100, LV_PART_MAIN);
+    lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
     lv_chart_set_point_count(chart_hr_trend, 24);
     //lv_chart_set_zoom_x(chart_hr_trend, 512);
-    lv_obj_set_style_pad_column(chart_hr_trend, 1, LV_PART_MAIN);
+    //lv_obj_set_style_pad_column(chart_hr_trend, 1, LV_PART_MAIN);
+    //lv_obj_set_style_pad_left(chart_hr_trend, -1, LV_PART_TICKS);
+    //lv_obj_set_style_pad_right(chart_hr_trend, -10, LV_PART_TICKS);
 
     // Hide the lines and show the points
-    //lv_obj_set_style_line_width(chart_hr_trend, 20, LV_PART_ITEMS);
-    //lv_obj_set_style_size(chart_hr_trend, 5, LV_PART_INDICATOR);
-    
+    lv_obj_set_style_line_width(chart_hr_trend, 0, LV_PART_ITEMS);
+    lv_obj_set_style_size(chart_hr_trend, 8, LV_PART_INDICATOR);
 
     lv_obj_add_event_cb(chart_hr_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
     // lv_obj_align_to(chart_hr_trend, NULL, LV_ALIGN_CENTER, 15, 0);
@@ -143,11 +147,11 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_color(chart_hr_trend, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_hr_trend, 0, LV_PART_MAIN);
 
-    // lv_obj_set_style_border_width(chart_hr_trend_up, 1, LV_PART_MAIN);
-    lv_chart_set_div_line_count(chart_hr_trend, 0, 0);
+    lv_obj_set_style_border_width(chart_hr_trend, 0, LV_PART_MAIN);
+    lv_chart_set_div_line_count(chart_hr_trend, 0, 24);
 
     lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
-    lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 10, 5, 3, 2, true, 60);
+    lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 10);
 
     // ser_hr_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
     // lv_obj_set_style_line_width(chart_hr_trend, 3, LV_PART_ITEMS);
