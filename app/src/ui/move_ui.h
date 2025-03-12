@@ -19,7 +19,7 @@
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 256 // SAMPLE_RATE * 4
 #define BPT_DISP_WINDOW_SIZE 256
- // SAMPLE_RATE * 4
+// SAMPLE_RATE * 4
 
 #define HPI_DISP_TIME_REFR_INT 1000
 #define HPI_DISP_BATT_REFR_INT 1000
@@ -29,11 +29,8 @@
 #define HPI_DISP_TODAY_REFRESH_INT 3000
 #define HPI_DISP_BPT_REFRESH_INT 3000
 #define HPI_DISP_TEMP_REFRESH_INT 3000
-
 #define HPI_DISP_SETTINGS_REFRESH_INT 1000
-
 #define HPI_DISP_TRENDS_REFRESH_INT 10000
-
 
 struct hpi_boot_msg_t
 {
@@ -55,14 +52,14 @@ enum hpi_disp_screens
     SCR_LIST_START,
 
     SCR_HOME,
-    SCR_PLOT_PRE,
+    //SCR_PLOT_PRE,
     SCR_TODAY,
     SCR_HR,
     SCR_SPO2,
     SCR_ECG,
     SCR_BPT,
     SCR_TEMP,
-    
+
     SCR_LIST_END,
     // Should not go here
     SCR_CLOCK,
@@ -73,7 +70,7 @@ enum hpi_disp_screens
 // Special screens
 enum hpi_disp_spl_screens
 {
-    SCR_SPL_LIST_START=50,
+    SCR_SPL_LIST_START = 50,
 
     SCR_SPL_BOOT,
     SCR_SPL_SETTINGS,
@@ -83,7 +80,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_ECG_COMPLETE,
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
-   
+
     SCR_SPL_LIST_END,
 };
 #define SCR_SPL_SETTINGS 20
@@ -235,6 +232,6 @@ LV_IMG_DECLARE(icon_spo2_30x35);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(ui_font_Number_big);
-LV_FONT_DECLARE( ui_font_Number_extra);
+LV_FONT_DECLARE(ui_font_Number_extra);
 // LV_FONT_DECLARE( ui_font_Subtitle);
 // LV_FONT_DECLARE( ui_font_Title);

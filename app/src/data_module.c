@@ -383,6 +383,7 @@ void data_thread(void)
             {
                 struct hpi_spo2_t spo2_chan_value = {
                     .spo2 = ppg_wr_sensor_sample.spo2,
+                    .time_tm = data_mod_sys_time,
                 };
                 zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
             }

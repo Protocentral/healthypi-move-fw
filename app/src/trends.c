@@ -33,7 +33,11 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 
 // Store raw HR values for the current minute
 static uint16_t m_hr_curr_minute[60] = {0}; // Assumed max 60 points per minute
-static uint8_t m_hr_curr_minute_counter = 0;
+static uint8_t m_trends_curr_minute_counter = 0;
+
+// Store raw SpO2 values for the current minute
+static uint8_t m_spo2_curr_minute[60] = {0}; // Assumed max 60 points per minute
+static uint8_t m_spo2_curr_minute_counter = 0;
 
 static uint16_t m_temp_curr_minute[60] = {0}; // Assumed max 60 points per minute
 static uint8_t m_temp_curr_minute_counter = 0;
@@ -42,6 +46,7 @@ static uint8_t m_temp_curr_minute_counter = 0;
 static int64_t m_trend_time_ts;
 
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
+K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_trend_point_t), 8, 1);
 
 // Trend buffers
 struct hpi_hr_trend_point_t hr_trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
@@ -51,19 +56,26 @@ void hpi_trend_sample_thread(void)
 {
     for (;;)
     {
-        if (m_hr_curr_minute_counter < HR_TREND_MINUTE_PTS)
+        if (m_trends_curr_minute_counter < HR_TREND_MINUTE_PTS)
         {
-            m_hr_curr_minute_counter++;
+            m_trends_curr_minute_counter++;
         }
         else
         {
-            m_hr_curr_minute_counter = 0;
+            m_trends_curr_minute_counter = 0;
 
             struct hpi_hr_trend_point_t hr_trend_point;
             hr_trend_point.timestamp = m_trend_time_ts;
             uint16_t hr_sum = 0;
             hr_trend_point.hr_max = 0;
             hr_trend_point.hr_min = 255;
+
+            struct hpi_spo2_trend_point_t spo2_trend_point;
+            spo2_trend_point.timestamp = m_trend_time_ts;
+            uint16_t spo2_sum = 0;
+            spo2_trend_point.spo2_max = 0;
+            spo2_trend_point.spo2_min = 255;
+
             for (int i = 0; i < HR_TREND_MINUTE_PTS; i++)
             {
                 if (m_hr_curr_minute[i] > hr_trend_point.hr_max)
@@ -75,12 +87,26 @@ void hpi_trend_sample_thread(void)
                     hr_trend_point.hr_min = m_hr_curr_minute[i];
                 }
                 hr_sum += m_hr_curr_minute[i];
+
+                if(m_spo2_curr_minute[i] > spo2_trend_point.spo2_max)
+                {
+                    spo2_trend_point.spo2_max = m_spo2_curr_minute[i];
+                }
+                if ((m_spo2_curr_minute[i] < spo2_trend_point.spo2_min) && (m_spo2_curr_minute[i] != 0))
+                {
+                    spo2_trend_point.spo2_min = m_spo2_curr_minute[i];
+                }
+                spo2_sum += m_spo2_curr_minute[i];
             }
 
             hr_trend_point.hr_avg = hr_sum / HR_TREND_MINUTE_PTS;
             hr_trend_point.hr_latest = m_hr_curr_minute[HR_TREND_MINUTE_PTS - 1];
 
+            spo2_trend_point.spo2_avg = spo2_sum / HR_TREND_MINUTE_PTS;
+            spo2_trend_point.spo2_latest = m_spo2_curr_minute[HR_TREND_MINUTE_PTS - 1];
+
             k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
+            k_msgq_put(&q_spo2_trend, &spo2_trend_point, K_NO_WAIT);
         }
         k_msleep(1000);
     }
@@ -98,13 +124,19 @@ static int64_t hpi_trend_get_day_start_ts(int64_t *today_time_ts)
 void hpi_trend_record_thread(void)
 {
     struct hpi_hr_trend_point_t _hr_trend_minute;
+    struct hpi_spo2_trend_point_t _spo2_trend_minute;
     for (;;)
     {
+        int64_t today_ts = hpi_trend_get_day_start_ts(&_hr_trend_minute.timestamp);
         if (k_msgq_get(&q_hr_trend, &_hr_trend_minute, K_NO_WAIT) == 0)
         {
             LOG_DBG("Recd HR point: %" PRIx64 "| %d | %d | %d", _hr_trend_minute.timestamp, _hr_trend_minute.hr_max, _hr_trend_minute.hr_min, _hr_trend_minute.hr_avg);
-            int64_t today_ts = hpi_trend_get_day_start_ts(&_hr_trend_minute.timestamp);
             hpi_trend_wr_hr_point_to_file(_hr_trend_minute, today_ts);
+        }
+        if(k_msgq_get(&q_spo2_trend, &_spo2_trend_minute, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("Recd SpO2 point: %" PRIx64 "| %d | %d | %d", _spo2_trend_minute.timestamp, _spo2_trend_minute.spo2_max, _spo2_trend_minute.spo2_min, _spo2_trend_minute.spo2_avg);
+            hpi_trend_wr_spo2_point_to_file(_spo2_trend_minute, today_ts);
         }
 
         k_sleep(K_SECONDS(2));
@@ -131,6 +163,31 @@ void hpi_trend_wr_hr_point_to_file(struct hpi_hr_trend_point_t m_hr_trend_point,
     }
 
     ret = fs_write(&file, &m_hr_trend_point, sizeof(m_hr_trend_point));
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}
+
+void hpi_trend_wr_spo2_point_to_file(struct hpi_spo2_trend_point_t m_spo2_trend_point, int64_t day_ts)
+{
+    struct fs_file_t file;
+    int ret = 0;
+    char fname[30];
+
+    fs_file_t_init(&file);
+
+    sprintf(fname, "/lfs/trspo2/%" PRIx64, day_ts);
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_spo2_trend_point));
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    ret = fs_write(&file, &m_spo2_trend_point, sizeof(m_spo2_trend_point));
 
     ret = fs_close(&file);
     ret = fs_sync(&file);
@@ -244,9 +301,16 @@ void hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend_p
 static void trend_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
-    m_hr_curr_minute[m_hr_curr_minute_counter] = hpi_hr->hr;
+    m_hr_curr_minute[m_trends_curr_minute_counter] = hpi_hr->hr;
 }
 ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
+
+static void trend_spo2_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
+    m_spo2_curr_minute[m_trends_curr_minute_counter] = hpi_spo2->spo2;
+}
+ZBUS_LISTENER_DEFINE(trend_spo2_lis, trend_spo2_listener);
 
 static void trend_temp_listener(const struct zbus_channel *chan)
 {
@@ -264,13 +328,7 @@ static void trend_steps_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(trend_steps_lis, trend_steps_listener);
 
-static void trend_spo2_listener(const struct zbus_channel *chan)
-{
-    const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
-    // m_disp_spo2 = hpi_spo2->spo2;
-    //LOG_DBG("ZB Spo2: %d\n", hpi_spo2->spo2);
-}
-ZBUS_LISTENER_DEFINE(trend_spo2_lis, trend_spo2_listener);
+
 
 static void trend_bpt_listener(const struct zbus_channel *chan)
 {

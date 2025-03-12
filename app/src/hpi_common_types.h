@@ -19,9 +19,6 @@ enum hpi_ppg_status
     HPI_PPG_STATUS_ON_SKIN,
 };
 
-
-
-
 struct hpi_ecg_bioz_sensor_data_t
 {
     int32_t ecg_samples[ECG_POINTS_PER_SAMPLE];
@@ -112,6 +109,7 @@ struct hpi_steps_t
 
 struct hpi_temp_t
 {
+    struct tm time_tm;
     double temp_f;
     double temp_c;
 };
@@ -130,7 +128,7 @@ struct hpi_bpt_t
 
 struct hpi_spo2_t
 {
-    uint32_t timestamp;
+    struct tm time_tm;
 
     uint16_t spo2;
     uint16_t hr;

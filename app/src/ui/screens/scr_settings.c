@@ -14,8 +14,7 @@ static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
 
 extern lv_style_t style_scr_black;
-extern lv_style_t style_batt_sym;
-extern lv_style_t style_batt_percent;
+extern lv_style_t style_lbl_white_14;
 
 static void brightness_slider_event_cb(lv_event_t *e)
 {
@@ -108,7 +107,7 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
 
     label_batt_level_val = lv_label_create(cont_col);
     lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " --");
-    lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
+    lv_obj_add_style(label_batt_level_val, &style_lbl_white_14, LV_STATE_DEFAULT);
     lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
 
     lv_obj_t *cont_brightness = lv_obj_create(cont_col);

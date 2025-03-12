@@ -63,7 +63,7 @@ void draw_scr_pre(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_line_width(chart_eda, 3, LV_PART_ITEMS);*/
    
 
-    hpi_disp_set_curr_screen(SCR_PLOT_PRE);
+    //hpi_disp_set_curr_screen(SCR_PLOT_PRE);
     hpi_show_screen(scr_eda, m_scroll_dir);
 }
 

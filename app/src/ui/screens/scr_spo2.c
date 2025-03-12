@@ -86,6 +86,8 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
+    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
@@ -97,8 +99,8 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(cont_spo2, &style_scr_black, 0);
     lv_obj_set_style_pad_all(cont_spo2, 1, LV_PART_MAIN);
     lv_obj_set_flex_align(cont_spo2, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_bottom(cont_spo2, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(cont_spo2, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(cont_spo2, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(cont_spo2, 0, LV_PART_MAIN);
 
     lv_obj_t *img1 = lv_img_create(cont_spo2);
     lv_img_set_src(img1, &icon_spo2_30x35);
@@ -129,12 +131,10 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     //lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     chart_spo2_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_spo2_trend, 290, 180);
+    lv_obj_set_size(chart_spo2_trend, 290, 170);
     lv_chart_set_type(chart_spo2_trend, LV_CHART_TYPE_BAR);
     lv_chart_set_range(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 50, 100);
     lv_chart_set_point_count(chart_spo2_trend, 24);
-
-    lv_obj_set_style_pad_left(chart_spo2_trend, 30, LV_PART_MAIN);
 
     // Hide the lines and show the points
     lv_obj_set_style_line_width(chart_spo2_trend, 0, LV_PART_ITEMS);
