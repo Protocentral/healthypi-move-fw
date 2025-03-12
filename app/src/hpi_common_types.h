@@ -4,6 +4,8 @@ HealthyPi specific common data types
 
 #pragma once
 
+#include <time.h>
+
 #define ECG_POINTS_PER_SAMPLE 8
 #define BIOZ_POINTS_PER_SAMPLE 8
 #define PPG_POINTS_PER_SAMPLE 8
@@ -97,6 +99,7 @@ struct hpi_computed_hrv_t
 
 struct hpi_hr_t
 {
+    struct tm time_tm;    
     uint16_t hr;
     bool hr_ready_flag;
 };

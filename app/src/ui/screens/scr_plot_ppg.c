@@ -130,7 +130,7 @@ void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     scr_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     // draw_bg(scr_ppg);
-    draw_header_minimal(scr_ppg, 10);
+    draw_scr_common(scr_ppg);
 
     // Bottom signal label
     lv_obj_t *label_signal = lv_label_create(scr_ppg);

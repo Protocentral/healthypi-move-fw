@@ -42,7 +42,7 @@ extern lv_style_t style_scr_black;
 void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
 {
     scr_plot_ecg = lv_obj_create(NULL);
-    draw_header_minimal(scr_plot_ecg, 10);
+    draw_scr_common(scr_plot_ecg);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_plot_ecg);

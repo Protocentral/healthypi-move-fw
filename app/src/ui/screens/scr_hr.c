@@ -4,6 +4,8 @@
 #include <lvgl.h>
 #include <stdio.h>
 
+#include <time.h>
+
 #include <zephyr/logging/log.h>
 
 #include "hpi_common_types.h"
@@ -30,11 +32,10 @@ static uint16_t hr_trend_min[HR_SCR_TREND_MAX_POINTS] = {0};
 
 // GUI Labels
 static lv_obj_t *label_hr_bpm;
-// static lv_obj_t *label_hr_status;
-static lv_obj_t *label_hr_last_update;
-
 static lv_obj_t *label_hr_min_max;
 static lv_obj_t *btn_hr_settings;
+
+static lv_obj_t *label_hr_last_update_time;
 
 // Externs
 extern lv_style_t style_scr_container;
@@ -42,6 +43,8 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
+
+extern lv_style_t style_tiny;
 
 static void draw_event_cb(lv_event_t *e)
 {
@@ -87,7 +90,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 {
     scr_hr = lv_obj_create(NULL);
     // lv_obj_set_flag(scr_hr, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    draw_header_minimal(scr_hr, 10);
+    draw_scr_common(scr_hr);
 
     lv_obj_set_scrollbar_mode(scr_hr, LV_SCROLLBAR_MODE_ON);
 
@@ -99,6 +102,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
+    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
@@ -126,8 +131,28 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_sub, " bpm");
     // lv_obj_align_to(label_hr_sub, label_hr_bpm, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
 
+    lv_obj_t *cont_hr_time = lv_obj_create(cont_col);
+    lv_obj_set_size(cont_hr_time, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cont_hr_time, LV_FLEX_FLOW_ROW);
+    lv_obj_add_style(cont_hr_time, &style_scr_black, 0);
+    lv_obj_set_flex_align(cont_hr_time, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_bottom(cont_hr_time, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(cont_hr_time, 0, LV_PART_MAIN);
+
+    lv_obj_t *label_hr_last_update = lv_label_create(cont_hr_time);
+    lv_label_set_text(label_hr_last_update, "Last update:");
+    lv_obj_add_style(label_hr_last_update, &style_tiny, 0);
+    //lv_obj_set_style_text_color(label_hr_last_update, lv_color_hex(0xFFFF00), 0);
+
+    label_hr_last_update_time = lv_label_create(cont_hr_time);
+    struct tm last_update_ts = disp_get_hr_last_update_ts();
+    
+    lv_label_set_text_fmt(label_hr_last_update_time, "%d:%d", last_update_ts.tm_hour, last_update_ts.tm_min);
+    //lv_obj_add_style(label_hr_last_update_time, &style_tiny, 0);
+    //lv_obj_set_style_text_color(label_hr_last_update_time, lv_color_hex(0xFFFF00), 0);
+
     chart_hr_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_hr_trend, 290, 180);
+    lv_obj_set_size(chart_hr_trend, 290, 170);
     //lv_obj_set_style_pad_left(chart_hr_trend, 100, LV_PART_MAIN);
     lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
@@ -157,8 +182,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     // lv_obj_set_style_line_width(chart_hr_trend, 3, LV_PART_ITEMS);
     // ser_hr_trend = lv_chart_add_series(chart_hr_trend, lv_palette_darken(LV_PALETTE_GREEN, 2), LV_CHART_AXIS_SECONDARY_Y);
 
-    ser_hr_max_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
-    ser_hr_min_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_GREEN), LV_CHART_AXIS_PRIMARY_Y);
+    ser_hr_max_trend = lv_chart_add_series(chart_hr_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
+    ser_hr_min_trend = lv_chart_add_series(chart_hr_trend, lv_color_hex(0x00B0FF), LV_CHART_AXIS_PRIMARY_Y);
 
     // hpi_set_chart_points(ser_hr_max_trend, hr_trend_max, HR_SCR_TREND_MAX_POINTS);
     // hpi_set_chart_points(ser_hr_min_trend, hr_trend_min, HR_SCR_TREND_MAX_POINTS);
@@ -171,10 +196,14 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_hr_min_max_title, &style_white_medium, 0);
     lv_obj_align_to(label_hr_min_max_title, chart_hr_trend, LV_ALIGN_OUT_BOTTOM_MID, 0, 50);
     */
-
-    lv_obj_t *lbl_gap = lv_label_create(cont_col);
-    lv_label_set_text(lbl_gap, " ");
-    lv_obj_align_to(lbl_gap, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
+   
+   /* lv_obj_t *cont_legend = lv_obj_create(cont_col);
+   lv_obj_set_size(cont_legend, lv_pct(100), LV_SIZE_CONTENT);
+   lv_obj_set_flex_flow(cont_legend, LV_FLEX_FLOW_ROW);
+   lv_obj_add_style(cont_legend, &style_scr_black, 0);
+   lv_obj_set_flex_align(cont_legend, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+   lv_obj_set_style_pad_bottom(cont_legend, 0, LV_PART_MAIN);
+   lv_obj_set_style_pad_top(cont_legend, 0, LV_PART_MAIN);*/
 
     /*label_hr_min_max = lv_label_create(cont_col);
     lv_label_set_text(label_hr_min_max, "80 - 113 bpm");
@@ -187,6 +216,11 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_last_update, "Hourly HR Range");
     // lv_obj_align_to(label_hr_last_update, label_hr_min_max, LV_ALIGN_OUT_TOP_MID , 0, 0);
     */
+
+    lv_obj_t *lbl_legend = lv_label_create(cont_col);
+    lv_label_set_recolor(lbl_legend, true);
+    lv_label_set_text(lbl_legend, "#FFEA00 " LV_SYMBOL_STOP " Max.# #00B0FF " LV_SYMBOL_STOP "   Min.# ");
+    lv_obj_set_style_pad_top(lbl_legend, 35, LV_PART_MAIN);
 
     lv_obj_t *lbl_gap1 = lv_label_create(cont_col);
     lv_label_set_text(lbl_gap1, " ");
@@ -212,7 +246,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_hr, m_scroll_dir);
 }
 
-void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean)
+void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
 {
     if (label_hr_bpm == NULL)
         return;
@@ -228,6 +262,8 @@ void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_
     }
 
     lv_label_set_text(label_hr_bpm, buf);
+   
+    lv_label_set_text_fmt(label_hr_last_update_time, "%d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
 
     /*char buf_min_max[32];
     sprintf(buf_min_max, "%d - %d bpm", min, max);

@@ -39,7 +39,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
 {
     scr_temp = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_temp, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    draw_header_minimal(scr_temp, 10);
+    draw_scr_common(scr_temp);
 
     lv_obj_t *cont_col = lv_obj_create(scr_temp);
     lv_obj_set_size(cont_col, lv_pct(100), LV_SIZE_CONTENT);

@@ -94,7 +94,7 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
 {
     scr_settings = lv_obj_create(NULL);
 
-    draw_header_minimal(scr_settings, 10);
+    draw_scr_common(scr_settings);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_settings);

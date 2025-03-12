@@ -250,12 +250,6 @@ static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_
     }
 }
 
-uint32_t hw_get_system_time(void)
-{
-    uint32_t time = k_uptime_get_32();
-    return time;
-}
-
 uint8_t read_battery_level(void)
 {
     uint8_t batt_level = 0;

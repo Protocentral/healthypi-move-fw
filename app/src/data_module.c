@@ -6,6 +6,7 @@
 
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
+#include <time.h>
 
 LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -16,6 +17,7 @@ LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 #include "fs_module.h"
 #include "ble_module.h"
 #include "algos.h"
+#include "ui/move_ui.h"
 
 // ProtoCentral data formats
 #define CES_CMDIF_PKT_START_1 0x0A
@@ -38,6 +40,8 @@ static bool settings_send_usb_enabled = false;
 static bool settings_send_ble_enabled = true;
 static bool settings_plot_enabled = true;
 
+static struct tm data_mod_sys_time;
+
 enum hpi5_data_format
 {
     DATA_FMT_OPENVIEW,
@@ -46,8 +50,6 @@ enum hpi5_data_format
 
 static bool settings_log_data_enabled = true; // true;
 static int settings_data_format = DATA_FMT_OPENVIEW;
-
-
 
 // struct hpi_ecg_bioz_sensor_data_t log_buffer[LOG_BUFFER_LENGTH];
 
@@ -370,6 +372,7 @@ void data_thread(void)
             if (ppg_wr_sensor_sample.hr_confidence > 75)
             {
                 struct hpi_hr_t hr_chan_value = {
+                    .time_tm = data_mod_sys_time,
                     .hr = ppg_wr_sensor_sample.hr,
                     .hr_ready_flag = true,
                 };
@@ -390,6 +393,15 @@ void data_thread(void)
         k_sleep(K_MSEC(40));
     }
 }
+
+static void data_mod_sys_time_listener(const struct zbus_channel *chan)
+{
+    const struct tm *sys_time = zbus_chan_const_msg(chan);
+    data_mod_sys_time = *sys_time;
+
+    // rtc_time_to_tm
+}
+ZBUS_LISTENER_DEFINE(data_mod_sys_time_lis, data_mod_sys_time_listener);
 
 #define DATA_THREAD_STACKSIZE 4096
 #define DATA_THREAD_PRIORITY 7

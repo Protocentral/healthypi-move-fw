@@ -41,7 +41,7 @@ static void scr_ecg_start_btn_event_handler(lv_event_t *e)
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
     scr_ecg = lv_obj_create(NULL);
-    draw_header_minimal(scr_ecg, 10);
+    draw_scr_common(scr_ecg);
     lv_obj_clear_flag(scr_ecg, LV_OBJ_FLAG_SCROLLABLE);
     // draw_bg(scr_ecg);
 

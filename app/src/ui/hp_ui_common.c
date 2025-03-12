@@ -28,10 +28,11 @@ LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(logo_round_white);
 
 // LVGL Styles
-static lv_style_t style_sub;
+
 static lv_style_t style_btn;
 
 // Global LVGL Styles
+lv_style_t style_tiny;
 lv_style_t style_scr_black;
 lv_style_t style_red_medium;
 lv_style_t style_lbl_red_small;
@@ -99,9 +100,9 @@ void display_init_styles(void)
     lv_disp_set_theme(NULL, &th_new);
 
     // Subscript (Unit) label style
-    lv_style_init(&style_sub);
-    lv_style_set_text_color(&style_sub, lv_color_white());
-    lv_style_set_text_font(&style_sub, &lv_font_montserrat_16);
+    lv_style_init(&style_tiny);
+    lv_style_set_text_color(&style_tiny, lv_color_white());
+    lv_style_set_text_font(&style_tiny, &lv_font_montserrat_20);
 
     lv_style_init(&style_batt_sym);
     lv_style_set_text_color(&style_batt_sym, lv_palette_main(LV_PALETTE_GREY));
@@ -123,11 +124,6 @@ void display_init_styles(void)
     lv_style_init(&style_red_medium);
     lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
     lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_34);
-
-    // Label Red Small
-    lv_style_init(&style_lbl_red_small);
-    lv_style_set_text_color(&style_lbl_red_small, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_lbl_red_small, &lv_font_montserrat_16);
 
     // Label White 14
     lv_style_init(&style_lbl_white_14);
@@ -154,7 +150,7 @@ void display_init_styles(void)
     lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
-void draw_header_minimal(lv_obj_t *parent, int top_offset)
+void draw_scr_common(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
     lv_obj_set_scroll_dir(parent, LV_DIR_VER);

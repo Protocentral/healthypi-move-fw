@@ -58,14 +58,18 @@ static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct tm m_disp_sys_time;
 
+// HR Screen variables
 static uint16_t m_disp_hr = 0;
 static uint16_t m_disp_hr_max = 0;
 static uint16_t m_disp_hr_min = 0;
 static uint16_t m_disp_hr_mean = 0;
+static struct tm m_disp_hr_last_update_ts;
 
+// @brief Spo2 Screen variables
 static uint8_t m_disp_spo2 = 0;
 static uint32_t m_disp_spo2_last_refresh = 0;
 
+// @brief Today Screen variables
 static uint32_t m_disp_steps = 0;
 static uint16_t m_disp_kcals = 0;
 static uint16_t m_disp_active_time_s = 10;
@@ -122,6 +126,17 @@ static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
     //
     /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
     return (uint16_t)_m_kcals;
+}
+
+struct tm disp_get_hr_last_update_ts(void)
+{
+    return m_disp_hr_last_update_ts;
+}
+
+int64_t disp_get_system_time(void)
+{
+    int64_t sys_time_ts = gmtime(&m_disp_sys_time);
+    return sys_time_ts;
 }
 
 static void st_display_init_entry(void *o)
@@ -459,7 +474,7 @@ static void st_display_active_run(void *o)
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
             hpi_disp_hr_load_trend();
-            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_ts); 
             last_hr_trend_refresh = k_uptime_get_32();
         }
         break;
@@ -652,21 +667,23 @@ static void disp_batt_status_listener(const struct zbus_channel *chan)
 
 ZBUS_LISTENER_DEFINE(disp_batt_lis, disp_batt_status_listener);
 
-static void disp_sys_time_listener(const struct zbus_channel *chan)
+static void data_mod_sys_time_listener(const struct zbus_channel *chan)
 {
     const struct tm *sys_time = zbus_chan_const_msg(chan);
     m_disp_sys_time = *sys_time;
 
     // rtc_time_to_tm
 }
-ZBUS_LISTENER_DEFINE(disp_sys_time_lis, disp_sys_time_listener);
+ZBUS_LISTENER_DEFINE(disp_sys_time_lis, data_mod_sys_time_listener);
 
-static void trend_hr_listener(const struct zbus_channel *chan)
+static void disp_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
+    m_disp_hr_last_update_ts = hpi_hr->time_tm;
+    LOG_DBG("ZB HR: %d at %d:%d \n", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
-ZBUS_LISTENER_DEFINE(disp_hr_lis, trend_hr_listener);
+ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
 static void disp_spo2_listener(const struct zbus_channel *chan)
 {

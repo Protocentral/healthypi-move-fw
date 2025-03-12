@@ -122,14 +122,16 @@ void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
 void ui_battery_update(uint8_t percent);
 
 void hdr_time_display_update(struct rtc_time in_time);
+int64_t disp_get_system_time(void);
 
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
-void hpi_disp_hr_update_hr(uint16_t hr, uint16_t min, uint16_t max, uint16_t hr_mean);
+void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_last_update_ts);
 void hpi_disp_hr_load_trend(void);
+struct tm disp_get_hr_last_update_ts(void);
 
 // Spo2 Screen functions
 void draw_scr_spo2(enum scroll_dir m_scroll_dir);
@@ -177,7 +179,7 @@ void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
 void draw_scr_settings(enum scroll_dir m_scroll_dir);
 
 // Helper objects
-void draw_header_minimal(lv_obj_t *parent, int top_offset);
+void draw_scr_common(lv_obj_t *parent);
 void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir);
 void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent);
 

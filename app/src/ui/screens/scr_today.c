@@ -33,7 +33,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     lv_obj_clear_flag(scr_today, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     //draw_bg(scr_today);
-    draw_header_minimal(scr_today, 320);
+    draw_scr_common(scr_today);
 
     //today_arcs = ui_dailymissiongroup_create(scr_today);
 

@@ -33,7 +33,7 @@ void draw_scr_pre(enum scroll_dir m_scroll_dir)
 {
     scr_eda = lv_obj_create(NULL);
     draw_bg(scr_eda);
-    draw_header_minimal(scr_eda, 10);
+    draw_scr_common(scr_eda);
 
     lv_obj_t *label_signal = lv_label_create(scr_eda);
     lv_label_set_text(label_signal, "PRE-RELEASE FIRMWARE");
