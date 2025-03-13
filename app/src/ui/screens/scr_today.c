@@ -35,8 +35,6 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     //draw_bg(scr_today);
     draw_scr_common(scr_today);
 
-    //today_arcs = ui_dailymissiongroup_create(scr_today);
-
     lv_obj_t *today_group;
     today_group = lv_obj_create(scr_today);
     lv_obj_set_width(today_group, 360);

@@ -92,18 +92,35 @@ enum hpi_disp_subscreens
     SUBSCR_BPT_MEASURE,
 };
 
-void display_init_styles(void);
 
-void hpi_display_sleep_off(void);
-void hpi_display_sleep_on(void);
+
+// Images used in the UI
+LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
+LV_IMG_DECLARE(img_heart_35);
+LV_IMG_DECLARE(img_steps_48);
+LV_IMG_DECLARE(img_calories_48);
+LV_IMG_DECLARE(img_timer_48);
+LV_IMG_DECLARE(ecg_70);
+LV_IMG_DECLARE(bp_70);
+LV_IMG_DECLARE(icon_spo2_30x35);
+
+// LV_FONT_DECLARE( ui_font_H1);
+LV_FONT_DECLARE(ui_font_Number_big);
+LV_FONT_DECLARE(ui_font_Number_extra);
+// LV_FONT_DECLARE( ui_font_Subtitle);
+// LV_FONT_DECLARE( ui_font_Title);
 
 /******** UI Function Prototypes ********/
 
+void display_init_styles(void);
+void hpi_display_sleep_off(void);
+void hpi_display_sleep_on(void);
+
+// Boot Screen functions
+void draw_scr_splash(void);
 void draw_scr_boot(void);
 void scr_boot_add_status(char *dev_label, bool status);
 void scr_boot_add_final(bool status);
-
-void draw_scr_splash(void);
 
 // Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);
@@ -114,15 +131,12 @@ void draw_scr_home(enum scroll_dir m_scroll_dir);
 void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
 
-void ui_time_display_update(uint8_t hour, uint8_t min, bool small);
-void ui_date_display_update(uint8_t day, uint8_t month, uint16_t year);
-void ui_battery_update(uint8_t percent);
-
 void hdr_time_display_update(struct rtc_time in_time);
 int64_t disp_get_system_time(void);
 
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
+void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s);
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
@@ -133,6 +147,7 @@ struct tm disp_get_hr_last_update_ts(void);
 // Spo2 Screen functions
 void draw_scr_spo2(enum scroll_dir m_scroll_dir);
 void hpi_disp_update_spo2(uint8_t spo2);
+void hpi_disp_spo2_load_trend(void);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -157,7 +172,6 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir);
 // void draw_scr_bpt_measure(void);
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
-
 void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir);
 
 // HRV screen functions
@@ -195,8 +209,6 @@ void ui_hr_button_update(uint8_t hr_bpm);
 lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent);
 void ui_spo2_button_update(uint8_t spo2);
 
-lv_obj_t *ui_dailymissiongroup_create(lv_obj_t *comp_parent);
-void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s);
 
 lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent);
 void ui_steps_button_update(uint16_t steps);
@@ -221,17 +233,4 @@ void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8
 
 void disp_screen_event(lv_event_t *e);
 
-LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
-LV_IMG_DECLARE(img_heart_35);
-LV_IMG_DECLARE(img_steps_48);
-LV_IMG_DECLARE(img_calories_48);
-LV_IMG_DECLARE(img_timer_48);
-LV_IMG_DECLARE(ecg_70);
-LV_IMG_DECLARE(bp_70);
-LV_IMG_DECLARE(icon_spo2_30x35);
 
-// LV_FONT_DECLARE( ui_font_H1);
-LV_FONT_DECLARE(ui_font_Number_big);
-LV_FONT_DECLARE(ui_font_Number_extra);
-// LV_FONT_DECLARE( ui_font_Subtitle);
-// LV_FONT_DECLARE( ui_font_Title);

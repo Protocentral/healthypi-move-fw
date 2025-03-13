@@ -62,15 +62,6 @@ static void scr_spo2_btn_live_event_handler(lv_event_t *e)
     }
 }
 
-static void scr_spo2_measure_btn_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-    }
-}
-
 void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 {
     scr_spo2 = lv_obj_create(NULL);
@@ -208,4 +199,16 @@ void hpi_disp_update_spo2(uint8_t spo2)
         return;
 
     lv_label_set_text_fmt(label_spo2_percent, "%d %", spo2);
+}
+
+void hpi_disp_spo2_load_trend(void)
+{
+    if (chart_spo2_trend == NULL)
+        return;
+
+    static uint16_t max_values[24] = {95, 96, 97, 98, 99, 100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82};
+    static uint16_t min_values[24] = {90, 91, 92, 93, 94, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77};
+
+    //hpi_set_chart_points(ser_spo2_max_trend, max_values, 24);
+    //hpi_set_chart_points(ser_spo2_min_trend, min_values, 24);
 }

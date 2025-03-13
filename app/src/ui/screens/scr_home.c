@@ -26,10 +26,8 @@ static lv_obj_t *ui_home_label_date;
 
 static lv_obj_t *label_batt_level_val;
 
-extern struct rtc_time global_system_time;
-
+// Externs
 extern lv_style_t style_lbl_white_14;
-
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
@@ -179,7 +177,6 @@ void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
 
     hpi_disp_set_curr_screen(SCR_HOME);
     hpi_show_screen(scr_home, m_scroll_dir);
-    // scr_home_set_time(global_system_time);
 }
 
 /*void draw_scr_home(enum scroll_dir m_scroll_dir)

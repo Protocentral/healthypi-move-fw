@@ -481,7 +481,7 @@ static void st_display_active_run(void *o)
     case SCR_SPO2:
         if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_SPO2_REFRESH_INT)
         {
-            // hpi_trend_load_day_trend();
+            hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
             hpi_disp_update_spo2(m_disp_spo2);
         }

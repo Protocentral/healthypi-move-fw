@@ -193,7 +193,7 @@ void hpi_trend_wr_spo2_point_to_file(struct hpi_spo2_trend_point_t m_spo2_trend_
     ret = fs_sync(&file);
 }
 
-void hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend_points, int *num_points)
+void hpi_trend_load_hr_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend_points, int *num_points)
 {
     struct fs_file_t file;
     int ret = 0;
@@ -296,6 +296,102 @@ void hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend_p
 
     ret = fs_close(&file);
     ret = fs_sync(&file);
+}
+
+void hpi_trend_load_spo2_day_trend(struct hpi_spo2_hourly_trend_point_t *spo2_hourly_trend_points, int *num_points)
+{
+    struct fs_file_t file;
+    int ret = 0;
+
+    struct fs_dirent trend_file_ent;
+    char fname[30];
+
+    uint16_t num_trend_points;
+
+    int64_t day_ts = hpi_trend_get_day_start_ts(&m_trend_time_ts);
+
+    fs_file_t_init(&file);
+
+    sprintf(fname, "/lfs/trspo2/%" PRIx64, day_ts);
+
+    ret = fs_stat(fname, &trend_file_ent);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: stat %s: %d", fname, ret);
+        return;
+    }
+
+    LOG_DBG("Read from file %s | Size: %d", fname, trend_file_ent.size);
+
+    num_trend_points = trend_file_ent.size / sizeof(struct hpi_spo2_trend_point_t);
+    *num_points = num_trend_points;
+
+    LOG_DBG("Num SpO2 Trend Points: %d", num_trend_points);
+
+    ret = fs_open(&file, fname, FS_O_READ);
+
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    struct hpi_spo2_trend_point_t spo2_trend_point;
+
+    int bucket_counts[NUM_HOURS] = {0};
+
+    for (int i = 0; i < num_trend_points; i++)
+    {
+        ret = fs_read(&file, &spo2_trend_point, sizeof(spo2_trend_point));
+        if (ret < 0)
+        {
+            LOG_ERR("FAIL: read %s: %d", fname, ret);
+        }
+        //spo2_trend_point_all[i] = spo2_trend_point;
+    }
+
+    for (int i = 0; i < num_trend_points; i++)
+    {
+        struct tm *time_info = gmtime(&spo2_trend_point.timestamp);
+        int hour = time_info->tm_hour;
+
+        if (bucket_counts[hour] < MAX_POINTS_PER_HOUR)
+        {
+            //spo2_trend_day_points[hour][bucket_counts[hour]] = spo2_trend_point_all[i];
+            bucket_counts[hour]++;
+        }
+        else
+        {
+            LOG_DBG("Bucket overflow for hour %d\n", hour);
+        }
+    }
+
+    for(int i=0; i<NUM_HOURS; i++)
+    {
+        spo2_hourly_trend_points[i].hour_no = i;
+        spo2_hourly_trend_points[i].spo2_avg = 0;
+        spo2_hourly_trend_points[i].spo2_max = 0;
+        spo2_hourly_trend_points[i].spo2_min = 0;
+
+        uint8_t spo2_max = 0;
+        uint8_t spo2_min = 255;
+
+        for(int j=0; j<bucket_counts[i]; j++)
+        {
+            if(spo2_trend_point.spo2_max > spo2_max)
+            {
+                spo2_hourly_trend_points[i].spo2_max = spo2_trend_point.spo2_max;
+            }
+            if(spo2_trend_point.spo2_min < spo2_min)
+            {
+                spo2_hourly_trend_points[i].spo2_min = spo2_trend_point.spo2_min;
+            }
+            spo2_hourly_trend_points[i].spo2_avg += spo2_trend_point.spo2_avg;
+        }
+        if(bucket_counts[i] > 0)
+        {
+            spo2_hourly_trend_points[i].spo2_avg /= bucket_counts[i];
+        }
+    }
 }
 
 static void trend_hr_listener(const struct zbus_channel *chan)

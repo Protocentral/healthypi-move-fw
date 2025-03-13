@@ -98,7 +98,7 @@ static volatile bool vbus_connected;
 static uint8_t global_batt_level = 0;
 // int32_t global_temp;
 // bool global_batt_charging = false;
-static struct rtc_time global_system_time;
+static struct rtc_time hw_system_time;
 
 uint8_t hw_second_boot __attribute__((section(".noinit")));
 
@@ -340,7 +340,7 @@ int npm_fuel_gauge_init(const struct device *charger)
     return 0;
 }
 
-int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected)
+int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uint8_t *batt_level, bool *batt_charging)
 {
     /* nPM1300 CHARGER.BCHGCHARGESTATUS.CONSTANTCURRENT register bitmask */
 #define NPM1300_CHG_STATUS_CC_MASK BIT_MASK(3)
@@ -373,14 +373,8 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected)
     // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
     // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
     // printk("Charge status: %d\n", chg_status);
-    struct hpi_batt_status_t batt_s = {
-        .batt_level = (uint8_t)soc,
-        .batt_charging = (chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0,
-    };
-
-    zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
-    hw_set_battery_level((uint8_t)soc);
-
+    *batt_level = (uint8_t)soc;
+    *batt_charging = ((chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0);
     return 0;
 }
 
@@ -446,18 +440,6 @@ void hw_pwr_display_enable(void)
 }
 
 K_MUTEX_DEFINE(mutex_batt_level);
-
-void hw_set_battery_level(uint8_t batt_level)
-{
-    k_mutex_lock(&mutex_batt_level, K_FOREVER);
-    global_batt_level = batt_level;
-    k_mutex_unlock(&mutex_batt_level);
-}
-
-uint8_t hw_get_battery_level(void)
-{
-    return global_batt_level;
-}
 
 bool hw_is_max32664c_present(void)
 {
@@ -590,8 +572,8 @@ void hw_init(void)
     // Turn 1.8v power to sensors ON
     // regulator_disable(ldsw_sens_1_8);
     // k_msleep(100);
-    //regulator_enable(ldsw_sens_1_8);
-    //k_msleep(100);
+    // regulator_enable(ldsw_sens_1_8);
+    // k_msleep(100);
 
     device_init(max30001_dev);
     k_sleep(K_MSEC(10));
@@ -708,7 +690,7 @@ void hw_init(void)
         /*struct sensor_value mode_set;
         mode_set.val1 = 1;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
-        
+
 
         k_sem_give(&sem_ppg_finger_sm_start);
     }*/
@@ -754,7 +736,7 @@ void hw_init(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    npm_fuel_gauge_update(charger, vbus_connected);
+    //npm_fuel_gauge_update(charger, vbus_connected);
 
     fs_module_init();
 
@@ -780,15 +762,15 @@ void hw_init(void)
  * @brief Retrieves the current time from the RTC (Real-Time Clock) device.
  *
  * This function calls the rtc_get_time function to get the current time from
- * the RTC device and stores it in the global_system_time variable. It then
+ * the RTC device and stores it in the hw_system_time variable. It then
  * returns the current time.
  *
  * @return struct rtc_time The current time retrieved from the RTC device.
  */
 struct rtc_time hw_get_current_time(void)
 {
-    rtc_get_time(rtc_dev, &global_system_time);
-    return global_system_time;
+    rtc_get_time(rtc_dev, &hw_system_time);
+    return hw_system_time;
 }
 
 static uint32_t acc_get_steps(void)
@@ -806,6 +788,9 @@ void hw_thread(void)
     uint32_t _steps = 0;
     double _temp_f = 0.0;
 
+    uint8_t sys_batt_level = 0;
+    bool sys_batt_charging = false;
+
     int ret;
 
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
@@ -814,7 +799,14 @@ void hw_thread(void)
     for (;;)
     {
         // Read and publish battery level
-        npm_fuel_gauge_update(charger, vbus_connected);
+        npm_fuel_gauge_update(charger, vbus_connected, &sys_batt_level, &sys_batt_charging);
+
+        struct hpi_batt_status_t batt_s = {
+            .batt_level = (uint8_t)sys_batt_level,
+            .batt_charging = sys_batt_charging,
+        };
+
+        zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
         // Read and publish time
         ret = rtc_get_time(rtc_dev, &rtc_sys_time);

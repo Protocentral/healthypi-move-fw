@@ -178,61 +178,17 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
     lv_chart_set_axis_tick(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 10);
 
-    // ser_hr_trend = lv_chart_add_series(chart_hr_trend, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
-    // lv_obj_set_style_line_width(chart_hr_trend, 3, LV_PART_ITEMS);
-    // ser_hr_trend = lv_chart_add_series(chart_hr_trend, lv_palette_darken(LV_PALETTE_GREEN, 2), LV_CHART_AXIS_SECONDARY_Y);
-
     ser_hr_max_trend = lv_chart_add_series(chart_hr_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
     ser_hr_min_trend = lv_chart_add_series(chart_hr_trend, lv_color_hex(0x00B0FF), LV_CHART_AXIS_PRIMARY_Y);
 
-    // hpi_set_chart_points(ser_hr_max_trend, hr_trend_max, HR_SCR_TREND_MAX_POINTS);
-    // hpi_set_chart_points(ser_hr_min_trend, hr_trend_min, HR_SCR_TREND_MAX_POINTS);
-
-    // lv_chart_refresh(chart_hr_trend);
-
-    // HR Min/Max label
-    /*lv_obj_t *label_hr_min_max_title = lv_label_create(scr_hr);
-    lv_label_set_text(label_hr_min_max_title, "Hourly HR Range");
-    lv_obj_add_style(label_hr_min_max_title, &style_white_medium, 0);
-    lv_obj_align_to(label_hr_min_max_title, chart_hr_trend, LV_ALIGN_OUT_BOTTOM_MID, 0, 50);
-    */
-   
-   /* lv_obj_t *cont_legend = lv_obj_create(cont_col);
-   lv_obj_set_size(cont_legend, lv_pct(100), LV_SIZE_CONTENT);
-   lv_obj_set_flex_flow(cont_legend, LV_FLEX_FLOW_ROW);
-   lv_obj_add_style(cont_legend, &style_scr_black, 0);
-   lv_obj_set_flex_align(cont_legend, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-   lv_obj_set_style_pad_bottom(cont_legend, 0, LV_PART_MAIN);
-   lv_obj_set_style_pad_top(cont_legend, 0, LV_PART_MAIN);*/
-
-    /*label_hr_min_max = lv_label_create(cont_col);
-    lv_label_set_text(label_hr_min_max, "80 - 113 bpm");
-    lv_obj_add_style(label_hr_min_max, &style_white_medium, 0);
-    // lv_obj_add_style(label_hr_min_max, &style_gap, LV_PART_MAIN);
-
-    // lv_obj_align_to(label_hr_min_max, NULL, LV_ALIGN_CENTER, 0, 150);
-
-    label_hr_last_update = lv_label_create(cont_col);
-    lv_label_set_text(label_hr_last_update, "Hourly HR Range");
-    // lv_obj_align_to(label_hr_last_update, label_hr_min_max, LV_ALIGN_OUT_TOP_MID , 0, 0);
-    */
-
     lv_obj_t *lbl_legend = lv_label_create(cont_col);
     lv_label_set_recolor(lbl_legend, true);
-    lv_label_set_text(lbl_legend, "#FFEA00 " LV_SYMBOL_STOP " Max.# #00B0FF " LV_SYMBOL_STOP "   Min.# ");
+    lv_label_set_text(lbl_legend, "#FFEA00 " LV_SYMBOL_STOP " Max.# #00B0FF  " LV_SYMBOL_STOP " Min.# ");
     lv_obj_set_style_pad_top(lbl_legend, 35, LV_PART_MAIN);
 
     lv_obj_t *lbl_gap1 = lv_label_create(cont_col);
     lv_label_set_text(lbl_gap1, " ");
     lv_obj_align_to(lbl_gap1, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
-
-    /*btn_hr_settings = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_height(btn_hr_settings, 80);
-
-    lv_obj_t *lbl_btn_settings = lv_label_create(btn_hr_settings);
-    lv_label_set_text(lbl_btn_settings, LV_SYMBOL_SETTINGS " Settings");
-    lv_obj_center(lbl_btn_settings);*/
 
     lv_obj_t *btn_hr_live = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_hr_live, scr_hr_btn_live_event_handler, LV_EVENT_ALL, NULL);
@@ -241,6 +197,14 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_btn_bpt_measure1 = lv_label_create(btn_hr_live);
     lv_label_set_text(label_btn_bpt_measure1, LV_SYMBOL_PLAY " Raw PPG");
     lv_obj_center(label_btn_bpt_measure1);
+
+    /*btn_hr_settings = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_set_height(btn_hr_settings, 80);
+
+    lv_obj_t *lbl_btn_settings = lv_label_create(btn_hr_settings);
+    lv_label_set_text(lbl_btn_settings, LV_SYMBOL_SETTINGS " Settings");
+    lv_obj_center(lbl_btn_settings);*/
 
     hpi_disp_set_curr_screen(SCR_HR);
     hpi_show_screen(scr_hr, m_scroll_dir);
@@ -252,6 +216,7 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
         return;
 
     char buf[32];
+    
     if (hr == 0)
     {
         sprintf(buf, "---");
@@ -262,13 +227,7 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
     }
 
     lv_label_set_text(label_hr_bpm, buf);
-   
     lv_label_set_text_fmt(label_hr_last_update_time, "%d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
-
-    /*char buf_min_max[32];
-    sprintf(buf_min_max, "%d - %d bpm", min, max);
-    lv_label_set_text(label_hr_min_max, buf_min_max);
-    */
 }
 
 void hpi_disp_hr_load_trend(void)
@@ -277,7 +236,7 @@ void hpi_disp_hr_load_trend(void)
 
     int m_num_points = 0;
 
-    hpi_trend_load_day_trend(hr_hourly_trend_points, &m_num_points);
+    hpi_trend_load_hr_day_trend(hr_hourly_trend_points, &m_num_points);
 
     if (chart_hr_trend == NULL)
     {
