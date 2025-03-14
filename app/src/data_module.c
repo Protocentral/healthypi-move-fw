@@ -311,9 +311,9 @@ void data_thread(void)
             if (settings_send_ble_enabled)
             {
 
-                //ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
-                //ble_bioz_notify(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples);
-                // b_notify(ecg_bioz_sensor_sample.bioz_sample);
+                // ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
+                // ble_bioz_notify(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples);
+                //  b_notify(ecg_bioz_sensor_sample.bioz_sample);
 
                 /*resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
                 if (resp_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
@@ -346,10 +346,9 @@ void data_thread(void)
                 .hr = ppg_fi_sensor_sample.hr,
                 .status = ppg_fi_sensor_sample.bpt_status,
                 .progress = ppg_fi_sensor_sample.bpt_progress,
-                //.timestamp = 
+                //.timestamp =
             };
             zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
-            
         }
 
         // Check if PPG data is available
@@ -368,27 +367,29 @@ void data_thread(void)
             {
             }
 
-            // If HR is available, set min, max and mean and publish over ZBUS
-            if (ppg_wr_sensor_sample.hr_confidence > 75)
+            if (ppg_wr_sensor_sample.scd_state == HPI_PPG_SCD_ON_SKIN)
             {
-                struct hpi_hr_t hr_chan_value = {
-                    .time_tm = data_mod_sys_time,
-                    .hr = ppg_wr_sensor_sample.hr,
-                    .hr_ready_flag = true,
-                };
-                zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                if (ppg_wr_sensor_sample.hr_confidence > 75)
+                {
+                    struct hpi_hr_t hr_chan_value = {
+                        .time_tm = data_mod_sys_time,
+                        .hr = ppg_wr_sensor_sample.hr,
+                        .hr_ready_flag = true,
+                    };
+                    zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                }
+
+                if (ppg_wr_sensor_sample.spo2_confidence > 60)
+                {
+                    struct hpi_spo2_t spo2_chan_value = {
+                        .time_tm = data_mod_sys_time,
+                        .spo2 = ppg_wr_sensor_sample.spo2,
+                    };
+                    zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
+                }
             }
 
-            if(ppg_wr_sensor_sample.spo2_confidence>60)
-            {
-                struct hpi_spo2_t spo2_chan_value = {
-                    .spo2 = ppg_wr_sensor_sample.spo2,
-                    .time_tm = data_mod_sys_time,
-                };
-                zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
-            }
-
-            //LOG_DBG("SpO2: %d | Confidence: %d", ppg_wr_sensor_sample.spo2, ppg_wr_sensor_sample.spo2_confidence);
+            // LOG_DBG("SpO2: %d | Confidence: %d", ppg_wr_sensor_sample.spo2, ppg_wr_sensor_sample.spo2_confidence);
         }
 
         k_sleep(K_MSEC(40));

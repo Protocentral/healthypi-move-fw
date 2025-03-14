@@ -24,8 +24,6 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 
 #define MAX32664C_FW_BIN_INCLUDE 0
 
-
-
 static int m_read_op_mode(const struct device *dev)
 {
     // struct max32664c_data *data = dev->data;
@@ -518,7 +516,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
         // EN SCD
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
         //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x42, 0x30, 0x00);
         //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x01, 0x01);

@@ -289,15 +289,15 @@ void hpi_ppg_disp_update_status(uint8_t status)
 
     switch (status)
     {
-    case HPI_PPG_STATUS_UNKNOWN:
-    case HPI_PPG_STATUS_OFF_SKIN:
+    case HPI_PPG_SCD_STATUS_UNKNOWN:
+    case HPI_PPG_SCD_OFF_SKIN:
         sprintf(stat_str, "Off Skin");
         hpi_scr_ppg_hide_plot(true);
         break;
-    case HPI_PPG_STATUS_ON_OBJ:
+    case HPI_PPG_SCD_ON_OBJ:
         sprintf(stat_str, "On Obj.");
         break;
-    case HPI_PPG_STATUS_ON_SKIN:
+    case HPI_PPG_SCD_ON_SKIN:
         sprintf(stat_str, "On Skin");
         hpi_scr_ppg_hide_plot(false);
         break;

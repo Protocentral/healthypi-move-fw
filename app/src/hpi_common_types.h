@@ -13,10 +13,10 @@ HealthyPi specific common data types
 
 enum hpi_ppg_status 
 {
-    HPI_PPG_STATUS_UNKNOWN,
-    HPI_PPG_STATUS_OFF_SKIN,
-    HPI_PPG_STATUS_ON_OBJ,
-    HPI_PPG_STATUS_ON_SKIN,
+    HPI_PPG_SCD_STATUS_UNKNOWN,
+    HPI_PPG_SCD_OFF_SKIN,
+    HPI_PPG_SCD_ON_OBJ,
+    HPI_PPG_SCD_ON_SKIN,
 };
 
 struct hpi_ecg_bioz_sensor_data_t

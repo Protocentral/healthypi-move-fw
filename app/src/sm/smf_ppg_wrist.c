@@ -107,6 +107,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 LOG_DBG("OFF SKIN");
                 //k_sem_give(&sem_ppg_wrist_off_skin);
             }*/
+            
             //LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
 
             k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
@@ -147,7 +148,7 @@ static void st_ppg_samp_active_entry(void *o)
 
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
     //hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AGC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
 }
 
