@@ -462,7 +462,7 @@ static void st_display_active_run(void *o)
     case SCR_TEMP:
         if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
         {            
-            hpi_temp_disp_update_temp_f((float)m_disp_temp);
+            hpi_temp_disp_update_temp_f((double)m_disp_temp);
             last_temp_trend_refresh = k_uptime_get_32();
         }
         break;

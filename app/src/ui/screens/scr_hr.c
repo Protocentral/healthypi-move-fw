@@ -254,7 +254,7 @@ void hpi_disp_hr_load_trend(void)
             }
         }
 
-        lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+        //lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
         lv_chart_refresh(chart_hr_trend);
     }
     else

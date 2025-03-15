@@ -225,11 +225,9 @@ void draw_scr_vitals_home(enum scroll_dir m_scroll_dir);
 void hpi_disp_home_update_batt_level(int batt_level, bool charging);
 void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
 
-void hpi_temp_disp_update_temp_f(float temp_f);
+void hpi_temp_disp_update_temp_f(double temp_f);
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent);
 
 void disp_screen_event(lv_event_t *e);
-
-
