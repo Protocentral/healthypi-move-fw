@@ -146,7 +146,7 @@ struct tm disp_get_hr_last_update_ts(void);
 
 // Spo2 Screen functions
 void draw_scr_spo2(enum scroll_dir m_scroll_dir);
-void hpi_disp_update_spo2(uint8_t spo2);
+void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update);
 void hpi_disp_spo2_load_trend(void);
 
 // ECG Screen functions

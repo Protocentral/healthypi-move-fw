@@ -18,9 +18,10 @@ static lv_chart_series_t *ser_spo2_min_trend;
 
 // GUI Labels
 static lv_obj_t *label_spo2_percent;
-//static lv_obj_t *label_spo2_status;
+static lv_obj_t *label_spo2_last_update_time;
+// static lv_obj_t *label_spo2_status;
 
-//static lv_obj_t *label_spo2_min_max;
+// static lv_obj_t *label_spo2_min_max;
 static lv_obj_t *btn_spo2_settings;
 
 // Externs
@@ -58,7 +59,7 @@ static void scr_spo2_btn_live_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t) SCR_SPO2);
+        hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t)SCR_SPO2);
     }
 }
 
@@ -83,7 +84,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "SpO2");
-   
+
     lv_obj_t *cont_spo2 = lv_obj_create(cont_col);
     lv_obj_set_size(cont_spo2, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_spo2, LV_FLEX_FLOW_ROW);
@@ -95,7 +96,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *img1 = lv_img_create(cont_spo2);
     lv_img_set_src(img1, &icon_spo2_30x35);
-    //lv_obj_align_to(img1, label_spo2_percent, LV_ALIGN_OUT_LEFT_MID, -10, 0);
+    // lv_obj_align_to(img1, label_spo2_percent, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 
     label_spo2_percent = lv_label_create(cont_spo2);
     lv_label_set_text(label_spo2_percent, "00 %");
@@ -110,16 +111,16 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_top(cont_spo2_time, 0, LV_PART_MAIN);
 
     lv_obj_t *label_spo2_last_update = lv_label_create(cont_spo2_time);
-    lv_label_set_text(label_spo2_last_update, "Last update:");
+    lv_label_set_text(label_spo2_last_update, "Last updated:");
     lv_obj_add_style(label_spo2_last_update, &style_tiny, 0);
 
-    lv_obj_t *label_spo2_last_update_time = lv_label_create(cont_spo2_time);
+    label_spo2_last_update_time = lv_label_create(cont_spo2_time);
     lv_label_set_text(label_spo2_last_update_time, "00:00");
 
-    //lv_obj_align_to(cont_spo2, NULL, LV_ALIGN_CENTER, 0, 0);
-  
-    //label_spo2_last_update = lv_label_create(cont_col);    lv_label_set_text(label_spo2_last_update, "Latest");
-    //lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
+    // lv_obj_align_to(cont_spo2, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    // label_spo2_last_update = lv_label_create(cont_col);    lv_label_set_text(label_spo2_last_update, "Latest");
+    // lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     chart_spo2_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_spo2_trend, 290, 170);
@@ -132,7 +133,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_size(chart_spo2_trend, 5, LV_PART_INDICATOR);
 
     lv_obj_add_event_cb(chart_spo2_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
-    //lv_obj_align_to(chart_spo2_trend, NULL, LV_ALIGN_CENTER, 15, 40);
+    // lv_obj_align_to(chart_spo2_trend, NULL, LV_ALIGN_CENTER, 15, 40);
 
     lv_obj_set_style_bg_color(chart_spo2_trend, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_spo2_trend, 0, LV_PART_MAIN);
@@ -156,10 +157,10 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     label_spo2_min_max = lv_label_create(cont_col);
     lv_label_set_text(label_spo2_min_max, "92 - 96 %");
     lv_obj_add_style(label_spo2_min_max, &style_white_medium, 0);
-  
+
     lv_obj_t *lbl_minmax_title = lv_label_create(cont_col);
     lv_label_set_text(lbl_minmax_title, "Hourly SpO2 Range");(*/
-    
+
     /*lv_obj_t *btn_measure = lv_btn_create(cont_col);
     //lv_obj_set_height(btn_measure, 80);
     lv_obj_add_event_cb(btn_measure, scr_spo2_measure_btn_event_handler, LV_EVENT_ALL, NULL);
@@ -188,17 +189,25 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_center(label_btn_spo2_live);
 
     lv_obj_align_to(btn_spo2_live, NULL, LV_ALIGN_CENTER, 0, 130);
-    
+
     hpi_disp_set_curr_screen(SCR_SPO2);
     hpi_show_screen(scr_spo2, m_scroll_dir);
 }
 
-void hpi_disp_update_spo2(uint8_t spo2)
+void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update)
 {
     if (label_spo2_percent == NULL)
         return;
 
-    lv_label_set_text_fmt(label_spo2_percent, "%d %", spo2);
+    if (spo2 == 0)
+    {
+        lv_label_set_text(label_spo2_percent, "-- %");
+    }
+    else
+    {
+        lv_label_set_text_fmt(label_spo2_percent, "%d %", spo2);
+    }
+    lv_label_set_text_fmt(label_spo2_last_update_time, "%d:%d", tm_last_update.tm_hour, tm_last_update.tm_min);
 }
 
 void hpi_disp_spo2_load_trend(void)
@@ -209,6 +218,6 @@ void hpi_disp_spo2_load_trend(void)
     static uint16_t max_values[24] = {95, 96, 97, 98, 99, 100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82};
     static uint16_t min_values[24] = {90, 91, 92, 93, 94, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77};
 
-    //hpi_set_chart_points(ser_spo2_max_trend, max_values, 24);
-    //hpi_set_chart_points(ser_spo2_min_trend, min_values, 24);
+    // hpi_set_chart_points(ser_spo2_max_trend, max_values, 24);
+    // hpi_set_chart_points(ser_spo2_min_trend, min_values, 24);
 }

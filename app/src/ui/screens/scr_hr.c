@@ -140,27 +140,27 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_top(cont_hr_time, 0, LV_PART_MAIN);
 
     lv_obj_t *label_hr_last_update = lv_label_create(cont_hr_time);
-    lv_label_set_text(label_hr_last_update, "Last update:");
+    lv_label_set_text(label_hr_last_update, "Last updated:");
     lv_obj_add_style(label_hr_last_update, &style_tiny, 0);
-    //lv_obj_set_style_text_color(label_hr_last_update, lv_color_hex(0xFFFF00), 0);
+    // lv_obj_set_style_text_color(label_hr_last_update, lv_color_hex(0xFFFF00), 0);
 
     label_hr_last_update_time = lv_label_create(cont_hr_time);
     struct tm last_update_ts = disp_get_hr_last_update_ts();
-    
+
     lv_label_set_text_fmt(label_hr_last_update_time, "%d:%d", last_update_ts.tm_hour, last_update_ts.tm_min);
-    //lv_obj_add_style(label_hr_last_update_time, &style_tiny, 0);
-    //lv_obj_set_style_text_color(label_hr_last_update_time, lv_color_hex(0xFFFF00), 0);
+    // lv_obj_add_style(label_hr_last_update_time, &style_tiny, 0);
+    // lv_obj_set_style_text_color(label_hr_last_update_time, lv_color_hex(0xFFFF00), 0);
 
     chart_hr_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_trend, 290, 170);
-    //lv_obj_set_style_pad_left(chart_hr_trend, 100, LV_PART_MAIN);
+    // lv_obj_set_style_pad_left(chart_hr_trend, 100, LV_PART_MAIN);
     lv_chart_set_type(chart_hr_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
     lv_chart_set_point_count(chart_hr_trend, 24);
-    //lv_chart_set_zoom_x(chart_hr_trend, 512);
-    //lv_obj_set_style_pad_column(chart_hr_trend, 1, LV_PART_MAIN);
-    //lv_obj_set_style_pad_left(chart_hr_trend, -1, LV_PART_TICKS);
-    //lv_obj_set_style_pad_right(chart_hr_trend, -10, LV_PART_TICKS);
+    // lv_chart_set_zoom_x(chart_hr_trend, 512);
+    // lv_obj_set_style_pad_column(chart_hr_trend, 1, LV_PART_MAIN);
+    // lv_obj_set_style_pad_left(chart_hr_trend, -1, LV_PART_TICKS);
+    // lv_obj_set_style_pad_right(chart_hr_trend, -10, LV_PART_TICKS);
 
     // Hide the lines and show the points
     lv_obj_set_style_line_width(chart_hr_trend, 0, LV_PART_ITEMS);
@@ -215,18 +215,14 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
     if (label_hr_bpm == NULL)
         return;
 
-    char buf[32];
-    
     if (hr == 0)
     {
-        sprintf(buf, "---");
+        lv_label_set_text(label_hr_bpm, "--");
     }
     else
     {
-        sprintf(buf, "%d", hr);
+        lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
-
-    lv_label_set_text(label_hr_bpm, buf);
     lv_label_set_text_fmt(label_hr_last_update_time, "%d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
 }
 
@@ -236,32 +232,37 @@ void hpi_disp_hr_load_trend(void)
 
     int m_num_points = 0;
 
-    hpi_trend_load_hr_day_trend(hr_hourly_trend_points, &m_num_points);
-
-    if (chart_hr_trend == NULL)
+    if (hpi_trend_load_hr_day_trend(hr_hourly_trend_points, &m_num_points) == 0)
     {
-        return;
+        if (chart_hr_trend == NULL)
+        {
+            return;
+        }
+
+        int y_max = -1;
+        int y_min = 999;
+
+        for (int i = 0; i < 24; i++)
+        {
+            // LOG_DBG("HR Point: %" PRIx64 "| %d | %d | %d", hr_trend_points[i].timestamp, hr_trend_points[i].hr_max, hr_trend_points[i].hr_min, hr_trend_points[i].hr_avg);
+            ser_hr_max_trend->y_points[i] = hr_hourly_trend_points[i].hr_max;
+            ser_hr_min_trend->y_points[i] = hr_hourly_trend_points[i].hr_min;
+
+            if (hr_hourly_trend_points[i].hr_max > y_max)
+            {
+                y_max = hr_hourly_trend_points[i].hr_max;
+            }
+            if ((hr_hourly_trend_points[i].hr_min < y_min) && (hr_hourly_trend_points[i].hr_min != 0))
+            {
+                y_min = hr_hourly_trend_points[i].hr_min;
+            }
+        }
+
+        lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+        lv_chart_refresh(chart_hr_trend);
     }
-
-    int y_max = -1;
-    int y_min = 999;
-
-    for (int i = 0; i < 24; i++)
+    else
     {
-        // LOG_DBG("HR Point: %" PRIx64 "| %d | %d | %d", hr_trend_points[i].timestamp, hr_trend_points[i].hr_max, hr_trend_points[i].hr_min, hr_trend_points[i].hr_avg);
-        ser_hr_max_trend->y_points[i] = hr_hourly_trend_points[i].hr_max;
-        ser_hr_min_trend->y_points[i] = hr_hourly_trend_points[i].hr_min;
-
-        if (hr_hourly_trend_points[i].hr_max > y_max)
-        {
-            y_max = hr_hourly_trend_points[i].hr_max;
-        }
-        if ((hr_hourly_trend_points[i].hr_min < y_min) && (hr_hourly_trend_points[i].hr_min != 0))
-        {
-            y_min = hr_hourly_trend_points[i].hr_min;
-        }
+        LOG_ERR("No data to load");
     }
-
-    lv_chart_set_range(chart_hr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
-    lv_chart_refresh(chart_hr_trend);
 }

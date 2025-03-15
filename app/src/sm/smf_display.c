@@ -11,7 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_SPO2
+#define HPI_DEFAULT_START_SCREEN SCR_HR
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -63,11 +63,11 @@ static uint16_t m_disp_hr = 0;
 static uint16_t m_disp_hr_max = 0;
 static uint16_t m_disp_hr_min = 0;
 static uint16_t m_disp_hr_mean = 0;
-static struct tm m_disp_hr_last_update_ts;
+static struct tm m_disp_hr_last_update_tm;
 
 // @brief Spo2 Screen variables
 static uint8_t m_disp_spo2 = 0;
-static uint32_t m_disp_spo2_last_refresh = 0;
+static struct tm m_disp_spo2_last_refresh_tm;
 
 // @brief Today Screen variables
 static uint32_t m_disp_steps = 0;
@@ -130,7 +130,7 @@ static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
 
 struct tm disp_get_hr_last_update_ts(void)
 {
-    return m_disp_hr_last_update_ts;
+    return m_disp_hr_last_update_tm;
 }
 
 int64_t disp_get_system_time(void)
@@ -474,7 +474,7 @@ static void st_display_active_run(void *o)
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
             hpi_disp_hr_load_trend();
-            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_ts); 
+            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_tm); 
             last_hr_trend_refresh = k_uptime_get_32();
         }
         break;
@@ -483,7 +483,7 @@ static void st_display_active_run(void *o)
         {
             hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
-            hpi_disp_update_spo2(m_disp_spo2);
+            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
         }
         break;
     case SCR_BPT:
@@ -680,7 +680,7 @@ static void disp_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
-    m_disp_hr_last_update_ts = hpi_hr->time_tm;
+    m_disp_hr_last_update_tm = hpi_hr->time_tm;
     //LOG_DBG("ZB HR: %d at %d:%d \n", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
@@ -689,6 +689,7 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
+    m_disp_spo2_last_refresh_tm = hpi_spo2->time_tm;
     //LOG_DBG("ZB Spo2: %d\n", hpi_spo2->spo2);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
