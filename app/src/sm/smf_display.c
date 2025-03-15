@@ -486,8 +486,8 @@ static void st_display_active_run(void *o)
         // st_disp_do_bpt_stuff();
         break;
     case SCR_SPL_PLOT_ECG:
-        // hpi_ecg_disp_update_hr(m_disp_hr);
-        // hpi_ecg_disp_update_timer(m_disp_ecg_timer);
+        hpi_ecg_disp_update_hr(m_disp_hr);
+        hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
             hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);

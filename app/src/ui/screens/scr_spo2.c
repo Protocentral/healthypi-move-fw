@@ -214,8 +214,6 @@ void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update)
     }
     lv_label_set_text_fmt(label_spo2_last_update_time, "%d:%d", tm_last_update.tm_hour, tm_last_update.tm_min);
 }
-
-
     
 void hpi_disp_spo2_load_trend(void)
 {
@@ -245,7 +243,7 @@ void hpi_disp_spo2_load_trend(void)
             ser_max_trend->y_points[i] = spo2_hourly_trend_points[i].max;
             ser_min_trend->y_points[i] = spo2_hourly_trend_points[i].min;
 
-            LOG_DBG("SpO2 Point: %d | %d | %d | %d", spo2_hourly_trend_points[i].hour_no, spo2_hourly_trend_points[i].max, spo2_hourly_trend_points[i].min, spo2_hourly_trend_points[i].avg);
+           // LOG_DBG("SpO2 Point: %d | %d | %d | %d", spo2_hourly_trend_points[i].hour_no, spo2_hourly_trend_points[i].max, spo2_hourly_trend_points[i].min, spo2_hourly_trend_points[i].avg);
 
             lv_chart_set_range(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
             lv_chart_refresh(chart_spo2_trend);   
