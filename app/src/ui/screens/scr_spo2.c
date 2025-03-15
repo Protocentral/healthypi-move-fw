@@ -8,20 +8,25 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "trends.h"
+
+LOG_MODULE_REGISTER(hpi_disp_scr_spo2, LOG_LEVEL_DBG);
 
 lv_obj_t *scr_spo2;
 
 static lv_obj_t *chart_spo2_trend;
 
-static lv_chart_series_t *ser_spo2_max_trend;
-static lv_chart_series_t *ser_spo2_min_trend;
+#define SPO2_SCR_TREND_MAX_POINTS 24
+
+static lv_chart_series_t *ser_max_trend;
+static lv_chart_series_t *ser_min_trend;
 
 // GUI Labels
 static lv_obj_t *label_spo2_percent;
 static lv_obj_t *label_spo2_last_update_time;
 // static lv_obj_t *label_spo2_status;
 
-// static lv_obj_t *label_spo2_min_max;
+// static lv_obj_t *label_min_max;
 static lv_obj_t *btn_spo2_settings;
 
 // Externs
@@ -124,13 +129,13 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 
     chart_spo2_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_spo2_trend, 290, 170);
-    lv_chart_set_type(chart_spo2_trend, LV_CHART_TYPE_BAR);
+    lv_chart_set_type(chart_spo2_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_range(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 50, 100);
     lv_chart_set_point_count(chart_spo2_trend, 24);
 
     // Hide the lines and show the points
     lv_obj_set_style_line_width(chart_spo2_trend, 0, LV_PART_ITEMS);
-    lv_obj_set_style_size(chart_spo2_trend, 5, LV_PART_INDICATOR);
+    lv_obj_set_style_size(chart_spo2_trend, 8, LV_PART_INDICATOR);
 
     lv_obj_add_event_cb(chart_spo2_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
     // lv_obj_align_to(chart_spo2_trend, NULL, LV_ALIGN_CENTER, 15, 40);
@@ -142,8 +147,8 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
     lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 80);
 
-    ser_spo2_max_trend = lv_chart_add_series(chart_spo2_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
-    ser_spo2_min_trend = lv_chart_add_series(chart_spo2_trend, lv_color_hex(0x00B0FF), LV_CHART_AXIS_PRIMARY_Y);
+    ser_max_trend = lv_chart_add_series(chart_spo2_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
+    ser_min_trend = lv_chart_add_series(chart_spo2_trend, lv_color_hex(0x00B0FF), LV_CHART_AXIS_PRIMARY_Y);
 
     lv_obj_t *lbl_legend = lv_label_create(cont_col);
     lv_label_set_recolor(lbl_legend, true);
@@ -154,9 +159,9 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(lbl_gap1, " ");
 
     /*
-    label_spo2_min_max = lv_label_create(cont_col);
-    lv_label_set_text(label_spo2_min_max, "92 - 96 %");
-    lv_obj_add_style(label_spo2_min_max, &style_white_medium, 0);
+    label_min_max = lv_label_create(cont_col);
+    lv_label_set_text(label_min_max, "92 - 96 %");
+    lv_obj_add_style(label_min_max, &style_white_medium, 0);
 
     lv_obj_t *lbl_minmax_title = lv_label_create(cont_col);
     lv_label_set_text(lbl_minmax_title, "Hourly SpO2 Range");(*/
@@ -210,14 +215,43 @@ void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update)
     lv_label_set_text_fmt(label_spo2_last_update_time, "%d:%d", tm_last_update.tm_hour, tm_last_update.tm_min);
 }
 
+
+    
 void hpi_disp_spo2_load_trend(void)
 {
+    struct hpi_hourly_trend_point_t spo2_hourly_trend_points[SPO2_SCR_TREND_MAX_POINTS];
     if (chart_spo2_trend == NULL)
         return;
 
-    static uint16_t max_values[24] = {95, 96, 97, 98, 99, 100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82};
-    static uint16_t min_values[24] = {90, 91, 92, 93, 94, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77};
+    int m_num_points = 0;
 
-    // hpi_set_chart_points(ser_spo2_max_trend, max_values, 24);
-    // hpi_set_chart_points(ser_spo2_min_trend, min_values, 24);
+    //if(0)
+    if(hpi_trend_load_spo2_day_trend(spo2_hourly_trend_points, &m_num_points) == 0)
+    {
+        int y_max = -1;
+        int y_min = 999;
+
+        for (int i = 0; i < SPO2_SCR_TREND_MAX_POINTS; i++)
+        {
+            if(spo2_hourly_trend_points[i].max > y_max)
+            {
+                y_max = spo2_hourly_trend_points[i].max;
+            }
+            if((spo2_hourly_trend_points[i].min < y_min)&&(spo2_hourly_trend_points[i].min != 0))
+            {
+                y_min = spo2_hourly_trend_points[i].min;
+            }
+
+            ser_max_trend->y_points[i] = spo2_hourly_trend_points[i].max;
+            ser_min_trend->y_points[i] = spo2_hourly_trend_points[i].min;
+
+            LOG_DBG("SpO2 Point: %d | %d | %d | %d", spo2_hourly_trend_points[i].hour_no, spo2_hourly_trend_points[i].max, spo2_hourly_trend_points[i].min, spo2_hourly_trend_points[i].avg);
+
+            lv_chart_set_range(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+            lv_chart_refresh(chart_spo2_trend);   
+        }
+    } else
+    {
+        LOG_ERR("No SpO2 data to load");
+    }
 }

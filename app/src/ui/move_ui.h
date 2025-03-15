@@ -132,7 +132,6 @@ void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
 
 void hdr_time_display_update(struct rtc_time in_time);
-int64_t disp_get_system_time(void);
 
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);

@@ -23,9 +23,6 @@ static lv_obj_t *chart_hr_trend;
 static lv_chart_series_t *ser_hr_max_trend;
 static lv_chart_series_t *ser_hr_min_trend;
 
-static uint16_t hr_trend_max[HR_SCR_TREND_MAX_POINTS] = {0};
-static uint16_t hr_trend_min[HR_SCR_TREND_MAX_POINTS] = {0};
-
 // static lv_chart_series_t *ser_hr_trend;
 // static lv_chart_series_t *ser_hr_max_trend;
 // static lv_chart_series_t *ser_hr_min_trend;
@@ -229,7 +226,6 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
 void hpi_disp_hr_load_trend(void)
 {
     struct hpi_hourly_trend_point_t hr_hourly_trend_points[HR_SCR_TREND_MAX_POINTS];
-
     int m_num_points = 0;
 
     if (hpi_trend_load_hr_day_trend(hr_hourly_trend_points, &m_num_points) == 0)
@@ -245,16 +241,16 @@ void hpi_disp_hr_load_trend(void)
         for (int i = 0; i < 24; i++)
         {
             // LOG_DBG("HR Point: %" PRIx64 "| %d | %d | %d", hr_trend_points[i].timestamp, hr_trend_points[i].hr_max, hr_trend_points[i].hr_min, hr_trend_points[i].hr_avg);
-            ser_hr_max_trend->y_points[i] = hr_hourly_trend_points[i].hr_max;
-            ser_hr_min_trend->y_points[i] = hr_hourly_trend_points[i].hr_min;
+            ser_hr_max_trend->y_points[i] = hr_hourly_trend_points[i].max;
+            ser_hr_min_trend->y_points[i] = hr_hourly_trend_points[i].min;
 
-            if (hr_hourly_trend_points[i].hr_max > y_max)
+            if (hr_hourly_trend_points[i].max > y_max)
             {
-                y_max = hr_hourly_trend_points[i].hr_max;
+                y_max = hr_hourly_trend_points[i].max;
             }
-            if ((hr_hourly_trend_points[i].hr_min < y_min) && (hr_hourly_trend_points[i].hr_min != 0))
+            if ((hr_hourly_trend_points[i].min < y_min) && (hr_hourly_trend_points[i].min != 0))
             {
-                y_min = hr_hourly_trend_points[i].hr_min;
+                y_min = hr_hourly_trend_points[i].min;
             }
         }
 

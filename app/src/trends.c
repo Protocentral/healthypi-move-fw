@@ -49,47 +49,46 @@ K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_trend_point_t), 8, 1);
 
 // Trend buffers
-struct hpi_hr_trend_point_t hr_trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
-struct hpi_hr_trend_point_t hr_trend_point_all[1440];
+struct hpi_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
+struct hpi_trend_point_t trend_point_all[1440];
 
 static int hpi_trend_hr_process_points()
 {
-    bool hr_point_valid = true;
     struct hpi_hr_trend_point_t hr_trend_point;
     hr_trend_point.timestamp = m_trend_time_ts;
     uint16_t hr_sum = 0;
-    hr_trend_point.hr_max = 0;
-    hr_trend_point.hr_min = 65535;
+    hr_trend_point.max = 0;
+    hr_trend_point.min = 65535;
 
     bool spo2_point_valid = true;
     struct hpi_spo2_trend_point_t spo2_trend_point;
     spo2_trend_point.timestamp = m_trend_time_ts;
     uint16_t spo2_sum = 0;
-    spo2_trend_point.spo2_max = 0;
-    spo2_trend_point.spo2_min = 65535;
+    spo2_trend_point.max = 0;
+    spo2_trend_point.min = 65535;
 
     for (int i = 0; i < HR_TREND_MINUTE_PTS; i++)
     {
-        if (m_hr_curr_minute[i] > hr_trend_point.hr_max)
+        if (m_hr_curr_minute[i] > hr_trend_point.max)
         {
-            hr_trend_point.hr_max = m_hr_curr_minute[i];
+            hr_trend_point.max = m_hr_curr_minute[i];
         }
-        if ((m_hr_curr_minute[i] < hr_trend_point.hr_min) && (m_hr_curr_minute[i] != 0))
+        if ((m_hr_curr_minute[i] < hr_trend_point.min) && (m_hr_curr_minute[i] != 0))
         {
-            hr_trend_point.hr_min = m_hr_curr_minute[i];
+            hr_trend_point.min = m_hr_curr_minute[i];
         }
         if ((m_hr_curr_minute[i] != 0) && (m_hr_curr_minute[i] != 65535))
         {
             hr_sum += m_hr_curr_minute[i];
         }
 
-        if (m_spo2_curr_minute[i] > spo2_trend_point.spo2_max)
+        if (m_spo2_curr_minute[i] > spo2_trend_point.max)
         {
-            spo2_trend_point.spo2_max = m_spo2_curr_minute[i];
+            spo2_trend_point.max = m_spo2_curr_minute[i];
         }
-        if ((m_spo2_curr_minute[i] < spo2_trend_point.spo2_min) && (m_spo2_curr_minute[i] != 0))
+        if ((m_spo2_curr_minute[i] < spo2_trend_point.min) && (m_spo2_curr_minute[i] != 0))
         {
-            spo2_trend_point.spo2_min = m_spo2_curr_minute[i];
+            spo2_trend_point.min = m_spo2_curr_minute[i];
         }
         if ((m_spo2_curr_minute[i] != 0) && (m_spo2_curr_minute[i] != 65535))
         {
@@ -101,17 +100,17 @@ static int hpi_trend_hr_process_points()
         }
     }
 
-    if (hr_sum >0)
+    if (hr_sum > 0)
     {
-        hr_trend_point.hr_avg = hr_sum / HR_TREND_MINUTE_PTS;
-        hr_trend_point.hr_latest = m_hr_curr_minute[HR_TREND_MINUTE_PTS - 1];
+        hr_trend_point.avg = hr_sum / HR_TREND_MINUTE_PTS;
+        hr_trend_point.latest = m_hr_curr_minute[HR_TREND_MINUTE_PTS - 1];
         k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
     }
 
     if (spo2_point_valid)
     {
-        spo2_trend_point.spo2_avg = spo2_sum / HR_TREND_MINUTE_PTS;
-        spo2_trend_point.spo2_latest = m_spo2_curr_minute[HR_TREND_MINUTE_PTS - 1];
+        spo2_trend_point.avg = spo2_sum / HR_TREND_MINUTE_PTS;
+        spo2_trend_point.latest = m_spo2_curr_minute[HR_TREND_MINUTE_PTS - 1];
         k_msgq_put(&q_spo2_trend, &spo2_trend_point, K_NO_WAIT);
     }
 }
@@ -154,12 +153,12 @@ void hpi_trend_record_thread(void)
         int64_t today_ts = hpi_trend_get_day_start_ts(&_hr_trend_minute.timestamp);
         if (k_msgq_get(&q_hr_trend, &_hr_trend_minute, K_NO_WAIT) == 0)
         {
-            LOG_DBG("Recd HR point: %" PRIx64 "| %d | %d | %d", _hr_trend_minute.timestamp, _hr_trend_minute.hr_max, _hr_trend_minute.hr_min, _hr_trend_minute.hr_avg);
+            LOG_DBG("Recd HR point: %" PRIx64 "| %d | %d | %d", _hr_trend_minute.timestamp, _hr_trend_minute.max, _hr_trend_minute.min, _hr_trend_minute.avg);
             hpi_trend_wr_hr_point_to_file(_hr_trend_minute, today_ts);
         }
         if (k_msgq_get(&q_spo2_trend, &_spo2_trend_minute, K_NO_WAIT) == 0)
         {
-            LOG_DBG("Recd SpO2 point: %" PRIx64 "| %d | %d | %d", _spo2_trend_minute.timestamp, _spo2_trend_minute.spo2_max, _spo2_trend_minute.spo2_min, _spo2_trend_minute.spo2_avg);
+            LOG_DBG("Recd SpO2 point: %" PRIx64 "| %d | %d | %d", _spo2_trend_minute.timestamp, _spo2_trend_minute.max, _spo2_trend_minute.min, _spo2_trend_minute.avg);
             hpi_trend_wr_spo2_point_to_file(_spo2_trend_minute, today_ts);
         }
 
@@ -237,7 +236,7 @@ int hpi_trend_load_hr_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend
     if (ret < 0)
     {
         LOG_ERR("FAIL: stat %s: %d", fname, ret);
-        if(ret == -ENOENT)
+        if (ret == -ENOENT)
         {
             *num_points = 0;
             LOG_ERR("File not found: %s", fname);
@@ -259,7 +258,7 @@ int hpi_trend_load_hr_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend
         LOG_ERR("FAIL: open %s: %d", fname, ret);
     }
 
-    struct hpi_hr_trend_point_t hr_trend_point;
+    struct hpi_trend_point_t hr_trend_point;
 
     int bucket_counts[NUM_HOURS] = {0};
 
@@ -270,17 +269,20 @@ int hpi_trend_load_hr_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend
         {
             LOG_ERR("FAIL: read %s: %d", fname, ret);
         }
-        hr_trend_point_all[i] = hr_trend_point;
+        trend_point_all[i] = hr_trend_point;
     }
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
 
     for (int i = 0; i < num_trend_points; i++)
     {
-        struct tm *time_info = gmtime(&hr_trend_point_all[i].timestamp);
+        struct tm *time_info = gmtime(&trend_point_all[i].timestamp);
         int hour = time_info->tm_hour;
 
         if (bucket_counts[hour] < MAX_POINTS_PER_HOUR)
         {
-            hr_trend_day_points[hour][bucket_counts[hour]] = hr_trend_point_all[i];
+            trend_day_points[hour][bucket_counts[hour]] = trend_point_all[i];
             bucket_counts[hour]++;
         }
         else
@@ -289,51 +291,49 @@ int hpi_trend_load_hr_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend
         }
     }
 
-    // Print the results
     for (int i = 0; i < NUM_HOURS; i++)
     {
         // printf("Hour %d: %d points\n", i, bucket_counts[i]);
 
         hr_hourly_trend_points[i].hour_no = i;
-        hr_hourly_trend_points[i].hr_avg = 0;
-        hr_hourly_trend_points[i].hr_max = 0;
-        hr_hourly_trend_points[i].hr_min = 0;
+        hr_hourly_trend_points[i].avg = 0;
+        hr_hourly_trend_points[i].max = 0;
+        hr_hourly_trend_points[i].min = 0;
 
-        uint16_t hr_max = 0;
-        uint16_t hr_min = 255;
+        uint16_t max = 0;
+        uint16_t min = 255;
 
         for (int j = 0; j < bucket_counts[i]; j++)
         {
-            if (hr_trend_day_points[i][j].hr_max > hr_max)
+            if (trend_day_points[i][j].max > max)
             {
-                hr_hourly_trend_points[i].hr_max = hr_trend_day_points[i][j].hr_max;
+                hr_hourly_trend_points[i].max = trend_day_points[i][j].max;
             }
-            if (hr_trend_day_points[i][j].hr_min < hr_min)
+            if (trend_day_points[i][j].min < min)
             {
-                hr_hourly_trend_points[i].hr_min = hr_trend_day_points[i][j].hr_min;
+                hr_hourly_trend_points[i].min = trend_day_points[i][j].min;
             }
-            hr_hourly_trend_points[i].hr_avg += hr_trend_day_points[i][j].hr_avg;
-            // printf("  Timestamp: %" PRIx64 "\n", hr_trend_day_points[i][j].timestamp);
+            hr_hourly_trend_points[i].avg += trend_day_points[i][j].avg;
+            // printf("  Timestamp: %" PRIx64 "\n", trend_day_points[i][j].timestamp);
         }
         if (bucket_counts[i] > 0)
         {
-            hr_hourly_trend_points[i].hr_avg /= bucket_counts[i];
+            hr_hourly_trend_points[i].avg /= bucket_counts[i];
         }
 
-        // LOG_DBG("Hour %d: | %d | %d | %d", hr_hourly_trend_points[i].hour_no, hr_hourly_trend_points[i].hr_max, hr_hourly_trend_points[i].hr_min, hr_hourly_trend_points[i].hr_avg);
+        // LOG_DBG("Hour %d: | %d | %d | %d", hr_hourly_trend_points[i].hour_no, hr_hourly_trend_points[i].max, hr_hourly_trend_points[i].min, hr_hourly_trend_points[i].avg);
     }
-
-    ret = fs_close(&file);
-    ret = fs_sync(&file);
-
     return 0;
 }
 
-int hpi_trend_load_spo2_day_trend(struct hpi_spo2_hourly_trend_point_t *spo2_hourly_trend_points, int *num_points)
-{
-    struct fs_file_t file;
-    int ret = 0;
+struct fs_file_t file;
+//struct hpi_spo2_trend_point_t spo2_trend_day_points[NUM_HOURS][MAX_POINTS_SPO2_PER_HOUR];
+//struct hpi_spo2_trend_point_t spo2_trend_point_all[360];
 
+int hpi_trend_load_spo2_day_trend(struct hpi_hourly_trend_point_t *spo2_hourly_trend_points, int *num_points)
+{
+    int ret = 0;
+  
     struct fs_dirent trend_file_ent;
     char fname[30];
 
@@ -349,7 +349,12 @@ int hpi_trend_load_spo2_day_trend(struct hpi_spo2_hourly_trend_point_t *spo2_hou
     if (ret < 0)
     {
         LOG_ERR("FAIL: stat %s: %d", fname, ret);
-        return;
+        if (ret == -ENOENT)
+        {
+            *num_points = 0;
+            LOG_ERR("File not found: %s", fname);
+        }
+        return ret;
     }
 
     LOG_DBG("Read from file %s | Size: %d", fname, trend_file_ent.size);
@@ -366,7 +371,7 @@ int hpi_trend_load_spo2_day_trend(struct hpi_spo2_hourly_trend_point_t *spo2_hou
         LOG_ERR("FAIL: open %s: %d", fname, ret);
     }
 
-    struct hpi_spo2_trend_point_t spo2_trend_point;
+    struct hpi_trend_point_t spo2_trend_point;
 
     int bucket_counts[NUM_HOURS] = {0};
 
@@ -377,17 +382,20 @@ int hpi_trend_load_spo2_day_trend(struct hpi_spo2_hourly_trend_point_t *spo2_hou
         {
             LOG_ERR("FAIL: read %s: %d", fname, ret);
         }
-        // spo2_trend_point_all[i] = spo2_trend_point;
+        trend_point_all[i] = spo2_trend_point;
     }
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
 
     for (int i = 0; i < num_trend_points; i++)
     {
-        struct tm *time_info = gmtime(&spo2_trend_point.timestamp);
+        struct tm *time_info = gmtime(&trend_point_all[i].timestamp);
         int hour = time_info->tm_hour;
 
         if (bucket_counts[hour] < MAX_POINTS_PER_HOUR)
         {
-            // spo2_trend_day_points[hour][bucket_counts[hour]] = spo2_trend_point_all[i];
+            trend_day_points[hour][bucket_counts[hour]] = trend_point_all[i];
             bucket_counts[hour]++;
         }
         else
@@ -399,30 +407,33 @@ int hpi_trend_load_spo2_day_trend(struct hpi_spo2_hourly_trend_point_t *spo2_hou
     for (int i = 0; i < NUM_HOURS; i++)
     {
         spo2_hourly_trend_points[i].hour_no = i;
-        spo2_hourly_trend_points[i].spo2_avg = 0;
-        spo2_hourly_trend_points[i].spo2_max = 0;
-        spo2_hourly_trend_points[i].spo2_min = 0;
+        spo2_hourly_trend_points[i].avg = 0;
+        spo2_hourly_trend_points[i].max = 0;
+        spo2_hourly_trend_points[i].min = 0;
 
-        uint8_t spo2_max = 0;
-        uint8_t spo2_min = 255;
+        uint8_t max = 0;
+        uint8_t min = 255;
 
         for (int j = 0; j < bucket_counts[i]; j++)
         {
-            if (spo2_trend_point.spo2_max > spo2_max)
+            if (trend_day_points[i][j].max > max)
             {
-                spo2_hourly_trend_points[i].spo2_max = spo2_trend_point.spo2_max;
+                spo2_hourly_trend_points[i].max = trend_day_points[i][j].max;
             }
-            if (spo2_trend_point.spo2_min < spo2_min)
+            if (trend_day_points[i][j].min < min)
             {
-                spo2_hourly_trend_points[i].spo2_min = spo2_trend_point.spo2_min;
+                spo2_hourly_trend_points[i].min = trend_day_points[i][j].min;
             }
-            spo2_hourly_trend_points[i].spo2_avg += spo2_trend_point.spo2_avg;
+            spo2_hourly_trend_points[i].avg += trend_day_points[i][j].avg;
+            // printf("  Timestamp: %" PRIx64 "\n", trend_day_points[i][j].timestamp);
         }
         if (bucket_counts[i] > 0)
         {
-            spo2_hourly_trend_points[i].spo2_avg /= bucket_counts[i];
+            spo2_hourly_trend_points[i].avg /= bucket_counts[i];
         }
     }
+
+    return 0;
 }
 
 static void trend_hr_listener(const struct zbus_channel *chan)

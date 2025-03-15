@@ -87,11 +87,17 @@ static uint8_t m_disp_bpt_progress = 0;
 
 static uint32_t splash_scr_start_time = 0;
 
+
+
+struct s_disp_object
+{
+    struct smf_ctx ctx;
+
+} s_disp_obj;
+
 // Externs
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
-
-// Screens
 extern lv_obj_t *scr_bpt;
 
 extern struct k_sem sem_disp_smf_start;
@@ -107,11 +113,7 @@ extern struct k_sem sem_crown_key_pressed;
 extern struct k_sem sem_ppg_fi_show_loading;
 extern struct k_sem sem_ppg_fi_hide_loading;
 
-struct s_disp_object
-{
-    struct smf_ctx ctx;
-
-} s_disp_obj;
+// User Profile settings
 
 static uint16_t m_user_height = 170; // Example height in m, adjust as needed
 static uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
@@ -131,12 +133,6 @@ static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
 struct tm disp_get_hr_last_update_ts(void)
 {
     return m_disp_hr_last_update_tm;
-}
-
-int64_t disp_get_system_time(void)
-{
-    int64_t sys_time_ts = gmtime(&m_disp_sys_time);
-    return sys_time_ts;
 }
 
 static void st_display_init_entry(void *o)
@@ -473,17 +469,17 @@ static void st_display_active_run(void *o)
     case SCR_HR:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            hpi_disp_hr_load_trend();
             hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_tm); 
+            hpi_disp_hr_load_trend();
             last_hr_trend_refresh = k_uptime_get_32();
         }
         break;
     case SCR_SPO2:
-        if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_SPO2_REFRESH_INT)
+        if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
+            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
             hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
-            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
         }
         break;
     case SCR_BPT:
