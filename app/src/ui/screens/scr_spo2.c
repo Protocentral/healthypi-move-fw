@@ -115,12 +115,8 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_bottom(cont_spo2_time, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_top(cont_spo2_time, 0, LV_PART_MAIN);
 
-    lv_obj_t *label_spo2_last_update = lv_label_create(cont_spo2_time);
-    lv_label_set_text(label_spo2_last_update, "Last updated:");
-    lv_obj_add_style(label_spo2_last_update, &style_tiny, 0);
-
-    label_spo2_last_update_time = lv_label_create(cont_spo2_time);
-    lv_label_set_text(label_spo2_last_update_time, "00:00");
+    label_spo2_last_update_time = lv_label_create(cont_col);
+    lv_label_set_text(label_spo2_last_update_time, "Last updated: 00:00");
 
     // lv_obj_align_to(cont_spo2, NULL, LV_ALIGN_CENTER, 0, 0);
 
@@ -212,7 +208,7 @@ void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update)
     {
         lv_label_set_text_fmt(label_spo2_percent, "%d %", spo2);
     }
-    lv_label_set_text_fmt(label_spo2_last_update_time, "%d:%d", tm_last_update.tm_hour, tm_last_update.tm_min);
+    lv_label_set_text_fmt(label_spo2_last_update_time, "Last updated: %02d:%02d", tm_last_update.tm_hour, tm_last_update.tm_min);
 }
     
 void hpi_disp_spo2_load_trend(void)
