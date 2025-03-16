@@ -224,7 +224,7 @@ void hpi_disp_spo2_load_trend(void)
     int m_num_points = 0;
 
     //if(0)
-    if(hpi_trend_load_spo2_day_trend(spo2_hourly_trend_points, &m_num_points) == 0)
+    if(hpi_trend_load_day_trend(spo2_hourly_trend_points, &m_num_points, TREND_SPO2) == 0)
     {
         int y_max = -1;
         int y_min = 999;
