@@ -147,4 +147,4 @@ void smf_imu_thread(void)
 #define IMU_THREAD_STACK_SIZE 1024
 #define IMU_THREAD_PRIORITY 5
 
-K_THREAD_DEFINE(smf_imu_thread_id, IMU_THREAD_STACK_SIZE, smf_imu_thread, NULL, NULL, NULL, IMU_THREAD_PRIORITY, 0, 0);
+//K_THREAD_DEFINE(smf_imu_thread_id, IMU_THREAD_STACK_SIZE, smf_imu_thread, NULL, NULL, NULL, IMU_THREAD_PRIORITY, 0, 0);

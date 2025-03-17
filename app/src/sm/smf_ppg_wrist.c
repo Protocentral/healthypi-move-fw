@@ -94,8 +94,8 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             if(ppg_sensor_sample.scd_state==HPI_PPG_SCD_OFF_SKIN)
             {
-                LOG_DBG("OFF SKIN");
-                k_sem_give(&sem_ppg_wrist_off_skin);
+                //LOG_DBG("OFF SKIN");
+                //k_sem_give(&sem_ppg_wrist_off_skin);
             }
 
             // LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);

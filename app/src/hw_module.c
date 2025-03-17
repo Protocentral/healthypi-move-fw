@@ -512,7 +512,7 @@ void hw_init(void)
 
     if (!device_is_ready(pmic))
     {
-        LOG_ERR("Pmic device not ready");
+        LOG_ERR("PMIC device not ready");
     }
 
     if (!device_is_ready(regulators))
@@ -531,7 +531,7 @@ void hw_init(void)
     regulator_enable(ldsw_disp_unit);
     k_msleep(500);
 
-    // regulator_enable(ldsw_sens_1_8);
+    regulator_enable(ldsw_sens_1_8);
 
     // Signal to start display state machine
     k_sem_give(&sem_disp_smf_start);
@@ -752,7 +752,7 @@ void hw_init(void)
 
     // init_settings();
 
-    // usb_init();
+    //usb_init();
 }
 
 /**
@@ -823,7 +823,8 @@ void hw_thread(void)
         zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
         // Read and publish temperature
-        _temp_f = read_temp_f();
+        //_temp_f = read_temp_f();
+        
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,
         };
