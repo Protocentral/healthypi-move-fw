@@ -87,8 +87,6 @@ static uint8_t m_disp_bpt_progress = 0;
 
 static uint32_t splash_scr_start_time = 0;
 
-
-
 struct s_disp_object
 {
     struct smf_ctx ctx;

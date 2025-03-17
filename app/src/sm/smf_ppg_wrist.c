@@ -13,21 +13,12 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 static const struct smf_state ppg_samp_states[];
 
 K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
-K_MUTEX_DEFINE(mutex_scd);
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
 
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
-
-/*RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_ctx,
-                         32,
-                         32,
-                         128,
-                         64,
-                         4);
-*/
 
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 
@@ -43,7 +34,6 @@ enum ppg_fi_sm_state
 struct s_object
 {
     struct smf_ctx ctx;
-
 } s_f_obj;
 
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
@@ -57,11 +47,11 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
     if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
     {
-        //printk("SCD: ", edata->scd_state);
-        if(edata->scd_state==3)
+        // printk("SCD: ", edata->scd_state);
+        if (edata->scd_state == 3)
         {
             LOG_DBG("ON SKIN");
-            //k_sem_give(&sem_ppg_wrist_on_skin);
+            // k_sem_give(&sem_ppg_wrist_on_skin);
         }
         return;
     }
@@ -100,21 +90,22 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.spo2_confidence = edata->spo2_confidence;
             }
 
-            //LOG_DBG("HR Conf: %d", ppg_sensor_sample.hr_confidence);
+            // LOG_DBG("HR Conf: %d", ppg_sensor_sample.hr_confidence);
 
-            /*if(ppg_sensor_sample.scd_state!=3)
+            if(ppg_sensor_sample.scd_state==HPI_PPG_SCD_OFF_SKIN)
             {
                 LOG_DBG("OFF SKIN");
-                //k_sem_give(&sem_ppg_wrist_off_skin);
-            }*/
-            
-            //LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
+                k_sem_give(&sem_ppg_wrist_off_skin);
+            }
+
+            // LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
 
             k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
         }
     }
 }
 
+/*
 void ppg_wrist_sampling_trigger_thread(void)
 {
     k_sem_take(&sem_ppg_wrist_thread_start, K_FOREVER);
@@ -126,7 +117,8 @@ void ppg_wrist_sampling_trigger_thread(void)
     for (;;)
     {
         ret = sensor_read(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, wrist_buf, sizeof(wrist_buf));
-        if (ret < 0) {
+        if (ret < 0)
+        {
             LOG_ERR("Error reading sensor data");
             continue;
         }
@@ -141,21 +133,45 @@ void ppg_wrist_sampling_trigger_thread(void)
         k_sleep(K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
     }
 }
+*/
+
+void work_sample_handler(struct k_work *work)
+{
+    uint8_t wrist_buf[512];
+    int ret;
+    ret = sensor_read(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, wrist_buf, sizeof(wrist_buf));
+    if (ret < 0)
+    {
+        LOG_ERR("Error reading sensor data");
+        return;
+    }
+    sensor_ppg_wrist_decode(wrist_buf, sizeof(wrist_buf));
+}
+
+K_WORK_DEFINE(work_sample, work_sample_handler);
+
+void ppg_wrist_sampling_handler(struct k_timer *dummy)
+{
+    k_work_submit(&work_sample);
+}
+
+K_TIMER_DEFINE(tmr_ppg_wrist_sampling, ppg_wrist_sampling_handler, NULL);
 
 static void st_ppg_samp_active_entry(void *o)
 {
     LOG_DBG("PPG SM Active Entry");
 
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-    //hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
+    
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
+      // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
 }
 
 static void st_ppg_samp_active_run(void *o)
 {
     // LOG_DBG("PPG SM Active Run");
-    if(k_sem_take(&sem_ppg_wrist_off_skin, K_FOREVER)==0)
+    if (k_sem_take(&sem_ppg_wrist_off_skin, K_FOREVER) == 0)
     {
         LOG_DBG("Switching to Off Skin");
         smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
@@ -178,7 +194,7 @@ static void st_ppg_samp_probing_entry(void *o)
 static void st_ppg_samp_probing_run(void *o)
 {
     // LOG_DBG("PPG SM Probing Run");
-    if(k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER)==0)
+    if (k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER) == 0)
     {
         LOG_DBG("Switching to Active");
         smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
@@ -193,13 +209,14 @@ static void st_ppg_samp_probing_exit(void *o)
 static void st_ppg_samp_off_skin_entry(void *o)
 {
     LOG_DBG("PPG SM Off Skin Entry");
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
 }
 
 static void st_ppg_samp_off_skin_run(void *o)
 {
     LOG_DBG("PPG SM Off Skin Running");
 
-    if(k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER)==0)
+    if (k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER) == 0)
     {
         LOG_DBG("Switching to Probing");
         smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
@@ -231,7 +248,7 @@ static void smf_ppg_wrist_thread(void)
 
     smf_set_initial(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
-    k_sem_give(&sem_ppg_wrist_thread_start);
+    k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
 
     LOG_INF("PPG State Machine Thread starting");
 
@@ -254,4 +271,5 @@ static void smf_ppg_wrist_thread(void)
 #define PPG_WRIST_SAMPLING_THREAD_PRIORITY 7
 
 K_THREAD_DEFINE(smf_ppg_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
-K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 2000);
+
+// K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 2000);

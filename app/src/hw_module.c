@@ -95,9 +95,6 @@ static volatile bool vbus_connected;
 // static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
 // static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
 
-static uint8_t global_batt_level = 0;
-// int32_t global_temp;
-// bool global_batt_charging = false;
 static struct rtc_time hw_system_time;
 
 uint8_t hw_second_boot __attribute__((section(".noinit")));

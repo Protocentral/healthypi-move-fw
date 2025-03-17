@@ -9,7 +9,6 @@
 #include <zephyr/settings/settings.h>
 #include <zephyr/zbus/zbus.h>
 
-#include <zephyr/drivers/rtc.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -45,23 +44,25 @@ static uint8_t m_temp_curr_minute_counter = 0;
 // Time variables
 static int64_t m_trend_time_ts;
 
-K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
-K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_trend_point_t), 8, 1);
+K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_trend_point_t), 8, 1);
+K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_trend_point_t), 8, 1);
+K_MSGQ_DEFINE(q_temp_trend, sizeof(struct hpi_trend_point_t), 8, 1);
 
 // Trend buffers
 struct hpi_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
 struct hpi_trend_point_t trend_point_all[1440];
 
+
+
 static int hpi_trend_hr_process_points()
 {
-    struct hpi_hr_trend_point_t hr_trend_point;
+    struct hpi_trend_point_t hr_trend_point;
     hr_trend_point.timestamp = m_trend_time_ts;
     uint16_t hr_sum = 0;
     hr_trend_point.max = 0;
     hr_trend_point.min = 65535;
 
-    bool spo2_point_valid = true;
-    struct hpi_spo2_trend_point_t spo2_trend_point;
+    struct hpi_trend_point_t spo2_trend_point;
     spo2_trend_point.timestamp = m_trend_time_ts;
     uint16_t spo2_sum = 0;
     spo2_trend_point.max = 0;
@@ -94,10 +95,6 @@ static int hpi_trend_hr_process_points()
         {
             spo2_sum += m_spo2_curr_minute[i];
         }
-        else
-        {
-            spo2_point_valid = false;
-        }
     }
 
     if (hr_sum > 0)
@@ -107,7 +104,7 @@ static int hpi_trend_hr_process_points()
         k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
     }
 
-    if (spo2_point_valid)
+    if (spo2_sum>0)
     {
         spo2_trend_point.avg = spo2_sum / HR_TREND_MINUTE_PTS;
         spo2_trend_point.latest = m_spo2_curr_minute[HR_TREND_MINUTE_PTS - 1];
@@ -115,25 +112,29 @@ static int hpi_trend_hr_process_points()
     }
 }
 
-void hpi_trend_sample_thread(void)
+void work_process_points_handler(struct k_work *work)
 {
-    for (;;)
+    if (m_trends_curr_minute_counter < HR_TREND_MINUTE_PTS)
     {
-        if (m_trends_curr_minute_counter < HR_TREND_MINUTE_PTS)
-        {
-            m_trends_curr_minute_counter++;
-        }
-        else
-        {
-            m_trends_curr_minute_counter = 0;
-            hpi_trend_hr_process_points();
-            memset(m_hr_curr_minute, 0, sizeof(m_hr_curr_minute));
-            memset(m_spo2_curr_minute, 0, sizeof(m_spo2_curr_minute));
-        }
-
-        k_msleep(1000);
+        m_trends_curr_minute_counter++;
+    }
+    else
+    {
+        m_trends_curr_minute_counter = 0;
+        hpi_trend_hr_process_points();
+        memset(m_hr_curr_minute, 0, sizeof(m_hr_curr_minute));
+        memset(m_spo2_curr_minute, 0, sizeof(m_spo2_curr_minute));
     }
 }
+
+K_WORK_DEFINE(work_process_points, work_process_points_handler);
+
+void trend_process_handler(struct k_timer *dummy)
+{
+    k_work_submit(&work_process_points);
+}
+
+K_TIMER_DEFINE(tmr_trend_process, trend_process_handler, NULL);
 
 static int64_t hpi_trend_get_day_start_ts(int64_t *today_time_ts)
 {
@@ -148,6 +149,10 @@ void hpi_trend_record_thread(void)
 {
     struct hpi_trend_point_t _hr_trend_minute;
     struct hpi_trend_point_t _spo2_trend_minute;
+
+    /* start a periodic timer that expires once every second */
+    k_timer_start(&tmr_trend_process, K_SECONDS(1), K_SECONDS(1));
+
     for (;;)
     {
         if (k_msgq_get(&q_hr_trend, &_hr_trend_minute, K_NO_WAIT) == 0)
@@ -247,7 +252,7 @@ int hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hourly_trend_point
 
     LOG_DBG("Read from file %s | Size: %d", fname, trend_file_ent.size);
 
-    num_trend_points = trend_file_ent.size / sizeof(struct hpi_hr_trend_point_t);
+    num_trend_points = trend_file_ent.size / sizeof(struct hpi_trend_point_t);
     *num_points = num_trend_points;
 
     LOG_DBG("Num Trend Points: %d", num_trend_points);
@@ -384,4 +389,4 @@ ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
 #define TREND_RECORD_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, hpi_trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 2000);
-K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, hpi_trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 2000);
+//K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, hpi_trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 2000);

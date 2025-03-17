@@ -23,10 +23,6 @@ static lv_obj_t *chart_hr_trend;
 static lv_chart_series_t *ser_hr_max_trend;
 static lv_chart_series_t *ser_hr_min_trend;
 
-// static lv_chart_series_t *ser_hr_trend;
-// static lv_chart_series_t *ser_hr_max_trend;
-// static lv_chart_series_t *ser_hr_min_trend;
-
 // GUI Labels
 static lv_obj_t *label_hr_bpm;
 static lv_obj_t *label_hr_min_max;
@@ -56,15 +52,6 @@ static void draw_event_cb(lv_event_t *e)
     }
 }
 
-static void scr_ecg_start_btn_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-    }
-}
-
 static void scr_hr_btn_live_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -72,14 +59,6 @@ static void scr_hr_btn_live_event_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t)SCR_HR);
-    }
-}
-
-static void hpi_set_chart_points(lv_chart_series_t *ser, uint16_t *points, int num_points)
-{
-    for (int i = 0; i < num_points; i++)
-    {
-        ser->y_points[i] = points[i];
     }
 }
 
@@ -128,20 +107,9 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_sub, " bpm");
     // lv_obj_align_to(label_hr_sub, label_hr_bpm, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
 
-    lv_obj_t *cont_hr_time = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_hr_time, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_hr_time, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_hr_time, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_hr_time, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_bottom(cont_hr_time, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(cont_hr_time, 0, LV_PART_MAIN);
-
-    lv_obj_t *label_hr_last_update = lv_label_create(cont_hr_time);
-    lv_label_set_text(label_hr_last_update, "Last updated:");
-    lv_obj_add_style(label_hr_last_update, &style_tiny, 0);
-    label_hr_last_update_time = lv_label_create(cont_hr_time);
+    label_hr_last_update_time = lv_label_create(cont_col);
     struct tm last_update_ts = disp_get_hr_last_update_ts();
-    lv_label_set_text_fmt(label_hr_last_update_time, "%d:%d", last_update_ts.tm_hour, last_update_ts.tm_min);
+    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", last_update_ts.tm_hour, last_update_ts.tm_min);
 
     chart_hr_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_trend, 290, 170);
@@ -209,7 +177,7 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
     {
         lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
-    lv_label_set_text_fmt(label_hr_last_update_time, "%d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
+    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
 }
 
 void hpi_disp_hr_load_trend(void)

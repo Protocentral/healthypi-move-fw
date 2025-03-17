@@ -118,11 +118,6 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     label_spo2_last_update_time = lv_label_create(cont_col);
     lv_label_set_text(label_spo2_last_update_time, "Last updated: 00:00");
 
-    // lv_obj_align_to(cont_spo2, NULL, LV_ALIGN_CENTER, 0, 0);
-
-    // label_spo2_last_update = lv_label_create(cont_col);    lv_label_set_text(label_spo2_last_update, "Latest");
-    // lv_obj_align_to(label_spo2_last_update, label_spo2_percent, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
-
     chart_spo2_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_spo2_trend, 290, 170);
     lv_chart_set_type(chart_spo2_trend, LV_CHART_TYPE_LINE);

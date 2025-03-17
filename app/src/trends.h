@@ -4,25 +4,7 @@
 #define MAX_POINTS_PER_HOUR 60
 #define MAX_POINTS_SPO2_PER_HOUR 10
 
-struct hpi_hr_trend_point_t
-{
-    int64_t timestamp;
-    uint16_t max;
-    uint16_t min;
-    uint16_t avg;
-    uint16_t latest; 
-};
-
 struct hpi_trend_point_t
-{
-    int64_t timestamp;
-    uint16_t max;
-    uint16_t min;
-    uint16_t avg;
-    uint16_t latest; 
-};
-
-struct hpi_spo2_trend_point_t
 {
     int64_t timestamp;
     uint16_t max;
@@ -40,31 +22,12 @@ struct hpi_hourly_trend_point_t
     uint16_t latest; 
 };
 
-/*
-struct hpi_spo2_hourly_trend_point_t
-{
-    uint8_t hour_no;
-    uint8_t spo2_max;
-    uint8_t spo2_min;
-    uint8_t spo2_avg;
-    uint8_t spo2_latest; 
-};
-*/
-
-
-struct hpi_hr_trend_day_t
-{
-    struct hpi_hr_trend_point_t hr_points[1440];
-    uint32_t time_last_update;
-};
-
 enum trend_type
 {
     TREND_HR,
     TREND_SPO2,
     TREND_TEMP,
     TREND_BPT,
-
 };
 
 int hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hr_hourly_trend_points, int *num_points, enum trend_type m_trend_type);

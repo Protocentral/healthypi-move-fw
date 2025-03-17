@@ -23,14 +23,12 @@
 
 #define HPI_DISP_TIME_REFR_INT 1000
 #define HPI_DISP_BATT_REFR_INT 1000
-#define HPI_DISP_HR_REFR_INT 1000
 
-#define HPI_DISP_SPO2_REFRESH_INT 3000
 #define HPI_DISP_TODAY_REFRESH_INT 3000
 #define HPI_DISP_BPT_REFRESH_INT 3000
 #define HPI_DISP_TEMP_REFRESH_INT 3000
 #define HPI_DISP_SETTINGS_REFRESH_INT 1000
-#define HPI_DISP_TRENDS_REFRESH_INT 10000
+#define HPI_DISP_TRENDS_REFRESH_INT 20000
 
 struct hpi_boot_msg_t
 {
@@ -52,7 +50,6 @@ enum hpi_disp_screens
     SCR_LIST_START,
 
     SCR_HOME,
-    //SCR_PLOT_PRE,
     SCR_TODAY,
     SCR_HR,
     SCR_SPO2,
@@ -92,8 +89,6 @@ enum hpi_disp_subscreens
     SUBSCR_BPT_MEASURE,
 };
 
-
-
 // Images used in the UI
 LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
 LV_IMG_DECLARE(img_heart_35);
@@ -107,8 +102,6 @@ LV_IMG_DECLARE(icon_spo2_30x35);
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(ui_font_Number_big);
 LV_FONT_DECLARE(ui_font_Number_extra);
-// LV_FONT_DECLARE( ui_font_Subtitle);
-// LV_FONT_DECLARE( ui_font_Title);
 
 /******** UI Function Prototypes ********/
 
