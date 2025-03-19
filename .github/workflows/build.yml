@@ -26,4 +26,4 @@ jobs:
       - name: Build base firmware
         working-directory: healthypi_move
         run: |
-          west build healthypi_move/app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
+          west build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
