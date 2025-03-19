@@ -130,7 +130,7 @@ void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     scr_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     // draw_bg(scr_ppg);
-    draw_header_minimal(scr_ppg, 10);
+    draw_scr_common(scr_ppg);
 
     // Bottom signal label
     lv_obj_t *label_signal = lv_label_create(scr_ppg);
@@ -289,15 +289,15 @@ void hpi_ppg_disp_update_status(uint8_t status)
 
     switch (status)
     {
-    case HPI_PPG_STATUS_UNKNOWN:
-    case HPI_PPG_STATUS_OFF_SKIN:
+    case HPI_PPG_SCD_STATUS_UNKNOWN:
+    case HPI_PPG_SCD_OFF_SKIN:
         sprintf(stat_str, "Off Skin");
         hpi_scr_ppg_hide_plot(true);
         break;
-    case HPI_PPG_STATUS_ON_OBJ:
+    case HPI_PPG_SCD_ON_OBJ:
         sprintf(stat_str, "On Obj.");
         break;
-    case HPI_PPG_STATUS_ON_SKIN:
+    case HPI_PPG_SCD_ON_SKIN:
         sprintf(stat_str, "On Skin");
         hpi_scr_ppg_hide_plot(false);
         break;

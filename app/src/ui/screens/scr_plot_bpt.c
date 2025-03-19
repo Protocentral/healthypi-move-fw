@@ -36,7 +36,7 @@ extern lv_style_t style_scr_black;
 void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
 {
     scr_plot_bpt = lv_obj_create(NULL);
-    draw_header_minimal(scr_plot_bpt, 10);
+    draw_scr_common(scr_plot_bpt);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_plot_bpt);

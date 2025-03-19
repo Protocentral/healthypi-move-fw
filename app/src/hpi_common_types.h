@@ -4,6 +4,8 @@ HealthyPi specific common data types
 
 #pragma once
 
+#include <time.h>
+
 #define ECG_POINTS_PER_SAMPLE 8
 #define BIOZ_POINTS_PER_SAMPLE 8
 #define PPG_POINTS_PER_SAMPLE 8
@@ -11,14 +13,11 @@ HealthyPi specific common data types
 
 enum hpi_ppg_status 
 {
-    HPI_PPG_STATUS_UNKNOWN,
-    HPI_PPG_STATUS_OFF_SKIN,
-    HPI_PPG_STATUS_ON_OBJ,
-    HPI_PPG_STATUS_ON_SKIN,
+    HPI_PPG_SCD_STATUS_UNKNOWN,
+    HPI_PPG_SCD_OFF_SKIN,
+    HPI_PPG_SCD_ON_OBJ,
+    HPI_PPG_SCD_ON_SKIN,
 };
-
-
-
 
 struct hpi_ecg_bioz_sensor_data_t
 {
@@ -97,6 +96,7 @@ struct hpi_computed_hrv_t
 
 struct hpi_hr_t
 {
+    struct tm time_tm;    
     uint16_t hr;
     bool hr_ready_flag;
 };
@@ -109,6 +109,7 @@ struct hpi_steps_t
 
 struct hpi_temp_t
 {
+    struct tm time_tm;
     double temp_f;
     double temp_c;
 };
@@ -127,7 +128,7 @@ struct hpi_bpt_t
 
 struct hpi_spo2_t
 {
-    uint32_t timestamp;
+    struct tm time_tm;
 
     uint16_t spo2;
     uint16_t hr;

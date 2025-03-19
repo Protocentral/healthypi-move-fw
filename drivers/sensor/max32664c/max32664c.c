@@ -24,8 +24,6 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 
 #define MAX32664C_FW_BIN_INCLUDE 0
 
-
-
 static int m_read_op_mode(const struct device *dev)
 {
     // struct max32664c_data *data = dev->data;
@@ -489,6 +487,28 @@ static int max32664c_set_mode_scd(const struct device *dev)
     return 0;
 }
 
+static int max32664c_set_mode_wake_on_motion(const struct device *dev)
+{
+    LOG_DBG("MAX32664C entering wake on motion mode...");
+
+    // Stop Algorithm
+    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
+
+    // Set motion detection threshold
+    m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, 0x05, 0x08);
+    
+    // Set output mode accel only
+    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+
+    // Set report rate
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+
+    // Enable Accel
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 30);
+
+    return 0;
+}
+
 static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode mode, uint8_t algo_mode)
 {
     LOG_DBG("MAX32664C entering ALGO mode...");
@@ -518,7 +538,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
         // EN SCD
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
+        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
         //m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x42, 0x30, 0x00);
         //m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x01, 0x01);
@@ -637,8 +657,12 @@ static int max32664c_attr_set(const struct device *dev,
             max32664c_set_mode_scd(dev);
             data->op_mode = MAX32664C_OP_MODE_SCD;
         }
+        else if (val->val1 == MAX32664C_OP_MODE_WAKE_ON_MOTION)
+        {
+            max32664c_set_mode_wake_on_motion(dev);
+            data->op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
+        }
         else
-
         {
             LOG_ERR("Unsupported sensor operation mode");
             return -ENOTSUP;

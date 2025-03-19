@@ -28,17 +28,16 @@ LV_IMG_DECLARE(pc_move_bg_200);
 // LV_IMG_DECLARE(logo_round_white);
 
 // LVGL Styles
-static lv_style_t style_sub;
+
 static lv_style_t style_btn;
 
 // Global LVGL Styles
+lv_style_t style_tiny;
 lv_style_t style_scr_black;
 lv_style_t style_red_medium;
 lv_style_t style_lbl_red_small;
 
 lv_style_t style_white_medium;
-lv_style_t style_batt_sym;
-lv_style_t style_batt_percent;
 
 lv_style_t style_scr_container;
 
@@ -99,17 +98,9 @@ void display_init_styles(void)
     lv_disp_set_theme(NULL, &th_new);
 
     // Subscript (Unit) label style
-    lv_style_init(&style_sub);
-    lv_style_set_text_color(&style_sub, lv_color_white());
-    lv_style_set_text_font(&style_sub, &lv_font_montserrat_16);
-
-    lv_style_init(&style_batt_sym);
-    lv_style_set_text_color(&style_batt_sym, lv_palette_main(LV_PALETTE_GREY));
-    lv_style_set_text_font(&style_batt_sym, &lv_font_montserrat_34);
-
-    lv_style_init(&style_batt_percent);
-    lv_style_set_text_color(&style_batt_percent, lv_color_white());
-    lv_style_set_text_font(&style_batt_percent, &lv_font_montserrat_24);
+    lv_style_init(&style_tiny);
+    lv_style_set_text_color(&style_tiny, lv_color_white());
+    lv_style_set_text_font(&style_tiny, &lv_font_montserrat_20);
 
     lv_style_init(&style_white_medium);
     lv_style_set_text_color(&style_white_medium, lv_color_white());
@@ -123,11 +114,6 @@ void display_init_styles(void)
     lv_style_init(&style_red_medium);
     lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
     lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_34);
-
-    // Label Red Small
-    lv_style_init(&style_lbl_red_small);
-    lv_style_set_text_color(&style_lbl_red_small, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_lbl_red_small, &lv_font_montserrat_16);
 
     // Label White 14
     lv_style_init(&style_lbl_white_14);
@@ -154,42 +140,11 @@ void display_init_styles(void)
     lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
-void draw_header_minimal(lv_obj_t *parent, int top_offset)
+void draw_scr_common(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
     lv_obj_set_scroll_dir(parent, LV_DIR_VER);
     //lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
-   
-    // Battery Level
-    /* label_batt_level = lv_label_create(parent);
-    lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
-    lv_obj_add_style(label_batt_level, &style_batt_sym, LV_STATE_DEFAULT);
-    lv_obj_align(label_batt_level, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
-
-    label_batt_level_val = lv_label_create(parent);
-    lv_label_set_text(label_batt_level_val, "--");
-    lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
-    lv_obj_align_to(label_batt_level_val, label_batt_level, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
-    */
-
-    /*lbl_hdr_hour = lv_label_create(parent);
-    lv_obj_set_width(lbl_hdr_hour, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(lbl_hdr_hour, LV_SIZE_CONTENT); /// 1
-    lv_label_set_text(lbl_hdr_hour, "00:");
-    lv_obj_set_style_text_color(lbl_hdr_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(lbl_hdr_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align_to(lbl_hdr_hour, NULL, LV_ALIGN_TOP_MID, -30, (top_offset + 2));
-    lv_obj_set_style_text_font(lbl_hdr_hour, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lbl_hdr_min = lv_label_create(parent);
-    lv_obj_set_width(lbl_hdr_min, LV_SIZE_CONTENT);  /// 1
-    lv_obj_set_height(lbl_hdr_min, LV_SIZE_CONTENT); /// 1
-    lv_label_set_text(lbl_hdr_min, "00");
-    lv_obj_set_style_text_color(lbl_hdr_min, lv_color_hex(0xEE1E1E), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(lbl_hdr_min, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_align_to(lbl_hdr_min, lbl_hdr_hour, LV_ALIGN_OUT_RIGHT_TOP, 0, 0);
-    lv_obj_set_style_text_font(lbl_hdr_min, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
-    */
 }
 
 void hpi_display_sleep_on(void)
@@ -388,9 +343,9 @@ void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
-    case SCR_PLOT_PRE:
+    /*case SCR_PLOT_PRE:
         draw_scr_pre(m_scroll_dir);
-        break;
+        break;*/
     case SCR_TODAY:
         draw_scr_today(m_scroll_dir);
         break;

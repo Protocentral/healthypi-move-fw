@@ -74,6 +74,55 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
     }
 }
 
+static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode)
+{
+    struct max32664c_data *data = dev->data;
+    const struct max32664c_config *config = dev->config;
+
+    uint8_t wr_buf[2] = {0x12, 0x01};
+    static uint8_t buf[2048];
+    static int sample_len = 1;
+
+    uint8_t hub_stat = max32664c_read_hub_status(dev);
+    if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK)
+    {
+        int fifo_count = max32664c_get_fifo_count(dev);
+
+        if (fifo_count > 8)
+        {
+            fifo_count = 8;
+        }
+
+        if (fifo_count > 0)
+        {
+            sample_len = 1;
+            *chip_op_mode = data->op_mode;
+
+            gpio_pin_set_dt(&config->mfio_gpio, 0);
+            k_sleep(K_USEC(300));
+            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+
+            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            k_sleep(K_USEC(300));
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+            for (int i = 0; i < fifo_count; i++)
+            {
+                //uint8_t scd_state_val = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
+                //*scd_state = scd_state_val;
+                //printk("SCD: %d\n", scd_state_val);
+                uint8_t algo_op_mode= (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
+                LOG_INF("Algo Op Mode: %d", algo_op_mode);
+            }
+        }
+    }
+
+    if (hub_stat & MAX32664C_HUB_STAT_SCD_MASK)
+    {
+        // printk("SCD ");
+    }
+}
+
 static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16], uint32_t *num_samples, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
@@ -302,6 +351,12 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
         rc = max32664c_async_sample_fetch_scd(dev, &m_edata->chip_op_mode, &m_edata->scd_state);
+    }
+    else if(data->op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
+    {
+        m_edata = (struct max32664c_encoded_data *)buf;
+        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
+        rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode);
     }
     else
     {

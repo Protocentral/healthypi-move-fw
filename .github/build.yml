@@ -1,0 +1,29 @@
+name: Build and upload FW binaries
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container: ghcr.io/zephyrproject-rtos/ci:v0.26.2 
+    env:
+      CMAKE_PREFIX_PATH: /opt/toolchains
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: healthypi_move
+
+      - name: Initialize
+        working-directory: healthypi_move
+        run: |
+          west init -l .
+          west update -o=--depth=1 -n
+
+      - name: Build base firmware
+        working-directory: healthypi_move
+        run: |
+          west build healthypi_move/app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.

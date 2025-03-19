@@ -26,11 +26,8 @@ static lv_obj_t *ui_home_label_date;
 
 static lv_obj_t *label_batt_level_val;
 
-extern struct rtc_time global_system_time;
-
-extern lv_style_t style_batt_percent;
-
-
+// Externs
+extern lv_style_t style_lbl_white_14;
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
@@ -79,7 +76,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
 
     label_batt_level_val = lv_label_create(scr_home);
     lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL "  --");
-    lv_obj_add_style(label_batt_level_val, &style_batt_percent, LV_STATE_DEFAULT);
+    lv_obj_add_style(label_batt_level_val, &style_lbl_white_14, LV_STATE_DEFAULT);
     lv_obj_align_to(label_batt_level_val, NULL, LV_ALIGN_TOP_MID, 0, 25);
 
     // ui_home_time_display_update(hw_get_current_time());
@@ -96,7 +93,7 @@ void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
     lv_obj_clear_flag(scr_home, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
     draw_bg(scr_home);
-    draw_header_minimal(scr_home, 75);
+    draw_scr_common(scr_home);
 
     home_step_disp = ui_steps_button_create(scr_home);
     lv_obj_align_to(home_step_disp, NULL, LV_ALIGN_TOP_MID, -80, 100);
@@ -180,7 +177,6 @@ void draw_scr_home_analog(enum scroll_dir m_scroll_dir)
 
     hpi_disp_set_curr_screen(SCR_HOME);
     hpi_show_screen(scr_home, m_scroll_dir);
-    // scr_home_set_time(global_system_time);
 }
 
 /*void draw_scr_home(enum scroll_dir m_scroll_dir)

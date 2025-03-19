@@ -22,14 +22,8 @@ void hpi_pwr_display_wake(void);
 
 struct rtc_time hw_get_current_time(void);
 
-uint8_t hw_get_battery_level(void);
-void hw_set_battery_level(uint8_t batt_level);
-
 bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
-
-uint32_t hw_get_system_time(void);
-
 enum gpio_keypad_key
 {
     GPIO_KEYPAD_KEY_NONE = 0,

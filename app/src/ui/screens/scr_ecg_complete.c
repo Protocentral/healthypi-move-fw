@@ -39,7 +39,7 @@ static void scr_ecg_complete_btn_ok_event_handler(lv_event_t *e)
 void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir)
 {
     scr_ecg_complete = lv_obj_create(NULL);
-    draw_header_minimal(scr_ecg_complete, 10);
+    draw_scr_common(scr_ecg_complete);
     // draw_bg(scr_ecg_complete);
 
     /*Create a container with COLUMN flex direction*/

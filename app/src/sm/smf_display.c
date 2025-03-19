@@ -11,7 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HOME
+#define HPI_DEFAULT_START_SCREEN SCR_HR
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -58,14 +58,18 @@ static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct tm m_disp_sys_time;
 
+// HR Screen variables
 static uint16_t m_disp_hr = 0;
 static uint16_t m_disp_hr_max = 0;
 static uint16_t m_disp_hr_min = 0;
 static uint16_t m_disp_hr_mean = 0;
+static struct tm m_disp_hr_last_update_tm;
 
+// @brief Spo2 Screen variables
 static uint8_t m_disp_spo2 = 0;
-static uint32_t m_disp_spo2_last_refresh = 0;
+static struct tm m_disp_spo2_last_refresh_tm;
 
+// @brief Today Screen variables
 static uint32_t m_disp_steps = 0;
 static uint16_t m_disp_kcals = 0;
 static uint16_t m_disp_active_time_s = 10;
@@ -83,11 +87,15 @@ static uint8_t m_disp_bpt_progress = 0;
 
 static uint32_t splash_scr_start_time = 0;
 
+struct s_disp_object
+{
+    struct smf_ctx ctx;
+
+} s_disp_obj;
+
 // Externs
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
-
-// Screens
 extern lv_obj_t *scr_bpt;
 
 extern struct k_sem sem_disp_smf_start;
@@ -103,11 +111,7 @@ extern struct k_sem sem_crown_key_pressed;
 extern struct k_sem sem_ppg_fi_show_loading;
 extern struct k_sem sem_ppg_fi_hide_loading;
 
-struct s_disp_object
-{
-    struct smf_ctx ctx;
-
-} s_disp_obj;
+// User Profile settings
 
 static uint16_t m_user_height = 170; // Example height in m, adjust as needed
 static uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
@@ -122,6 +126,11 @@ static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
     //
     /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
     return (uint16_t)_m_kcals;
+}
+
+struct tm disp_get_hr_last_update_ts(void)
+{
+    return m_disp_hr_last_update_tm;
 }
 
 static void st_display_init_entry(void *o)
@@ -451,32 +460,32 @@ static void st_display_active_run(void *o)
     case SCR_TEMP:
         if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
         {            
-            hpi_temp_disp_update_temp_f((float)m_disp_temp);
+            hpi_temp_disp_update_temp_f((double)m_disp_temp);
             last_temp_trend_refresh = k_uptime_get_32();
         }
         break;
     case SCR_HR:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            hpi_disp_hr_load_trend();
-            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_min, m_disp_hr_max, m_disp_hr_mean);
+            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_tm); 
+            //hpi_disp_hr_load_trend();
             last_hr_trend_refresh = k_uptime_get_32();
         }
         break;
     case SCR_SPO2:
-        if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_SPO2_REFRESH_INT)
+        if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            // hpi_trend_load_day_trend();
+            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
+            hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
-            hpi_disp_update_spo2(m_disp_spo2);
         }
         break;
     case SCR_BPT:
         // st_disp_do_bpt_stuff();
         break;
     case SCR_SPL_PLOT_ECG:
-        // hpi_ecg_disp_update_hr(m_disp_hr);
-        // hpi_ecg_disp_update_timer(m_disp_ecg_timer);
+        hpi_ecg_disp_update_hr(m_disp_hr);
+        hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
             hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
@@ -652,26 +661,29 @@ static void disp_batt_status_listener(const struct zbus_channel *chan)
 
 ZBUS_LISTENER_DEFINE(disp_batt_lis, disp_batt_status_listener);
 
-static void disp_sys_time_listener(const struct zbus_channel *chan)
+static void data_mod_sys_time_listener(const struct zbus_channel *chan)
 {
     const struct tm *sys_time = zbus_chan_const_msg(chan);
     m_disp_sys_time = *sys_time;
 
     // rtc_time_to_tm
 }
-ZBUS_LISTENER_DEFINE(disp_sys_time_lis, disp_sys_time_listener);
+ZBUS_LISTENER_DEFINE(disp_sys_time_lis, data_mod_sys_time_listener);
 
-static void trend_hr_listener(const struct zbus_channel *chan)
+static void disp_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
+    m_disp_hr_last_update_tm = hpi_hr->time_tm;
+    //LOG_DBG("ZB HR: %d at %d:%d \n", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
-ZBUS_LISTENER_DEFINE(disp_hr_lis, trend_hr_listener);
+ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
 static void disp_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
+    m_disp_spo2_last_refresh_tm = hpi_spo2->time_tm;
     //LOG_DBG("ZB Spo2: %d\n", hpi_spo2->spo2);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
