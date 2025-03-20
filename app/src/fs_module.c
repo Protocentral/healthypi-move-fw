@@ -203,6 +203,7 @@ void transfer_send_file(uint16_t file_id)
     {
         printk("Error opening file %d\n", rc);
         return;
+        
     }
 
     for (i = 0; i < number_writes; i++)
