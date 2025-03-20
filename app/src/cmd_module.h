@@ -61,6 +61,6 @@ struct hpi_cmd_data_obj_t
     uint8_t data[MAX_MSG_SIZE];
 };
 
-void cmdif_send_ble_data(const char *buf, size_t len);
+void cmdif_send_ble_data(uint8_t *m_data, uint8_t m_data_len);
 void hpi_cmdif_send_ble_cmd_rsp(uint8_t m_cmd, uint16_t m_value);
 void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len);

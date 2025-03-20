@@ -178,8 +178,8 @@ void transfer_send_file(uint16_t file_id)
     printk("Sending file %u\n", file_id);
     uint8_t m_buffer[FILE_TRANSFER_BLE_PACKET_SIZE + 1];
 
-    char m_file_name[30];
-    snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
+    char m_file_name[30] = "/lfs/trhr/67db5a80";
+    //snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
 
     uint32_t file_len = transfer_get_file_length(m_file_name);
     uint32_t number_writes = file_len / FILE_TRANSFER_BLE_PACKET_SIZE;

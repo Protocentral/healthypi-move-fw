@@ -89,34 +89,19 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
     }
 }
 
-// TODO: implement BLE UART
-void cmdif_send_ble_data(const char *in_data_buf, size_t in_data_len)
+uint8_t data_pkt[256];
+
+void cmdif_send_ble_data(uint8_t *m_data, uint8_t m_data_len)
 {
-    uint8_t dataPacket[50];
+    printk("Sending BLE Data: %d\n", m_data_len);
 
-    dataPacket[0] = CES_CMDIF_PKT_START_1;
-    dataPacket[1] = CES_CMDIF_PKT_START_2;
-    dataPacket[2] = in_data_len;
-    dataPacket[3] = 0;
-    dataPacket[4] = CES_CMDIF_TYPE_DATA;
-
-    for (int i = 0; i < in_data_len; i++)
+    data_pkt[0] = CES_CMDIF_TYPE_DATA;
+    for (int i = 0; i < m_data_len; i++)
     {
-        dataPacket[i + 5] = in_data_buf[i];
-        // printk("Data %x: %d\n", i, in_data_buf[i]);
+        data_pkt[1 + i] = m_data[i];
     }
-
-    dataPacket[in_data_len + 5] = CES_CMDIF_PKT_STOP_1;
-    dataPacket[in_data_len + 6] = CES_CMDIF_PKT_STOP_2;
-
-    // printk("Sending UART data: %d\n", in_data_len);
-
-    for (int i = 0; i < (in_data_len + 7); i++)
-    {
-        // uart_poll_out(esp_uart_dev, dataPacket[i]);
-    }
+    hpi_ble_send_data(data_pkt, 1 + m_data_len);
 }
-
 // Send index of all session logs
 void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
 {

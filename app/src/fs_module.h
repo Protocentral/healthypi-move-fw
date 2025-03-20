@@ -6,5 +6,6 @@
 
 void fs_module_init(void);
 
+void transfer_send_file(uint16_t file_id);
 
 #endif

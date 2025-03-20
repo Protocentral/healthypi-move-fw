@@ -19,7 +19,7 @@ enum hpi_log_types
 
 struct hpi_log_header_t
 {
-    char log_file_name; 
+    char log_file_name[16]; 
     uint32_t log_file_length;
 };
 
