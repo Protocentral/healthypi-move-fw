@@ -216,6 +216,15 @@ BT_GATT_SERVICE_DEFINE(hpi_cmd_service,
 					   BT_GATT_CCC(cmd_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
+void hpi_ble_send_data(const uint8_t *data, uint16_t len)
+{
+
+	const struct bt_gatt_attr *attr = &hpi_cmd_service.attrs[4];
+
+	// printk("Sending data len %d \n", len);
+
+	bt_gatt_notify(NULL, attr, data, len);
+}
 void ble_spo2_notify(uint16_t spo2_val)
 {
 	spo2_att_ble[0] = 0x00;
