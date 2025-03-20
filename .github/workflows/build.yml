@@ -20,6 +20,7 @@ jobs:
       - name: Initialize
         working-directory: healthypi_move
         run: |
+          pip install ecdsa
           west init -l .
           west update -o=--depth=1 -n
 
