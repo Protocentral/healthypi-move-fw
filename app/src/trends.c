@@ -162,7 +162,7 @@ void hpi_trend_record_thread(void)
         }
         if (k_msgq_get(&q_spo2_trend, &_spo2_trend_minute, K_NO_WAIT) == 0)
         {
-            int64_t today_ts = hpi_trend_get_day_start_ts(&_hr_trend_minute.timestamp);
+            int64_t today_ts = hpi_trend_get_day_start_ts(&_spo2_trend_minute.timestamp);
             LOG_DBG("Recd SpO2 point: %" PRIx64 "| %d | %d | %d", _spo2_trend_minute.timestamp, _spo2_trend_minute.max, _spo2_trend_minute.min, _spo2_trend_minute.avg);
             hpi_trend_wr_point_to_file(_spo2_trend_minute, today_ts, TREND_SPO2);
         }
