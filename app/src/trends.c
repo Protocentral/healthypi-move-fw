@@ -52,8 +52,6 @@ K_MSGQ_DEFINE(q_temp_trend, sizeof(struct hpi_trend_point_t), 8, 1);
 struct hpi_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
 struct hpi_trend_point_t trend_point_all[1440];
 
-
-
 static int hpi_trend_hr_process_points()
 {
     struct hpi_trend_point_t hr_trend_point;

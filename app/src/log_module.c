@@ -232,6 +232,8 @@ int log_get_index(uint8_t m_log_type)
             m_header.log_file_length = entry.size;
             strcpy(m_header.log_file_name, entry.name);
 
+            LOG_DBG("Log File Name: %s | Size: %d", m_header.log_file_name, m_header.log_file_length);
+
             //memcpy(&buf_log, &m_header, sizeof(struct hpi_log_trend_header_t));
             // buf_log_index += sizeof(struct tes_session_log_header_t);
 
