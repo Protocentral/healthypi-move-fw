@@ -28,3 +28,11 @@ jobs:
         working-directory: healthypi_move
         run: |
           west build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
+          mv build/merged.hex healthypi_move_${{ github.ref_name }}.hex
+          mv build/dfu_application.zip healthypi_move_update_${{ github.ref_name }}.zip
+
+      - name: Upload release assets
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "healthypi_move/*.hex, healthypi_move/*.zip"
+          token: ${{ secrets.GITHUB_TOKEN }}
