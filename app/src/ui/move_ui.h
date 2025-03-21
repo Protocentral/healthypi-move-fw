@@ -98,8 +98,11 @@ LV_IMG_DECLARE(img_timer_48);
 LV_IMG_DECLARE(ecg_120);
 LV_IMG_DECLARE(bp_70);
 LV_IMG_DECLARE(icon_spo2_30x35);
+LV_IMG_DECLARE(img_heart_120);
 
 // LV_FONT_DECLARE( ui_font_H1);
+LV_FONT_DECLARE(oxanium_90);
+LV_FONT_DECLARE(fredoka_28);
 LV_FONT_DECLARE(ui_font_Number_big);
 LV_FONT_DECLARE(ui_font_Number_extra);
 
