@@ -25,7 +25,7 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_white_medium;
 
-static void draw_event_cb(lv_event_t *e)
+static void draw_event_cb_hour(lv_event_t *e)
 {
     lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
     if (!lv_obj_draw_part_check_type(dsc, &lv_chart_class, LV_CHART_DRAW_PART_TICK_LABEL))
@@ -73,7 +73,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_line_width(chart_temp_trend, 0, LV_PART_ITEMS);
     lv_obj_set_style_size(chart_temp_trend, 8, LV_PART_INDICATOR);
 
-    lv_obj_add_event_cb(chart_temp_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+    lv_obj_add_event_cb(chart_temp_trend, draw_event_cb_hour, LV_EVENT_DRAW_PART_BEGIN, NULL);
 
     lv_obj_set_style_bg_color(chart_temp_trend, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_temp_trend, 0, LV_PART_MAIN);

@@ -21,8 +21,12 @@ lv_obj_t *scr_hr;
 static lv_obj_t *chart_hr_hour_trend;
 static lv_obj_t *chart_hr_day_trend;
 
+static lv_chart_series_t *ser_hr_hour_trend;
+
 static lv_chart_series_t *ser_hr_max_trend;
 static lv_chart_series_t *ser_hr_min_trend;
+
+
 
 // GUI Labels
 static lv_obj_t *label_hr_bpm;
@@ -43,7 +47,7 @@ extern lv_style_t style_scr_black;
 
 extern lv_style_t style_tiny;
 
-static void draw_event_cb(lv_event_t *e)
+static void draw_event_cb_day(lv_event_t *e)
 {
     lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
     if (!lv_obj_draw_part_check_type(dsc, &lv_chart_class, LV_CHART_DRAW_PART_TICK_LABEL))
@@ -52,6 +56,19 @@ static void draw_event_cb(lv_event_t *e)
     if (dsc->id == LV_CHART_AXIS_PRIMARY_X && dsc->text)
     {
         const char *hour[] = {"00", "06", "12", "18", "23"};
+        lv_snprintf(dsc->text, dsc->text_length, "%s", hour[dsc->value]);
+    }
+}
+
+static void draw_event_cb_hour(lv_event_t *e)
+{
+    lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
+    if (!lv_obj_draw_part_check_type(dsc, &lv_chart_class, LV_CHART_DRAW_PART_TICK_LABEL))
+        return;
+
+    if (dsc->id == LV_CHART_AXIS_PRIMARY_X && dsc->text)
+    {
+        const char *hour[] = {"00", "15", "30", "45", "60"};
         lv_snprintf(dsc->text, dsc->text_length, "%s", hour[dsc->value]);
     }
 }
@@ -90,8 +107,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_signal, "Heart Rate");
     lv_obj_add_style(label_signal, &style_white_small, 0);
 
-   
-
     lv_obj_t *img_hr = lv_img_create(cont_col);
     lv_img_set_src(img_hr, &img_heart_120);
 
@@ -120,51 +135,64 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", last_update_ts.tm_hour, last_update_ts.tm_min);
 
     label_hr_previous_hr = lv_label_create(cont_col);
-    lv_label_set_text(label_hr_previous_hr, "Previously 00 at 00:00");
+    lv_label_set_text(label_hr_previous_hr, "Previously 00 at 00:00\n");
 
-    lv_obj_t *label_more = lv_label_create(cont_col);
-    lv_label_set_text(label_more, "Scroll DOWN for more\n");
-    lv_obj_add_style(label_more, &style_tiny, 0);
+    /*Create an array for the points of the line*/
+    static lv_point_t line_points[] = { {10, 0}, {240, 0}};
+ 
+    lv_obj_t * line1 = lv_line_create(cont_col);
+    lv_line_set_points(line1, line_points, 2);     
+       
+    lv_obj_t *lbl_l1 = lv_label_create(cont_col);
+    lv_label_set_text(lbl_l1, "Last hour trend");
 
     chart_hr_hour_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_hr_hour_trend, 270, 140);
+    lv_obj_set_size(chart_hr_hour_trend, 270, 110);
     lv_chart_set_type(chart_hr_hour_trend, LV_CHART_TYPE_LINE);
+    lv_chart_set_update_mode(chart_hr_hour_trend, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_chart_set_range(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
     lv_chart_set_point_count(chart_hr_hour_trend, 60);
 
     lv_obj_set_style_line_width(chart_hr_hour_trend, 4, LV_PART_ITEMS);
-    lv_obj_set_style_size(chart_hr_hour_trend, 8, LV_PART_INDICATOR);
+    lv_obj_set_style_size(chart_hr_hour_trend, 6, LV_PART_INDICATOR);
 
-    lv_obj_add_event_cb(chart_hr_hour_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+    lv_obj_add_event_cb(chart_hr_hour_trend, draw_event_cb_hour, LV_EVENT_DRAW_PART_BEGIN, NULL);
 
-    //lv_obj_set_style_bg_color(chart_hr_hour_trend, lv_color_black(), LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(chart_hr_hour_trend, lv_color_black(), LV_STATE_DEFAULT);
     //lv_obj_set_style_bg_opa(chart_hr_hour_trend, 0, LV_PART_MAIN);
 
-    lv_obj_set_style_border_width(chart_hr_hour_trend, 0, LV_PART_MAIN);
-    lv_chart_set_div_line_count(chart_hr_hour_trend, 0, 24);
+    lv_obj_set_style_border_width(chart_hr_hour_trend, 2, LV_PART_MAIN);
+    lv_chart_set_div_line_count(chart_hr_hour_trend, 0, 0);
 
-    lv_chart_set_axis_tick(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
+    lv_chart_set_axis_tick(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 2, true, 40);
     lv_chart_set_axis_tick(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 10);
 
-    lv_chart_series_t *ser_hr_hour_trend = lv_chart_add_series(chart_hr_hour_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
+    ser_hr_hour_trend = lv_chart_add_series(chart_hr_hour_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
 
+    lv_obj_t *lbl_l3 = lv_label_create(cont_col);
+    lv_label_set_text(lbl_l3,  " \n");
+
+    lv_obj_t * line2 = lv_line_create(cont_col);
+    lv_line_set_points(line2, line_points, 2);     
     
+    lv_obj_t *lbl_l2 = lv_label_create(cont_col);
+    lv_label_set_text(lbl_l2, "Last day trend");
 
     chart_hr_day_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_day_trend, 270, 170);
     lv_chart_set_type(chart_hr_day_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_range(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
-    lv_chart_set_point_count(chart_hr_day_trend, 24);
+    lv_chart_set_point_count(chart_hr_day_trend, 60);
 
     lv_obj_set_style_line_width(chart_hr_day_trend, 0, LV_PART_ITEMS);
     lv_obj_set_style_size(chart_hr_day_trend, 8, LV_PART_INDICATOR);
 
-    lv_obj_add_event_cb(chart_hr_day_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+    lv_obj_add_event_cb(chart_hr_day_trend, draw_event_cb_day, LV_EVENT_DRAW_PART_BEGIN, NULL);
 
     lv_obj_set_style_bg_color(chart_hr_day_trend, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_hr_day_trend, 0, LV_PART_MAIN);
 
-    lv_obj_set_style_border_width(chart_hr_day_trend, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(chart_hr_day_trend, 2, LV_PART_MAIN);
     lv_chart_set_div_line_count(chart_hr_day_trend, 0, 24);
 
     lv_chart_set_axis_tick(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
@@ -216,20 +244,30 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
         lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
     lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
+
+    //Add HR to trend
+
+    lv_chart_set_next_value(chart_hr_hour_trend, ser_hr_hour_trend, hr);
 }
 
 void hpi_disp_hr_load_trend(void)
 {
     struct hpi_hourly_trend_point_t hr_hourly_trend_points[HR_SCR_TREND_MAX_POINTS];
+    struct hpi_minutely_trend_point_t hr_minutely_trend_points[60];
+
+    for(int i=0; i<60; i++)
+    {
+        hr_minutely_trend_points[i].avg = 0;
+    }
+
     int m_num_points = 0;
 
-    if (hpi_trend_load_day_trend(hr_hourly_trend_points, &m_num_points, TREND_HR) == 0)
+    if (hpi_trend_load_trend(hr_hourly_trend_points, hr_minutely_trend_points, &m_num_points, TREND_HR) == 0)
     {
         if (chart_hr_day_trend == NULL)
         {
             return;
         }
-
         int y_max = -1;
         int y_min = 999;
 
@@ -249,7 +287,13 @@ void hpi_disp_hr_load_trend(void)
             }
         }
 
+        for(int i=0; i<60; i++)
+        {
+            ser_hr_hour_trend->y_points[i] = hr_minutely_trend_points[i].avg;
+        }
+
         //lv_chart_set_range(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+        lv_chart_refresh(chart_hr_hour_trend);
         lv_chart_refresh(chart_hr_day_trend);
     }
     else

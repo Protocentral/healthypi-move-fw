@@ -36,7 +36,7 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
-static void draw_event_cb(lv_event_t *e)
+static void draw_event_cb_hour(lv_event_t *e)
 {
     lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
     if (!lv_obj_draw_part_check_type(dsc, &lv_chart_class, LV_CHART_DRAW_PART_TICK_LABEL))
@@ -128,7 +128,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_line_width(chart_spo2_trend, 0, LV_PART_ITEMS);
     lv_obj_set_style_size(chart_spo2_trend, 8, LV_PART_INDICATOR);
 
-    lv_obj_add_event_cb(chart_spo2_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+    lv_obj_add_event_cb(chart_spo2_trend, draw_event_cb_hour, LV_EVENT_DRAW_PART_BEGIN, NULL);
     // lv_obj_align_to(chart_spo2_trend, NULL, LV_ALIGN_CENTER, 15, 40);
 
     lv_obj_set_style_bg_color(chart_spo2_trend, lv_color_black(), LV_STATE_DEFAULT);
@@ -209,13 +209,14 @@ void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update)
 void hpi_disp_spo2_load_trend(void)
 {
     struct hpi_hourly_trend_point_t spo2_hourly_trend_points[SPO2_SCR_TREND_MAX_POINTS];
+    struct hpi_minutely_trend_point_t spo2_minutely_trend_points[SPO2_SCR_TREND_MAX_POINTS];
     if (chart_spo2_trend == NULL)
         return;
 
     int m_num_points = 0;
 
     //if(0)
-    if(hpi_trend_load_day_trend(spo2_hourly_trend_points, &m_num_points, TREND_SPO2) == 0)
+    if(hpi_trend_load_trend(spo2_hourly_trend_points, spo2_minutely_trend_points, &m_num_points, TREND_SPO2) == 0)
     {
         int y_max = -1;
         int y_min = 999;
