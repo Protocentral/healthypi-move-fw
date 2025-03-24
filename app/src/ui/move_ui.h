@@ -102,7 +102,7 @@ LV_IMG_DECLARE(img_heart_120);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(oxanium_90);
-LV_FONT_DECLARE(fredoka_28);
+//LV_FONT_DECLARE(fredoka_28);
 LV_FONT_DECLARE(ui_font_Number_big);
 LV_FONT_DECLARE(ui_font_Number_extra);
 

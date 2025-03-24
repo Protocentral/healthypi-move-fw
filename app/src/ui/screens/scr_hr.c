@@ -145,6 +145,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
        
     lv_obj_t *lbl_l1 = lv_label_create(cont_col);
     lv_label_set_text(lbl_l1, "Last hour trend");
+    lv_obj_add_style(lbl_l1, &style_white_small, 0);
+
 
     chart_hr_hour_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_hour_trend, 270, 110);
@@ -153,7 +155,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_chart_set_range(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
     lv_chart_set_point_count(chart_hr_hour_trend, 60);
 
-    lv_obj_set_style_line_width(chart_hr_hour_trend, 4, LV_PART_ITEMS);
+    lv_obj_set_style_line_width(chart_hr_hour_trend, 0, LV_PART_ITEMS);
     lv_obj_set_style_size(chart_hr_hour_trend, 6, LV_PART_INDICATOR);
 
     lv_obj_add_event_cb(chart_hr_hour_trend, draw_event_cb_hour, LV_EVENT_DRAW_PART_BEGIN, NULL);
@@ -244,10 +246,6 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
         lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
     lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
-
-    //Add HR to trend
-
-    lv_chart_set_next_value(chart_hr_hour_trend, ser_hr_hour_trend, hr);
 }
 
 void hpi_disp_hr_load_trend(void)
@@ -289,7 +287,7 @@ void hpi_disp_hr_load_trend(void)
 
         for(int i=0; i<60; i++)
         {
-            ser_hr_hour_trend->y_points[i] = hr_minutely_trend_points[i].avg;
+            ser_hr_hour_trend->y_points[i] = hr_minutely_trend_points[i].max;
         }
 
         //lv_chart_set_range(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);

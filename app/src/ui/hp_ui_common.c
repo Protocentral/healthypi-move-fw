@@ -98,6 +98,13 @@ void display_init_styles(void)
     /*Assign the new theme to the current display*/
     lv_disp_set_theme(NULL, &th_new);
 
+    /*lv_theme_t *th = lv_theme_default_init(NULL,                                                                 
+        lv_palette_main(LV_PALETTE_RED), lv_palette_main(LV_PALETTE_RED) ,                            
+                                           true,                                                                  
+                                           &fredoka_28); 
+    
+    lv_disp_set_theme(NULL, th);*/
+
     // Subscript (Unit) label style
     lv_style_init(&style_tiny);
     lv_style_set_text_color(&style_tiny, lv_color_white());
@@ -106,7 +113,7 @@ void display_init_styles(void)
     // Label White Small
     lv_style_init(&style_white_small);
     lv_style_set_text_color(&style_white_small, lv_color_white());
-    lv_style_set_text_font(&style_white_small, &fredoka_28);
+    lv_style_set_text_font(&style_white_small, &lv_font_montserrat_24);
 
     lv_style_init(&style_white_medium);
     lv_style_set_text_color(&style_white_medium, lv_color_white());
@@ -150,7 +157,7 @@ void draw_scr_common(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
     lv_obj_set_scroll_dir(parent, LV_DIR_VER);
-    //lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
+    // lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
 }
 
 void hpi_display_sleep_on(void)
@@ -470,8 +477,6 @@ void disp_screen_event(lv_event_t *e)
         }
     }
 }
-
-
 
 void hdr_time_display_update(struct rtc_time in_time)
 {
