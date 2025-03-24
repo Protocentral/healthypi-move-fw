@@ -9,7 +9,6 @@
 #include <zephyr/settings/settings.h>
 #include <zephyr/zbus/zbus.h>
 
-
 #include <time.h>
 #include <zephyr/posix/time.h>
 #include <zephyr/sys/timeutil.h>
@@ -42,6 +41,7 @@ static uint16_t m_temp_curr_minute[60] = {0}; // Assumed max 60 points per minut
 static uint8_t m_temp_curr_minute_counter = 0;
 
 // Time variables
+static struct tm m_trend_sys_time_tm;
 static int64_t m_trend_time_ts;
 
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_trend_point_t), 8, 1);
@@ -102,7 +102,7 @@ static int hpi_trend_hr_process_points()
         k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
     }
 
-    if (spo2_sum>0)
+    if (spo2_sum > 0)
     {
         spo2_trend_point.avg = spo2_sum / HR_TREND_MINUTE_PTS;
         spo2_trend_point.latest = m_spo2_curr_minute[HR_TREND_MINUTE_PTS - 1];
@@ -143,6 +143,14 @@ static int64_t hpi_trend_get_day_start_ts(int64_t *today_time_ts)
     return timeutil_timegm64(&today_time_tm);
 }
 
+static int64_t hpi_trend_get_hour_start_ts(int64_t *hour_time_ts)
+{
+    struct tm today_time_tm = *gmtime(hour_time_ts);
+    today_time_tm.tm_min = 0;
+    today_time_tm.tm_sec = 0;
+    return timeutil_timegm64(&today_time_tm);
+}
+
 void hpi_trend_record_thread(void)
 {
     struct hpi_trend_point_t _hr_trend_minute;
@@ -158,7 +166,6 @@ void hpi_trend_record_thread(void)
             int64_t today_ts = hpi_trend_get_day_start_ts(&_hr_trend_minute.timestamp);
             LOG_DBG("Recd HR point: %" PRIx64 "| %d | %d | %d", _hr_trend_minute.timestamp, _hr_trend_minute.max, _hr_trend_minute.min, _hr_trend_minute.avg);
             hpi_trend_wr_point_to_file(_hr_trend_minute, today_ts, TREND_HR);
-            
         }
         if (k_msgq_get(&q_spo2_trend, &_spo2_trend_minute, K_NO_WAIT) == 0)
         {
@@ -208,7 +215,7 @@ void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_trend_point, int64_t 
     ret = fs_sync(&file);
 }
 
-int hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, int *num_points, enum trend_type m_trend_type)
+int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, struct hpi_minutely_trend_point_t *minutely_trend_points, int *num_points, enum trend_type m_trend_type)
 {
     struct fs_file_t file;
     int ret = 0;
@@ -295,6 +302,20 @@ int hpi_trend_load_day_trend(struct hpi_hourly_trend_point_t *hourly_trend_point
         }
     }
 
+    int8_t minute_counter = 0;
+    for (int i = 0; i < num_trend_points; i++)
+    {
+        if (trend_point_all[i].timestamp > m_trend_time_ts - 3600)
+        {
+            if(minute_counter >= 60)
+            {
+                LOG_ERR("Minute counter overflow");
+                break;
+            }
+            minutely_trend_points[minute_counter++].avg = trend_point_all[i].avg;
+        }
+    }
+
     for (int i = 0; i < NUM_HOURS; i++)
     {
         // printf("Hour %d: %d points\n", i, bucket_counts[i]);
@@ -373,6 +394,7 @@ ZBUS_LISTENER_DEFINE(trend_bpt_lis, trend_bpt_listener);
 static void trend_sys_time_listener(const struct zbus_channel *chan)
 {
     const struct tm *sys_time = zbus_chan_const_msg(chan);
+    m_trend_sys_time_tm = *sys_time;
     m_trend_time_ts = timeutil_timegm64(sys_time);
 
     // LOG_DBG("Time: %d-%d-%d %d:%d:%d", m_trend_time->tm_year, m_trend_time->tm_mon, m_trend_time->tm_mday, m_trend_time->tm_hour, m_trend_time->tm_min, m_trend_time->tm_sec);
@@ -387,4 +409,4 @@ ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
 #define TREND_RECORD_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, hpi_trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 2000);
-//K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, hpi_trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 2000);
+// K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, hpi_trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 2000);

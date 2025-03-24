@@ -358,6 +358,10 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
         rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode);
     }
+    else if(data->op_mode == MAX32664C_OP_MODE_IDLE)
+    {
+        // Idle mode, do nothing, take a break
+    }
     else
     {
         LOG_ERR("Invalid operation mode");

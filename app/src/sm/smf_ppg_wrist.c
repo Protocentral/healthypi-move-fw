@@ -8,7 +8,7 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "max32664c.h"
 #include "hpi_common_types.h"
 
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 8
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 
 static const struct smf_state ppg_samp_states[];
 
@@ -17,6 +17,7 @@ K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_motion_detected, 0, 1);
 
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
 
@@ -29,12 +30,15 @@ enum ppg_fi_sm_state
     PPG_SAMP_STATE_ACTIVE,
     PPG_SAMP_STATE_PROBING,
     PPG_SAMP_STATE_OFF_SKIN,
+    PPG_SAMP_STATE_MOTION_DETECT,
 };
 
 struct s_object
 {
     struct smf_ctx ctx;
 } s_f_obj;
+
+static int m_curr_state;
 
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 {
@@ -50,12 +54,19 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
         // printk("SCD: ", edata->scd_state);
         if (edata->scd_state == 3)
         {
-            LOG_DBG("ON SKIN");
-            // k_sem_give(&sem_ppg_wrist_on_skin);
+            LOG_DBG("ON SKIN | state: %d", m_curr_state);
+            k_sem_give(&sem_ppg_wrist_on_skin);
         }
         return;
     }
-    else
+    else if (edata->chip_op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
+    {
+
+        LOG_DBG("WAKE ON MOTION | state: %d", m_curr_state);
+        k_sem_give(&sem_ppg_wrist_motion_detected);
+        return;
+    }
+    else if (edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AGC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
         // printk("WR NS: %d ", _n_samples);
         if (_n_samples > 8)
@@ -92,10 +103,10 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             // LOG_DBG("HR Conf: %d", ppg_sensor_sample.hr_confidence);
 
-            if(ppg_sensor_sample.scd_state==HPI_PPG_SCD_OFF_SKIN)
+            if (ppg_sensor_sample.scd_state == HPI_PPG_SCD_OFF_SKIN)
             {
-                //LOG_DBG("OFF SKIN");
-                //k_sem_give(&sem_ppg_wrist_off_skin);
+                LOG_DBG("OFF SKIN | state: %d", m_curr_state);
+                k_sem_give(&sem_ppg_wrist_off_skin);
             }
 
             // LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
@@ -160,17 +171,18 @@ K_TIMER_DEFINE(tmr_ppg_wrist_sampling, ppg_wrist_sampling_handler, NULL);
 static void st_ppg_samp_active_entry(void *o)
 {
     LOG_DBG("PPG SM Active Entry");
+    m_curr_state = PPG_SAMP_STATE_ACTIVE;
 
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
-    
+
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
-      // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
 }
 
 static void st_ppg_samp_active_run(void *o)
 {
-    // LOG_DBG("PPG SM Active Run");
+    // LOG_DBG("PPG SM Active Run");  
     if (k_sem_take(&sem_ppg_wrist_off_skin, K_FOREVER) == 0)
     {
         LOG_DBG("Switching to Off Skin");
@@ -178,14 +190,10 @@ static void st_ppg_samp_active_run(void *o)
     }
 }
 
-static void st_ppg_samp_active_exit(void *o)
-{
-    LOG_DBG("PPG SM Active Exit");
-}
-
 static void st_ppg_samp_probing_entry(void *o)
 {
     LOG_DBG("PPG SM Probing Entry");
+    m_curr_state = PPG_SAMP_STATE_PROBING;
 
     // Enter SCD mode
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
@@ -201,37 +209,46 @@ static void st_ppg_samp_probing_run(void *o)
     }
 }
 
-static void st_ppg_samp_probing_exit(void *o)
-{
-    LOG_DBG("PPG SM Probing Exit");
-}
-
 static void st_ppg_samp_off_skin_entry(void *o)
 {
     LOG_DBG("PPG SM Off Skin Entry");
+    m_curr_state = PPG_SAMP_STATE_OFF_SKIN;
+
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
+    k_msleep(1000);
 }
 
 static void st_ppg_samp_off_skin_run(void *o)
 {
     LOG_DBG("PPG SM Off Skin Running");
+    smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
+}
 
-    if (k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER) == 0)
+static void st_ppg_samp_motion_detect_entry(void *o)
+{
+    LOG_DBG("PPG SM Motion Detect Entry");
+    m_curr_state = PPG_SAMP_STATE_MOTION_DETECT;
+}
+
+static void st_ppg_samp_motion_detect_run(void *o)
+{
+    LOG_DBG("PPG SM Motion Detect Running");
+
+
+    if (k_sem_take(&sem_ppg_wrist_motion_detected, K_FOREVER) == 0)
     {
+        hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
+        k_msleep(1000);
         LOG_DBG("Switching to Probing");
         smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
     }
 }
 
-static void st_ppg_samp_off_skin_exit(void *o)
-{
-    LOG_DBG("PPG SM Off Skin Exit");
-}
-
 static const struct smf_state ppg_samp_states[] = {
-    [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(st_ppg_samp_active_entry, st_ppg_samp_active_run, st_ppg_samp_active_exit, NULL, NULL),
-    [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, st_ppg_samp_probing_exit, NULL, NULL),
-    [PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, st_ppg_samp_off_skin_exit, NULL, NULL),
+    [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(st_ppg_samp_active_entry, st_ppg_samp_active_run, NULL, NULL, NULL),
+    [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, NULL, NULL, NULL),
+    [PPG_SAMP_STATE_MOTION_DETECT] = SMF_CREATE_STATE(st_ppg_samp_motion_detect_entry, st_ppg_samp_motion_detect_run, NULL, NULL, NULL),
+    [PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
 };
 
 static void smf_ppg_wrist_thread(void)
