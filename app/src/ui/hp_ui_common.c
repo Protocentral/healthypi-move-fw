@@ -46,6 +46,9 @@ lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_black_small;
 lv_style_t style_white_large;
 
+lv_style_t style_bg_blue;
+lv_style_t style_bg_red;
+
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
 static int curr_screen = SCR_HOME;
@@ -150,13 +153,38 @@ void display_init_styles(void)
     lv_style_set_border_width(&style_scr_black, 0);
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
 
+    lv_style_init(&style_bg_blue);
+    lv_style_set_radius(&style_bg_blue, 15);
+    lv_style_set_bg_opa(&style_bg_blue, LV_OPA_COVER);
+    static lv_grad_dsc_t grad;
+    grad.dir = LV_GRAD_DIR_VER;
+    grad.stops_count = 2;
+    grad.stops[0].color = lv_color_black();
+    grad.stops[1].color = lv_palette_darken(LV_PALETTE_BLUE_GREY, 4);
+    grad.stops[0].frac = 150;
+    grad.stops[1].frac = 192;
+    lv_style_set_bg_grad(&style_bg_blue, &grad);
+    
+    lv_style_init(&style_bg_red);
+    lv_style_set_radius(&style_bg_red, 15);
+    lv_style_set_bg_opa(&style_bg_red, LV_OPA_COVER);
+    static lv_grad_dsc_t grad_red;
+    grad_red.dir = LV_GRAD_DIR_VER;
+    grad_red.stops_count = 2;
+    grad_red.stops[0].color = lv_color_black();
+    grad_red.stops[1].color = lv_palette_darken(LV_PALETTE_DEEP_ORANGE, 4);
+    grad_red.stops[0].frac = 168;
+    grad_red.stops[1].frac = 255;
+
+    lv_style_set_bg_grad(&style_bg_red, &grad_red);
+
     lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
 void draw_scr_common(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
-    lv_obj_set_scroll_dir(parent, LV_DIR_VER);
+    lv_obj_set_scroll_dir(parent, LV_DIR_VER);0
     // lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
 }
 

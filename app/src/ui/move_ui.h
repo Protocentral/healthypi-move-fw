@@ -97,8 +97,9 @@ LV_IMG_DECLARE(img_calories_48);
 LV_IMG_DECLARE(img_timer_48);
 LV_IMG_DECLARE(ecg_120);
 LV_IMG_DECLARE(bp_70);
-LV_IMG_DECLARE(icon_spo2_30x35);
+//LV_IMG_DECLARE(icon_spo2_30x35);
 LV_IMG_DECLARE(img_heart_120);
+LV_IMG_DECLARE(icon_spo2_100);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(oxanium_90);

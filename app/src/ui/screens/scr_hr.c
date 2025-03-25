@@ -43,7 +43,8 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_white_small;
 
 extern lv_style_t style_scr_black;
-
+extern lv_style_t style_bg_red;
+extern lv_style_t style_bg_blue;
 
 extern lv_style_t style_tiny;
 
@@ -101,7 +102,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     //lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
     //lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
-    lv_obj_add_style(cont_col, &style_scr_black, 0);
+    //lv_obj_add_style(cont_col, &style_scr_black, 0);
+    lv_obj_add_style(cont_col, &style_bg_blue, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");

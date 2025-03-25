@@ -11,7 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HR
+#define HPI_DEFAULT_START_SCREEN SCR_SPO2
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
@@ -474,8 +474,8 @@ static void st_display_active_run(void *o)
     case SCR_SPO2:
         if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
-            hpi_disp_spo2_load_trend();
+            //hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
+            //hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
         }
         break;
