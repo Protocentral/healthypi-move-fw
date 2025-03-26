@@ -540,8 +540,6 @@ static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
     return 0;
 }
 
-
-
 static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode mode, uint8_t algo_mode)
 {
     LOG_DBG("MAX32664C entering ALGO mode...");

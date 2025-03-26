@@ -48,6 +48,7 @@ lv_style_t style_white_large;
 
 lv_style_t style_bg_blue;
 lv_style_t style_bg_red;
+lv_style_t style_bg_green;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
@@ -175,8 +176,19 @@ void display_init_styles(void)
     grad_red.stops[1].color = lv_palette_darken(LV_PALETTE_DEEP_ORANGE, 4);
     grad_red.stops[0].frac = 168;
     grad_red.stops[1].frac = 255;
-
     lv_style_set_bg_grad(&style_bg_red, &grad_red);
+
+    lv_style_init(&style_bg_green);
+    lv_style_set_radius(&style_bg_green, 15);
+    lv_style_set_bg_opa(&style_bg_green, LV_OPA_COVER);
+    static lv_grad_dsc_t grad_green;
+    grad_green.dir = LV_GRAD_DIR_VER;
+    grad_green.stops_count = 2;
+    grad_green.stops[0].color = lv_color_black();
+    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_PINK, 4);
+    grad_green.stops[0].frac = 168;
+    grad_green.stops[1].frac = 255;
+    lv_style_set_bg_grad(&style_bg_green, &grad_green);
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 }
@@ -368,6 +380,13 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_PLOT_HRV_SCATTER:
         draw_scr_hrv_scatter(m_scroll_dir);
         break;
+    case SCR_SPL_SPO2_SCR2:
+        draw_scr_spo2_scr2(m_scroll_dir);
+        break;
+    case SCR_SPL_SPO2_SCR3:
+        draw_scr_spo2_scr3(m_scroll_dir);
+        break;
+    
     default:
         printk("Invalid screen: %d", m_screen);
     }

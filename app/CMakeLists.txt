@@ -21,7 +21,15 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/fonts/*.c
                         src/ui/screens/*.c
                         src/sm/*.c
-                        )    
+                        )  
+
+FILE(GLOB image_sources src/ui/images/*.c
+                        src/ui/images/img_spo2_hand.c
+                        src/ui/fonts/*.c
+                        src/ui/screens/*.c
+                        src/ui/hp_ui_common.c
+
+)                        
 
 target_sources(app PRIVATE ${app_sources})
 
@@ -32,10 +40,11 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 # This places images in the external flash memory
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/images/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/components/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/move_ui.h LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(FILES src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+
+#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/components/*.c LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/move_ui.h LOCATION EXTFLASH_TEXT NOCOPY)
 
 #zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sm/*.c LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/data_module.c LOCATION EXTFLASH_TEXT NOCOPY)

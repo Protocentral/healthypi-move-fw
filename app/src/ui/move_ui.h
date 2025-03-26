@@ -77,6 +77,9 @@ enum hpi_disp_spl_screens
     SCR_SPL_ECG_COMPLETE,
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
+    SCR_SPL_SPO2_SCR2,
+    SCR_SPL_SPO2_SCR3,
+    SCR_SPL_HR_SCR2,
 
     SCR_SPL_LIST_END,
 };
@@ -101,11 +104,15 @@ LV_IMG_DECLARE(bp_70);
 LV_IMG_DECLARE(img_heart_120);
 LV_IMG_DECLARE(icon_spo2_100);
 
+LV_IMG_DECLARE(img_spo2_hand);
+
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(oxanium_90);
 //LV_FONT_DECLARE(fredoka_28);
 LV_FONT_DECLARE(ui_font_Number_big);
 LV_FONT_DECLARE(ui_font_Number_extra);
+
+
 
 /******** UI Function Prototypes ********/
 

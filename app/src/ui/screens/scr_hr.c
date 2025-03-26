@@ -41,12 +41,13 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_white_small;
+extern lv_style_t style_tiny;
+
 
 extern lv_style_t style_scr_black;
 extern lv_style_t style_bg_red;
 extern lv_style_t style_bg_blue;
-
-extern lv_style_t style_tiny;
+extern lv_style_t style_bg_green;
 
 static void draw_event_cb_day(lv_event_t *e)
 {
@@ -87,14 +88,13 @@ static void scr_hr_btn_live_event_handler(lv_event_t *e)
 void draw_scr_hr(enum scroll_dir m_scroll_dir)
 {
     scr_hr = lv_obj_create(NULL);
-    // lv_obj_set_flag(scr_hr, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    draw_scr_common(scr_hr);
+    lv_obj_clear_flag(scr_hr, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    //draw_scr_common(scr_hr);
 
-    lv_obj_set_scrollbar_mode(scr_hr, LV_SCROLLBAR_MODE_ON);
+    //lv_obj_set_scrollbar_mode(scr_hr, LV_SCROLLBAR_MODE_ON);
 
-    /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_hr);
-    lv_obj_set_size(cont_col, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     // lv_obj_set_width(cont_col, lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
@@ -102,8 +102,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     //lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
     //lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
-    //lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style_bg_blue, 0);
+    lv_obj_add_style(cont_col, &style_scr_black, 0);
+    lv_obj_add_style(cont_col, &style_bg_green, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
@@ -120,6 +120,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_bottom(cont_hr, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_top(cont_hr, 0, LV_PART_MAIN);
 
+    lv_obj_set_style_bg_opa(cont_hr, 0, 0);
+
     //lv_obj_t *img1 = lv_img_create(cont_hr);
     //lv_img_set_src(img1, &img_heart_35);
     // lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
@@ -134,101 +136,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     label_hr_last_update_time = lv_label_create(cont_col);
     struct tm last_update_ts = disp_get_hr_last_update_ts();
-    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", last_update_ts.tm_hour, last_update_ts.tm_min);
-
-    label_hr_previous_hr = lv_label_create(cont_col);
-    lv_label_set_text(label_hr_previous_hr, "Previously 00 at 00:00\n");
-
-    /*Create an array for the points of the line*/
-    static lv_point_t line_points[] = { {10, 0}, {240, 0}};
- 
-    lv_obj_t * line1 = lv_line_create(cont_col);
-    lv_line_set_points(line1, line_points, 2);     
-       
-    lv_obj_t *lbl_l1 = lv_label_create(cont_col);
-    lv_label_set_text(lbl_l1, "Last hour trend");
-    lv_obj_add_style(lbl_l1, &style_white_small, 0);
-
-
-    chart_hr_hour_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_hr_hour_trend, 270, 110);
-    lv_chart_set_type(chart_hr_hour_trend, LV_CHART_TYPE_LINE);
-    lv_chart_set_update_mode(chart_hr_hour_trend, LV_CHART_UPDATE_MODE_CIRCULAR);
-    lv_chart_set_range(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
-    lv_chart_set_point_count(chart_hr_hour_trend, 60);
-
-    lv_obj_set_style_line_width(chart_hr_hour_trend, 0, LV_PART_ITEMS);
-    lv_obj_set_style_size(chart_hr_hour_trend, 6, LV_PART_INDICATOR);
-
-    lv_obj_add_event_cb(chart_hr_hour_trend, draw_event_cb_hour, LV_EVENT_DRAW_PART_BEGIN, NULL);
-
-    lv_obj_set_style_bg_color(chart_hr_hour_trend, lv_color_black(), LV_STATE_DEFAULT);
-    //lv_obj_set_style_bg_opa(chart_hr_hour_trend, 0, LV_PART_MAIN);
-
-    lv_obj_set_style_border_width(chart_hr_hour_trend, 2, LV_PART_MAIN);
-    lv_chart_set_div_line_count(chart_hr_hour_trend, 0, 0);
-
-    lv_chart_set_axis_tick(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 2, true, 40);
-    lv_chart_set_axis_tick(chart_hr_hour_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 10);
-
-    ser_hr_hour_trend = lv_chart_add_series(chart_hr_hour_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
-
-    lv_obj_t *lbl_l3 = lv_label_create(cont_col);
-    lv_label_set_text(lbl_l3,  " \n");
-
-    lv_obj_t * line2 = lv_line_create(cont_col);
-    lv_line_set_points(line2, line_points, 2);     
-    
-    lv_obj_t *lbl_l2 = lv_label_create(cont_col);
-    lv_label_set_text(lbl_l2, "Last day trend");
-
-    chart_hr_day_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_hr_day_trend, 270, 170);
-    lv_chart_set_type(chart_hr_day_trend, LV_CHART_TYPE_LINE);
-    lv_chart_set_range(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
-    lv_chart_set_point_count(chart_hr_day_trend, 60);
-
-    lv_obj_set_style_line_width(chart_hr_day_trend, 0, LV_PART_ITEMS);
-    lv_obj_set_style_size(chart_hr_day_trend, 8, LV_PART_INDICATOR);
-
-    lv_obj_add_event_cb(chart_hr_day_trend, draw_event_cb_day, LV_EVENT_DRAW_PART_BEGIN, NULL);
-
-    lv_obj_set_style_bg_color(chart_hr_day_trend, lv_color_black(), LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(chart_hr_day_trend, 0, LV_PART_MAIN);
-
-    lv_obj_set_style_border_width(chart_hr_day_trend, 2, LV_PART_MAIN);
-    lv_chart_set_div_line_count(chart_hr_day_trend, 0, 24);
-
-    lv_chart_set_axis_tick(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
-    lv_chart_set_axis_tick(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 10);
-
-    ser_hr_max_trend = lv_chart_add_series(chart_hr_day_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
-    ser_hr_min_trend = lv_chart_add_series(chart_hr_day_trend, lv_color_hex(0x00B0FF), LV_CHART_AXIS_PRIMARY_Y);
-
-    lv_obj_t *lbl_legend = lv_label_create(cont_col);
-    lv_label_set_recolor(lbl_legend, true);
-    lv_label_set_text(lbl_legend, "#FFEA00 " LV_SYMBOL_STOP " Max.# #00B0FF  " LV_SYMBOL_STOP " Min.# ");
-    lv_obj_set_style_pad_top(lbl_legend, 35, LV_PART_MAIN);
-
-    lv_obj_t *lbl_gap1 = lv_label_create(cont_col);
-    lv_label_set_text(lbl_gap1, " ");
-    lv_obj_align_to(lbl_gap1, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
-
-    lv_obj_t *btn_hr_live = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_live, scr_hr_btn_live_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_height(btn_hr_live, 80);
-
-    lv_obj_t *label_btn_bpt_measure1 = lv_label_create(btn_hr_live);
-    lv_label_set_text(label_btn_bpt_measure1, LV_SYMBOL_PLAY " Raw PPG");
-    lv_obj_center(label_btn_bpt_measure1);
-
-    /*btn_hr_settings = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_hr_settings, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_height(btn_hr_settings, 80);
-
-    lv_obj_t *lbl_btn_settings = lv_label_create(btn_hr_settings);
-    lv_label_set_text(lbl_btn_settings, LV_SYMBOL_SETTINGS " Settings");
-    lv_obj_center(lbl_btn_settings);*/
+    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %02d:%02d", last_update_ts.tm_hour, last_update_ts.tm_min);
 
     hpi_disp_set_curr_screen(SCR_HR);
     hpi_show_screen(scr_hr, m_scroll_dir);
@@ -241,13 +149,13 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
 
     if (hr == 0)
     {
-        lv_label_set_text(label_hr_bpm, "99");
+        lv_label_set_text(label_hr_bpm, "--");
     }
     else
     {
         lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
-    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
+    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %02d:%02d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
 }
 
 void hpi_disp_hr_load_trend(void)

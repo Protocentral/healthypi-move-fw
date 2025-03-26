@@ -54,12 +54,13 @@ static void draw_event_cb_hour(lv_event_t *e)
     }
 }
 
-static void scr_spo2_settings_btn_event_handler(lv_event_t *e)
+static void scr_spo2_btn_measure_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
+        hpi_move_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2);
     }
 }
 
@@ -134,11 +135,13 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 
     btn_spo2_measure = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_spo2_measure, scr_spo2_measure_btn_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_height(btn_spo2_measure, 60);
+    lv_obj_set_height(btn_spo2_measure, 85);
 
     lv_obj_t *label_measure = lv_label_create(btn_spo2_measure);
     lv_label_set_text(label_measure, LV_SYMBOL_PLAY " Measure");
     lv_obj_center(label_measure);
+
+    lv_obj_add_event_cb(btn_spo2_measure, scr_spo2_btn_measure_handler, LV_EVENT_ALL, NULL);
 
     /*
     label_min_max = lv_label_create(cont_col);
