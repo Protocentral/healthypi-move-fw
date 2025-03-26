@@ -70,6 +70,14 @@ enum max32664c_attribute
 	MAX32664C_ATTR_SENSOR_IDS=0x12,
 };
 
+enum max32664c_scd_states
+{
+	MAX32664C_SCD_STATE_UNKNOWN = 0,
+	MAX32664C_SCD_STATE_OFF_SKIN = 1,
+	MAX32664C_SCD_STATE_ON_OBJECT = 2,
+	MAX32664C_SCD_STATE_ON_SKIN = 3,
+};
+
 struct max32664c_config
 {
 	struct i2c_dt_spec i2c;

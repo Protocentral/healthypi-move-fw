@@ -184,7 +184,7 @@ void display_init_styles(void)
 void draw_scr_common(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
-    lv_obj_set_scroll_dir(parent, LV_DIR_VER);0
+    lv_obj_set_scroll_dir(parent, LV_DIR_VER);
     // lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
 }
 
