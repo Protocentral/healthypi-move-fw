@@ -12,7 +12,7 @@
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2_scr3, LOG_LEVEL_DBG);
 
-lv_obj_t *scr_spo2_scr3;
+static lv_obj_t *scr_spo2_scr3;
 
 static lv_obj_t *chart_spo2_trend;
 
@@ -68,7 +68,7 @@ static void scr_spo2_btn_live_event_handler(lv_event_t *e)
     }
 }
 
-void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
+void draw_scr_spo2_trends(enum scroll_dir m_scroll_dir)
 {
     scr_spo2_scr3 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr3, &style_scr_black, 0);

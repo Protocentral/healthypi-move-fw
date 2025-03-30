@@ -22,6 +22,8 @@ K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_motion_detected, 0, 1);
 
+K_SEM_DEFINE(sem_start_one_shot_spo2, 0, 1);
+
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
 
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
@@ -39,7 +41,7 @@ enum ppg_fi_sm_state
 struct s_object
 {
     struct smf_ctx ctx;
-} s_f_obj;
+} sm_ctx_ppg_wr;
 
 static int m_curr_state;
 
@@ -50,7 +52,7 @@ void work_off_skin_handler(struct k_work *work)
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
         LOG_DBG("Still OFF SKIN");
-        //smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
+        // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
     }
 }
 
@@ -61,7 +63,7 @@ void work_on_skin_handler(struct k_work *work)
     if (m_curr_scd_state == MAX32664C_SCD_STATE_ON_SKIN)
     {
         LOG_DBG("Still ON SKIN");
-        //smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+        // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
     }
 }
 
@@ -83,7 +85,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
         {
             LOG_DBG("ON SKIN | state: %d", m_curr_state);
             k_work_schedule(&work_on_skin, K_SECONDS(HPI_PROBE_DURATION_S));
-            //k_sem_give(&sem_ppg_wrist_on_skin);
+            // k_sem_give(&sem_ppg_wrist_on_skin);
         }
         return;
     }
@@ -96,7 +98,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     else if (edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AGC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
         // printk("WR NS: %d ", _n_samples);
-        //LOG_DBG("Chip Mode: %d", edata->chip_op_mode);
+        // LOG_DBG("Chip Mode: %d", edata->chip_op_mode);
         if (_n_samples > 8)
         {
             _n_samples = 8;
@@ -127,7 +129,14 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.scd_state = edata->scd_state;
                 ppg_sensor_sample.hr_confidence = edata->hr_confidence;
                 ppg_sensor_sample.spo2_confidence = edata->spo2_confidence;
+                ppg_sensor_sample.spo2_excessive_motion = edata->spo2_excessive_motion;
+                ppg_sensor_sample.spo2_valid_percent_complete = edata->spo2_valid_percent_complete;
+                ppg_sensor_sample.spo2_state = edata->spo2_state;
+                ppg_sensor_sample.spo2_low_pi = edata->spo2_low_pi;
             }
+
+            LOG_DBG("SPO2: %d | Spo2 Prog: %d | Low PI: %d | Motion: %d | State: %d", ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_valid_percent_complete,
+                    ppg_sensor_sample.spo2_low_pi, ppg_sensor_sample.spo2_excessive_motion, ppg_sensor_sample.spo2_state);
 
             // LOG_DBG("HR Conf: %d", ppg_sensor_sample.hr_confidence);
 
@@ -137,9 +146,15 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 k_work_schedule(&work_off_skin, K_SECONDS(HPI_OFFSKIN_THRESHOLD_S));
             }
 
+            if(ppg_sensor_sample.spo2_valid_percent_complete==100)
+            {
+                hw_max32664c_stop_algo();
+                k_msleep(600);
+            }
+
             m_curr_scd_state = edata->scd_state;
 
-            //LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
+            // LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
             if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
             {
                 k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
@@ -206,19 +221,28 @@ static void st_ppg_samp_active_entry(void *o)
     m_curr_state = PPG_SAMP_STATE_ACTIVE;
 
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
 }
 
+static void ppg_wr_start_oneshot_spo2(void)
+{
+    LOG_DBG("PPG Wrist starting one-shot SpO2");
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+    k_msleep(600);
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
+    k_msleep(600);
+    k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+}
+
 static void st_ppg_samp_active_run(void *o)
 {
-    // LOG_DBG("PPG SM Active Run");
+    LOG_DBG("PPG SM Active Run");
     if (k_sem_take(&sem_ppg_wrist_off_skin, K_FOREVER) == 0)
     {
         LOG_DBG("Switching to Off Skin");
-        smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
+        smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
     }
 }
 
@@ -237,7 +261,7 @@ static void st_ppg_samp_probing_run(void *o)
     if (k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER) == 0)
     {
         LOG_DBG("Switching to Active");
-        smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+        smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
     }
 }
 
@@ -254,7 +278,7 @@ static void st_ppg_samp_off_skin_entry(void *o)
 static void st_ppg_samp_off_skin_run(void *o)
 {
     LOG_DBG("PPG SM Off Skin Running");
-    //smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
+    // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
 }
 
 static void st_ppg_samp_motion_detect_entry(void *o)
@@ -272,7 +296,7 @@ static void st_ppg_samp_motion_detect_run(void *o)
         hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
         k_msleep(1000);
         LOG_DBG("Switching to Probing");
-        smf_set_state(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
+        smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
     }
 }
 
@@ -287,6 +311,8 @@ static void smf_ppg_wrist_thread(void)
 {
     int32_t ret;
 
+    bool is_smf_active = true;
+
     k_sem_take(&sem_ppg_wrist_sm_start, K_FOREVER);
 
     if (hw_is_max32664c_present() == false)
@@ -295,20 +321,35 @@ static void smf_ppg_wrist_thread(void)
         return;
     }
 
-    smf_set_initial(SMF_CTX(&s_f_obj), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+    smf_set_initial(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
-
     LOG_INF("PPG State Machine Thread starting");
 
     for (;;)
     {
-        ret = smf_run_state(SMF_CTX(&s_f_obj));
-        if (ret)
+        // if (is_smf_active == true)
+        //{
+        // ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
+        //}
+        /*if (ret)
         {
             LOG_ERR("Error in PPG State Machine");
             break;
+        }*/
+
+        if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
+        {
+            // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
+            LOG_DBG("Stopping PPG Sampling");
+            k_timer_stop(&tmr_ppg_wrist_sampling);
+            is_smf_active = false;
+            LOG_DBG("Starting One Shot SpO2");
+            ppg_wr_start_oneshot_spo2();
         }
+
+        LOG_DBG("PPG SMF Thread Running");
+
         k_msleep(1000);
     }
 }

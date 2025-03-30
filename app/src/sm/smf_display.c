@@ -306,6 +306,24 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
         lv_disp_trig_activity(NULL);
     }
+    else if(hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+    {
+        hpi_disp_spo2_plotPPG(ppg_sensor_sample);
+        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2);
+
+        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
+
+        /*if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
+        {
+            hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
+            //  hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            //  hpi_disp_update_hr(m_disp_hr);
+            hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
+            hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
+        }*/
+    }
+
+
     else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
     {
     }

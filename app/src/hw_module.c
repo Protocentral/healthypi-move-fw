@@ -451,6 +451,14 @@ int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
     return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
 }
 
+int hw_max32664c_stop_algo(void)
+{
+    struct sensor_value mode_set;
+    mode_set.val1 = MAX32664C_OP_MODE_STOP_ALGO;
+    mode_set.val2 = 0;
+    return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+}
+
 static void pmic_event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
     if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))

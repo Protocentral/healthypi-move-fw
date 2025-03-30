@@ -102,11 +102,11 @@ void display_init_styles(void)
     /*Assign the new theme to the current display*/
     lv_disp_set_theme(NULL, &th_new);
 
-    /*lv_theme_t *th = lv_theme_default_init(NULL,                                                                 
-        lv_palette_main(LV_PALETTE_RED), lv_palette_main(LV_PALETTE_RED) ,                            
-                                           true,                                                                  
-                                           &fredoka_28); 
-    
+    /*lv_theme_t *th = lv_theme_default_init(NULL,
+        lv_palette_main(LV_PALETTE_RED), lv_palette_main(LV_PALETTE_RED) ,
+                                           true,
+                                           &fredoka_28);
+
     lv_disp_set_theme(NULL, th);*/
 
     // Subscript (Unit) label style
@@ -165,7 +165,7 @@ void display_init_styles(void)
     grad.stops[0].frac = 150;
     grad.stops[1].frac = 192;
     lv_style_set_bg_grad(&style_bg_blue, &grad);
-    
+
     lv_style_init(&style_bg_red);
     lv_style_set_radius(&style_bg_red, 15);
     lv_style_set_bg_opa(&style_bg_red, LV_OPA_COVER);
@@ -179,13 +179,13 @@ void display_init_styles(void)
     lv_style_set_bg_grad(&style_bg_red, &grad_red);
 
     lv_style_init(&style_bg_green);
-    lv_style_set_radius(&style_bg_green, 15);
+    lv_style_set_radius(&style_bg_green, 5);
     lv_style_set_bg_opa(&style_bg_green, LV_OPA_COVER);
     static lv_grad_dsc_t grad_green;
     grad_green.dir = LV_GRAD_DIR_VER;
     grad_green.stops_count = 2;
     grad_green.stops[0].color = lv_color_black();
-    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_PINK, 4);
+    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_GREEN, 4);
     grad_green.stops[0].frac = 168;
     grad_green.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_green, &grad_green);
@@ -380,13 +380,16 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_PLOT_HRV_SCATTER:
         draw_scr_hrv_scatter(m_scroll_dir);
         break;
+    case SCR_SPL_HR_SCR2:
+        draw_scr_hr_scr2(m_scroll_dir);
+        break;
     case SCR_SPL_SPO2_SCR2:
         draw_scr_spo2_scr2(m_scroll_dir);
         break;
     case SCR_SPL_SPO2_SCR3:
         draw_scr_spo2_scr3(m_scroll_dir);
         break;
-    
+
     default:
         printk("Invalid screen: %d", m_screen);
     }
@@ -476,6 +479,7 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printf("Left at %d\n", curr_screen);
 
+        
         if ((curr_screen + 1) == SCR_LIST_END)
         {
             printk("End of list\n");
@@ -492,6 +496,19 @@ void disp_screen_event(lv_event_t *e)
     {
         lv_indev_wait_release(lv_indev_get_act());
         printf("Right at %d\n", curr_screen);
+
+        if(hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
+        {
+            hpi_move_load_screen(SCR_HR, SCROLL_LEFT);
+            return;
+        }
+
+        if(hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        {
+            hpi_move_load_screen(SCR_SPO2, SCROLL_LEFT);
+            return;
+        }
+
         if ((curr_screen - 1) == SCR_LIST_START)
         {
             printk("Start of list\n");
@@ -512,6 +529,7 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_move_load_scr_settings(SCROLL_DOWN);
         }
+        
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
     {
@@ -521,6 +539,10 @@ void disp_screen_event(lv_event_t *e)
         if (curr_screen == SCR_SPL_SETTINGS)
         {
             hpi_move_load_screen(SCR_HOME, SCROLL_UP);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_HR)
+        {
+            hpi_move_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR);
         }
     }
 }

@@ -37,6 +37,7 @@ enum max32664c_mode
 	MAX32664C_OP_MODE_SCD,
 	MAX32664C_OP_MODE_WAKE_ON_MOTION,
 	MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION,
+	MAX32664C_OP_MODE_STOP_ALGO,
 };
 
 enum max32664c_algo_op_mode
@@ -131,7 +132,12 @@ struct max32664c_encoded_data
 
 	uint16_t spo2;
 	uint8_t spo2_confidence;
-
+	uint8_t spo2_valid_percent_complete;
+	uint8_t spo2_low_quality;
+	uint8_t spo2_excessive_motion;
+	uint8_t spo2_low_pi;
+	uint8_t spo2_state;
+	
 	uint16_t rtor;
 	uint8_t rtor_confidence;
 

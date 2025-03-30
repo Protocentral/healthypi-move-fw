@@ -16,17 +16,14 @@ LOG_MODULE_REGISTER(hpi_disp_scr_hr, LOG_LEVEL_DBG);
 
 #define HR_SCR_TREND_MAX_POINTS 24
 
-lv_obj_t *scr_hr;
+static lv_obj_t *scr_hr;
 
 static lv_obj_t *chart_hr_hour_trend;
 static lv_obj_t *chart_hr_day_trend;
 
 static lv_chart_series_t *ser_hr_hour_trend;
-
 static lv_chart_series_t *ser_hr_max_trend;
 static lv_chart_series_t *ser_hr_min_trend;
-
-
 
 // GUI Labels
 static lv_obj_t *label_hr_bpm;
@@ -127,7 +124,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     // lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 
     label_hr_bpm = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_bpm, "78");
+    lv_label_set_text(label_hr_bpm, "--");
     lv_obj_add_style(label_hr_bpm, &style_white_large, 0);
 
     // HR Sub bpm label
@@ -137,6 +134,9 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     label_hr_last_update_time = lv_label_create(cont_col);
     struct tm last_update_ts = disp_get_hr_last_update_ts();
     lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %02d:%02d", last_update_ts.tm_hour, last_update_ts.tm_min);
+
+    lv_obj_t *lbl_gap = lv_label_create(cont_col);
+    lv_label_set_text(lbl_gap, " ");
 
     hpi_disp_set_curr_screen(SCR_HR);
     hpi_show_screen(scr_hr, m_scroll_dir);

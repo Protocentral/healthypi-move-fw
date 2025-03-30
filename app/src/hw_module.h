@@ -24,6 +24,8 @@ struct rtc_time hw_get_current_time(void);
 
 bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
+int hw_max32664c_stop_algo(void);
+
 enum gpio_keypad_key
 {
     GPIO_KEYPAD_KEY_NONE = 0,

@@ -63,7 +63,7 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
             {
                 uint8_t scd_state_val = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
                 *scd_state = scd_state_val;
-                //printk("SCD: %d\n", scd_state_val);
+                // printk("SCD: %d\n", scd_state_val);
             }
         }
     }
@@ -108,10 +108,10 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
 
             for (int i = 0; i < fifo_count; i++)
             {
-                //uint8_t scd_state_val = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
+                // uint8_t scd_state_val = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
                 //*scd_state = scd_state_val;
-                //printk("SCD: %d\n", scd_state_val);
-                uint8_t algo_op_mode= (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
+                // printk("SCD: %d\n", scd_state_val);
+                uint8_t algo_op_mode = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
                 LOG_INF("Algo Op Mode: %d", algo_op_mode);
             }
         }
@@ -137,7 +137,7 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
     {
         int fifo_count = max32664c_get_fifo_count(dev);
 
-        //printk("F: %d | ", fifo_count);
+        // printk("F: %d | ", fifo_count);
 
         if (fifo_count > 16)
         {
@@ -158,7 +158,7 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
             k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-            for(int i = 0; i < fifo_count; i++)
+            for (int i = 0; i < fifo_count; i++)
             {
                 uint32_t led_green = (uint32_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_green |= (uint32_t)buf[(sample_len * i) + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
@@ -185,9 +185,9 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 }
 
 static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
-                                        uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor, 
-                                        uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class,
-                                        uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
+                                        uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint8_t *spo2_valid_percent_complete, uint8_t *spo2_low_quality,
+                                        uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor,
+                                        uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -205,7 +205,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
     {
         // printk("DRDY ");
         int fifo_count = max32664c_get_fifo_count(dev);
-        //printk("AL F: %d | ", fifo_count);
+        // printk("AL F: %d | ", fifo_count);
 
         if (fifo_count > 16)
         {
@@ -262,6 +262,13 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 *hr_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 3 + MAX32664C_SENSOR_DATA_OFFSET];
 
+                uint16_t rtor_val = (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
+                rtor_val |= (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 5 + MAX32664C_SENSOR_DATA_OFFSET];
+
+                *rtor = (rtor_val / 10);
+
+                *rtor_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 6 + MAX32664C_SENSOR_DATA_OFFSET];
+
                 *spo2_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 10 + MAX32664C_SENSOR_DATA_OFFSET];
 
                 uint16_t spo2_val = (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 11 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
@@ -269,12 +276,11 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 *spo2 = (spo2_val / 10);
 
-                uint16_t rtor_val = (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
-                rtor_val |= (uint16_t)buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 5 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                *rtor = (rtor_val / 10);
-
-                *rtor_conf = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 6 + MAX32664C_SENSOR_DATA_OFFSET];
+                *spo2_valid_percent_complete = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 13 + MAX32664C_SENSOR_DATA_OFFSET];
+                *spo2_low_quality = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 14 + MAX32664C_SENSOR_DATA_OFFSET];
+                *spo2_excessive_motion = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 15 + MAX32664C_SENSOR_DATA_OFFSET];
+                *spo2_low_pi = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 16 + MAX32664C_SENSOR_DATA_OFFSET];
+                *spo2_state = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 18 + MAX32664C_SENSOR_DATA_OFFSET];
 
                 *scd_state = buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 19 + MAX32664C_SENSOR_DATA_OFFSET];
 
@@ -335,9 +341,10 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
         rc = max32664c_async_sample_fetch(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples,
-                                          &m_edata->num_samples, &m_edata->spo2, &m_edata->spo2_confidence, &m_edata->hr, &m_edata->hr_confidence, &m_edata->rtor,
-                                          &m_edata->rtor_confidence, &m_edata->scd_state, &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, 
-                                          &m_edata->chip_op_mode);
+                                          &m_edata->num_samples, &m_edata->spo2, &m_edata->spo2_confidence, &m_edata->spo2_valid_percent_complete,
+                                          &m_edata->spo2_low_quality, &m_edata->spo2_excessive_motion, &m_edata->spo2_low_pi, &m_edata->spo2_state,
+                                          &m_edata->hr, &m_edata->hr_confidence, &m_edata->rtor,&m_edata->rtor_confidence, &m_edata->scd_state, 
+                                          &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode);
         // printk("Device is in idle mode\n");
     }
     else if (data->op_mode == MAX32664C_OP_MODE_RAW)
@@ -352,13 +359,13 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
         rc = max32664c_async_sample_fetch_scd(dev, &m_edata->chip_op_mode, &m_edata->scd_state);
     }
-    else if(data->op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
+    else if (data->op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
     {
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
         rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode);
     }
-    else if(data->op_mode == MAX32664C_OP_MODE_IDLE)
+    else if (data->op_mode == MAX32664C_OP_MODE_IDLE)
     {
         // Idle mode, do nothing, take a break
     }

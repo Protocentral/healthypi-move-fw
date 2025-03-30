@@ -19,7 +19,7 @@
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 256 // SAMPLE_RATE * 4
 #define BPT_DISP_WINDOW_SIZE 256
-// SAMPLE_RATE * 4
+#define SPO2_DISP_WINDOW_SIZE 128
 
 #define HPI_DISP_TIME_REFR_INT 1000
 #define HPI_DISP_BATT_REFR_INT 1000
@@ -146,11 +146,16 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir);
 void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_last_update_ts);
 void hpi_disp_hr_load_trend(void);
 struct tm disp_get_hr_last_update_ts(void);
+void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir);
 
 // Spo2 Screen functions
 void draw_scr_spo2(enum scroll_dir m_scroll_dir);
+void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir);
+void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir);
 void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update);
 void hpi_disp_spo2_load_trend(void);
+void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
+void hpi_disp_spo2_update_progress(int progress, int status, int spo2);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);

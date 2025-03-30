@@ -90,6 +90,8 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir)
     // lv_obj_set_flag(scr_hr, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     draw_scr_common(scr_hr_scr2);
 
+    static lv_point_t line_points[] = { {10, 0}, {240, 0}};
+
     lv_obj_set_scrollbar_mode(scr_hr_scr2, LV_SCROLLBAR_MODE_ON);
 
     /*Create a container with COLUMN flex direction*/
@@ -102,53 +104,20 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     //lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
     //lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
-    //lv_obj_add_style(cont_col, &style_scr_black, 0);
+    lv_obj_add_style(cont_col, &style_scr_black, 0);
     lv_obj_add_style(cont_col, &style_bg_blue, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
     lv_obj_add_style(label_signal, &style_white_small, 0);
 
-    lv_obj_t *img_hr = lv_img_create(cont_col);
-    lv_img_set_src(img_hr, &img_heart_120);
-
-    lv_obj_t *cont_hr = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_hr, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_bottom(cont_hr, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(cont_hr, 0, LV_PART_MAIN);
-
-    //lv_obj_t *img1 = lv_img_create(cont_hr);
-    //lv_img_set_src(img1, &img_heart_35);
-    // lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
-
-    label_hr_bpm = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_bpm, "78");
-    lv_obj_add_style(label_hr_bpm, &style_white_large, 0);
-
-    // HR Sub bpm label
-    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_sub, " bpm");
-
-    label_hr_last_update_time = lv_label_create(cont_col);
-    struct tm last_update_ts = disp_get_hr_last_update_ts();
-    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %d:%d", last_update_ts.tm_hour, last_update_ts.tm_min);
-
-    label_hr_previous_hr = lv_label_create(cont_col);
-    lv_label_set_text(label_hr_previous_hr, "Previously 00 at 00:00\n");
-
-    /*Create an array for the points of the line*/
-    static lv_point_t line_points[] = { {10, 0}, {240, 0}};
- 
-    lv_obj_t * line1 = lv_line_create(cont_col);
-    lv_line_set_points(line1, line_points, 2);     
+    // Draw a horizontal line
+    /*lv_obj_t * line1 = lv_line_create(cont_col);
+    lv_line_set_points(line1, line_points, 2);*/     
        
     lv_obj_t *lbl_l1 = lv_label_create(cont_col);
     lv_label_set_text(lbl_l1, "Last hour trend");
     lv_obj_add_style(lbl_l1, &style_white_small, 0);
-
 
     chart_hr_hour_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_hour_trend, 270, 110);
@@ -230,6 +199,6 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(lbl_btn_settings, LV_SYMBOL_SETTINGS " Settings");
     lv_obj_center(lbl_btn_settings);*/
 
-    hpi_disp_set_curr_screen(SCR_HR);
+    hpi_disp_set_curr_screen(SCR_SPL_HR_SCR2);
     hpi_show_screen(scr_hr_scr2, m_scroll_dir);
 }
