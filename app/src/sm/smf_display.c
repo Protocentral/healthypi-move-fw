@@ -12,7 +12,7 @@
 #include "ui/move_ui.h"
 
 #define HPI_DEFAULT_START_SCREEN SCR_HR
-LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -306,6 +306,24 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
         lv_disp_trig_activity(NULL);
     }
+    else if(hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+    {
+        hpi_disp_spo2_plotPPG(ppg_sensor_sample);
+        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2);
+
+        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
+
+        /*if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
+        {
+            hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
+            //  hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            //  hpi_disp_update_hr(m_disp_hr);
+            hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
+            hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
+        }*/
+    }
+
+
     else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
     {
     }
@@ -474,8 +492,8 @@ static void st_display_active_run(void *o)
     case SCR_SPO2:
         if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
-            hpi_disp_spo2_load_trend();
+            //hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
+            //hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
         }
         break;
@@ -673,7 +691,7 @@ static void disp_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
     m_disp_hr_last_update_tm = hpi_hr->time_tm;
-    // LOG_DBG("ZB HR: %d at %d:%d \n", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
+    LOG_INF("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 

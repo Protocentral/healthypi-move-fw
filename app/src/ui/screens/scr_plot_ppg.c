@@ -138,7 +138,7 @@ void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 5);
 
     chart_ppg = lv_chart_create(scr_ppg);
-    lv_obj_set_size(chart_ppg, 390, 130);
+    lv_obj_set_size(chart_ppg, 380, 130);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
     lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);

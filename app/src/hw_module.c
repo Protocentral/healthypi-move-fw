@@ -112,7 +112,7 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
@@ -448,6 +448,14 @@ int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
     struct sensor_value mode_set;
     mode_set.val1 = op_mode;
     mode_set.val2 = algo_mode;
+    return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+}
+
+int hw_max32664c_stop_algo(void)
+{
+    struct sensor_value mode_set;
+    mode_set.val1 = MAX32664C_OP_MODE_STOP_ALGO;
+    mode_set.val2 = 0;
     return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
 }
 

@@ -455,9 +455,12 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     return 0;
 }
 
-static int max32664c_stop(const struct device *dev)
+static int max32664c_stop_algo(const struct device *dev)
 {
-    LOG_DBG("MAX32664C stopping...");
+    LOG_DBG("Stopping Algo...");
+
+    // Stop Algorithm
+    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, 120);
 
     // Disable AFE
     m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x00, 0x00, 250);
@@ -465,8 +468,7 @@ static int max32664c_stop(const struct device *dev)
     // Disable Accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, 20);
 
-    // Stop Algorithm
-    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, 120);
+ 
 
     return 0;
 }
@@ -475,7 +477,7 @@ static int max32664c_set_mode_scd(const struct device *dev)
 {
     LOG_DBG("MAX32664C entering SCD mode...");
 
-    max32664c_stop(dev);
+    max32664c_stop_algo(dev);
 
     // max32664c_check_sensors(dev);
 
@@ -540,13 +542,11 @@ static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
     return 0;
 }
 
-
-
 static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode mode, uint8_t algo_mode)
 {
     LOG_DBG("MAX32664C entering ALGO mode...");
 
-    max32664c_stop(dev);
+    max32664c_stop_algo(dev);
 
     max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
@@ -700,6 +700,11 @@ static int max32664c_attr_set(const struct device *dev,
         else if (val->val1 == MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION)
         {
             max32664c_exit_mode_wake_on_motion(dev);
+            data->op_mode = MAX32664C_OP_MODE_IDLE;
+        }
+        else if(val->val1 == MAX32664C_OP_MODE_STOP_ALGO)
+        {
+            max32664c_stop_algo(dev);
             data->op_mode = MAX32664C_OP_MODE_IDLE;
         }
         else

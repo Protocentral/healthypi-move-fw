@@ -21,8 +21,8 @@ static lv_obj_t *btn_ecg_measure;
 
 // Externs
 extern lv_style_t style_red_medium;
-
 extern lv_style_t style_scr_black;
+extern lv_style_t style_bg_blue;
 
 extern struct k_sem sem_ecg_start;
 
@@ -41,11 +41,11 @@ static void scr_ecg_start_btn_event_handler(lv_event_t *e)
 void draw_scr_ecg(enum scroll_dir m_scroll_dir)
 {
     scr_ecg = lv_obj_create(NULL);
-    draw_scr_common(scr_ecg);
-    lv_obj_clear_flag(scr_ecg, LV_OBJ_FLAG_SCROLLABLE);
+    //draw_scr_common(scr_ecg);
+   // lv_obj_add_style(scr_ecg, &style_scr_black, 0);
+   // lv_obj_clear_flag(scr_ecg, LV_OBJ_FLAG_SCROLLABLE);
     // draw_bg(scr_ecg);
 
-   
     lv_obj_t *cont_col = lv_obj_create(scr_ecg);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     // lv_obj_set_width(cont_col, lv_pct(100));
@@ -54,7 +54,9 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_set_scroll_dir(cont_col, LV_DIR_VER);
+    lv_obj_add_style(cont_col, &style_bg_blue, 0);
+    //lv_obj_add_style(cont_col, &style_scr_black, 0);
+    //lv_obj_set_scroll_dir(cont_col, LV_DIR_VER);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "ECG");
