@@ -14,20 +14,16 @@ LOG_MODULE_REGISTER(hpi_disp_scr_spo2, LOG_LEVEL_DBG);
 
 lv_obj_t *scr_spo2;
 
-static lv_obj_t *chart_spo2_trend;
+
 
 #define SPO2_SCR_TREND_MAX_POINTS 24
 
-static lv_chart_series_t *ser_max_trend;
-static lv_chart_series_t *ser_min_trend;
+
 
 // GUI Labels
 static lv_obj_t *label_spo2_percent;
 static lv_obj_t *label_spo2_last_update_time;
 // static lv_obj_t *label_spo2_status;
-
-// static lv_obj_t *label_min_max;
-static lv_obj_t *btn_spo2_settings;
 
 static lv_obj_t *btn_spo2_measure;
 
@@ -41,18 +37,7 @@ extern lv_style_t style_tiny;
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
-static void draw_event_cb_hour(lv_event_t *e)
-{
-    lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
-    if (!lv_obj_draw_part_check_type(dsc, &lv_chart_class, LV_CHART_DRAW_PART_TICK_LABEL))
-        return;
 
-    if (dsc->id == LV_CHART_AXIS_PRIMARY_X && dsc->text)
-    {
-        const char *hour[] = {"00", "06", "12", "18", "23"};
-        lv_snprintf(dsc->text, dsc->text_length, "%s", hour[dsc->value]);
-    }
-}
 
 static void scr_spo2_btn_measure_handler(lv_event_t *e)
 {
@@ -61,28 +46,6 @@ static void scr_spo2_btn_measure_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         hpi_move_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2);
-    }
-}
-
-static void scr_spo2_btn_live_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t)SCR_SPO2);
-    }
-}
-
-static void scr_spo2_measure_btn_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        // hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
-        // k_msleep(500);
-        // k_sem_give(&sem_ecg_start);
     }
 }
 
@@ -134,8 +97,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_spo2_last_update_time, "Last measured: 00:00");
 
     btn_spo2_measure = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_spo2_measure, scr_spo2_measure_btn_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_height(btn_spo2_measure, 85);
+    lv_obj_set_height(btn_spo2_measure, 75);
 
     lv_obj_t *label_measure = lv_label_create(btn_spo2_measure);
     lv_label_set_text(label_measure, LV_SYMBOL_PLAY " Measure");

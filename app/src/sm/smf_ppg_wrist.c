@@ -52,7 +52,7 @@ void work_off_skin_handler(struct k_work *work)
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
         LOG_DBG("Still OFF SKIN");
-        // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
+        smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
     }
 }
 
@@ -135,8 +135,8 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.spo2_low_pi = edata->spo2_low_pi;
             }
 
-            LOG_DBG("SPO2: %d | Spo2 Prog: %d | Low PI: %d | Motion: %d | State: %d", ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_valid_percent_complete,
-                    ppg_sensor_sample.spo2_low_pi, ppg_sensor_sample.spo2_excessive_motion, ppg_sensor_sample.spo2_state);
+            //LOG_DBG("SPO2: %d | Spo2 Prog: %d | Low PI: %d | Motion: %d | State: %d", ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_valid_percent_complete,
+            //        ppg_sensor_sample.spo2_low_pi, ppg_sensor_sample.spo2_excessive_motion, ppg_sensor_sample.spo2_state);
 
             // LOG_DBG("HR Conf: %d", ppg_sensor_sample.hr_confidence);
 
@@ -330,36 +330,44 @@ static void smf_ppg_wrist_thread(void)
     {
         // if (is_smf_active == true)
         //{
-        // ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
+        ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
         //}
-        /*if (ret)
+        if (ret)
         {
             LOG_ERR("Error in PPG State Machine");
             break;
-        }*/
-
-        if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
-        {
-            // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
-            LOG_DBG("Stopping PPG Sampling");
-            k_timer_stop(&tmr_ppg_wrist_sampling);
-            is_smf_active = false;
-            LOG_DBG("Starting One Shot SpO2");
-            ppg_wr_start_oneshot_spo2();
         }
 
-        LOG_DBG("PPG SMF Thread Running");
+       
 
         k_msleep(1000);
     }
 }
 
+static void ppg_wrist_ctrl_thread(void)
+{
+    for(;;)
+    {
+        if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
+        {
+            // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
+            LOG_DBG("Stopping PPG Sampling");
+            k_timer_stop(&tmr_ppg_wrist_sampling);           
+            LOG_DBG("Starting One Shot SpO2");
+            ppg_wr_start_oneshot_spo2();
+        }
+
+        LOG_DBG("PPG WR control Running");
+
+        k_msleep(1000);
+    }
+}
+
+#define PPG_CTRL_THREAD_STACKSIZE 1024
+#define PPG_CTRL_THREAD_PRIORITY 7
+
 #define SMF_PPG_THREAD_STACKSIZE 4096
 #define SMF_PPG_THREAD_PRIORITY 7
 
-#define PPG_WRIST_SAMPLING_THREAD_STACKSIZE 8192
-#define PPG_WRIST_SAMPLING_THREAD_PRIORITY 7
-
 K_THREAD_DEFINE(smf_ppg_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
-
-// K_THREAD_DEFINE(ppg_wrist_sampling_trigger_thread_id, PPG_WRIST_SAMPLING_THREAD_STACKSIZE, ppg_wrist_sampling_trigger_thread, NULL, NULL, NULL, PPG_WRIST_SAMPLING_THREAD_PRIORITY, 0, 2000);
+K_THREAD_DEFINE(ppg_ctrl_thread_id, PPG_CTRL_THREAD_STACKSIZE, ppg_wrist_ctrl_thread, NULL, NULL, NULL, PPG_CTRL_THREAD_PRIORITY, 0, 0);

@@ -371,7 +371,7 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     }
     else
     {
-        LOG_ERR("Invalid operation mode");
+        LOG_ERR("Invalid operation mode %d", data->op_mode);
         // return 4;
     }
 

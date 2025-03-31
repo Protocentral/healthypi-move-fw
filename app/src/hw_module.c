@@ -112,7 +112,7 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
