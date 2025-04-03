@@ -357,7 +357,7 @@ static void ppg_wrist_ctrl_thread(void)
             ppg_wr_start_oneshot_spo2();
         }
 
-        LOG_DBG("PPG WR control Running");
+        //LOG_DBG("PPG WR control Running");
 
         k_msleep(1000);
     }
