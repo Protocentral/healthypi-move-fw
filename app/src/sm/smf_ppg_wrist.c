@@ -47,7 +47,7 @@ static int m_curr_state;
 
 static enum max32664c_scd_states m_curr_scd_state;
 
-void work_off_skin_handler(struct k_work *work)
+void work_off_skin_wait_handler(struct k_work *work)
 {
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
@@ -56,9 +56,9 @@ void work_off_skin_handler(struct k_work *work)
     }
 }
 
-K_WORK_DELAYABLE_DEFINE(work_off_skin, work_off_skin_handler);
+K_WORK_DELAYABLE_DEFINE(work_off_skin, work_off_skin_wait_handler);
 
-void work_on_skin_handler(struct k_work *work)
+void work_on_skin_wait_handler(struct k_work *work)
 {
     if (m_curr_scd_state == MAX32664C_SCD_STATE_ON_SKIN)
     {
@@ -67,7 +67,7 @@ void work_on_skin_handler(struct k_work *work)
     }
 }
 
-K_WORK_DELAYABLE_DEFINE(work_on_skin, work_on_skin_handler);
+K_WORK_DELAYABLE_DEFINE(work_on_skin, work_on_skin_wait_handler);
 
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 {
@@ -135,24 +135,35 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.spo2_low_pi = edata->spo2_low_pi;
             }
 
-            //LOG_DBG("SPO2: %d | Spo2 Prog: %d | Low PI: %d | Motion: %d | State: %d", ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_valid_percent_complete,
-            //        ppg_sensor_sample.spo2_low_pi, ppg_sensor_sample.spo2_excessive_motion, ppg_sensor_sample.spo2_state);
+            // LOG_DBG("SPO2: %d | Spo2 Prog: %d | Low PI: %d | Motion: %d | State: %d", ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_valid_percent_complete,
+            //         ppg_sensor_sample.spo2_low_pi, ppg_sensor_sample.spo2_excessive_motion, ppg_sensor_sample.spo2_state);
 
             // LOG_DBG("HR Conf: %d", ppg_sensor_sample.hr_confidence);
 
-            if ((ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_OFF_SKIN) && (m_curr_scd_state != MAX32664C_SCD_STATE_OFF_SKIN))
+            /*if ((ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_OFF_SKIN) && (m_curr_scd_state != MAX32664C_SCD_STATE_OFF_SKIN))
             {
                 LOG_DBG("OFF SKIN");
                 k_work_schedule(&work_off_skin, K_SECONDS(HPI_OFFSKIN_THRESHOLD_S));
+            }*/
+
+            if (ppg_sensor_sample.scd_state != MAX32664C_SCD_STATE_ON_SKIN && (m_curr_scd_state == MAX32664C_SCD_STATE_ON_SKIN))
+            {
+                LOG_DBG("OFF SKIN");
+                // k_work_schedule(&work_off_skin, K_SECONDS(HPI_OFFSKIN_THRESHOLD_S));
+            }
+            else if(ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN && (m_curr_scd_state != MAX32664C_SCD_STATE_ON_SKIN))
+            {
+                LOG_DBG("ON SKIN");
+                // k_work_schedule(&work_on_skin, K_SECONDS(HPI_PROBE_DURATION_S));
             }
 
-            if(ppg_sensor_sample.spo2_valid_percent_complete==100)
+            if (ppg_sensor_sample.spo2_valid_percent_complete == 100)
             {
                 hw_max32664c_stop_algo();
                 k_msleep(600);
             }
 
-            m_curr_scd_state = edata->scd_state;
+            m_curr_scd_state = ppg_sensor_sample.scd_state;
 
             // LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);
             if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
@@ -311,8 +322,6 @@ static void smf_ppg_wrist_thread(void)
 {
     int32_t ret;
 
-    bool is_smf_active = true;
-
     k_sem_take(&sem_ppg_wrist_sm_start, K_FOREVER);
 
     if (hw_is_max32664c_present() == false)
@@ -328,17 +337,13 @@ static void smf_ppg_wrist_thread(void)
 
     for (;;)
     {
-        // if (is_smf_active == true)
-        //{
         ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
-        //}
+
         if (ret)
         {
             LOG_ERR("Error in PPG State Machine");
             break;
         }
-
-       
 
         k_msleep(1000);
     }
@@ -346,18 +351,18 @@ static void smf_ppg_wrist_thread(void)
 
 static void ppg_wrist_ctrl_thread(void)
 {
-    for(;;)
+    for (;;)
     {
         if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
         {
             // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
             LOG_DBG("Stopping PPG Sampling");
-            k_timer_stop(&tmr_ppg_wrist_sampling);           
+            k_timer_stop(&tmr_ppg_wrist_sampling);
             LOG_DBG("Starting One Shot SpO2");
             ppg_wr_start_oneshot_spo2();
         }
 
-        //LOG_DBG("PPG WR control Running");
+        // LOG_DBG("PPG WR control Running");
 
         k_msleep(1000);
     }
