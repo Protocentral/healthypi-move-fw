@@ -112,7 +112,7 @@ void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
     for (int i = 0; i < m_data_len; i++)
     {
         cmd_pkt[1 + i] = m_data[i];
-        //printk("%02X ", m_data[i]);
+        printk("%02X ", m_data[i]);
         //k_sleep(K_MSEC(10));
     }
 
