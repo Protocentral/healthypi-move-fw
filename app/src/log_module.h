@@ -17,12 +17,6 @@ enum hpi_log_types
     HPI_LOG_TYPE_PPG_FINGER_RECORD,
 };
 
-struct hpi_log_header_t
-{
-    char log_file_name[16]; 
-    uint32_t log_file_length;
-};
-
 char* log_get_current_session_id_str(void);
 void log_session_add_point(uint16_t time, int16_t current, uint16_t impedance);
 //void log_write_to_file(struct tes_session_log_t *m_session_log);

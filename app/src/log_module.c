@@ -74,12 +74,13 @@ static int hpi_log_get_path(char* m_path, uint8_t m_log_type)
     return 0;
 }
 
-/*struct hpi_log_trend_header_t log_get_file_header(char* file_id)
+struct hpi_log_header_t log_get_file_header(char* file_id)
 {
     LOG_DBG("Getting header for file %s\n", file_id);
 
+    LOG_DBG("Header size: %d\n", sizeof(struct hpi_log_header_t));
 
-    LOG_DBG("Header size: %d\n", sizeof(struct hpi_log_trend_header_t));
+    struct hpi_log_header_t m_header;
 
     //char m_file_name[30];
     //snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
@@ -96,7 +97,7 @@ static int hpi_log_get_path(char* m_path, uint8_t m_log_type)
         // return;
     }
 
-    rc = fs_read(&m_file, (struct hpi_log_trend_header_t *)&m_header, sizeof(struct hpi_log_trend_header_t));
+    rc = fs_read(&m_file, (struct hpi_log_header_t *) &m_header, sizeof(struct hpi_log_header_t));
     if (rc < 0)
     {
         printk("Error reading file %d\n", rc);
@@ -113,7 +114,7 @@ static int hpi_log_get_path(char* m_path, uint8_t m_log_type)
     }
 
     return m_header;
-}*/
+}
 
 uint16_t log_get_count(uint8_t m_log_type)
 {
@@ -225,14 +226,14 @@ int log_get_index(uint8_t m_log_type)
             //char* file_name = entry.name;
             //uint16_t session_id = atoi(entry.name);
 
-            //struct hpi_log_trend_header_t m_header = log_get_file_header(file_name);
+            struct hpi_log_header_t m_header = log_get_file_header(file_name);
             
-            struct hpi_log_header_t m_header;
+            //struct hpi_log_header_t m_header;
 
-            m_header.log_file_length = entry.size;
-            strcpy(m_header.log_file_name, entry.name);
+            //m_header.log_file_length = entry.size;
+            
 
-            LOG_DBG("Log File Name: %s | Size: %d", m_header.log_file_name, m_header.log_file_length);
+            LOG_DBG("Log File Start: %ld | Size: %d", m_header.start_time, m_header.log_file_length);
 
             //memcpy(&buf_log, &m_header, sizeof(struct hpi_log_trend_header_t));
             // buf_log_index += sizeof(struct tes_session_log_header_t);

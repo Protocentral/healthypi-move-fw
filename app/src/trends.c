@@ -183,6 +183,8 @@ void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_trend_point, int64_t 
     struct fs_file_t file;
     int ret = 0;
     char fname[30];
+    struct fs_dirent trend_file_ent;
+    bool file_exists = false;
 
     fs_file_t_init(&file);
 
@@ -202,14 +204,46 @@ void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_trend_point, int64_t 
 
     LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_trend_point));
 
-    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
-
+    ret = fs_stat(fname, &trend_file_ent);
     if (ret < 0)
     {
-        LOG_ERR("FAIL: open %s: %d", fname, ret);
-    }
+        LOG_ERR("FAIL: stat %s: %d", fname, ret);
+        if (ret == -ENOENT)
+        {
 
-    ret = fs_write(&file, &m_trend_point, sizeof(m_trend_point));
+            LOG_ERR("File not found: %s. Creating new file", fname);
+            ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR);
+            if (ret < 0)
+            {
+                LOG_ERR("FAIL: open %s: %d", fname, ret);
+            }
+
+            // Write file header
+            struct hpi_log_header_t file_header;
+
+            file_header.start_time = day_ts;
+            file_header.log_file_length = 0;
+            file_header.log_type = m_trend_type;
+
+            ret = fs_write(&file, &file_header, sizeof(file_header));
+        }
+        file_exists = false;
+    }
+    else
+    {
+        LOG_DBG("File found: %s. Appending to file", fname);
+        file_exists = true;
+        ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+        if (ret < 0)
+        {
+            LOG_ERR("FAIL: open %s: %d", fname, ret);
+        }
+        ret = fs_write(&file, &m_trend_point, sizeof(m_trend_point));
+        if (ret < 0)
+        {
+            LOG_ERR("FAIL: open %s: %d", fname, ret);
+        }
+    }
 
     ret = fs_close(&file);
     ret = fs_sync(&file);
@@ -307,7 +341,7 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
     {
         if (trend_point_all[i].timestamp > m_trend_time_ts - 3600)
         {
-            if(minute_counter >= 60)
+            if (minute_counter >= 60)
             {
                 LOG_ERR("Minute counter overflow");
                 break;

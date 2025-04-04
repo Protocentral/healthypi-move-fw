@@ -13,6 +13,13 @@ struct hpi_trend_point_t
     uint16_t latest; 
 };
 
+struct hpi_log_header_t
+{
+    int64_t start_time;
+    uint16_t log_file_length;
+    uint8_t log_type;
+};
+
 struct hpi_hourly_trend_point_t
 {
     uint8_t hour_no;
