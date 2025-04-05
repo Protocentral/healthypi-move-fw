@@ -190,11 +190,11 @@ void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_trend_point, int64_t 
 
     if (m_trend_type == TREND_HR)
     {
-        sprintf(fname, "/lfs/trhr/%" PRIx64, day_ts);
+        sprintf(fname, "/lfs/trhr/%" PRId64, day_ts);
     }
     else if (m_trend_type == TREND_SPO2)
     {
-        sprintf(fname, "/lfs/trspo2/%" PRIx64, day_ts);
+        sprintf(fname, "/lfs/trspo2/%" PRId64, day_ts);
     }
     else
     {
@@ -204,45 +204,15 @@ void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_trend_point, int64_t 
 
     LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_trend_point));
 
-    ret = fs_stat(fname, &trend_file_ent);
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
     if (ret < 0)
     {
-        LOG_ERR("FAIL: stat %s: %d", fname, ret);
-        if (ret == -ENOENT)
-        {
-
-            LOG_ERR("File not found: %s. Creating new file", fname);
-            ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR);
-            if (ret < 0)
-            {
-                LOG_ERR("FAIL: open %s: %d", fname, ret);
-            }
-
-            // Write file header
-            struct hpi_log_header_t file_header;
-
-            file_header.start_time = day_ts;
-            file_header.log_file_length = 0;
-            file_header.log_type = m_trend_type;
-
-            ret = fs_write(&file, &file_header, HPI_LOG_HEADER_SIZE);
-        }
-        file_exists = false;
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
     }
-    else
+    ret = fs_write(&file, &m_trend_point, sizeof(m_trend_point));
+    if (ret < 0)
     {
-        LOG_DBG("File found: %s. Appending to file", fname);
-        file_exists = true;
-        ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
-        if (ret < 0)
-        {
-            LOG_ERR("FAIL: open %s: %d", fname, ret);
-        }
-        ret = fs_write(&file, &m_trend_point, sizeof(m_trend_point));
-        if (ret < 0)
-        {
-            LOG_ERR("FAIL: open %s: %d", fname, ret);
-        }
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
     }
 
     ret = fs_close(&file);
@@ -265,11 +235,11 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
 
     if (m_trend_type == TREND_HR)
     {
-        sprintf(fname, "/lfs/trhr/%" PRIx64, day_ts);
+        sprintf(fname, "/lfs/trhr/%" PRId64, day_ts);
     }
     else if (m_trend_type == TREND_SPO2)
     {
-        sprintf(fname, "/lfs/trspo2/%" PRIx64, day_ts);
+        sprintf(fname, "/lfs/trspo2/%" PRId64, day_ts);
     }
     else
     {

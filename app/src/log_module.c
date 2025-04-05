@@ -74,22 +74,35 @@ static int hpi_log_get_path(char* m_path, uint8_t m_log_type)
     return 0;
 }
 
-struct hpi_log_header_t log_get_file_header(char* file_id)
+struct hpi_log_header_t log_get_file_header(char* file_path_name)
 {
-    LOG_DBG("Getting header for file %s\n", file_id);
-
+    LOG_DBG("Getting header for file %s\n", file_path_name);
     LOG_DBG("Header size: %d\n", HPI_LOG_HEADER_SIZE);
-
-    struct hpi_log_header_t m_header;
 
     //char m_file_name[30];
     //snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
 
     struct fs_file_t m_file;
+    struct fs_dirent trend_file_ent;
+    int ret=0;
+
     fs_file_t_init(&m_file);
 
+    ret = fs_stat(file_path_name, &trend_file_ent);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: stat %s: %d", file_path_name, ret);
+        if (ret == -ENOENT)
+        {
+            LOG_ERR("File not found: %s", file_path_name);
+        }
+        //return ret;
+    }
+
+    LOG_DBG("Read from file %s | Size: %d", file_path_name, trend_file_ent.size);
+
     int rc = 0;
-    rc = fs_open(&m_file, file_id, FS_O_READ);
+    rc = fs_open(&m_file, file_path_name, FS_O_READ);
 
     if (rc != 0)
     {
@@ -97,12 +110,21 @@ struct hpi_log_header_t log_get_file_header(char* file_id)
         // return;
     }
 
-    rc = fs_read(&m_file, (struct hpi_log_header_t *) &m_header, HPI_LOG_HEADER_SIZE);
+    int64_t file_sessionID=0;
+
+    rc = fs_read(&m_file, (int64_t) &file_sessionID, 8);
     if (rc < 0)
     {
         printk("Error reading file %d\n", rc);
         // return;
     }
+
+    int64_t filename_int = atoi(trend_file_ent.name);
+   
+    struct hpi_log_header_t m_header;
+    m_header.start_time = filename_int;//file_sessionID;
+    m_header.log_file_length = trend_file_ent.size;
+    m_header.log_type = HPI_LOG_TYPE_TREND_HR;
 
     // m_header = *((struct tes_session_log_header_t *)m_header_buffer);
 
