@@ -55,32 +55,32 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         k_sleep(K_MSEC(1000));
         sys_reboot(SYS_REBOOT_COLD);
         break;
-    
+
     // File System Commands
     case HPI_CMD_LOG_GET_COUNT:
-        printk("Recd Get Session Log Count Command\n");
+        LOG_DBG("Recd Get Session Log Count Command");
         // cmdif_send_ble_command(HPI_CMD_GET_SESSION_LOG_COUNT);
         uint16_t log_count = log_get_count(in_pkt_buf[1]);
-        //log_count=0x1234;
+        // log_count=0x1234;
         hpi_cmdif_send_ble_cmd_rsp(HPI_CMD_LOG_GET_COUNT, log_count);
-        //log_get_count();
+        // log_get_count();
         break;
     case HPI_CMD_LOG_GET_INDEX:
-        printk("Recd Get Session Log Index Command\n");
+        LOG_DBG("Recd Get Session Log Index Command");
         // cmdif_send_ble_command(HPI_CMD_GET_SESSION_LOG_INDEX);
         log_get_index(in_pkt_buf[1]);
         break;
     case HPI_CMD_LOG_GET_FILE:
-        printk("Recd Get Session Log Command\n");
+        LOG_DBG("Recd Get Session Log Command");
         uint16_t sess_id = (in_pkt_buf[2] | (in_pkt_buf[1] << 8));
         log_get(sess_id);
         break;
     case HPI_CMD_LOG_DELETE:
-        printk("Recd Session Log Delete Command\n");
+        LOG_DBG("Recd Session Log Delete Command");
         log_delete((in_pkt_buf[1] | (in_pkt_buf[2] << 8)));
         break;
     case HPI_CMD_LOG_WIPE_ALL:
-        printk("Recd Session Log Wipe Command\n");
+        LOG_DBG("Recd Session Log Wipe Command");
         log_wipe_all();
         break;
     default:
@@ -93,7 +93,7 @@ uint8_t data_pkt[256];
 
 void cmdif_send_ble_data(uint8_t *m_data, uint8_t m_data_len)
 {
-    printk("Sending BLE Data: %d\n", m_data_len);
+    LOG_DBG("Sending BLE Data: %d", m_data_len);
 
     data_pkt[0] = CES_CMDIF_TYPE_DATA;
     for (int i = 0; i < m_data_len; i++)
@@ -105,18 +105,18 @@ void cmdif_send_ble_data(uint8_t *m_data, uint8_t m_data_len)
 // Send index of all session logs
 void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
 {
-    printk("Sending BLE Index Data: %d\n", m_data_len);
+    LOG_DBG("Sending BLE Index Data: %d", m_data_len);
     uint8_t cmd_pkt[1 + m_data_len];
 
     cmd_pkt[0] = CES_CMDIF_TYPE_LOG_IDX;
     for (int i = 0; i < m_data_len; i++)
     {
         cmd_pkt[1 + i] = m_data[i];
-        printk("%02X ", m_data[i]);
-        //k_sleep(K_MSEC(10));
+        //printk("%02X ", m_data[i]);
+        // k_sleep(K_MSEC(10));
     }
 
-    printk("\n");
+    //printk("\n");
 
     hpi_ble_send_data(cmd_pkt, 1 + m_data_len);
 }

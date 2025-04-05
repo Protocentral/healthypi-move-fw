@@ -77,7 +77,7 @@ static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t v
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		printk("ECG/RESP CCCD subscribed");
+		LOG_DBG("ECG/RESP CCCD subscribed");
 		break;
 
 	case BT_GATT_CCC_INDICATE:
@@ -85,11 +85,11 @@ static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t v
 		break;
 
 	case 0:
-		printk("ECG/RESP CCCD unsubscribed");
+		LOG_DBG("ECG/RESP CCCD unsubscribed");
 		break;
 
 	default:
-		printk("Error, CCCD has been set to an invalid value");
+		LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
 }
 
@@ -187,7 +187,7 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		printk("CMD RX/TX CCCD subscribed");
+	LOG_DBG("CMD RX/TX CCCD subscribed");
 		break;
 
 	case BT_GATT_CCC_INDICATE:
@@ -195,11 +195,11 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 		break;
 
 	case 0:
-		printk("CMD RX/TX CCCD unsubscribed");
+	LOG_DBG("CMD RX/TX CCCD unsubscribed");
 		break;
 
 	default:
-		printk("Error, CCCD has been set to an invalid value");
+	LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
 }
 
@@ -307,11 +307,11 @@ static void connected(struct bt_conn *conn, uint8_t err)
 {
 	if (err)
 	{
-		printk("Connection failed (err 0x%02x)\n", err);
+		LOG_ERR("Connection failed (err 0x%02x)", err);
 	}
 	else
 	{
-		printk("Connected\n");
+		LOG_DBG("Connected");
 		// send_status_serial(BLE_STATUS_CONNECTED);
 		current_conn = bt_conn_ref(conn);
 	}
@@ -319,7 +319,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	printk("Disconnected (reason 0x%02x)\n", reason);
+	LOG_DBG("Disconnected (reason 0x%02x)", reason);
 	// send_status_serial(BLE_STATUS_DISCONNECTED);
 	if (current_conn)
 	{
