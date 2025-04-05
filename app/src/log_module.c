@@ -78,7 +78,7 @@ struct hpi_log_header_t log_get_file_header(char* file_id)
 {
     LOG_DBG("Getting header for file %s\n", file_id);
 
-    LOG_DBG("Header size: %d\n", sizeof(struct hpi_log_header_t));
+    LOG_DBG("Header size: %d\n", HPI_LOG_HEADER_SIZE);
 
     struct hpi_log_header_t m_header;
 
@@ -97,7 +97,7 @@ struct hpi_log_header_t log_get_file_header(char* file_id)
         // return;
     }
 
-    rc = fs_read(&m_file, (struct hpi_log_header_t *) &m_header, sizeof(struct hpi_log_header_t));
+    rc = fs_read(&m_file, (struct hpi_log_header_t *) &m_header, HPI_LOG_HEADER_SIZE);
     if (rc < 0)
     {
         printk("Error reading file %d\n", rc);
@@ -238,7 +238,7 @@ int log_get_index(uint8_t m_log_type)
             //memcpy(&buf_log, &m_header, sizeof(struct hpi_log_trend_header_t));
             // buf_log_index += sizeof(struct tes_session_log_header_t);
 
-            cmdif_send_ble_data_idx(&m_header, sizeof(struct hpi_log_header_t));
+            cmdif_send_ble_data_idx(&m_header, HPI_LOG_HEADER_SIZE);
 
             // log_count++;
 

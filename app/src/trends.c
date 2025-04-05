@@ -225,7 +225,7 @@ void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_trend_point, int64_t 
             file_header.log_file_length = 0;
             file_header.log_type = m_trend_type;
 
-            ret = fs_write(&file, &file_header, sizeof(file_header));
+            ret = fs_write(&file, &file_header, HPI_LOG_HEADER_SIZE);
         }
         file_exists = false;
     }
