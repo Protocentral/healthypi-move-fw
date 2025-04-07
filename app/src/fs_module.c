@@ -173,15 +173,16 @@ uint32_t transfer_get_file_length(char *m_file_name)
     return file_len;
 }
 
-void transfer_send_file(uint16_t file_id)
+void transfer_send_file(char* in_file_name)
 {
-    printk("Sending file %u\n", file_id);
+    LOG_DBG("Sending file %s", in_file_name);
     uint8_t m_buffer[FILE_TRANSFER_BLE_PACKET_SIZE + 1];
 
-    char m_file_name[30] = "/lfs/trhr/67db5a80";
+    //char m_file_name[30] = "/lfs/trhr/67db5a80";
     //snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
 
-    uint32_t file_len = transfer_get_file_length(m_file_name);
+
+    uint32_t file_len = transfer_get_file_length(in_file_name);
     uint32_t number_writes = file_len / FILE_TRANSFER_BLE_PACKET_SIZE;
 
     uint32_t i = 0;
@@ -193,11 +194,11 @@ void transfer_send_file(uint16_t file_id)
         number_writes++; // Last write will be smaller than 64 bytes
     }
 
-    printk("File name: %s Size:%d NW: %d \n", m_file_name, file_len, number_writes);
+    printk("File name: %s Size:%d NW: %d \n", in_file_name, file_len, number_writes);
 
     fs_file_t_init(&m_file);
 
-    rc = fs_open(&m_file, m_file_name, FS_O_READ);
+    rc = fs_open(&m_file, in_file_name, FS_O_READ);
 
     if (rc != 0)
     {
@@ -228,8 +229,6 @@ void transfer_send_file(uint16_t file_id)
 
     printk("File sent\n");
 }
-
-
 
 void hpi_init_fs_struct(void)
 {

@@ -360,12 +360,14 @@ ZBUS_LISTENER_DEFINE(trend_spo2_lis, trend_spo2_listener);
 static void trend_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
+    LOG_INF("ZB Temp: %d", hpi_temp->temp_c);
 }
 ZBUS_LISTENER_DEFINE(trend_temp_lis, trend_temp_listener);
 
 static void trend_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
+
     // m_disp_steps = hpi_steps->steps_walk;
     // m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
     // ui_steps_button_update(hpi_steps->steps_walk);

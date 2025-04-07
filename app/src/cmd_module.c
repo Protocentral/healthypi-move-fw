@@ -58,7 +58,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 
     // File System Commands
     case HPI_CMD_LOG_GET_COUNT:
-        LOG_DBG("Recd Get Session Log Count Command");
+        LOG_DBG("RX Get Log Count Command");
         // cmdif_send_ble_command(HPI_CMD_GET_SESSION_LOG_COUNT);
         uint16_t log_count = log_get_count(in_pkt_buf[1]);
         // log_count=0x1234;
@@ -66,14 +66,17 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         // log_get_count();
         break;
     case HPI_CMD_LOG_GET_INDEX:
-        LOG_DBG("Recd Get Session Log Index Command");
+        LOG_DBG("RX Get Index Command");
         // cmdif_send_ble_command(HPI_CMD_GET_SESSION_LOG_INDEX);
         log_get_index(in_pkt_buf[1]);
         break;
     case HPI_CMD_LOG_GET_FILE:
-        LOG_DBG("Recd Get Session Log Command");
-        uint16_t sess_id = (in_pkt_buf[2] | (in_pkt_buf[1] << 8));
-        log_get(sess_id);
+        LOG_DBG("RX Get Log Command");
+        int64_t sess_id = 0;
+        for (int i = 0; i < 8; i++) {
+            sess_id |= ((int64_t)in_pkt_buf[1 + i] << (8 * i));
+        }
+        log_get(0x01, sess_id);
         break;
     case HPI_CMD_LOG_DELETE:
         LOG_DBG("Recd Session Log Delete Command");

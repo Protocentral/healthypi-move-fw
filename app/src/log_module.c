@@ -243,7 +243,7 @@ int log_get_index(uint8_t m_log_type)
             //m_header.log_file_length = entry.size;
             
 
-            LOG_DBG("Log File Start: %ld | Size: %d", m_header.start_time, m_header.log_file_length);
+            LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
 
             //memcpy(&buf_log, &m_header, sizeof(struct hpi_log_trend_header_t));
             // buf_log_index += sizeof(struct tes_session_log_header_t);
@@ -276,10 +276,12 @@ int log_get_index(uint8_t m_log_type)
     return res;
 }
 
-void log_get(uint16_t file_id)
+void log_get(uint8_t log_type, int64_t file_id)
 {
-    LOG_DBG("Get Log %u", file_id);
-    transfer_send_file(file_id);
+    LOG_DBG("Getting Log type %d , File ID %" PRId64 , log_type, file_id);
+    char m_file_name[40];
+    snprintf(m_file_name, sizeof(m_file_name), "/lfs/trhr/%" PRId64, file_id);
+    transfer_send_file(m_file_name);
 }
 
 void log_delete(uint16_t file_id)

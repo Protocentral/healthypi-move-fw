@@ -24,7 +24,7 @@ void log_complete(void);
 void log_wipe_all(void);
 
 void log_delete(uint16_t session_id);
-void log_get(uint16_t session_id);
+void log_get(uint8_t log_type, int64_t file_id);
 int log_get_index(uint8_t m_log_type);
 void log_seq_init(void);
 uint16_t log_get_count(uint8_t m_log_type);
