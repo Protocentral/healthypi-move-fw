@@ -58,7 +58,7 @@
 
 #include "display_sh8601.h"
 
-LOG_MODULE_REGISTER(hw_module);
+LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 char curr_string[40];
 
 // Peripheral Device Pointers
@@ -445,6 +445,7 @@ bool hw_is_max32664c_present(void)
 
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
 {
+    LOG_DBG("Setting op mode: %d, algo mode: %d", op_mode, algo_mode);
     struct sensor_value mode_set;
     mode_set.val1 = op_mode;
     mode_set.val2 = algo_mode;

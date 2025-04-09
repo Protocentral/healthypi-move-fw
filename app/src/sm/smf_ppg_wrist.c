@@ -42,6 +42,8 @@ struct s_object
 
 static int m_curr_state;
 
+int sig_wake_on_motion_count = 0;
+
 static enum max32664c_scd_states m_curr_scd_state;
 
 void work_off_skin_wait_handler(struct k_work *work)
@@ -49,7 +51,7 @@ void work_off_skin_wait_handler(struct k_work *work)
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
         LOG_DBG("Still OFF SKIN");
-        //smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
+        //smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
     }
 }
 
@@ -86,11 +88,13 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
         }
         return;
     }
-    else if (edata->chip_op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
+    else if (edata->chip_op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION && sig_wake_on_motion_count<=1)
     {
-        LOG_DBG("WAKE ON MOTION | state: %d", m_curr_state);
+        LOG_DBG("WOKEN ON MOTION | state: %d", m_curr_state);
+        sig_wake_on_motion_count++;
+        hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
         k_sem_give(&sem_ppg_wrist_motion_detected);
-        return;
+        //return;
     }
     else if (edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AGC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
@@ -273,6 +277,7 @@ static void st_ppg_samp_probing_run(void *o)
     }
 }
 
+/*
 static void st_ppg_samp_off_skin_entry(void *o)
 {
     LOG_DBG("PPG SM Off Skin Entry");
@@ -286,12 +291,14 @@ static void st_ppg_samp_off_skin_entry(void *o)
 static void st_ppg_samp_off_skin_run(void *o)
 {
     LOG_DBG("PPG SM Off Skin Running");
-    // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
-}
+    smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
+}*/
 
 static void st_ppg_samp_motion_detect_entry(void *o)
 {
     LOG_DBG("PPG SM Motion Detect Entry");
+    sig_wake_on_motion_count = 0;
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
     m_curr_state = PPG_SAMP_STATE_MOTION_DETECT;
 }
 
@@ -300,8 +307,7 @@ static void st_ppg_samp_motion_detect_run(void *o)
     LOG_DBG("PPG SM Motion Detect Running");
 
     if (k_sem_take(&sem_ppg_wrist_motion_detected, K_FOREVER) == 0)
-    {
-        hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
+    {      
         k_msleep(1000);
         LOG_DBG("Switching to Probing");
         smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
@@ -312,7 +318,7 @@ static const struct smf_state ppg_samp_states[] = {
     [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(st_ppg_samp_active_entry, st_ppg_samp_active_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_MOTION_DETECT] = SMF_CREATE_STATE(st_ppg_samp_motion_detect_entry, st_ppg_samp_motion_detect_run, NULL, NULL, NULL),
-    [PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
+    //[PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
 };
 
 static void smf_ppg_wrist_thread(void)
@@ -329,9 +335,9 @@ static void smf_ppg_wrist_thread(void)
 
     smf_set_initial(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
-    k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+    //k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+    
     LOG_INF("PPG State Machine Thread starting");
-
     for (;;)
     {
         ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
