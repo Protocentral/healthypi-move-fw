@@ -12,6 +12,7 @@
 #include "fs_module.h"
 #include "ui/move_ui.h"
 #include "trends.h"
+#include "cmd_module.h"
 
 #ifdef CONFIG_MCUMGR_GRP_FS
 #include <zephyr/device.h>
@@ -154,34 +155,35 @@ void record_wipe_all(void)
 
 uint32_t transfer_get_file_length(char *m_file_name)
 {
-    printk("Getting file length for file %s\n", m_file_name);
+    LOG_DBG("Getting file length for file %s", m_file_name);
 
     uint32_t file_len = 0;
     int rc = 0;
 
     struct fs_dirent dirent;
     rc = fs_stat(m_file_name, &dirent);
-    printk("\n%s stat: %d\n", m_file_name, rc);
+    LOG_DBG("%s Stat: %d", m_file_name, rc);
     if (rc >= 0)
     {
-        printk("\nfn '%s' siz %u\n", dirent.name, dirent.size);
+        //printk("\nfn '%s' siz %u\n", dirent.name, dirent.size);
         file_len = dirent.size;
+    } else
+    {
+        LOG_ERR("Error getting file length %d", rc);
+        return 0;
     }
 
-    printk("File length: %d\n", file_len);
+    LOG_DBG("File length: %d", file_len);
 
     return file_len;
 }
 
-void transfer_send_file(uint16_t file_id)
+void transfer_send_file(char* in_file_name)
 {
-    printk("Sending file %u\n", file_id);
+    LOG_DBG("Start file transfer %s", in_file_name);
     uint8_t m_buffer[FILE_TRANSFER_BLE_PACKET_SIZE + 1];
 
-    char m_file_name[30] = "/lfs/trhr/67db5a80";
-    //snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
-
-    uint32_t file_len = transfer_get_file_length(m_file_name);
+    uint32_t file_len = transfer_get_file_length(in_file_name);
     uint32_t number_writes = file_len / FILE_TRANSFER_BLE_PACKET_SIZE;
 
     uint32_t i = 0;
@@ -193,17 +195,16 @@ void transfer_send_file(uint16_t file_id)
         number_writes++; // Last write will be smaller than 64 bytes
     }
 
-    printk("File name: %s Size:%d NW: %d \n", m_file_name, file_len, number_writes);
+    LOG_DBG("Send file: %s Size:%d No Writes: %d", in_file_name, file_len, number_writes);
 
     fs_file_t_init(&m_file);
 
-    rc = fs_open(&m_file, m_file_name, FS_O_READ);
+    rc = fs_open(&m_file, in_file_name, FS_O_READ);
 
     if (rc != 0)
     {
-        printk("Error opening file %d\n", rc);
+        LOG_ERR("Error opening file %d", rc);
         return;
-        
     }
 
     for (i = 0; i < number_writes; i++)
@@ -211,7 +212,7 @@ void transfer_send_file(uint16_t file_id)
         rc = fs_read(&m_file, m_buffer, FILE_TRANSFER_BLE_PACKET_SIZE);
         if (rc < 0)
         {
-            printk("Error reading file %d\n", rc);
+            LOG_ERR("Error reading file %d", rc);
             return;
         }
 
@@ -222,24 +223,19 @@ void transfer_send_file(uint16_t file_id)
     rc = fs_close(&m_file);
     if (rc != 0)
     {
-        printk("Error closing file %d\n", rc);
+        LOG_ERR("Error closing file %d", rc);
         return;
     }
 
-    printk("File sent\n");
+    LOG_INF("File sent!!");
 }
-
-
 
 void hpi_init_fs_struct(void)
 {
-    struct fs_dir_t dir;
     int ret;
 
     //record_wipe_all();
-
     // Create FS directories
-
     ret = fs_mkdir("/lfs/trhr");
     if (ret)
     {

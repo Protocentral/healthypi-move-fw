@@ -13,12 +13,16 @@ struct hpi_trend_point_t
     uint16_t latest; 
 };
 
+#define HPI_TREND_POINT_SIZE 16
+
 struct hpi_log_header_t
 {
     int64_t start_time;
     uint16_t log_file_length;
     uint8_t log_type;
 };
+
+#define HPI_LOG_HEADER_SIZE 11
 
 struct hpi_hourly_trend_point_t
 {
@@ -48,3 +52,4 @@ enum trend_type
 
 int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, struct hpi_minutely_trend_point_t *minute_trend_points, int *num_points, enum trend_type m_trend_type);
 void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_hr_trend_point, int64_t day_ts, enum trend_type m_trend_type);
+void hpi_spo2_wr_point_to_file(struct hpi_spo2_t m_spo2_point, int64_t day_ts);

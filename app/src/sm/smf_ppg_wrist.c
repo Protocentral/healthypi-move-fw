@@ -9,23 +9,20 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 
 #define PPG_WRIST_SAMPLING_INTERVAL_MS 40
-
 #define HPI_OFFSKIN_THRESHOLD_S 5
 #define HPI_PROBE_DURATION_S 15
 
 static const struct smf_state ppg_samp_states[];
 
 K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
-K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
-
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_motion_detected, 0, 1);
-
 K_SEM_DEFINE(sem_start_one_shot_spo2, 0, 1);
 
-RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
+K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
+RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 
 extern struct k_sem sem_ppg_wrist_sm_start;
@@ -52,7 +49,7 @@ void work_off_skin_wait_handler(struct k_work *work)
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
         LOG_DBG("Still OFF SKIN");
-        smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
+        //smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
     }
 }
 
@@ -149,12 +146,12 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             if (ppg_sensor_sample.scd_state != MAX32664C_SCD_STATE_ON_SKIN && (m_curr_scd_state == MAX32664C_SCD_STATE_ON_SKIN))
             {
                 LOG_DBG("OFF SKIN");
-                // k_work_schedule(&work_off_skin, K_SECONDS(HPI_OFFSKIN_THRESHOLD_S));
+                k_work_schedule(&work_off_skin, K_SECONDS(HPI_OFFSKIN_THRESHOLD_S));
             }
             else if(ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN && (m_curr_scd_state != MAX32664C_SCD_STATE_ON_SKIN))
             {
                 LOG_DBG("ON SKIN");
-                // k_work_schedule(&work_on_skin, K_SECONDS(HPI_PROBE_DURATION_S));
+                k_work_schedule(&work_on_skin, K_SECONDS(HPI_PROBE_DURATION_S));
             }
 
             if (ppg_sensor_sample.spo2_valid_percent_complete == 100)

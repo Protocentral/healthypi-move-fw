@@ -77,7 +77,7 @@ static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t v
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		printk("ECG/RESP CCCD subscribed");
+		LOG_DBG("ECG/RESP CCCD subscribed");
 		break;
 
 	case BT_GATT_CCC_INDICATE:
@@ -85,11 +85,11 @@ static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t v
 		break;
 
 	case 0:
-		printk("ECG/RESP CCCD unsubscribed");
+		LOG_DBG("ECG/RESP CCCD unsubscribed");
 		break;
 
 	default:
-		printk("Error, CCCD has been set to an invalid value");
+		LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
 }
 
@@ -187,7 +187,7 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		printk("CMD RX/TX CCCD subscribed");
+	LOG_DBG("CMD RX/TX CCCD subscribed");
 		break;
 
 	case BT_GATT_CCC_INDICATE:
@@ -195,11 +195,11 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 		break;
 
 	case 0:
-		printk("CMD RX/TX CCCD unsubscribed");
+	LOG_DBG("CMD RX/TX CCCD unsubscribed");
 		break;
 
 	default:
-		printk("Error, CCCD has been set to an invalid value");
+	LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
 }
 
@@ -307,11 +307,11 @@ static void connected(struct bt_conn *conn, uint8_t err)
 {
 	if (err)
 	{
-		printk("Connection failed (err 0x%02x)\n", err);
+		LOG_ERR("Connection failed (err 0x%02x)", err);
 	}
 	else
 	{
-		printk("Connected\n");
+		LOG_DBG("Connected");
 		// send_status_serial(BLE_STATUS_CONNECTED);
 		current_conn = bt_conn_ref(conn);
 	}
@@ -319,7 +319,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	printk("Disconnected (reason 0x%02x)\n", reason);
+	LOG_DBG("Disconnected (reason 0x%02x)", reason);
 	// send_status_serial(BLE_STATUS_DISCONNECTED);
 	if (current_conn)
 	{
@@ -352,41 +352,6 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 	//.security_changed = security_changed,
 };
 
-static void bt_ready(void)
-{
-	int err;
-
-	LOG_DBG("Bluetooth initialized");
-
-	if (IS_ENABLED(CONFIG_SETTINGS))
-	{
-		// settings_load();
-	}
-
-	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
-	if (err)
-	{
-		printk("Advertising failed to start (err %d)\n", err);
-		return;
-	}
-
-	LOG_DBG("Advertising successfully started");
-}
-
-static void auth_passkey_confirm(struct bt_conn *conn, unsigned int passkey)
-{
-	char passkey_str[7];
-	char addr[BT_ADDR_LE_STR_LEN];
-
-	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-	snprintk(passkey_str, ARRAY_SIZE(passkey_str), "%06u", passkey);
-
-	printk("Passkey for %s: %s\n", addr, passkey_str);
-
-	// k_poll_signal_raise(&passkey_enter_signal, 0);
-}
-
 static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 {
 	char passkey_str[7];
@@ -405,13 +370,13 @@ static void auth_cancel(struct bt_conn *conn)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	printk("Pairing cancelled: %s\n", addr);
+	LOG_DBG("Pairing cancelled: %s\n", addr);
 }
 
 static struct bt_conn_auth_cb auth_cb_display = {
-	.cancel = auth_cancel,
 	.passkey_display = auth_passkey_display,
-	.passkey_confirm = auth_passkey_confirm,
+	.passkey_entry = NULL,
+	.cancel = auth_cancel,
 };
 
 void remove_separators(char *str)
@@ -436,8 +401,22 @@ void ble_module_init()
 		LOG_ERR("Bluetooth init failed (err %d)", err);
 		return;
 	}
+	LOG_DBG("Bluetooth init !");
 
-	bt_ready();
+	if (IS_ENABLED(CONFIG_SETTINGS))
+	{
+		// settings_load();
+	}
 
-	// bt_conn_auth_cb_register(&auth_cb_display);
+	bt_conn_auth_cb_register(&auth_cb_display);
+
+	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
+	if (err)
+	{
+		LOG_ERR("Advertising failed to start (err %d)\n", err);
+		return;
+	}
+	LOG_INF("Advertising successfully started");
+
+
 }

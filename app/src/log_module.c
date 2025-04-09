@@ -27,7 +27,6 @@ uint8_t buf_log[1024]; // 56 bytes / session, 18 sessions / packet
 // Externs
 extern struct fs_mount_t *mp;
 
-
 static int hpi_log_get_path(char* m_path, uint8_t m_log_type)
 {
     if(m_log_type == HPI_LOG_TYPE_TREND_HR)
@@ -74,42 +73,64 @@ static int hpi_log_get_path(char* m_path, uint8_t m_log_type)
     return 0;
 }
 
-struct hpi_log_header_t log_get_file_header(char* file_id)
+struct hpi_log_header_t log_get_file_header(char* file_path_name)
 {
-    LOG_DBG("Getting header for file %s\n", file_id);
-
-    LOG_DBG("Header size: %d\n", sizeof(struct hpi_log_header_t));
-
-    struct hpi_log_header_t m_header;
+    LOG_DBG("Getting header for file %s\n", file_path_name);
+    LOG_DBG("Header size: %d\n", HPI_LOG_HEADER_SIZE);
 
     //char m_file_name[30];
     //snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
 
     struct fs_file_t m_file;
+    struct fs_dirent trend_file_ent;
+    int ret=0;
+
     fs_file_t_init(&m_file);
 
+    ret = fs_stat(file_path_name, &trend_file_ent);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: stat %s: %d", file_path_name, ret);
+        if (ret == -ENOENT)
+        {
+            LOG_ERR("File not found: %s", file_path_name);
+        }
+        //return ret;
+    }
+
+    LOG_DBG("Read from file %s | Size: %d", file_path_name, trend_file_ent.size);
+
     int rc = 0;
-    rc = fs_open(&m_file, file_id, FS_O_READ);
+    rc = fs_open(&m_file, file_path_name, FS_O_READ);
 
     if (rc != 0)
     {
-        printk("Error opening file %d\n", rc);
+        LOG_ERR("Error opening file %d", rc);
         // return;
     }
 
-    rc = fs_read(&m_file, (struct hpi_log_header_t *) &m_header, sizeof(struct hpi_log_header_t));
+    int64_t file_sessionID=0;
+
+    rc = fs_read(&m_file, (int64_t) &file_sessionID, 8);
     if (rc < 0)
     {
-        printk("Error reading file %d\n", rc);
+        LOG_ERR("Error reading file %d", rc);
         // return;
     }
+
+    int64_t filename_int = atoi(trend_file_ent.name);
+   
+    struct hpi_log_header_t m_header;
+    m_header.start_time = filename_int;//file_sessionID;
+    m_header.log_file_length = trend_file_ent.size;
+    m_header.log_type = HPI_LOG_TYPE_TREND_HR;
 
     // m_header = *((struct tes_session_log_header_t *)m_header_buffer);
 
     rc = fs_close(&m_file);
     if (rc != 0)
     {
-        printk("Error closing file %d\n", rc);
+        LOG_ERR("Error closing file %d", rc);
         // return;
     }
 
@@ -167,24 +188,18 @@ uint16_t log_get_count(uint8_t m_log_type)
     return log_count;
 }
 
-
-
 int log_get_index(uint8_t m_log_type)
 {
     int res;
     struct fs_dir_t dirp;
     static struct fs_dirent entry;
 
-    uint16_t log_count = 0;
-    uint16_t buf_log_index = 0;
-
     fs_dir_t_init(&dirp);
 
-    char m_path[40] = "/lfs/log";
+    char m_path[40] = " ";
 
     hpi_log_get_path(m_path, m_log_type);
 
-    /* Verify fs_opendir() */
     res = fs_opendir(&dirp, m_path);
     if (res)
     {
@@ -195,7 +210,6 @@ int log_get_index(uint8_t m_log_type)
     LOG_PRINTK("\nGet Index CMD %s ...\n", m_path);
     for (;;)
     {
-        /* Verify fs_readdir() */
         res = fs_readdir(&dirp, &entry);
 
         /* entry.name[0] == 0 means end-of-dir */
@@ -206,98 +220,63 @@ int log_get_index(uint8_t m_log_type)
                 LOG_ERR("Error reading dir [%d]\n", res);
             }
 
-            /*printk("Total log count: %d\n", log_count);
-            if (log_count > 0)
-            {
-                //cmdif_send_ble_data_idx(buf_log, buf_log_index);
-                // cmdif_send_ble_command(WISER_CMD_SESS_LOG_GET_INDEX,buf_log,buf_log_index);
-            }*/
-
             break;
         }
 
         if (entry.type != FS_DIR_ENTRY_DIR)
         {   
             char file_name[70] = "";
+
             strcpy(file_name, m_path);
+            strcat(file_name, entry.name);
 
-            strcat(file_name,entry.name);
+            struct hpi_log_header_t m_header = log_get_file_header(file_name);          
 
-            //char* file_name = entry.name;
-            //uint16_t session_id = atoi(entry.name);
+            LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
 
-            struct hpi_log_header_t m_header = log_get_file_header(file_name);
-            
-            //struct hpi_log_header_t m_header;
-
-            //m_header.log_file_length = entry.size;
-            
-
-            LOG_DBG("Log File Start: %ld | Size: %d", m_header.start_time, m_header.log_file_length);
-
-            //memcpy(&buf_log, &m_header, sizeof(struct hpi_log_trend_header_t));
-            // buf_log_index += sizeof(struct tes_session_log_header_t);
-
-            cmdif_send_ble_data_idx(&m_header, sizeof(struct hpi_log_header_t));
-
-            // log_count++;
-
-            // LOG_PRINTK("%d,%d\n", session_id, session_size);
-            /*LOG_PRINTK("Session ID: %d\n", session_id);
-
-            k_sleep(K_MSEC(100));
-            for(int i=0;i<sizeof(struct tes_session_log_header_t);i++)
-            {
-                LOG_PRINTK("%02X", buf_log[i]);
-                k_sleep(K_MSEC(10));
-            }
-            LOG_PRINTK("\n");
-
-            LOG_PRINTK("TM Size: %d %d\n", sizeof(struct tm), sizeof(int));
-            */
+            cmdif_send_ble_data_idx(&m_header, HPI_LOG_HEADER_SIZE);
         }
-
-        //LOG_PRINTK("Log Buff Size: %d\n", buf_log_index);
     }
 
-    // cmdif_send_ble_command(WISER_CMD_SESS_LOG_GET_INDEX, buf_log, buf_log_index);
-    // cmdif_send_ble_data_idx(buf_log, buf_log_index);
-
-    /* Verify fs_closedir() */
     fs_closedir(&dirp);
 
     return res;
 }
 
-void log_get(uint16_t file_id)
+void log_get(uint8_t log_type, int64_t file_id)
 {
-    printk("Get Log %u\n", file_id);
-    transfer_send_file(file_id);
+    LOG_DBG("Getting Log type %d , File ID %" PRId64 , log_type, file_id);
+    char m_file_name[40];
+    hpi_log_get_path(m_file_name, log_type);
+    char temp_file_name[60];
+    sprintf(temp_file_name, "%s%" PRId64, m_file_name, file_id);
+    strcpy(m_file_name, temp_file_name);
+    //strcat(m_file_name, "/");
+
+    //snprintf(m_file_name, sizeof(m_file_name), "/lfs/trhr/%" PRId64, file_id);
+    transfer_send_file(m_file_name);
 }
 
 void log_delete(uint16_t file_id)
 {
     char log_file_name[30];
-
     snprintf(log_file_name, sizeof(log_file_name), "/lfs/log/%d", file_id);
-
-    printk("Deleting %s\n", log_file_name);
+    LOG_DBG("Deleting %s", log_file_name);
     fs_unlink(log_file_name);
 }
 
-void log_wipe_all(void)
+void log_wipe_folder(char* folder_path)
 {
-    int err;
+    int err=0;
     struct fs_dir_t dir;
-
     char file_name[100] = "";
 
     fs_dir_t_init(&dir);
 
-    err = fs_opendir(&dir, "/lfs/log");
+    err = fs_opendir(&dir, folder_path);
     if (err)
     {
-        printk("Unable to open (err %d)", err);
+        LOG_ERR("Unable to open (err %d)", err);
     }
 
     while (1)
@@ -307,7 +286,7 @@ void log_wipe_all(void)
         err = fs_readdir(&dir, &entry);
         if (err)
         {
-            printk("Unable to read directory");
+            LOG_ERR("Unable to read directory");
             break;
         }
 
@@ -322,12 +301,33 @@ void log_wipe_all(void)
 
         // if (strstr(entry.name, "") != NULL)
         //{
-        strcpy(file_name, "/lfs/log/");
+        strcpy(file_name, folder_path);
         strcat(file_name, entry.name);
 
-        printk("Deleting %s\n", file_name);
+        LOG_DBG("Deleting %s", file_name);
+
         fs_unlink(file_name);
     }
-
     fs_closedir(&dir);
+}
+
+void log_wipe_all(void)
+{
+    char log_file_name[40]="";
+
+    // Wipe all trend logs
+
+    LOG_DBG("Wiping all trend logs");
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_TREND_HR);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_TREND_SPO2);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_TREND_TEMP);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_TREND_STEPS);
+    log_wipe_folder(log_file_name);
 }
