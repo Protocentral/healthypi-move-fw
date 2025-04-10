@@ -32,6 +32,8 @@ struct hpi_ecg_bioz_sensor_data_t
     uint8_t ecg_lead_off;
     uint8_t bioz_lead_off;
     bool _bioZSkipSample;
+
+    uint8_t rrint;
 };
 
 struct hpi_ppg_wr_data_t

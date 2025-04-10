@@ -12,12 +12,13 @@ static int max30001_async_sample_fetch_lon_detect(const struct device *dev, uint
 
     max30001_status = max30001_read_status(dev);
 
-    //printk("Status: %x\n", max30001_status);
+    // printk("Status: %x\n", max30001_status);
     if ((max30001_status & MAX30001_STATUS_MASK_LONINT) == MAX30001_STATUS_MASK_LONINT)
     {
-        //printk("LONINT\n");
+        // printk("LONINT\n");
         *lon_state = 1;
-    } else
+    }
+    else
     {
         *lon_state = 0;
     }
@@ -27,7 +28,7 @@ static int max30001_async_sample_fetch_lon_detect(const struct device *dev, uint
 
 static int max30001_async_sample_fetch(const struct device *dev,
                                        uint8_t *num_samples_ecg, uint8_t *num_samples_bioz, int32_t ecg_samples[32],
-                                       int32_t bioz_samples[32], uint16_t *rri, uint16_t *hr,
+                                       int32_t bioz_samples[32], uint16_t *rri, uint16_t *hr, uint8_t *rrint,
                                        uint8_t *ecg_lead_off, uint8_t *bioz_lead_off)
 {
     struct max30001_data *data = dev->data;
@@ -173,6 +174,14 @@ static int max30001_async_sample_fetch(const struct device *dev,
             *hr = data->lastHR;
             *rri = data->lastRRI;
         }
+        if ((max30001_status & MAX30001_STATUS_MASK_RRINT) == MAX30001_STATUS_MASK_RRINT)
+        {
+            *rrint = 1;
+        }
+        else
+        {
+            *rrint = 0;
+        }
     }
 
     /*if ((max30001_status & MAX30001_STATUS_MASK_BINT) == MAX30001_STATUS_MASK_BINT)
@@ -235,7 +244,8 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
         m_edata->chip_op_mode = MAX30001_OP_MODE_STREAM;
         ret = max30001_async_sample_fetch(dev, &m_edata->num_samples_ecg, &m_edata->num_samples_bioz,
-                                          m_edata->ecg_samples, m_edata->bioz_samples, &m_edata->rri, &m_edata->hr, &m_edata->ecg_lead_off, &m_edata->bioz_lead_off);
+                                          m_edata->ecg_samples, m_edata->bioz_samples, &m_edata->rri, &m_edata->hr, &m_edata->rrint,
+                                          &m_edata->ecg_lead_off, &m_edata->bioz_lead_off);
     }
     if (ret != 0)
     {

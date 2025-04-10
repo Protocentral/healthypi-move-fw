@@ -1,12 +1,8 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
 #include <app_version.h>
 #include <zephyr/logging/log.h>
 
@@ -21,9 +17,8 @@ static lv_obj_t *chart_ecg;
 static lv_chart_series_t *ser_ecg;
 
 static lv_obj_t *label_ecg_hr;
-static lv_obj_t *label_hr_bpm;
 static lv_obj_t *label_timer;
-//static lv_obj_t *label_ecg_lead_off;
+static lv_obj_t *label_ecg_lead_off;
 
 static bool chart_ecg_update = false;
 static float y_max_ecg = 0;
@@ -88,15 +83,15 @@ void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
-    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_main(LV_PALETTE_YELLOW), LV_CHART_AXIS_PRIMARY_Y);
+    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ecg, 6, LV_PART_ITEMS);
 
-    /*label_ecg_lead_off = lv_label_create(scr_ecg);
-    lv_label_set_text(label_ecg_lead_off, LV_SYMBOL_UP "\nPlace finger \non sensor \nto start ECG");
-    lv_obj_align_to(label_ecg_lead_off, NULL, LV_ALIGN_CENTER, -20, -40);
+    label_ecg_lead_off = lv_label_create(cont_col);
+    lv_label_set_text(label_ecg_lead_off, "Do not remove finger");
+    //lv_obj_align_to(label_ecg_lead_off, NULL, LV_ALIGN_CENTER, -20, -40);
     lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
-    lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);*/
+    // lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
+    lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
@@ -105,11 +100,12 @@ void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
     // Draw BPM
-    lv_obj_t *img1 = lv_img_create(cont_hr);
-    lv_img_set_src(img1, &img_heart_35);
-    label_hr_bpm = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_bpm, "00");
-    lv_obj_add_style(label_hr_bpm, &style_white_medium, 0);
+    lv_obj_t *img_heart = lv_img_create(cont_hr);
+    lv_img_set_src(img_heart, &img_heart_35);
+
+    label_ecg_hr = lv_label_create(cont_hr);
+    lv_label_set_text(label_ecg_hr, "00");
+    lv_obj_add_style(label_ecg_hr, &style_white_medium, 0);
     lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_sub, " bpm");
 
@@ -162,7 +158,7 @@ void hpi_ecg_disp_update_timer(int time_left)
     if (label_timer == NULL)
         return;
 
-    lv_label_set_text_fmt(label_timer, "%d" , time_left);
+    lv_label_set_text_fmt(label_timer, "%d", time_left);
 }
 
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
@@ -196,14 +192,20 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
             hpi_ecg_disp_add_samples(1);
             hpi_ecg_disp_do_set_scale(ECG_DISP_WINDOW_SIZE);
         }
+
+        /*if (ecg_lead_off == true)
+        {
+            //lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+            // ecg_plot_hidden = true;
+        }
+        else
+        {
+            lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+            // ecg_plot_hidden = false;
+        }*/
         // lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg);
         // hpi_ecg_disp_add_samples(1);
         // hpi_ecg_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
     }
-    /*else if (ecg_lead_off == true)
-    {
-        lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-        ecg_plot_hidden = true;
-    }*/
 }

@@ -61,8 +61,9 @@ K_MUTEX_DEFINE(mutex_hr_change);
 // Externs
 
 ZBUS_CHAN_DECLARE(hr_chan);
-ZBUS_CHAN_DECLARE(spo2_chan);
+
 ZBUS_CHAN_DECLARE(bpt_chan);
+ZBUS_CHAN_DECLARE(ecg_hr_chan);
 
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_wrist_sample;
@@ -154,9 +155,9 @@ static int hpi_get_trend_stats(uint16_t *in_array, uint16_t in_array_len, uint16
 void send_data_text(int32_t ecg_sample, int32_t bioz_sample, int32_t raw_red)
 {
     char data[100];
-    float f_ecg_sample = (float)ecg_sample / 1000;
-    float f_bioz_sample = (float)bioz_sample / 1000;
-    float f_raw_red = (float)raw_red / 1000;
+    double f_ecg_sample = (double)ecg_sample / 1000;
+    double f_bioz_sample = (double)bioz_sample / 1000;
+    double f_raw_red = (double)raw_red / 1000;
 
     sprintf(data, "%.3f\t%.3f\t%.3f\r\n", f_ecg_sample, f_bioz_sample, f_raw_red);
 
@@ -252,19 +253,19 @@ void data_thread(void)
     // arm_biquad_cascade_df2T_init_f32(&iir_filt_inst, 2, iir_coeff, iir_state);
     // record_init_session_log();
 
-    float32_t ecg_input = 0;
-    float32_t ecg_output = 0;
-    float32_t ecg_output2 = 0;
+    //float32_t ecg_input = 0;
+    //float32_t ecg_output = 0;
+    //float32_t ecg_output2 = 0;
 
-    int32_t hrv_max;
-    int32_t hrv_min;
-    float hrv_mean;
-    float hrv_sdnn;
-    float hrv_pnn;
-    float hrv_rmssd;
-    bool hrv_ready_flag = false;
+    //int32_t hrv_max;
+    //int32_t hrv_min;
+    //float hrv_mean;
+    //float hrv_sdnn;
+    //float hrv_pnn;
+    //float hrv_rmssd;
+    //bool hrv_ready_flag = false;
 
-    struct hpi_computed_hrv_t hrv_calculated;
+    //struct hpi_computed_hrv_t hrv_calculated;
 
 #define NUM_TAPS 10  /* Number of taps in the FIR filter (length of the moving average window) */
 #define BLOCK_SIZE 8 /* Number of samples processed per block */
@@ -327,6 +328,14 @@ void data_thread(void)
             {
                 k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
             }
+
+            uint16_t ecg_hr = ecg_bioz_sensor_sample.hr;
+            zbus_chan_pub(&ecg_hr_chan, &ecg_hr, K_SECONDS(1));
+            
+            if(ecg_bioz_sensor_sample.rrint==1)
+            {
+                LOG_DBG("RRINT !");
+            }
         }
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
@@ -379,14 +388,7 @@ void data_thread(void)
                     zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
                 }
 
-                if (ppg_wr_sensor_sample.spo2_confidence > 60)
-                {
-                    struct hpi_spo2_t spo2_chan_value = {
-                        .time_tm = data_mod_sys_time,
-                        .spo2 = ppg_wr_sensor_sample.spo2,
-                    };
-                    zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
-                }
+               
             }
 
             // LOG_DBG("SpO2: %d | Confidence: %d", ppg_wr_sensor_sample.spo2, ppg_wr_sensor_sample.spo2_confidence);

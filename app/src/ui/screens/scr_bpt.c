@@ -56,16 +56,16 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Blood Pressure");
-    
-    lv_obj_t *label_install = lv_label_create(cont_col);
-    lv_label_set_recolor(label_install, true);     
-    lv_label_set_text(label_install, "To install this feature\nplease update your device firmware.\n\nVisit #42A5F5 move.protocentral.com # \n for details.");
-    lv_obj_set_style_text_font(label_install, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_width(label_install, 380);
-    lv_obj_set_style_text_align(label_install, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_t *img1 = lv_img_create(cont_col);
     lv_img_set_src(img1, &bp_70);
+    
+    lv_obj_t *label_install = lv_label_create(cont_col);
+    lv_label_set_recolor(label_install, true);     
+    lv_label_set_text(label_install, "Feature still in progress.\n\nVisit #42A5F5 move.protocentral.com # \n for progress.");
+    lv_obj_set_style_text_font(label_install, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_width(label_install, 380);
+    lv_obj_set_style_text_align(label_install, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     //lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 

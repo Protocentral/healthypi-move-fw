@@ -832,7 +832,7 @@ void hw_thread(void)
         zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
 
         // Read and publish temperature
-        //_temp_f = read_temp_f();
+        _temp_f = read_temp_f();
         
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,

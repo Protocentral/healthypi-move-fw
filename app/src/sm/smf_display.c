@@ -11,8 +11,9 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HR
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
+
+#define HPI_DEFAULT_START_SCREEN SCR_HOME
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -57,11 +58,13 @@ static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct tm m_disp_sys_time;
 
+static uint32_t splash_scr_start_time = 0;
+
 // HR Screen variables
 static uint16_t m_disp_hr = 0;
-static uint16_t m_disp_hr_max = 0;
-static uint16_t m_disp_hr_min = 0;
-static uint16_t m_disp_hr_mean = 0;
+// static uint16_t m_disp_hr_max = 0;
+// static uint16_t m_disp_hr_min = 0;
+// static uint16_t m_disp_hr_mean = 0;
 static struct tm m_disp_hr_last_update_tm;
 
 // @brief Spo2 Screen variables
@@ -71,20 +74,20 @@ static struct tm m_disp_spo2_last_refresh_tm;
 // @brief Today Screen variables
 static uint32_t m_disp_steps = 0;
 static uint16_t m_disp_kcals = 0;
-static uint16_t m_disp_active_time_s = 10;
+static uint16_t m_disp_active_time_s = 0;
 
+// @brief Temperature Screen variables
 static float m_disp_temp = 0;
 
 static uint16_t m_disp_bp_sys = 0;
 static uint16_t m_disp_bp_dia = 0;
 static uint32_t m_disp_bp_last_refresh = 0;
-
-static int m_disp_ecg_timer = 0;
-
 static uint8_t m_disp_bpt_status = 0;
 static uint8_t m_disp_bpt_progress = 0;
 
-static uint32_t splash_scr_start_time = 0;
+// @brief ECG Screen variables
+static int m_disp_ecg_timer = 0;
+static uint16_t m_disp_ecg_hr = 0;
 
 struct s_disp_object
 {
@@ -306,10 +309,10 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
         lv_disp_trig_activity(NULL);
     }
-    else if(hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
     {
         hpi_disp_spo2_plotPPG(ppg_sensor_sample);
-        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2);
+        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
 
         // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
@@ -322,7 +325,6 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
             hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
         }*/
     }
-
 
     else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
     {
@@ -492,8 +494,8 @@ static void st_display_active_run(void *o)
     case SCR_SPO2:
         if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            //hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
-            //hpi_disp_spo2_load_trend();
+            // hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
+            // hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
         }
         break;
@@ -501,7 +503,7 @@ static void st_display_active_run(void *o)
         // st_disp_do_bpt_stuff();
         break;
     case SCR_SPL_PLOT_ECG:
-        hpi_ecg_disp_update_hr(m_disp_hr);
+        hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
@@ -741,6 +743,14 @@ static void disp_ecg_timer_listener(const struct zbus_channel *chan)
     m_disp_ecg_timer = ecg_timer->timer_val;
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_timer_lis, disp_ecg_timer_listener);
+
+static void disp_ecg_hr_listener(const struct zbus_channel *chan)
+{
+    const uint16_t *ecg_hr = zbus_chan_const_msg(chan);
+    m_disp_ecg_hr = *ecg_hr;
+    // LOG_INF("ZB ECG HR: %d", *ecg_hr);
+}
+ZBUS_LISTENER_DEFINE(disp_ecg_hr_lis, disp_ecg_hr_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 32768
 #define SMF_DISPLAY_THREAD_PRIORITY 5

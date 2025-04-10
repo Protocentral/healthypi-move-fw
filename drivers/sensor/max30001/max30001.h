@@ -400,6 +400,8 @@ struct max30001_encoded_data
 
 	uint8_t lon_state;
 	uint8_t chip_op_mode;
+
+	uint8_t rrint;
 };
 
 int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);

@@ -70,3 +70,11 @@ ZBUS_CHAN_DEFINE(ecg_timer_chan,                 /* Name */
                  ZBUS_OBSERVERS(disp_ecg_timer_lis),
                  ZBUS_MSG_INIT(0)                      /* Initial value {0} */
 );
+
+ZBUS_CHAN_DEFINE(ecg_hr_chan,                 /* Name */
+                 uint16_t,
+                 NULL,                                 /* Validator */
+                 NULL,                                 /* User Data */
+                 ZBUS_OBSERVERS(disp_ecg_hr_lis),
+                 ZBUS_MSG_INIT(0)                      /* Initial value {0} */
+);

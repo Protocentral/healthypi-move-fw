@@ -54,14 +54,11 @@ enum hpi_disp_screens
     SCR_HR,
     SCR_SPO2,
     SCR_ECG,
-    SCR_BPT,
     SCR_TEMP,
-
+    SCR_BPT,
+    
     SCR_LIST_END,
     // Should not go here
-    SCR_CLOCK,
-    SCR_VITALS,
-    // SCR_BPT_HOME,
 };
 
 // Special screens
@@ -102,8 +99,8 @@ LV_IMG_DECLARE(ecg_120);
 LV_IMG_DECLARE(bp_70);
 //LV_IMG_DECLARE(icon_spo2_30x35);
 LV_IMG_DECLARE(img_heart_120);
+LV_IMG_DECLARE(img_temp_100);
 LV_IMG_DECLARE(icon_spo2_100);
-
 LV_IMG_DECLARE(img_spo2_hand);
 
 // LV_FONT_DECLARE( ui_font_H1);
@@ -111,8 +108,7 @@ LV_FONT_DECLARE(oxanium_90);
 //LV_FONT_DECLARE(fredoka_28);
 LV_FONT_DECLARE(ui_font_Number_big);
 LV_FONT_DECLARE(ui_font_Number_extra);
-
-
+//LV_FONT_DECLARE(orbitron_90px);
 
 /******** UI Function Prototypes ********/
 
@@ -155,7 +151,8 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir);
 void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update);
 void hpi_disp_spo2_load_trend(void);
 void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
-void hpi_disp_spo2_update_progress(int progress, int status, int spo2);
+void hpi_disp_spo2_update_progress(int progress, int status, int spo2, int hr);
+void hpi_disp_spo2_update_hr(int hr);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);

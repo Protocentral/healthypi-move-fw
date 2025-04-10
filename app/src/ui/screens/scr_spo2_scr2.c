@@ -23,7 +23,6 @@ static lv_obj_t *chart_ppg;
 static lv_chart_series_t *ser_ppg;
 
 static lv_obj_t *label_hr;
-static lv_obj_t *label_hr_bpm;
 
 static lv_obj_t *label_spo2_progress;
 static lv_obj_t *bar_spo2_progress;
@@ -34,7 +33,6 @@ static lv_obj_t *cont_spo2_val;
 // static lv_obj_t *label_min_max;
 static lv_obj_t *btn_spo2_proceed;
 
-static bool chart_ppg_update = false;
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
 
@@ -154,7 +152,7 @@ void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
 
     lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart_ppg, ECG_DISP_WINDOW_SIZE);
+    lv_chart_set_point_count(chart_ppg, SPO2_DISP_WINDOW_SIZE);
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
@@ -180,18 +178,22 @@ void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
 
-    /*label_ecg_lead_off = lv_label_create(scr_ecg);
-    lv_label_set_text(label_ecg_lead_off, LV_SYMBOL_UP "\nPlace finger \non sensor \nto start ECG");
-    lv_obj_align_to(label_ecg_lead_off, NULL, LV_ALIGN_CENTER, -20, -40);
-    lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
-    lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);*/
-
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+
+     // Draw BPM
+     /*lv_obj_t *img_heart = lv_img_create(cont_hr);
+     lv_img_set_src(img_heart, &img_heart_35);
+ 
+     label_hr = lv_label_create(cont_hr);
+     lv_label_set_text(label_hr, "00");
+     lv_obj_add_style(label_hr, &style_white_medium, 0);
+     lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
+     lv_label_set_text(label_hr_sub, " bpm");
+     */
 
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_SCR3);
     hpi_show_screen(scr_spo2_scr3, m_scroll_dir);
@@ -208,7 +210,7 @@ void hpi_disp_update_spo2(uint8_t spo2, struct tm tm_last_update)
     }
     else
     {
-        lv_label_set_text_fmt(label_spo2_percent, "%d %", spo2);
+        lv_label_set_text_fmt(label_spo2_percent, "%d %%", spo2);
     }
     lv_label_set_text_fmt(label_spo2_last_update_time, "Last updated: %02d:%02d", tm_last_update.tm_hour, tm_last_update.tm_min);
 }
@@ -231,7 +233,7 @@ static void hpi_ppg_disp_do_set_scale(int disp_window_size)
     }
 }
 
-void hpi_disp_spo2_update_progress(int progress, int status, int spo2)
+void hpi_disp_spo2_update_progress(int progress, int status, int spo2, int hr)
 {
     if (label_spo2_progress == NULL)
         return;
@@ -246,6 +248,7 @@ void hpi_disp_spo2_update_progress(int progress, int status, int spo2)
     else if (status == 2)
     {
         lv_label_set_text(label_spo2_status, "Complete");
+        lv_obj_add_flag(label_spo2_status, LV_OBJ_FLAG_HIDDEN);
     }
     else
     {
@@ -258,6 +261,15 @@ void hpi_disp_spo2_update_progress(int progress, int status, int spo2)
         lv_obj_add_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(cont_spo2_val, LV_OBJ_FLAG_HIDDEN);
     }
+
+    /*if (hr == 0)
+    {
+        lv_label_set_text(label_hr, "--");
+    }
+    else
+    {
+        lv_label_set_text_fmt(label_hr, "%d", hr);
+    }*/
 }
 
 void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample)

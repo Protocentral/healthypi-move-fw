@@ -24,7 +24,7 @@ extern lv_style_t style_scr_black;
 
 extern struct k_sem sem_ecg_complete_ok;
 
-static void scr_ecg_complete_btn_ok_event_handler(lv_event_t *e)
+static void scr_ecg_complete_btn_close_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
@@ -58,12 +58,14 @@ void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *lbl_session_stats = lv_label_create(cont_col);
     lv_label_set_text_fmt(lbl_session_stats, "ECG recording saved\nStarted at %d ", 1234);
+    lv_obj_set_style_text_align(lbl_session_stats, LV_TEXT_ALIGN_CENTER, 0);
 
-    lv_obj_t *btn_ok = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_ok, scr_ecg_complete_btn_ok_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_t *btn_close = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_close, scr_ecg_complete_btn_close_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_set_height(btn_close, 80);
     
-    lv_obj_t *label_btn_ok = lv_label_create(btn_ok);
-    lv_label_set_text(label_btn_ok, LV_SYMBOL_CLOSE "Close");
+    lv_obj_t *label_btn_ok = lv_label_create(btn_close);
+    lv_label_set_text(label_btn_ok, LV_SYMBOL_CLOSE " Close");
     lv_obj_center(label_btn_ok);
 
     hpi_disp_set_curr_screen(SCR_SPL_ECG_COMPLETE);

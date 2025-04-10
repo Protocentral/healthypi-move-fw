@@ -105,8 +105,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir)
     //lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
     //lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style_bg_blue, 0);
-
+    
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
     lv_obj_add_style(label_signal, &style_white_small, 0);

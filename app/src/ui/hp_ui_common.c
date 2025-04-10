@@ -161,9 +161,9 @@ void display_init_styles(void)
     grad.dir = LV_GRAD_DIR_VER;
     grad.stops_count = 2;
     grad.stops[0].color = lv_color_black();
-    grad.stops[1].color = lv_palette_darken(LV_PALETTE_BLUE_GREY, 4);
-    grad.stops[0].frac = 150;
-    grad.stops[1].frac = 192;
+    grad.stops[1].color = lv_palette_darken(LV_PALETTE_BLUE, 4);
+    grad.stops[0].frac = 168;
+    grad.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_blue, &grad);
 
     lv_style_init(&style_bg_red);
@@ -179,13 +179,13 @@ void display_init_styles(void)
     lv_style_set_bg_grad(&style_bg_red, &grad_red);
 
     lv_style_init(&style_bg_green);
-    lv_style_set_radius(&style_bg_green, 5);
+    lv_style_set_radius(&style_bg_green, 15);
     lv_style_set_bg_opa(&style_bg_green, LV_OPA_COVER);
     static lv_grad_dsc_t grad_green;
     grad_green.dir = LV_GRAD_DIR_VER;
     grad_green.stops_count = 2;
     grad_green.stops[0].color = lv_color_black();
-    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_GREEN, 4);
+    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_CYAN, 2);
     grad_green.stops[0].frac = 168;
     grad_green.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_green, &grad_green);
