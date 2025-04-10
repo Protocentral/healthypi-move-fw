@@ -72,6 +72,7 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
     {
         // printk("SCD ");
     }
+    return 0;
 }
 
 static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode)
@@ -108,19 +109,12 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
 
             for (int i = 0; i < fifo_count; i++)
             {
-                // uint8_t scd_state_val = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
-                //*scd_state = scd_state_val;
-                // printk("SCD: %d\n", scd_state_val);
                 uint8_t algo_op_mode = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
                 LOG_INF("Algo Op Mode: %d", algo_op_mode);
             }
         }
     }
-
-    if (hub_stat & MAX32664C_HUB_STAT_SCD_MASK)
-    {
-        // printk("SCD ");
-    }
+    return 0;
 }
 
 static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16], uint32_t *num_samples, uint8_t *chip_op_mode)
@@ -180,7 +174,6 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
             }
         }
     }
-
     return 0;
 }
 
@@ -313,6 +306,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
             }
         }
     }
+    return 0;
 }
 
 int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
@@ -334,7 +328,6 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         return rc;
     }
 
-    // printk("Fetch ");
     if (data->op_mode == MAX32664C_OP_MODE_ALGO_AGC || data->op_mode == MAX32664C_OP_MODE_ALGO_AEC ||
         data->op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
@@ -345,7 +338,6 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
                                           &m_edata->spo2_low_quality, &m_edata->spo2_excessive_motion, &m_edata->spo2_low_pi, &m_edata->spo2_state,
                                           &m_edata->hr, &m_edata->hr_confidence, &m_edata->rtor,&m_edata->rtor_confidence, &m_edata->scd_state, 
                                           &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode);
-        // printk("Device is in idle mode\n");
     }
     else if (data->op_mode == MAX32664C_OP_MODE_RAW)
     {

@@ -1,15 +1,10 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <stdio.h>
 
-#include <zephyr/sys/reboot.h>
-
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/littlefs.h>
-#include <zephyr/storage/flash_map.h>
 #include <time.h>
 
 #include "log_module.h"
@@ -17,12 +12,6 @@
 #include "fs_module.h"
 
 LOG_MODULE_REGISTER(log_module, LOG_LEVEL_DBG);
-
-#define MAX_SESSION_LOG_LENGTH 2048
-const char fname_log_seq[30] = "/lfs/log_seq";
-
-// Buffers to store session log files
-uint8_t buf_log[1024]; // 56 bytes / session, 18 sessions / packet
 
 // Externs
 extern struct fs_mount_t *mp;
@@ -111,7 +100,7 @@ struct hpi_log_header_t log_get_file_header(char* file_path_name)
 
     int64_t file_sessionID=0;
 
-    rc = fs_read(&m_file, (int64_t) &file_sessionID, 8);
+    rc = fs_read(&m_file, (int64_t*) &file_sessionID, 8);
     if (rc < 0)
     {
         LOG_ERR("Error reading file %d", rc);
@@ -234,7 +223,7 @@ int log_get_index(uint8_t m_log_type)
 
             LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
 
-            cmdif_send_ble_data_idx(&m_header, HPI_LOG_HEADER_SIZE);
+            cmdif_send_ble_data_idx((uint8_t*)&m_header, HPI_LOG_HEADER_SIZE);
         }
     }
 
@@ -245,21 +234,21 @@ int log_get_index(uint8_t m_log_type)
 
 void log_get(uint8_t log_type, int64_t file_id)
 {
-    LOG_DBG("Getting Log type %d , File ID %" PRId64 , log_type, file_id);
     char m_file_name[40];
-    hpi_log_get_path(m_file_name, log_type);
     char temp_file_name[60];
+
+    LOG_DBG("Getting Log type %d , File ID %" PRId64 , log_type, file_id);
+
+    hpi_log_get_path(m_file_name, log_type);
     sprintf(temp_file_name, "%s%" PRId64, m_file_name, file_id);
     strcpy(m_file_name, temp_file_name);
-    //strcat(m_file_name, "/");
-
-    //snprintf(m_file_name, sizeof(m_file_name), "/lfs/trhr/%" PRId64, file_id);
     transfer_send_file(m_file_name);
 }
 
 void log_delete(uint16_t file_id)
 {
     char log_file_name[30];
+
     snprintf(log_file_name, sizeof(log_file_name), "/lfs/log/%d", file_id);
     LOG_DBG("Deleting %s", log_file_name);
     fs_unlink(log_file_name);
@@ -295,12 +284,6 @@ void log_wipe_folder(char* folder_path)
         {
             break;
         }
-
-        // printk("%s%s %d\n", entry.name,
-        //	      (entry.type == FS_DIR_ENTRY_DIR) ? "/" : "",entry.size);
-
-        // if (strstr(entry.name, "") != NULL)
-        //{
         strcpy(file_name, folder_path);
         strcat(file_name, entry.name);
 
@@ -314,8 +297,6 @@ void log_wipe_folder(char* folder_path)
 void log_wipe_all(void)
 {
     char log_file_name[40]="";
-
-    // Wipe all trend logs
 
     LOG_DBG("Wiping all trend logs");
 
