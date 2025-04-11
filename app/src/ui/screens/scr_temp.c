@@ -18,6 +18,8 @@ extern lv_style_t style_scr_black;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_white_large;
 
+extern lv_style_t style_bg_purple;
+
 void draw_scr_temp(enum scroll_dir m_scroll_dir)
 {
     scr_temp = lv_obj_create(NULL);
@@ -32,6 +34,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_set_style_pad_left(cont_col, 0, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
+    lv_obj_add_style(cont_col, &style_bg_purple, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Skin Temp.");

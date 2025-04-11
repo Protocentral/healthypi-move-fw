@@ -49,6 +49,7 @@ lv_style_t style_white_large;
 lv_style_t style_bg_blue;
 lv_style_t style_bg_red;
 lv_style_t style_bg_green;
+lv_style_t style_bg_purple;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
@@ -189,6 +190,18 @@ void display_init_styles(void)
     grad_green.stops[0].frac = 168;
     grad_green.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_green, &grad_green);
+
+    lv_style_init(&style_bg_purple);
+    lv_style_set_radius(&style_bg_purple, 15);
+    lv_style_set_bg_opa(&style_bg_purple, LV_OPA_COVER);
+    static lv_grad_dsc_t grad_purple;
+    grad_purple.dir = LV_GRAD_DIR_VER;
+    grad_purple.stops_count = 2;
+    grad_purple.stops[0].color = lv_color_black();
+    grad_purple.stops[1].color = lv_palette_darken(LV_PALETTE_PURPLE, 4);
+    grad_purple.stops[0].frac = 168;
+    grad_purple.stops[1].frac = 255;
+    lv_style_set_bg_grad(&style_bg_purple, &grad_purple);
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 }
