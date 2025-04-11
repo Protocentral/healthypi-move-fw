@@ -11,7 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 #define HPI_DEFAULT_START_SCREEN SCR_HOME
 
@@ -710,7 +710,10 @@ static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     m_disp_steps = hpi_steps->steps_walk;
+
     m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
+
+    //LOG_DBG("ZB Steps Walk : %d | Run: %d", hpi_steps->steps_walk, hpi_steps->steps_run);
 
     // ui_steps_button_update(hpi_steps->steps_walk);
 }

@@ -572,7 +572,10 @@ void hw_init(void)
     else
     {
         hw_add_boot_msg("BMI323", true);
-        k_sem_give(&sem_imu_smf_start);
+        struct sensor_value set_val;
+        set_val.val1 = 1;
+        sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+        sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
     }
 
     // Turn 1.8v power to sensors ON
@@ -829,7 +832,7 @@ void hw_thread(void)
         struct hpi_steps_t steps = {
             .steps_walk = _steps,
         };
-        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
+        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(4));
 
         // Read and publish temperature
         _temp_f = read_temp_f();

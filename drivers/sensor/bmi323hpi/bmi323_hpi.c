@@ -320,6 +320,16 @@ static uint32_t bmi323_fetch_step_counter(const struct device *dev)
 	return 0;
 }
 
+static uint32_t bmi323_reset_step_counter(const struct device *dev)
+{
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	int ret;
+
+	//ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_ADDR, 0x)
+
+	return 0;
+}
+
 static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum sensor_channel chan,
 											enum sensor_attribute attr,
 											const struct sensor_value *val)
@@ -343,9 +353,10 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 			break;
 		case BMI323_HPI_ATTR_EN_STEP_COUNTER:
 			ret = bmi323_enable_acc(dev);
-
 			data->feature_step_counter_enabled = true;
 			break;
+		case BMI323_HPI_ATTR_RESET_STEP_COUNTER:
+
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_set_acc_odr(dev, val);
 			break;
