@@ -356,7 +356,8 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 			data->feature_step_counter_enabled = true;
 			break;
 		case BMI323_HPI_ATTR_RESET_STEP_COUNTER:
-
+			ret = bmi323_reset_step_counter(dev);
+			break;
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_set_acc_odr(dev, val);
 			break;
