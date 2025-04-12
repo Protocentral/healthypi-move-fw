@@ -43,7 +43,7 @@ lv_style_t style_white_medium;
 lv_style_t style_scr_container;
 
 lv_style_t style_lbl_white_14;
-lv_style_t style_lbl_black_small;
+lv_style_t style_lbl_white_medium;
 lv_style_t style_white_large;
 
 lv_style_t style_bg_blue;
@@ -139,9 +139,9 @@ void display_init_styles(void)
     lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_24);
 
     // Label Black
-    lv_style_init(&style_lbl_black_small);
-    lv_style_set_text_color(&style_lbl_black_small, lv_color_black());
-    lv_style_set_text_font(&style_lbl_black_small, &lv_font_montserrat_34);
+    lv_style_init(&style_lbl_white_medium);
+    lv_style_set_text_color(&style_lbl_white_medium, lv_color_black());
+    lv_style_set_text_font(&style_lbl_white_medium, &lv_font_montserrat_34);
 
     // Container for scrollable screen layout
     lv_style_init(&style_scr_container);
@@ -380,6 +380,9 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
         break;
     case SCR_SPL_PLOT_ECG:
         draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
+        break;
+    case SCR_SPL_ECG_SCR2:
+        draw_scr_ecg_scr2(m_scroll_dir);
         break;
     case SCR_SPL_PLOT_BPT_PPG:
         draw_scr_plot_bpt(m_scroll_dir);

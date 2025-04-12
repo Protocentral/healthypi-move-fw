@@ -88,6 +88,7 @@ static uint8_t m_disp_bpt_progress = 0;
 // @brief ECG Screen variables
 static int m_disp_ecg_timer = 0;
 static uint16_t m_disp_ecg_hr = 0;
+static bool m_lead_on_off = false;
 
 struct s_disp_object
 {
@@ -112,6 +113,9 @@ extern struct k_sem sem_crown_key_pressed;
 
 extern struct k_sem sem_ppg_fi_show_loading;
 extern struct k_sem sem_ppg_fi_hide_loading;
+
+extern struct k_sem sem_ecg_lead_on;
+extern struct k_sem sem_ecg_lead_off;
 
 // User Profile settings
 
@@ -406,7 +410,7 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_ECG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
     {
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
     }
@@ -502,13 +506,26 @@ static void st_display_active_run(void *o)
     case SCR_BPT:
         // st_disp_do_bpt_stuff();
         break;
-    case SCR_SPL_PLOT_ECG:
+    case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
             hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
         }
+        if(k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
+        {
+            scr_ecg_lead_on_off_handler(true);
+            m_lead_on_off = true;
+        }
+        if(k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
+        {
+            scr_ecg_lead_on_off_handler(false);
+            m_lead_on_off = false;
+        }
+
+        lv_disp_trig_activity(NULL);
+        
         break;
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
@@ -713,7 +730,7 @@ static void disp_steps_listener(const struct zbus_channel *chan)
 
     m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
 
-    //LOG_DBG("ZB Steps Walk : %d | Run: %d", hpi_steps->steps_walk, hpi_steps->steps_run);
+    // LOG_DBG("ZB Steps Walk : %d | Run: %d", hpi_steps->steps_walk, hpi_steps->steps_run);
 
     // ui_steps_button_update(hpi_steps->steps_walk);
 }

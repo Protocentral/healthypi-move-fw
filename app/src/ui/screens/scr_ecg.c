@@ -1,14 +1,8 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
-#include <app_version.h>
-#include <zephyr/logging/log.h>
 
 #include "hpi_common_types.h"
 
@@ -32,7 +26,7 @@ static void scr_ecg_start_btn_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_PLOT_ECG, SCROLL_UP, (uint8_t)SCR_ECG);
+        hpi_move_load_scr_spl(SCR_SPL_ECG_SCR2 , SCROLL_UP, (uint8_t)SCR_ECG);
         k_msleep(500);
         k_sem_give(&sem_ecg_start);
     }

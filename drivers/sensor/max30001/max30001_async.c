@@ -57,7 +57,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
     if ((max30001_status & MAX30001_STATUS_MASK_DCLOFF) == MAX30001_STATUS_MASK_DCLOFF)
     {
-        printk("LOff");
+        //printk("LOff");
         data->ecg_lead_off = 1;
         *ecg_lead_off = 1;
     }

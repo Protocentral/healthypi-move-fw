@@ -69,6 +69,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_BOOT,
     SCR_SPL_SETTINGS,
     SCR_SPL_PLOT_PPG,
+    SCR_SPL_ECG_SCR2,
     SCR_SPL_PLOT_ECG,
     SCR_SPL_PLOT_BPT_PPG,
     SCR_SPL_ECG_COMPLETE,
@@ -160,6 +161,8 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 void hpi_ecg_disp_update_hr(int hr);
 void hpi_ecg_disp_update_timer(int timer);
 void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir);
+void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir);
+void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);

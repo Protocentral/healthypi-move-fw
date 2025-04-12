@@ -150,3 +150,8 @@ struct hpi_ecg_timer_t
 {
     uint16_t timer_val;
 };
+
+struct hpi_ecg_lead_on_off_t
+{
+    bool lead_on_off;
+};
