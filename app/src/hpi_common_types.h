@@ -11,6 +11,8 @@ HealthyPi specific common data types
 #define PPG_POINTS_PER_SAMPLE 8
 #define BPT_PPG_POINTS_PER_SAMPLE 32
 
+#define ECG_RECORD_BUFFER_SAMPLES 3040 //128 *30 
+
 enum hpi_ppg_status 
 {
     HPI_PPG_SCD_STATUS_UNKNOWN,

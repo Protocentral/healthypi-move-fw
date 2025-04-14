@@ -125,6 +125,8 @@ ZBUS_CHAN_DECLARE(temp_chan);
 
 static int64_t ref_time;
 
+struct tm sys_tm_time;
+
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
 };
@@ -696,7 +698,7 @@ void hw_init(void)
         hw_add_boot_msg("MAX32664D", true);
 
         // To force bootloader mode
-        /*struct sensor_value mode_set;
+        struct sensor_value mode_set;
         mode_set.val1 = 1;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
 
@@ -767,19 +769,9 @@ void hw_init(void)
     //usb_init();
 }
 
-/**
- * @brief Retrieves the current time from the RTC (Real-Time Clock) device.
- *
- * This function calls the rtc_get_time function to get the current time from
- * the RTC device and stores it in the hw_system_time variable. It then
- * returns the current time.
- *
- * @return struct rtc_time The current time retrieved from the RTC device.
- */
-struct rtc_time hw_get_current_time(void)
+struct tm hw_get_sys_time(void)
 {
-    rtc_get_time(rtc_dev, &hw_system_time);
-    return hw_system_time;
+    return sys_tm_time;
 }
 
 static uint32_t acc_get_steps(void)
@@ -793,7 +785,7 @@ static uint32_t acc_get_steps(void)
 void hw_thread(void)
 {
     struct rtc_time rtc_sys_time;
-    struct tm sys_tm_time;
+   
     uint32_t _steps = 0;
     double _temp_f = 0.0;
 

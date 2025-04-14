@@ -56,7 +56,7 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
 {
     scr_ecg_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_ecg_scr2, &style_scr_black, 0);
-    lv_obj_clear_flag(scr_ecg_scr2, LV_OBJ_FLAG_SCROLLABLE); 
+    lv_obj_clear_flag(scr_ecg_scr2, LV_OBJ_FLAG_SCROLLABLE);
     // draw_scr_common(scr_ecg_scr2);
 
     /*Create a container with COLUMN flex direction*/
@@ -93,7 +93,7 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
     label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Touch the metal bezel to start ECG");
+    lv_label_set_text(label_info, "Touch the metal bezel to start");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_style(label_info, &style_white_medium, 0);
 
@@ -105,21 +105,21 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_btn, LV_SYMBOL_CLOSE);
     lv_obj_center(label_btn);*/
 
-     // Create Chart 1 - ECG
-     chart_ecg = lv_chart_create(cont_col);
-     lv_obj_set_size(chart_ecg, 390, 140);
-     lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_STATE_DEFAULT);
-     lv_obj_set_style_bg_opa(chart_ecg, 0, LV_PART_MAIN);
- 
-     lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
-     lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
-     lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
-     lv_chart_set_div_line_count(chart_ecg, 0, 0);
-     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
-     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
-     ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
-     lv_obj_set_style_line_width(chart_ecg, 6, LV_PART_ITEMS);
-     lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+    // Create Chart 1 - ECG
+    chart_ecg = lv_chart_create(cont_col);
+    lv_obj_set_size(chart_ecg, 390, 140);
+    lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(chart_ecg, 0, LV_PART_MAIN);
+
+    lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
+    lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
+    lv_chart_set_div_line_count(chart_ecg, 0, 0);
+    lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
+    lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
+    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_set_style_line_width(chart_ecg, 6, LV_PART_ITEMS);
+    //lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
 
     // Draw BPM container
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
@@ -253,7 +253,7 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 
 void scr_ecg_lead_on_off_handler(bool lead_on_off)
 {
-    if(label_info == NULL)
+    if (label_info == NULL)
         return;
 
     if (lead_on_off == false)

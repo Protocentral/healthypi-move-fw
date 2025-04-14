@@ -28,3 +28,7 @@ void log_get(uint8_t log_type, int64_t file_id);
 int log_get_index(uint8_t m_log_type);
 void log_seq_init(void);
 uint16_t log_get_count(uint8_t m_log_type);
+
+void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_hr_trend_point, int64_t day_ts, enum trend_type m_trend_type);
+void hpi_spo2_wr_point_to_file(struct hpi_spo2_t m_spo2_point, int64_t day_ts);
+void hpi_write_ecg_record_file(int16_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts);

@@ -62,6 +62,100 @@ static int hpi_log_get_path(char* m_path, uint8_t m_log_type)
     return 0;
 }
 
+void hpi_write_ecg_record_file(int16_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts)
+{
+    struct fs_file_t file;
+    int ret = 0;
+    char fname[30];
+
+    fs_file_t_init(&file);
+
+    sprintf(fname, "/lfs/ecg/%" PRId64 , start_ts);
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, ECG_RECORD_BUFFER_SAMPLES);
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+    
+    ret = fs_write(&file, ecg_record_buffer, sizeof(ecg_record_buffer));
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}
+
+void hpi_spo2_wr_point_to_file(struct hpi_spo2_t m_spo2_point, int64_t day_ts)
+{
+    struct fs_file_t file;
+    int ret = 0;
+    char fname[30];
+
+    fs_file_t_init(&file);
+
+    sprintf(fname, "/lfs/trspo2/%" PRId64, day_ts);
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_spo2_point));
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+    ret = fs_write(&file, &m_spo2_point, sizeof(m_spo2_point));
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}
+
+void hpi_trend_wr_point_to_file(struct hpi_trend_point_t m_trend_point, int64_t day_ts, enum trend_type m_trend_type)
+{
+    struct fs_file_t file;
+    int ret = 0;
+    char fname[30];
+
+    fs_file_t_init(&file);
+
+    if (m_trend_type == TREND_HR)
+    {
+        sprintf(fname, "/lfs/trhr/%" PRId64, day_ts);
+    }
+    else if (m_trend_type == TREND_SPO2)
+    {
+        sprintf(fname, "/lfs/trspo2/%" PRId64, day_ts);
+    }
+    else
+    {
+        LOG_ERR("Invalid trend type");
+        // /return -1;
+    }
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_trend_point));
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+    ret = fs_write(&file, &m_trend_point, sizeof(m_trend_point));
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}
+
 struct hpi_log_header_t log_get_file_header(char* file_path_name)
 {
     LOG_DBG("Getting header for file %s\n", file_path_name);

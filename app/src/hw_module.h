@@ -20,7 +20,7 @@ void hpi_hw_pmic_off(void);
 void hpi_pwr_display_sleep(void);
 void hpi_pwr_display_wake(void);
 
-struct rtc_time hw_get_current_time(void);
+struct tm hw_get_sys_time(void);
 
 bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
