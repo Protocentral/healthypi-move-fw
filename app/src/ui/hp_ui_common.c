@@ -22,13 +22,7 @@
 
 LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 
-// LV_IMG_DECLARE(pc_logo_bg3);
-LV_IMG_DECLARE(pc_move_bg_200);
-// LV_IMG_DECLARE(pc_logo_bg3);
-// LV_IMG_DECLARE(logo_round_white);
-
 // LVGL Styles
-
 static lv_style_t style_btn;
 
 // Global LVGL Styles
@@ -585,7 +579,7 @@ void hdr_time_display_update(struct rtc_time in_time)
 void draw_bg(lv_obj_t *parent)
 {
     lv_obj_t *logo_bg = lv_img_create(parent);
-    lv_img_set_src(logo_bg, &pc_move_bg_200);
+    lv_img_set_src(logo_bg, &bck_heart_200);
     lv_obj_set_width(logo_bg, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(logo_bg, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(logo_bg, LV_ALIGN_CENTER);

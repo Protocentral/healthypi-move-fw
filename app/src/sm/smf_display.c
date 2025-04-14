@@ -126,10 +126,9 @@ static double m_user_met = 3.5;      // Example MET value based speed = 1.34 m/s
 static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
 {
     // KCals = time * MET * 3.5 * weight / (200*60)
+    
     double _m_time = (((m_user_height / 100.000) * 0.414 * steps) / 4800.000) * 60.000; // Assuming speed of 4.8 km/h
-    // LOG_DBG("Calc Time %.3f", _m_time);
     double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
-    //
     /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
     return (uint16_t)_m_kcals;
 }

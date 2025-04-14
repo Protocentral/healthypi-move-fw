@@ -105,6 +105,9 @@ LV_IMG_DECLARE(icon_spo2_100);
 LV_IMG_DECLARE(img_spo2_hand);
 LV_IMG_DECLARE(img_complete_100);
 
+//LV_IMG_DECLARE(pc_move_bg_200);
+LV_IMG_DECLARE(bck_heart_200);
+
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(oxanium_90);
 //LV_FONT_DECLARE(fredoka_28);

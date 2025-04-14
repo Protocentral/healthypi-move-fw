@@ -9,14 +9,11 @@
 #include <zephyr/posix/time.h>
 #include <zephyr/sys/timeutil.h>
 
+#include "max30001.h"
 #include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
 #include "log_module.h"
-
-
-
-#include "max30001.h"
 
 LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
@@ -342,10 +339,10 @@ static void st_ecg_bioz_complete_entry(void *o)
 
 static void st_ecg_bioz_complete_run(void *o)
 {
-    if (k_sem_take(&sem_ecg_complete_ok, K_NO_WAIT) == 0)
-    {
+    //if (k_sem_take(&sem_ecg_complete_ok, K_NO_WAIT) == 0)
+    //{
         smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
-    }
+    //}
 }
 
 static void st_ecg_bioz_complete_exit(void *o)

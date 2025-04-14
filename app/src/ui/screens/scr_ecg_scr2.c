@@ -40,8 +40,6 @@ extern lv_style_t style_tiny;
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
-extern struct k_sem sem_ecg_start;
-
 static void btn_ecg_cancel_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);

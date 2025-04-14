@@ -1,8 +1,6 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/led.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
 
