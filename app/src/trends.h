@@ -4,13 +4,19 @@
 #define MAX_POINTS_PER_HOUR 60
 #define MAX_POINTS_SPO2_PER_HOUR 10
 
-struct hpi_trend_point_t
+struct hpi_hr_trend_point_t
 {
     int64_t timestamp;
     uint16_t max;
     uint16_t min;
     uint16_t avg;
     uint16_t latest; 
+};
+
+struct hpi_temp_trend_point_t
+{
+    int64_t timestamp;
+    uint16_t temp_c;
 };
 
 #define HPI_TREND_POINT_SIZE 16

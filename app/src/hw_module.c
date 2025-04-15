@@ -772,6 +772,11 @@ struct tm hw_get_sys_time(void)
     return sys_tm_time;
 }
 
+int64_t hw_get_sys_time_ts(void)
+{
+    return timeutil_timegm64(&sys_tm_time);
+}
+
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;

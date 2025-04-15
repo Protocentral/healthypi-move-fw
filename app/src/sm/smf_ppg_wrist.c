@@ -169,9 +169,8 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 k_sem_give(&sem_stop_one_shot_spo2);
                 if (ppg_sensor_sample.spo2_confidence > 60)
                 {
-                    struct hpi_spo2_t spo2_chan_value = {
-                        
-                       
+                    struct hpi_spo2_point_t spo2_chan_value = { 
+                        .timestamp = hw_get_sys_time_ts(),
                         .spo2 = ppg_sensor_sample.spo2,
                     };
                     zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));

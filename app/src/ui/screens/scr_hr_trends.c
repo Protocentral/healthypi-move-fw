@@ -80,7 +80,7 @@ static void scr_hr_btn_live_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t)SCR_HR);
+        hpi_move_load_scr_spl(SCR_SPL_RAW_PPG, SCROLL_UP, (uint8_t)SCR_HR);
     }
 }
 
@@ -151,7 +151,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(lbl_l2, "Last day trend");
 
     chart_hr_day_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_hr_day_trend, 270, 170);
+    lv_obj_set_size(chart_hr_day_trend, 270, 140);
     lv_chart_set_type(chart_hr_day_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_range(chart_hr_day_trend, LV_CHART_AXIS_PRIMARY_Y, 30, 150);
     lv_chart_set_point_count(chart_hr_day_trend, 60);

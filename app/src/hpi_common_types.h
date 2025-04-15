@@ -134,9 +134,9 @@ struct hpi_bpt_t
     uint8_t progress;
 };
 
-struct hpi_spo2_t
+struct hpi_spo2_point_t
 {
-    struct tm time_tm;
+    int64_t timestamp;
 
     uint16_t spo2;
     uint16_t hr;

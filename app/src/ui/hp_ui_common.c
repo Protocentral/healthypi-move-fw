@@ -372,12 +372,12 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     switch (m_screen)
     {
 
-    case SCR_SPL_PLOT_PPG:
-        draw_scr_spl_plot_ppg(m_scroll_dir, scr_parent);
+    case SCR_SPL_RAW_PPG:
+        draw_scr_spl_raw_ppg(m_scroll_dir, scr_parent);
         break;
-    //case SCR_SPL_PLOT_ECG:
-    //    draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
-    //    break;
+    // case SCR_SPL_PLOT_ECG:
+    //     draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
+    //     break;
     case SCR_SPL_ECG_SCR2:
         draw_scr_ecg_scr2(m_scroll_dir);
         break;
@@ -551,6 +551,10 @@ void disp_screen_event(lv_event_t *e)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
             hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_COMPLETE)
+        {
+            hpi_move_load_screen(SCR_ECG, SCROLL_UP);
         }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)

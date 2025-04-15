@@ -57,7 +57,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
     if ((max30001_status & MAX30001_STATUS_MASK_DCLOFF) == MAX30001_STATUS_MASK_DCLOFF)
     {
-        //printk("LOff");
+        // printk("LOff");
         data->ecg_lead_off = 1;
         *ecg_lead_off = 1;
     }
@@ -110,7 +110,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
             // printk("E %x ", etag);
 
-            if ((etag == 0x00) || (etag == 0x02)) // Valid sample
+            if ((etag == 0x00) || (etag == 0x01) || (etag == 0x02)) // Valid sample
             {
                 uint32_t uecgtemp = (uint32_t)(((uint32_t)buf_ecg[i * 3] << 16 | (uint32_t)buf_ecg[i * 3 + 1] << 8) | (uint32_t)(buf_ecg[i * 3 + 2] & 0xC0));
                 uecgtemp = (uint32_t)(uecgtemp << 8);

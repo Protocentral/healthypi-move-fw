@@ -27,7 +27,7 @@ K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
-static int last_hr_refresh = 0;
+
 
 static int last_time_refresh = 0;
 static int last_settings_refresh = 0;
@@ -35,7 +35,6 @@ static int last_settings_refresh = 0;
 static int last_hr_trend_refresh = 0;
 static int last_spo2_trend_refresh = 0;
 static int last_today_trend_refresh = 0;
-static int last_bpt_trend_refresh = 0;
 static int last_temp_trend_refresh = 0;
 
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
@@ -69,7 +68,7 @@ static struct tm m_disp_hr_last_update_tm;
 
 // @brief Spo2 Screen variables
 static uint8_t m_disp_spo2 = 0;
-static struct tm m_disp_spo2_last_refresh_tm;
+static int64_t m_disp_spo2_last_refresh_ts;
 
 // @brief Today Screen variables
 static uint32_t m_disp_steps = 0;
@@ -299,7 +298,7 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
     {
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
 
@@ -712,10 +711,10 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
 static void disp_spo2_listener(const struct zbus_channel *chan)
 {
-    const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
+    const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
-    m_disp_spo2_last_refresh_tm = hpi_spo2->time_tm;
-    // LOG_DBG("ZB Spo2: %d\n", hpi_spo2->spo2);
+    m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
+    LOG_DBG("ZB Spo2: %d | Time: %d", hpi_spo2->spo2, hpi_spo2->timestamp);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
 

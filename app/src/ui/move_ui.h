@@ -68,7 +68,7 @@ enum hpi_disp_spl_screens
 
     SCR_SPL_BOOT,
     SCR_SPL_SETTINGS,
-    SCR_SPL_PLOT_PPG,
+    SCR_SPL_RAW_PPG,
     SCR_SPL_ECG_SCR2,
     SCR_SPL_PLOT_ECG,
     SCR_SPL_PLOT_BPT_PPG,
@@ -226,7 +226,7 @@ void ui_steps_button_update(uint16_t steps);
 void draw_bg(lv_obj_t *parent);
 
 // Draw special screens
-void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
 void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
 
 void draw_scr_temp(enum scroll_dir m_scroll_dir);

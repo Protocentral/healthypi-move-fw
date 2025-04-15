@@ -64,7 +64,7 @@ static void scr_spo2_btn_live_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_PLOT_PPG, SCROLL_UP, (uint8_t)SCR_SPO2);
+        hpi_move_load_scr_spl(SCR_SPL_RAW_PPG, SCROLL_UP, (uint8_t)SCR_SPO2);
     }
 }
 
@@ -72,12 +72,9 @@ void draw_scr_spo2_trends(enum scroll_dir m_scroll_dir)
 {
     scr_spo2_scr3 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr3, &style_scr_black, 0);
-    // lv_obj_set_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    //draw_scr_common(scr_spo2_scr2);
 
     lv_obj_set_scrollbar_mode(scr_spo2_scr3, LV_SCROLLBAR_MODE_ON);
 
-    /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_spo2_scr3);
     lv_obj_set_size(cont_col, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);

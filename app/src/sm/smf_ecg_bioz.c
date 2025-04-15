@@ -22,7 +22,6 @@ SENSOR_DT_READ_IODEV(max30001_iodev, DT_ALIAS(max30001), SENSOR_CHAN_VOLTAGE);
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 
 K_SEM_DEFINE(sem_ecg_start, 0, 1);
-K_SEM_DEFINE(sem_ecg_complete_ok, 0, 1);
 K_SEM_DEFINE(sem_ecg_lon, 0, 1);
 K_SEM_DEFINE(sem_ecg_loff, 0, 1);
 K_SEM_DEFINE(sem_ecg_cancel, 0, 1);
@@ -39,8 +38,8 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 #define ECG_SAMPLING_INTERVAL_MS 65
 #define ECG_RECORD_DURATION_S 60
 
-static int ecg_last_timer_val=0;
-static int ecg_countdown_val=0;
+static int ecg_last_timer_val = 0;
+static int ecg_countdown_val = 0;
 
 static bool ecg_record_active = false;
 
@@ -109,16 +108,16 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
             m_ecg_lead_on_off = true;
             LOG_DBG("ECG LOFF");
 
-            //k_sem_give(&sem_ecg_lead_off);
-            // smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_LEADOFF]);
+            // k_sem_give(&sem_ecg_lead_off);
+            //  smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_LEADOFF]);
         }
         else if (edata->ecg_lead_off == 0 && m_ecg_lead_on_off == true)
         {
             m_ecg_lead_on_off = false;
             LOG_DBG("ECG LON");
-            //k_sem_give(&sem_ecg_lead_on);
-            //k_sem_give(&sem_ecg_lead_on_local);
-            // smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
+            // k_sem_give(&sem_ecg_lead_on);
+            // k_sem_give(&sem_ecg_lead_on_local);
+            //  smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
         }
 
         if (ecg_active)
@@ -126,7 +125,7 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
             k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_MSEC(1));
         }
 
-        if(ecg_record_active==true)
+        if (ecg_record_active == true)
         {
             for (int i = 0; i < ecg_num_samples; i++)
             {
@@ -225,7 +224,7 @@ static void st_ecg_bioz_idle_entry(void *o)
     hw_max30001_ecg_disable();
     hw_max30001_bioz_disable();
 
-    for(int i=0; i<ECG_RECORD_BUFFER_SAMPLES; i++)
+    for (int i = 0; i < ECG_RECORD_BUFFER_SAMPLES; i++)
     {
         ecg_record_buffer[i] = 0;
     }
@@ -264,12 +263,12 @@ static void st_ecg_bioz_stream_run(void *o)
             ecg_countdown_val--;
             LOG_DBG("ECG timer: %d", ecg_countdown_val);
             ecg_last_timer_val = k_uptime_get_32();
-            
+
             struct hpi_ecg_timer_t ecg_timer = {
                 .timer_val = ecg_countdown_val,
             };
             zbus_chan_pub(&ecg_timer_chan, &ecg_timer, K_NO_WAIT);
-            
+
             if (ecg_countdown_val <= 0)
             {
                 smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_COMPLETE]);
@@ -277,7 +276,7 @@ static void st_ecg_bioz_stream_run(void *o)
         }
     }
 
-    if(k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0)
     {
         LOG_DBG("ECG cancelled");
         smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
@@ -301,7 +300,6 @@ static void work_ecg_write_file_handler(struct k_work *work)
     LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);
     // Write ECG data to file
     hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, log_time);
-   
 }
 K_WORK_DEFINE(work_ecg_write_file, work_ecg_write_file_handler);
 
@@ -313,18 +311,15 @@ static void st_ecg_bioz_complete_entry(void *o)
     // k_thread_suspend(ecg_bioz_sampling_thread_id);
 
     k_work_submit(&work_ecg_write_file);
-    //k_sem_give(&sem_ecg_complete_reset);
-    // Write ECG data to file
-    //hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, k_uptime_get_32());
+    // k_sem_give(&sem_ecg_complete_reset);
+    //  Write ECG data to file
+    // hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, k_uptime_get_32());
     k_sem_give(&sem_ecg_complete);
 }
 
 static void st_ecg_bioz_complete_run(void *o)
 {
-    //if (k_sem_take(&sem_ecg_complete_ok, K_NO_WAIT) == 0)
-    //{
-        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
-    //}
+    smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
 }
 
 static void st_ecg_bioz_complete_exit(void *o)

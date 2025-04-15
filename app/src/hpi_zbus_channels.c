@@ -56,7 +56,7 @@ ZBUS_CHAN_DEFINE(bpt_chan, /* Name */
 );
 
 ZBUS_CHAN_DEFINE(spo2_chan, /* Name */
-                 struct hpi_spo2_t,
+                 struct hpi_spo2_point_t,
                  NULL, /* Validator */
                  NULL, /* User Data */
                  ZBUS_OBSERVERS(disp_spo2_lis, trend_spo2_lis),
