@@ -171,8 +171,6 @@ void scr_ecg_lead_on_off_handler(bool lead_on_off);
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);
-void hpi_ppg_disp_update_spo2(int spo2);
-void hpi_ppg_disp_update_status(uint8_t status);
 
 // EDA screen functions
 void draw_scr_pre(enum scroll_dir m_scroll_dir);

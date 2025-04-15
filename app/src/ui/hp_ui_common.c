@@ -65,6 +65,9 @@ K_MUTEX_DEFINE(mutex_curr_screen);
 // Externs
 extern const struct device *display_dev;
 
+extern struct k_sem sem_ecg_cancel;
+extern struct k_sem sem_stop_one_shot_spo2;
+
 /*Will be called when the styles of the base theme are already added to add new styles*/
 static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
 {
@@ -372,9 +375,9 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_PLOT_PPG:
         draw_scr_spl_plot_ppg(m_scroll_dir, scr_parent);
         break;
-    case SCR_SPL_PLOT_ECG:
-        draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
-        break;
+    //case SCR_SPL_PLOT_ECG:
+    //    draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
+    //    break;
     case SCR_SPL_ECG_SCR2:
         draw_scr_ecg_scr2(m_scroll_dir);
         break;
@@ -489,7 +492,6 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printf("Left at %d\n", curr_screen);
 
-        
         if ((curr_screen + 1) == SCR_LIST_END)
         {
             printk("End of list\n");
@@ -507,13 +509,13 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printf("Right at %d\n", curr_screen);
 
-        if(hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
+        if (hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
         {
             hpi_move_load_screen(SCR_HR, SCROLL_LEFT);
             return;
         }
 
-        if(hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
             hpi_move_load_screen(SCR_SPO2, SCROLL_LEFT);
             return;
@@ -539,7 +541,17 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_move_load_scr_settings(SCROLL_DOWN);
         }
-        
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
+        {
+            printk("Cancel ECG\n");
+            k_sem_give(&sem_ecg_cancel);
+            hpi_move_load_screen(SCR_ECG, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        {
+            k_sem_give(&sem_stop_one_shot_spo2);
+            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+        }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
     {

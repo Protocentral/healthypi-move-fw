@@ -22,6 +22,7 @@ K_SEM_DEFINE(sem_ppg_wrist_motion_detected, 0, 1);
 
 K_SEM_DEFINE(sem_start_one_shot_spo2, 0, 1);
 K_SEM_DEFINE(sem_stop_one_shot_spo2, 0, 1);
+K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 

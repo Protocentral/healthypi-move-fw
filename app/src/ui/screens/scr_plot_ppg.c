@@ -1,14 +1,8 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
-#include <app_version.h>
-#include <zephyr/logging/log.h>
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
@@ -187,17 +181,6 @@ void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_align_to(label_ppg_spo2, chart_ppg,  LV_ALIGN_OUT_BOTTOM_MID, 100, 60);
     lv_obj_add_style(label_ppg_spo2, &style_white_medium, 0);
 
-    // SpO2 Sub % label
-    lv_obj_t *label_spo2_sub = lv_label_create(scr_ppg);
-    lv_label_set_text(label_spo2_sub, " %");
-    lv_obj_align_to(label_spo2_sub, label_ppg_spo2, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-
-    // SpO2 caption label
-    lv_obj_t *label_spo2_cap = lv_label_create(scr_ppg);
-    lv_label_set_text(label_spo2_cap, "SpO2");
-    lv_obj_align_to(label_spo2_cap, label_ppg_spo2,LV_ALIGN_OUT_TOP_MID, 0, -20);
-    lv_obj_add_style(label_spo2_cap, &style_red_medium, 0);
-
     /*lv_obj_t *btn_settings = lv_btn_create(scr_ppg);
     lv_obj_set_width(btn_settings, 80);
     lv_obj_set_height(btn_settings, 80);
@@ -246,67 +229,6 @@ void hpi_ppg_disp_update_hr(int hr)
     }
 
     lv_label_set_text(label_ppg_hr, buf);
-}
-
-void hpi_ppg_disp_update_spo2(int spo2)
-{
-    if (label_ppg_spo2 == NULL)
-        return;
-
-    char buf[32];
-    if (spo2 == 0)
-    {
-        sprintf(buf, "--");
-    }
-    else
-    {
-        sprintf(buf, "%d", spo2);
-    }
-    // sprintf(buf, "%d", spo2);
-    lv_label_set_text(label_ppg_spo2, buf);
-}
-
-static void hpi_scr_ppg_hide_plot(bool hide)
-{
-    if (hide)
-    {
-        lv_obj_add_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
-    }
-    else
-    {
-        lv_obj_clear_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
-    }
-}
-
-void hpi_ppg_disp_update_status(uint8_t status)
-{
-    if (label_status == NULL)
-        return;
-
-    char stat_str[16];
-
-    switch (status)
-    {
-    case HPI_PPG_SCD_STATUS_UNKNOWN:
-    case HPI_PPG_SCD_OFF_SKIN:
-        sprintf(stat_str, "Off Skin");
-        hpi_scr_ppg_hide_plot(true);
-        break;
-    case HPI_PPG_SCD_ON_OBJ:
-        sprintf(stat_str, "On Obj.");
-        break;
-    case HPI_PPG_SCD_ON_SKIN:
-        sprintf(stat_str, "On Skin");
-        hpi_scr_ppg_hide_plot(false);
-        break;
-    default:
-        sprintf(stat_str, "UNK.");
-        break;
-    }
-
-    lv_label_set_text(label_status, stat_str);
 }
 
 static void hpi_ppg_disp_add_samples(int num_samples)

@@ -117,6 +117,9 @@ extern struct k_sem sem_ppg_fi_hide_loading;
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
 
+extern struct k_sem sem_ecg_cancel;
+extern struct k_sem sem_stop_one_shot_spo2;
+
 // User Profile settings
 
 static uint16_t m_user_height = 170; // Example height in m, adjust as needed
@@ -126,7 +129,7 @@ static double m_user_met = 3.5;      // Example MET value based speed = 1.34 m/s
 static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
 {
     // KCals = time * MET * 3.5 * weight / (200*60)
-    
+
     double _m_time = (((m_user_height / 100.000) * 0.414 * steps) / 4800.000) * 60.000; // Assuming speed of 4.8 km/h
     double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
     /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
@@ -299,15 +302,11 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
     if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_PPG)
     {
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
-        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
         if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
         {
             hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
-            // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-            //  hpi_disp_update_hr(m_disp_hr);
             hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
-            hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
         }
 
         lv_disp_trig_activity(NULL);
@@ -316,17 +315,6 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
     {
         hpi_disp_spo2_plotPPG(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
-
-        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
-
-        /*if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
-        {
-            hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
-            //  hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-            //  hpi_disp_update_hr(m_disp_hr);
-            hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
-            hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
-        }*/
     }
 
     else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
@@ -413,6 +401,9 @@ static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg
     {
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
     }
+    else
+    {
+    }
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
         hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
@@ -427,10 +418,10 @@ static void st_display_active_entry(void *o)
     {
         hpi_move_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
     }
-    else
+    /*else
     {
         hpi_move_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
-    }
+    }*/
 }
 
 static void st_disp_do_bpt_stuff(void)
@@ -488,6 +479,8 @@ static void st_display_active_run(void *o)
         break;
     case SCR_HR:
         hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_tm);
+        break;
+    case SCR_SPL_HR_SCR2:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
             hpi_disp_hr_load_trend();
@@ -512,19 +505,19 @@ static void st_display_active_run(void *o)
         {
             hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
         }
-        if(k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
             scr_ecg_lead_on_off_handler(true);
             m_lead_on_off = true;
         }
-        if(k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
         {
             scr_ecg_lead_on_off_handler(false);
             m_lead_on_off = false;
         }
 
         lv_disp_trig_activity(NULL);
-        
+
         break;
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
@@ -583,22 +576,26 @@ static void st_display_active_run(void *o)
     // Add button handlers
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
-        /*if (m_display_active == false)
-        {
 
-        }
-        else
-        {*/
         lv_disp_trig_activity(NULL);
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
             // hpi_display_sleep_on();
         }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
+        {
+            k_sem_give(&sem_ecg_cancel);
+            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        {
+            k_sem_give(&sem_stop_one_shot_spo2);
+            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+        }
         else
         {
             hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
         }
-        //}
     }
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);

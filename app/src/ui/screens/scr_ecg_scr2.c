@@ -88,12 +88,12 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_timer_sub, " secs");
     lv_obj_add_style(label_timer_sub, &style_white_medium, 0);
 
-    label_info = lv_label_create(cont_col);
+    /*label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Touch the metal bezel to start");
+    lv_label_set_text(label_info, "Touch anywhere on the bezel to start");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_info, &style_white_medium, 0);
+    lv_obj_add_style(label_info, &style_white_medium, 0);*/
 
     /*btn_ecg_cancel = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_ecg_cancel, btn_ecg_cancel_handler, LV_EVENT_ALL, NULL);
