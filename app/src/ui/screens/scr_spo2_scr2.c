@@ -29,6 +29,8 @@ static lv_obj_t *bar_spo2_progress;
 static lv_obj_t *label_spo2_status;
 
 static lv_obj_t *cont_spo2_val;
+static lv_obj_t *cont_status;
+static lv_obj_t *img_complete;
 
 // static lv_obj_t *label_min_max;
 static lv_obj_t *btn_spo2_proceed;
@@ -82,14 +84,14 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(cont_col, &style_scr_black, 0);
     lv_obj_add_style(cont_col, &style_bg_red, 0);
 
+    lv_obj_t *img_spo2 = lv_img_create(cont_col);
+    lv_img_set_src(img_spo2, &img_spo2_hand);
+
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
     lv_label_set_text(label_info, "Ensure that your Move is worn on the wrist as shown, not too tight nor too loose, away from the wrist bone.");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
-
-    lv_obj_t *img_spo2 = lv_img_create(cont_col);
-    lv_img_set_src(img_spo2, &img_spo2_hand);
 
     btn_spo2_proceed = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_spo2_proceed, scr_spo2_btn_proceed_handler, LV_EVENT_ALL, NULL);
@@ -128,7 +130,7 @@ void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_signal, "SpO2");
 
     // Draw countdown timer container
-    lv_obj_t *cont_status = lv_obj_create(cont_col);
+    cont_status = lv_obj_create(cont_col);
     lv_obj_set_size(cont_status, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_status, LV_FLEX_FLOW_COLUMN);
     lv_obj_add_style(cont_status, &style_scr_black, 0);
@@ -144,6 +146,10 @@ void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
     label_spo2_progress = lv_label_create(cont_status);
     lv_label_set_text(label_spo2_progress, "--");
     lv_obj_set_style_text_align(label_spo2_progress, LV_TEXT_ALIGN_CENTER, 0);
+
+    img_complete= lv_img_create(cont_col);
+    lv_img_set_src(img_complete, &img_complete_100);
+    lv_obj_add_flag(img_complete, LV_OBJ_FLAG_HIDDEN);
 
     chart_ppg = lv_chart_create(cont_col);
     lv_obj_set_size(chart_ppg, 390, 140);
@@ -259,7 +265,10 @@ void hpi_disp_spo2_update_progress(int progress, int status, int spo2, int hr)
     {
         lv_label_set_text_fmt(label_spo2_percent, "%d", spo2);
         lv_obj_add_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(cont_spo2_val, LV_OBJ_FLAG_HIDDEN);
+
+        lv_obj_add_flag(cont_status, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(img_complete, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(cont_spo2_val, LV_OBJ_FLAG_HIDDEN);        
     }
 
     /*if (hr == 0)

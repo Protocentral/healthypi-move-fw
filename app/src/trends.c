@@ -16,6 +16,7 @@
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "trends.h"
+#include "log_module.h"
 
 LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 
@@ -29,9 +30,15 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 #define HR_TREND_MINUTE_PTS 60
 #define HR_TREND_DAY_MAX_PTS 1440 // 60 * 24
 
+#define TEMP_TREND_MINUTE_PTS 12
+
 // Store raw HR values for the current minute
 static uint16_t m_hr_curr_minute[60] = {0}; // Assumed max 60 points per minute
+static uint16_t m_temp_curr_minute[13] = {0}; // Assumed max 10 points per minute
+
 static uint8_t m_trends_curr_minute_counter = 0;
+
+static uint8_t m_trends_temp_minute_sample_counter = 0;
 
 // Time variables
 static struct tm m_trend_sys_time_tm;
@@ -45,13 +52,19 @@ K_MSGQ_DEFINE(q_temp_trend, sizeof(struct hpi_temp_trend_point_t), 8, 1);
 struct hpi_hr_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
 struct hpi_hr_trend_point_t trend_point_all[1440];
 
-static int hpi_trend_hr_process_points()
+static int hpi_trend_process_points()
 {
     struct hpi_hr_trend_point_t hr_trend_point;
     hr_trend_point.timestamp = m_trend_time_ts;
     uint16_t hr_sum = 0;
     hr_trend_point.max = 0;
     hr_trend_point.min = 65535;
+
+    struct hpi_temp_trend_point_t temp_trend_point;
+    temp_trend_point.timestamp = m_trend_time_ts;
+    uint16_t temp_sum = 0;
+    temp_trend_point.max = 0;
+    temp_trend_point.min = 65535;
 
     for (int i = 0; i < HR_TREND_MINUTE_PTS; i++)
     {
@@ -68,6 +81,31 @@ static int hpi_trend_hr_process_points()
             hr_sum += m_hr_curr_minute[i];
         }
     }
+
+    for(int i = 0; i < m_trends_temp_minute_sample_counter; i++)
+    {
+        if (m_temp_curr_minute[i] > temp_trend_point.max)
+        {
+            temp_trend_point.max = m_temp_curr_minute[i];
+        }
+        if ((m_temp_curr_minute[i] < temp_trend_point.min) && (m_temp_curr_minute[i] != 0))
+        {
+            temp_trend_point.min = m_temp_curr_minute[i];
+        }
+        if ((m_temp_curr_minute[i] != 0) && (m_temp_curr_minute[i] != 65535))
+        {
+            temp_sum += m_temp_curr_minute[i];
+        }
+    }
+
+    if (temp_sum > 0)
+    {
+        temp_trend_point.avg = temp_sum / m_trends_temp_minute_sample_counter;
+        temp_trend_point.latest = m_temp_curr_minute[m_trends_temp_minute_sample_counter - 1];
+        k_msgq_put(&q_temp_trend, &temp_trend_point, K_NO_WAIT);
+    }
+
+    m_trends_temp_minute_sample_counter = 0;
 
     if (hr_sum > 0)
     {
@@ -86,7 +124,7 @@ void work_process_points_handler(struct k_work *work)
     else
     {
         m_trends_curr_minute_counter = 0;
-        hpi_trend_hr_process_points();
+        hpi_trend_process_points();
         memset(m_hr_curr_minute, 0, sizeof(m_hr_curr_minute));
     }
 }
@@ -113,6 +151,7 @@ void hpi_trend_record_thread(void)
 {
     struct hpi_hr_trend_point_t trend_hr_minute;
     struct hpi_spo2_point_t trend_spo2;
+    struct hpi_temp_trend_point_t trend_temp;
 
     /* start a periodic timer that expires once every second */
     k_timer_start(&tmr_trend_process, K_SECONDS(1), K_SECONDS(1));
@@ -130,6 +169,12 @@ void hpi_trend_record_thread(void)
             int64_t today_ts = hpi_trend_get_day_start_ts(&trend_spo2.timestamp);
             LOG_DBG("Recd SpO2 point: %" PRId64 "| %d ", trend_spo2.timestamp, trend_spo2.spo2);
             hpi_spo2_trend_wr_point_to_file(trend_spo2, today_ts);
+        }
+        if(k_msgq_get(&q_temp_trend, &trend_temp, K_NO_WAIT) == 0)
+        {
+            int64_t today_ts = hpi_trend_get_day_start_ts(&trend_temp.timestamp);
+            LOG_DBG("Recd Temp point: %" PRId64 "| %d | %d | %d", trend_temp.timestamp, trend_temp.max, trend_temp.min, trend_temp.avg);
+            hpi_temp_trend_wr_point_to_file(trend_temp, today_ts);
         }
 
         k_sleep(K_SECONDS(2));
@@ -294,7 +339,10 @@ ZBUS_LISTENER_DEFINE(trend_spo2_lis, trend_spo2_listener);
 static void trend_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
-    // LOG_INF("ZB Temp: %d", hpi_temp->temp_c);
+    m_temp_curr_minute[m_trends_curr_minute_counter] = hpi_temp->temp_f*100;
+    m_trends_temp_minute_sample_counter++;
+    LOG_INF("ZB Temp: %f", hpi_temp->temp_f);
+
 }
 ZBUS_LISTENER_DEFINE(trend_temp_lis, trend_temp_listener);
 

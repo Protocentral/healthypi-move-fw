@@ -16,7 +16,10 @@ struct hpi_hr_trend_point_t
 struct hpi_temp_trend_point_t
 {
     int64_t timestamp;
-    uint16_t temp_c;
+    uint16_t max;
+    uint16_t min;
+    uint16_t avg;
+    uint16_t latest;
 };
 
 #define HPI_TREND_POINT_SIZE 16
