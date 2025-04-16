@@ -94,7 +94,7 @@ void hpi_spo2_wr_point_to_file(struct hpi_spo2_point_t m_spo2_point, int64_t day
 {
     struct fs_file_t file;
     int ret = 0;
-    char fname[30];
+    char fname[40];
 
     fs_file_t_init(&file);
 

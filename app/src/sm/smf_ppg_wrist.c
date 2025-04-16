@@ -167,7 +167,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             if ((ppg_sensor_sample.spo2_valid_percent_complete == 100) && spo2_measurement_in_progress)
             {
                 k_sem_give(&sem_stop_one_shot_spo2);
-                if (ppg_sensor_sample.spo2_confidence > 60)
+                if (ppg_sensor_sample.spo2_confidence > 20)
                 {
 
                     struct hpi_spo2_point_t spo2_chan_value = {

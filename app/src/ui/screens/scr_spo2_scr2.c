@@ -283,7 +283,7 @@ void hpi_disp_spo2_update_progress(int progress, int status, int spo2, int hr)
 
 void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_green;
+    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
