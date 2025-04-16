@@ -482,7 +482,7 @@ static void st_display_active_run(void *o)
     case SCR_SPL_HR_SCR2:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            hpi_disp_hr_load_trend();
+            //hpi_disp_hr_load_trend();
             last_hr_trend_refresh = k_uptime_get_32();
         }
         break;

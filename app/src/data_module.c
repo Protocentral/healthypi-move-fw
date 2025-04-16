@@ -222,72 +222,17 @@ float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
     return y;
 }*/
 
+static uint32_t last_hr_update_time = 0;
+
 void data_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_wr_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
-    // int32_t resp_sample_buffer[64];
-    // int resp_sample_buffer_count = 0;
-
-    /* Filter coeffcients from Maxim AN6906
-
-    b[] = {b0, b1, b2, b3, b4}
-    a[] = {a0, a1, a2, a3, a4}
-
-    CMSIS DSP Library expects coefficient in second order section digital filter manner:
-
-    {b10, b11, b12, a11, a12, b20, b21, b22, a21, a22, ...}
-
-    50Hz notch, 128 samples/sec
-    b[] = { 0.811831745907865, 2.537684304617564, 3.606784274651312, 2.537684304617564,0.811831745907865 }
-    a[] = { 1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096 }
-
-    */
-
-    // Initialize IIR filter (2nd order, 5 tap, 50 Hz Notch)
-    // arm_biquad_casd_df1_inst_f32 iir_filt_inst;
-    // arm_biquad_cascade_df2T_instance_f32 iir_filt_inst;
-    // arm_biquad_cascade_df1_init_f32(&iir_filt_inst, 2, iir_coeff, iir_state);
-    // arm_biquad_cascade_df2T_init_f32(&iir_filt_inst, 2, iir_coeff, iir_state);
-    // record_init_session_log();
-
-    //float32_t ecg_input = 0;
-    //float32_t ecg_output = 0;
-    //float32_t ecg_output2 = 0;
-
-    //int32_t hrv_max;
-    //int32_t hrv_min;
-    //float hrv_mean;
-    //float hrv_sdnn;
-    //float hrv_pnn;
-    //float hrv_rmssd;
-    //bool hrv_ready_flag = false;
-
-    //struct hpi_computed_hrv_t hrv_calculated;
-
-#define NUM_TAPS 10  /* Number of taps in the FIR filter (length of the moving average window) */
-#define BLOCK_SIZE 8 /* Number of samples processed per block */
-
-    /*
-     * Filter coefficients are all equal for a moving average filter. Here, 1/NUM_TAPS = 0.1f.
-     */
-    // q31_t firCoeffs[NUM_TAPS] = {0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD,
-    //                 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD, 0x0CCCCCCD};
-
-    /*arm_fir_instance_f32 sFIR;
-    float32_t firState[NUM_TAPS + BLOCK_SIZE - 1];
-
-    float32_t input[BLOCK_SIZE];
-    float32_t output[BLOCK_SIZE];
-    uint32_t start, end;
-    arm_fir_init_f32(&sFIR, NUM_TAPS, filt_notch_b, firState, BLOCK_SIZE);
-    */
+    static uint32_t hr_zbus_last_pub_time = 0;
 
     LOG_INF("Data Thread starting");
-
-    // printk("PPG Sample struct size: %d\n", sizeof(struct hpi_ppg_sensor_data_t));
 
     for (;;)
     {
@@ -331,8 +276,8 @@ void data_thread(void)
 
             uint16_t ecg_hr = ecg_bioz_sensor_sample.hr;
             zbus_chan_pub(&ecg_hr_chan, &ecg_hr, K_SECONDS(1));
-            
-            if(ecg_bioz_sensor_sample.rrint==1)
+
+            if (ecg_bioz_sensor_sample.rrint == 1)
             {
                 LOG_DBG("RRINT !");
             }
@@ -380,15 +325,21 @@ void data_thread(void)
             {
                 if (ppg_wr_sensor_sample.hr_confidence > 75)
                 {
-                    struct hpi_hr_t hr_chan_value = {
-                        .time_tm = data_mod_sys_time,
-                        .hr = ppg_wr_sensor_sample.hr,
-                        .hr_ready_flag = true,
-                    };
-                    zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                    if (hr_zbus_last_pub_time == 0)
+                    {
+                        hr_zbus_last_pub_time = k_uptime_seconds();
+                    }
+                    if ((k_uptime_seconds() - hr_zbus_last_pub_time) > 2)
+                    {
+                        struct hpi_hr_t hr_chan_value = {
+                            .time_tm = data_mod_sys_time,
+                            .hr = ppg_wr_sensor_sample.hr,
+                            .hr_ready_flag = true,
+                        };
+                        zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                        hr_zbus_last_pub_time = k_uptime_seconds();
+                    }
                 }
-
-               
             }
 
             // LOG_DBG("SpO2: %d | Confidence: %d", ppg_wr_sensor_sample.spo2, ppg_wr_sensor_sample.spo2_confidence);

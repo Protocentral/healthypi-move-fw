@@ -164,17 +164,18 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 k_work_schedule(&work_on_skin, K_SECONDS(HPI_PROBE_DURATION_S));
             }
 
-            if ((ppg_sensor_sample.spo2_valid_percent_complete == 100)&&spo2_measurement_in_progress)
+            if ((ppg_sensor_sample.spo2_valid_percent_complete == 100) && spo2_measurement_in_progress)
             {
                 k_sem_give(&sem_stop_one_shot_spo2);
                 if (ppg_sensor_sample.spo2_confidence > 60)
                 {
-                    struct hpi_spo2_point_t spo2_chan_value = { 
+
+                    struct hpi_spo2_point_t spo2_chan_value = {
                         .timestamp = hw_get_sys_time_ts(),
                         .spo2 = ppg_sensor_sample.spo2,
                     };
                     zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
-                }   
+                }
                 spo2_measurement_in_progress = false;
             }
 
@@ -318,7 +319,7 @@ static void ppg_wrist_ctrl_thread(void)
             // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
             LOG_DBG("Stopping PPG Sampling");
             k_timer_stop(&tmr_ppg_wrist_sampling);
-            
+
             LOG_DBG("Starting One Shot SpO2");
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             k_msleep(600);
@@ -335,7 +336,7 @@ static void ppg_wrist_ctrl_thread(void)
             k_timer_stop(&tmr_ppg_wrist_sampling);
             spo2_measurement_in_progress = false;
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
-            
+
             k_msleep(1000);
 
             LOG_DBG("Switching to Continuous Sampling HR");
