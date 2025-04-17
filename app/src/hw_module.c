@@ -776,7 +776,7 @@ struct tm hw_get_sys_time(void)
 int64_t hw_get_sys_time_ts(void)
 {
     int64_t sys_time_ts = timeutil_timegm64(&sys_tm_time);
-    return 
+    return sys_time_ts;
 }
 
 static uint32_t acc_get_steps(void)

@@ -36,6 +36,10 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 static uint16_t m_hr_curr_minute[60] = {0};   // Assumed max 60 points per minute
 static uint16_t m_temp_curr_minute[13] = {0}; // Assumed max 10 points per minute
 
+static uint16_t m_spo2 = 0;
+static int64_t m_spo2_last_ts = 0;
+K_SEM_DEFINE(sem_spo2_updated, 0, 1);
+
 static uint8_t m_trends_curr_minute_counter = 0;
 
 static uint8_t m_trends_temp_minute_sample_counter = 0;
@@ -46,7 +50,7 @@ static struct tm m_trend_sys_time_tm;
 static int64_t m_trend_time_ts;
 
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
-K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_point_t), 8, 1);
+K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_point_t), 8, 4);
 K_MSGQ_DEFINE(q_temp_trend, sizeof(struct hpi_temp_trend_point_t), 8, 1);
 
 static int hpi_trend_process_points()
@@ -116,6 +120,14 @@ static int hpi_trend_process_points()
         k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
     }
 
+    if(k_sem_take(&sem_spo2_updated, K_NO_WAIT) == 0)
+    {
+        struct hpi_spo2_point_t spo2_trend_point;
+        spo2_trend_point.timestamp = m_trend_time_ts;
+        spo2_trend_point.spo2 = m_spo2;
+        k_msgq_put(&q_spo2_trend, &spo2_trend_point, K_NO_WAIT);
+    }
+
     m_trends_hr_minute_sample_counter = 0;
 }
 
@@ -166,17 +178,19 @@ void hpi_trend_record_thread(void)
             LOG_DBG("Recd HR point: %" PRId64 "| %d | %d | %d", trend_hr_minute.timestamp, trend_hr_minute.max, trend_hr_minute.min, trend_hr_minute.avg);
             hpi_hr_trend_wr_point_to_file(trend_hr_minute, today_ts);
         }
-        if (k_msgq_get(&q_spo2_trend, &trend_spo2, K_NO_WAIT) == 0)
-        {
-            int64_t today_ts = hpi_trend_get_day_start_ts(&trend_spo2.timestamp);
-            LOG_DBG("Recd SpO2 point: %" PRId64 "| %d ", trend_spo2.timestamp, trend_spo2.spo2);
-            hpi_spo2_trend_wr_point_to_file(trend_spo2, today_ts);
-        }
+        
         if (k_msgq_get(&q_temp_trend, &trend_temp, K_NO_WAIT) == 0)
         {
             int64_t today_ts = hpi_trend_get_day_start_ts(&trend_temp.timestamp);
             LOG_DBG("Recd Temp point: %" PRId64 "| %d | %d | %d", trend_temp.timestamp, trend_temp.max, trend_temp.min, trend_temp.avg);
             hpi_temp_trend_wr_point_to_file(trend_temp, today_ts);
+        }
+
+        if (k_msgq_get(&q_spo2_trend, &trend_spo2, K_NO_WAIT) == 0)
+        {
+            int64_t today_ts = hpi_trend_get_day_start_ts(&trend_spo2.timestamp);
+            LOG_DBG("Recd SpO2 point: %" PRId64 "| %d ", trend_spo2.timestamp, trend_spo2.spo2);
+            hpi_spo2_trend_wr_point_to_file(trend_spo2, today_ts);
         }
 
         k_sleep(K_SECONDS(2));
@@ -331,8 +345,11 @@ struct fs_file_t file;
 static void trend_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
-    LOG_DBG("ZB SpO2: %d", hpi_spo2->spo2);
-    k_msgq_put(&q_spo2_trend, &hpi_spo2, K_NO_WAIT);
+    LOG_DBG("ZB SpO2: %d | Time: %" PRId64, hpi_spo2->spo2, hpi_spo2->timestamp);
+    m_spo2 = hpi_spo2->spo2;
+    m_spo2_last_ts = hpi_spo2->timestamp;
+    k_sem_give(&sem_spo2_updated);
+    //k_msgq_put(&q_spo2_trend, &hpi_spo2, K_NO_WAIT);
 }
 ZBUS_LISTENER_DEFINE(trend_spo2_lis, trend_spo2_listener);
 
