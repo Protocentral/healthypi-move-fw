@@ -25,6 +25,7 @@
 
 #include <time.h>
 #include <zephyr/posix/time.h>
+#include <zephyr/sys/timeutil.h>
 
 #include <nrfx_clock.h>
 #include <nrfx_spim.h>
@@ -774,7 +775,8 @@ struct tm hw_get_sys_time(void)
 
 int64_t hw_get_sys_time_ts(void)
 {
-    return timeutil_timegm64(&sys_tm_time);
+    int64_t sys_time_ts = timeutil_timegm64(&sys_tm_time);
+    return 
 }
 
 static uint32_t acc_get_steps(void)

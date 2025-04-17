@@ -132,14 +132,12 @@ void work_process_points_handler(struct k_work *work)
         memset(m_hr_curr_minute, 0, sizeof(m_hr_curr_minute));
     }
 }
-
 K_WORK_DEFINE(work_process_points, work_process_points_handler);
 
 void trend_process_handler(struct k_timer *dummy)
 {
     k_work_submit(&work_process_points);
 }
-
 K_TIMER_DEFINE(tmr_trend_process, trend_process_handler, NULL);
 
 static int64_t hpi_trend_get_day_start_ts(int64_t *today_time_ts)
