@@ -559,6 +559,10 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_move_load_screen(SCR_ECG, SCROLL_UP);
         }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_COMPLETE)
+        {
+            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+        }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
     {

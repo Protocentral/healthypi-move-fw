@@ -37,11 +37,15 @@ void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir)
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
-    lv_obj_t *img1 = lv_img_create(cont_col);
-    lv_img_set_src(img1, &img_complete_100);
+    lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
+    lv_label_set_text(lbl_info_scroll, LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_lighten(LV_PALETTE_RED, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Success");
+
+    lv_obj_t *img1 = lv_img_create(cont_col);
+    lv_img_set_src(img1, &img_complete_85);
 
     lv_obj_t *cont_spo2_val = lv_obj_create(cont_col);
     lv_obj_set_size(cont_spo2_val, lv_pct(100), LV_SIZE_CONTENT);

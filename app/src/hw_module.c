@@ -821,7 +821,6 @@ void hw_thread(void)
             LOG_ERR("Failed to get RTC time");
         }
         sys_tm_time = *rtc_time_to_tm(&rtc_sys_time);
-
         zbus_chan_pub(&sys_time_chan, &sys_tm_time, K_SECONDS(1));
 
         // Read and publish steps

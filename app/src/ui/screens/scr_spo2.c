@@ -59,9 +59,6 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "SpO2");
 
-    lv_obj_t *img_spo2 = lv_img_create(cont_col);
-    lv_img_set_src(img_spo2, &icon_spo2_100);
-
     lv_obj_t *cont_spo2 = lv_obj_create(cont_col);
     lv_obj_set_size(cont_spo2, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_spo2, LV_FLEX_FLOW_ROW);
@@ -69,10 +66,12 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_spo2, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_bottom(cont_spo2, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_top(cont_spo2, 0, LV_PART_MAIN);
-    
     lv_obj_set_style_bg_opa(cont_spo2, 0, 0);
 
-    /*label_spo2_percent = lv_label_create(cont_spo2);
+    lv_obj_t *img_spo2 = lv_img_create(cont_spo2);
+    lv_img_set_src(img_spo2, &icon_spo2_100);
+
+    label_spo2_percent = lv_label_create(cont_spo2);
     lv_label_set_text(label_spo2_percent, "100");
     lv_obj_add_style(label_spo2_percent, &style_white_large, 0);
 
@@ -81,7 +80,6 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 
     label_spo2_last_update_time = lv_label_create(cont_col);
     lv_label_set_text(label_spo2_last_update_time, "Last measured: 00:00");
-    */
 
     btn_spo2_measure = lv_btn_create(cont_col);
     lv_obj_set_height(btn_spo2_measure, 75);

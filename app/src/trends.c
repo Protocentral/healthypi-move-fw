@@ -120,7 +120,7 @@ static int hpi_trend_process_points()
         k_msgq_put(&q_hr_trend, &hr_trend_point, K_NO_WAIT);
     }
 
-    if(k_sem_take(&sem_spo2_updated, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_spo2_updated, K_NO_WAIT) == 0)
     {
         struct hpi_spo2_point_t spo2_trend_point;
         spo2_trend_point.timestamp = m_trend_time_ts;
@@ -178,7 +178,7 @@ void hpi_trend_record_thread(void)
             LOG_DBG("Recd HR point: %" PRId64 "| %d | %d | %d", trend_hr_minute.timestamp, trend_hr_minute.max, trend_hr_minute.min, trend_hr_minute.avg);
             hpi_hr_trend_wr_point_to_file(trend_hr_minute, today_ts);
         }
-        
+
         if (k_msgq_get(&q_temp_trend, &trend_temp, K_NO_WAIT) == 0)
         {
             int64_t today_ts = hpi_trend_get_day_start_ts(&trend_temp.timestamp);
@@ -338,10 +338,6 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
     return 0;
 }
 
-struct fs_file_t file;
-// struct hpi_spo2_point_t spo2_trend_day_points[NUM_HOURS][MAX_POINTS_SPO2_PER_HOUR];
-// struct hpi_spo2_point_t spo2_trend_point_all[360];
-
 static void trend_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
@@ -349,7 +345,7 @@ static void trend_spo2_listener(const struct zbus_channel *chan)
     m_spo2 = hpi_spo2->spo2;
     m_spo2_last_ts = hpi_spo2->timestamp;
     k_sem_give(&sem_spo2_updated);
-    //k_msgq_put(&q_spo2_trend, &hpi_spo2, K_NO_WAIT);
+    // k_msgq_put(&q_spo2_trend, &hpi_spo2, K_NO_WAIT);
 }
 ZBUS_LISTENER_DEFINE(trend_spo2_lis, trend_spo2_listener);
 
@@ -367,7 +363,7 @@ static void trend_temp_listener(const struct zbus_channel *chan)
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
     m_temp_curr_minute[m_trends_temp_minute_sample_counter] = hpi_temp->temp_f * 100;
     m_trends_temp_minute_sample_counter++;
-    LOG_INF("ZB Temp: %f", hpi_temp->temp_f);
+    // LOG_INF("ZB Temp: %f", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(trend_temp_lis, trend_temp_listener);
 
@@ -393,8 +389,6 @@ static void trend_sys_time_listener(const struct zbus_channel *chan)
     const struct tm *sys_time = zbus_chan_const_msg(chan);
     m_trend_sys_time_tm = *sys_time;
     m_trend_time_ts = timeutil_timegm64(sys_time);
-
-    // LOG_DBG("Time: %d-%d-%d %d:%d:%d", m_trend_time->tm_year, m_trend_time->tm_mon, m_trend_time->tm_mday, m_trend_time->tm_hour, m_trend_time->tm_min, m_trend_time->tm_sec);
     // LOG_DBG("Sys TS: %" PRIx64, m_trend_time_ts);
 }
 ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
@@ -406,4 +400,3 @@ ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
 #define TREND_RECORD_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, hpi_trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 2000);
-// K_THREAD_DEFINE(trend_sample_thread_id, THREAD_SAMPLE_THREAD_STACK_SIZE, hpi_trend_sample_thread, NULL, NULL, NULL, THREAD_SAMPLE_THREAD_PRIORITY, 0, 2000);
