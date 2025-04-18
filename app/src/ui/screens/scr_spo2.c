@@ -12,8 +12,6 @@
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2, LOG_LEVEL_DBG);
 
-
-
 #define SPO2_SCR_TREND_MAX_POINTS 24
 
 lv_obj_t *scr_spo2;

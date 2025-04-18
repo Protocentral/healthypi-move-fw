@@ -137,9 +137,7 @@ struct hpi_bpt_t
 struct hpi_spo2_point_t
 {
     int64_t timestamp;
-
     uint16_t spo2;
-    uint16_t hr;
 };
 
 struct hpi_batt_status_t
@@ -156,4 +154,13 @@ struct hpi_ecg_timer_t
 struct hpi_ecg_lead_on_off_t
 {
     bool lead_on_off;
+};
+
+enum spo2_meas_state
+{
+    SPO2_MEAS_LED_ADJ = 0x00,
+    SPO2_MEAS_COMPUTATION,
+    SPO2_MEAS_SUCCESS,
+    SPO2_MEAS_TIMEOUT,
+    SPO2_MEAS_UNK,
 };

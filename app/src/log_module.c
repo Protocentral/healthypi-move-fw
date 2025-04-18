@@ -90,33 +90,6 @@ void hpi_write_ecg_record_file(int16_t *ecg_record_buffer, uint16_t ecg_record_l
     ret = fs_sync(&file);
 }
 
-void hpi_spo2_wr_point_to_file(struct hpi_spo2_point_t m_spo2_point, int64_t day_ts)
-{
-    struct fs_file_t file;
-    int ret = 0;
-    char fname[40];
-
-    fs_file_t_init(&file);
-
-    sprintf(fname, "/lfs/trspo2/%" PRId64, day_ts);
-
-    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_spo2_point));
-
-    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
-    if (ret < 0)
-    {
-        LOG_ERR("FAIL: open %s: %d", fname, ret);
-    }
-    ret = fs_write(&file, &m_spo2_point, sizeof(m_spo2_point));
-    if (ret < 0)
-    {
-        LOG_ERR("FAIL: open %s: %d", fname, ret);
-    }
-
-    ret = fs_close(&file);
-    ret = fs_sync(&file);
-}
-
 void hpi_hr_trend_wr_point_to_file(struct hpi_hr_trend_point_t m_trend_point, int64_t day_ts)
 {
     struct fs_file_t file;
@@ -154,7 +127,7 @@ void hpi_spo2_trend_wr_point_to_file(struct hpi_spo2_point_t m_spo2_point, int64
 
     sprintf(fname, "/lfs/trspo2/%" PRId64, day_ts);
 
-    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_spo2_point));
+    LOG_DBG("Write to file... %s | Size: %d", fname, 10);//sizeof(m_spo2_point));
 
     ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
     if (ret < 0)

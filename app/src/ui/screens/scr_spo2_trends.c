@@ -27,7 +27,7 @@ static lv_obj_t *label_spo2_last_update_time;
 // static lv_obj_t *label_spo2_status;
 
 // static lv_obj_t *label_min_max;
-static lv_obj_t *btn_spo2_settings;
+//static lv_obj_t *btn_spo2_settings;
 
 // Externs
 extern lv_style_t style_red_medium;
@@ -46,15 +46,6 @@ static void draw_event_cb(lv_event_t *e)
     {
         const char *hour[] = {"00", "06", "12", "18", "23"};
         lv_snprintf(dsc->text, dsc->text_length, "%s", hour[dsc->value]);
-    }
-}
-
-static void scr_spo2_settings_btn_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
     }
 }
 

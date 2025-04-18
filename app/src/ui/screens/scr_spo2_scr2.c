@@ -12,25 +12,22 @@
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2_scr2, LOG_LEVEL_DBG);
 
+
 static lv_obj_t *scr_spo2_scr2;
 static lv_obj_t *scr_spo2_scr3;
 
 // GUI Labels
-static lv_obj_t *label_spo2_percent;
-static lv_obj_t *label_spo2_last_update_time;
 
 static lv_obj_t *chart_ppg;
 static lv_chart_series_t *ser_ppg;
 
-static lv_obj_t *label_hr;
+//static lv_obj_t *label_hr;
 
 static lv_obj_t *label_spo2_progress;
 static lv_obj_t *bar_spo2_progress;
 static lv_obj_t *label_spo2_status;
 
-static lv_obj_t *cont_spo2_val;
-static lv_obj_t *cont_status;
-static lv_obj_t *img_complete;
+static lv_obj_t *cont_progress;
 
 // static lv_obj_t *label_min_max;
 static lv_obj_t *btn_spo2_proceed;
@@ -82,7 +79,6 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style_bg_red, 0);
 
     lv_obj_t *img_spo2 = lv_img_create(cont_col);
     lv_img_set_src(img_spo2, &img_spo2_hand);
@@ -121,36 +117,30 @@ void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
-    //lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    //lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    // lv_obj_add_style(cont_col, &style_bg_red, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "SpO2");
 
-    // Draw countdown timer container
-    cont_status = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_status, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_status, LV_FLEX_FLOW_COLUMN);
-    lv_obj_add_style(cont_status, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_status, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    label_spo2_status = lv_label_create(cont_status);
+    label_spo2_status = lv_label_create(cont_col);
     lv_label_set_text(label_spo2_status, "--");
     lv_obj_set_style_text_align(label_spo2_status, LV_TEXT_ALIGN_CENTER, 0);
 
-    bar_spo2_progress = lv_bar_create(cont_status);
+    // Draw countdown timer container
+    cont_progress = lv_obj_create(cont_col);
+    lv_obj_set_size(cont_progress, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cont_progress, LV_FLEX_FLOW_COLUMN);
+    lv_obj_add_style(cont_progress, &style_scr_black, 0);
+    lv_obj_set_flex_align(cont_progress, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    bar_spo2_progress = lv_bar_create(cont_progress);
     lv_obj_set_size(bar_spo2_progress, 200, 20);
 
-    label_spo2_progress = lv_label_create(cont_status);
+    label_spo2_progress = lv_label_create(cont_progress);
     lv_label_set_text(label_spo2_progress, "--");
     lv_obj_set_style_text_align(label_spo2_progress, LV_TEXT_ALIGN_CENTER, 0);
 
-    img_complete= lv_img_create(cont_col);
-    lv_img_set_src(img_complete, &img_complete_100);
-    lv_obj_add_flag(img_complete, LV_OBJ_FLAG_HIDDEN);
-
+   
     chart_ppg = lv_chart_create(cont_col);
     lv_obj_set_size(chart_ppg, 390, 140);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
@@ -162,24 +152,6 @@ void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
-
-    cont_spo2_val = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_spo2_val, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_spo2_val, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_spo2_val, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_spo2_val, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_add_flag(cont_spo2_val, LV_OBJ_FLAG_HIDDEN);
-
-    lv_obj_t *img_spo2 = lv_img_create(cont_spo2_val);
-    lv_img_set_src(img_spo2, &icon_spo2_100);
-    
-    label_spo2_percent = lv_label_create(cont_spo2_val);
-    lv_label_set_text(label_spo2_percent, "--");
-    lv_obj_set_style_text_align(label_spo2_percent, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_spo2_percent, &style_white_large, 0);
-    
-    lv_obj_t *label_spo2_percent_sign = lv_label_create(cont_spo2_val);
-    lv_label_set_text(label_spo2_percent_sign, " %");
 
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
@@ -203,22 +175,7 @@ void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
 
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_SCR3);
     hpi_show_screen(scr_spo2_scr3, m_scroll_dir);
-}
-
-void hpi_disp_update_spo2(uint8_t spo2, struct tm tm_last_update)
-{
-    if (label_spo2_percent == NULL)
-        return;
-
-    if (spo2 == 0)
-    {
-        lv_label_set_text(label_spo2_percent, "-- %");
-    }
-    else
-    {
-        lv_label_set_text_fmt(label_spo2_percent, "%d %%", spo2);
-    }
-    lv_label_set_text_fmt(label_spo2_last_update_time, "Last updated: %02d:%02d", tm_last_update.tm_hour, tm_last_update.tm_min);
+    
 }
 
 static void hpi_ppg_disp_add_samples(int num_samples)
@@ -239,7 +196,7 @@ static void hpi_ppg_disp_do_set_scale(int disp_window_size)
     }
 }
 
-void hpi_disp_spo2_update_progress(int progress, int status, int spo2, int hr)
+void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int spo2, int hr)
 {
     if (label_spo2_progress == NULL)
         return;
@@ -247,28 +204,23 @@ void hpi_disp_spo2_update_progress(int progress, int status, int spo2, int hr)
     lv_label_set_text_fmt(label_spo2_progress, "%d %%", progress);
     lv_bar_set_value(bar_spo2_progress, progress, LV_ANIM_ON);
 
-    if ((status == 0) || (status == 1))
+    
+    if ((state == SPO2_MEAS_LED_ADJ) || (state == SPO2_MEAS_COMPUTATION))
     {
         lv_label_set_text(label_spo2_status, "Measuring...");
     }
-    else if (status == 2)
+    else if (state == SPO2_MEAS_SUCCESS)
     {
         lv_label_set_text(label_spo2_status, "Complete");
-        lv_obj_add_flag(label_spo2_status, LV_OBJ_FLAG_HIDDEN);
+        hpi_move_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2);
     }
-    else
+    else if(state == SPO2_MEAS_TIMEOUT)
     {
-        lv_label_set_text(label_spo2_status, "Timeout");
+        lv_label_set_text(label_spo2_status, "Timed Out");
     }
-
-    if(status == 2)
+    else if(state == SPO2_MEAS_UNK)
     {
-        lv_label_set_text_fmt(label_spo2_percent, "%d", spo2);
-        lv_obj_add_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
-
-        lv_obj_add_flag(cont_status, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(img_complete, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(cont_spo2_val, LV_OBJ_FLAG_HIDDEN);        
+        lv_label_set_text(label_spo2_status, "Starting...");
     }
 
     /*if (hr == 0)

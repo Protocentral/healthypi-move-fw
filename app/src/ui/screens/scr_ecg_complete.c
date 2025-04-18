@@ -1,14 +1,8 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
-#include <app_version.h>
-#include <zephyr/logging/log.h>
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"

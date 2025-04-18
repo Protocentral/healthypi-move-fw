@@ -25,9 +25,10 @@ K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 
+
+
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
-
 
 static int last_time_refresh = 0;
 static int last_settings_refresh = 0;
@@ -118,6 +119,7 @@ extern struct k_sem sem_ecg_lead_off;
 
 extern struct k_sem sem_ecg_cancel;
 extern struct k_sem sem_stop_one_shot_spo2;
+extern struct k_sem sem_spo2_complete;
 
 // User Profile settings
 
@@ -524,6 +526,13 @@ static void st_display_active_run(void *o)
             hpi_move_load_screen(SCR_ECG, SCROLL_UP);
         }
         break;
+    case SCR_SPL_SPO2_COMPLETE:
+        if(k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
+        {
+            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_ts);
+        }
+        break;
+    
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {

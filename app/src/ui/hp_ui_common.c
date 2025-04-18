@@ -402,6 +402,9 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_SPO2_SCR3:
         draw_scr_spo2_scr3(m_scroll_dir);
         break;
+    case SCR_SPL_SPO2_COMPLETE:
+        draw_scr_spl_spo2_complete(m_scroll_dir);
+        break;
 
     default:
         printk("Invalid screen: %d", m_screen);

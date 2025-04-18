@@ -24,6 +24,7 @@ K_SEM_DEFINE(sem_start_one_shot_spo2, 0, 1);
 K_SEM_DEFINE(sem_stop_one_shot_spo2, 0, 1);
 K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
+
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
@@ -167,7 +168,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             if ((ppg_sensor_sample.spo2_valid_percent_complete == 100) && spo2_measurement_in_progress)
             {
                 k_sem_give(&sem_stop_one_shot_spo2);
-                if (ppg_sensor_sample.spo2_confidence > 20)
+                if (ppg_sensor_sample.spo2_confidence > 50)
                 {
 
                     struct hpi_spo2_point_t spo2_chan_value = {
@@ -175,6 +176,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                         .spo2 = ppg_sensor_sample.spo2,
                     };
                     zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
+                    
                 }
                 spo2_measurement_in_progress = false;
             }
@@ -321,6 +323,7 @@ static void ppg_wrist_ctrl_thread(void)
             k_timer_stop(&tmr_ppg_wrist_sampling);
 
             LOG_DBG("Starting One Shot SpO2");
+            
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             k_msleep(600);
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
