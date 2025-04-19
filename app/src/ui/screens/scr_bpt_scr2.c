@@ -29,7 +29,6 @@ static void scr_bpt_btn_proceed_handler(lv_event_t *e)
     }
 }
 
-
 void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir)
 {
     scr_bpt_scr2 = lv_obj_create(NULL);
@@ -51,12 +50,12 @@ void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
     lv_obj_t *img_bpt = lv_img_create(cont_col);
-    lv_img_set_src(img_bpt, &img_bpt_finger);
+    lv_img_set_src(img_bpt, &img_bpt_finger_120);
 
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "This feature requires the you to connect the finger sensor");
+    lv_label_set_text(label_info, "This feature requires you to wear the finger sensor as shown above");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
     btn_spo2_proceed = lv_btn_create(cont_col);
