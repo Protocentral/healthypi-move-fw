@@ -286,7 +286,7 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_BPT_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 

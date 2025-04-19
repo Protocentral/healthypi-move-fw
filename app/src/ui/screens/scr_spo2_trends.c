@@ -176,3 +176,45 @@ void draw_scr_spo2_trends(enum scroll_dir m_scroll_dir)
     hpi_disp_set_curr_screen(SCR_SPO2);
     hpi_show_screen(scr_spo2_scr3, m_scroll_dir);
 }
+
+/*
+
+void hpi_disp_spo2_load_trend(void)
+{
+    struct hpi_hourly_trend_point_t spo2_hourly_trend_points[SPO2_SCR_TREND_MAX_POINTS];
+    struct hpi_minutely_trend_point_t spo2_minutely_trend_points[SPO2_SCR_TREND_MAX_POINTS];
+    if (chart_spo2_trend == NULL)
+        return;
+
+    int m_num_points = 0;
+
+    //if(0)
+    if(hpi_trend_load_trend(spo2_hourly_trend_points, spo2_minutely_trend_points, &m_num_points, TREND_SPO2) == 0)
+    {
+        int y_max = -1;
+        int y_min = 999;
+
+        for (int i = 0; i < SPO2_SCR_TREND_MAX_POINTS; i++)
+        {
+            if(spo2_hourly_trend_points[i].max > y_max)
+            {
+                y_max = spo2_hourly_trend_points[i].max;
+            }
+            if((spo2_hourly_trend_points[i].min < y_min)&&(spo2_hourly_trend_points[i].min != 0))
+            {
+                y_min = spo2_hourly_trend_points[i].min;
+            }
+
+            ser_max_trend->y_points[i] = spo2_hourly_trend_points[i].max;
+            ser_min_trend->y_points[i] = spo2_hourly_trend_points[i].min;
+
+           // LOG_DBG("SpO2 Point: %d | %d | %d | %d", spo2_hourly_trend_points[i].hour_no, spo2_hourly_trend_points[i].max, spo2_hourly_trend_points[i].min, spo2_hourly_trend_points[i].avg);
+
+            lv_chart_set_range(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+            lv_chart_refresh(chart_spo2_trend);
+        }
+    } else
+    {
+        LOG_ERR("No SpO2 data to load");
+    }
+}*/

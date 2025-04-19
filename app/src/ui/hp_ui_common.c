@@ -257,7 +257,7 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
     // printk("Updating battery level: %d\n", batt_level);
 
     char buf[8];
-    sprintf(buf, " %2d % ", batt_level);
+    sprintf(buf, " %2d %% ", batt_level);
     lv_label_set_text(label_batt_level_val, buf);
 
     if (batt_level > 75)
@@ -335,10 +335,10 @@ void disp_spl_scr_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printk("Spl down at %d\n", curr_screen);
 
-        if (curr_screen == SCR_SPL_PLOT_BPT_PPG)
+        /*if (curr_screen == SCR_SPL_PLOT_BPT_PPG)
         {
             hpi_bpt_abort();
-        }
+        }*/
 
         hpi_move_load_screen(*scr_parent, SCROLL_UP);
     }
@@ -381,8 +381,11 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_ECG_SCR2:
         draw_scr_ecg_scr2(m_scroll_dir);
         break;
-    case SCR_SPL_PLOT_BPT_PPG:
-        draw_scr_plot_bpt(m_scroll_dir);
+    case SCR_SPL_BPT_SCR2:
+        draw_scr_bpt_scr2(m_scroll_dir);
+        break;
+    case SCR_SPL_BPT_SCR3:
+        draw_scr_bpt_scr3(m_scroll_dir);
         break;
     case SCR_SPL_ECG_COMPLETE:
         draw_scr_ecg_complete(m_scroll_dir);
@@ -578,6 +581,14 @@ void disp_screen_event(lv_event_t *e)
             hpi_move_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR);
         }
     }
+}
+
+int hpi_helper_get_date_time_str(int64_t in_ts, char *date_time_str)
+{
+    struct tm today_time_tm = *gmtime(&in_ts);
+    snprintf(date_time_str, 74, "Last Updated: %02d:%02d\n%02d-%02d-%04d", today_time_tm.tm_hour,
+             today_time_tm.tm_min, today_time_tm.tm_mday, today_time_tm.tm_mon, today_time_tm.tm_year + 1900);
+    return 0;
 }
 
 void hdr_time_display_update(struct rtc_time in_time)

@@ -24,15 +24,12 @@ K_SEM_DEFINE(sem_start_one_shot_spo2, 0, 1);
 K_SEM_DEFINE(sem_stop_one_shot_spo2, 0, 1);
 K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
-
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 
 ZBUS_CHAN_DECLARE(spo2_chan);
-
-extern struct k_sem sem_ppg_wrist_sm_start;
 
 enum ppg_fi_sm_state
 {
@@ -47,13 +44,24 @@ struct s_object
     struct smf_ctx ctx;
 } sm_ctx_ppg_wr;
 
+static uint16_t smf_ppg_spo2_last_measured_value = 0;
+static int64_t smf_ppg_spo2_last_measured_time;
+
 static int m_curr_state;
-
 int sig_wake_on_motion_count = 0;
-
 static bool spo2_measurement_in_progress = false;
-
 static enum max32664c_scd_states m_curr_scd_state;
+
+// Externs
+extern struct k_sem sem_ppg_wrist_sm_start;
+
+int hpi_smf_ppg_get_last_spo2(uint16_t *spo2_value, int64_t *timestamp)
+{
+    *spo2_value = smf_ppg_spo2_last_measured_value;
+    *timestamp = smf_ppg_spo2_last_measured_time;
+    
+    return 0;
+}
 
 void work_off_skin_wait_handler(struct k_work *work)
 {
@@ -63,7 +71,6 @@ void work_off_skin_wait_handler(struct k_work *work)
         // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
     }
 }
-
 K_WORK_DELAYABLE_DEFINE(work_off_skin, work_off_skin_wait_handler);
 
 void work_on_skin_wait_handler(struct k_work *work)
@@ -74,7 +81,6 @@ void work_on_skin_wait_handler(struct k_work *work)
         // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
     }
 }
-
 K_WORK_DELAYABLE_DEFINE(work_on_skin, work_on_skin_wait_handler);
 
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
@@ -170,13 +176,14 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 k_sem_give(&sem_stop_one_shot_spo2);
                 if (ppg_sensor_sample.spo2_confidence > 50)
                 {
-
                     struct hpi_spo2_point_t spo2_chan_value = {
                         .timestamp = hw_get_sys_time_ts(),
                         .spo2 = ppg_sensor_sample.spo2,
                     };
                     zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
-                    
+
+                    smf_ppg_spo2_last_measured_value = ppg_sensor_sample.spo2;
+                    smf_ppg_spo2_last_measured_time = hw_get_sys_time_ts();
                 }
                 spo2_measurement_in_progress = false;
             }
@@ -323,7 +330,7 @@ static void ppg_wrist_ctrl_thread(void)
             k_timer_stop(&tmr_ppg_wrist_sampling);
 
             LOG_DBG("Starting One Shot SpO2");
-            
+
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             k_msleep(600);
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);

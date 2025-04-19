@@ -1,19 +1,13 @@
 #include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
-#include <app_version.h>
 #include <zephyr/logging/log.h>
 
 #include "hpi_common_types.h"
 #include "hw_module.h"
-
 #include "ui/move_ui.h"
 
-lv_obj_t *scr_plot_bpt;
+lv_obj_t *scr_bpt_scr3;
 
 static lv_obj_t *chart_bpt_ppg;
 static lv_chart_series_t *ser_bpt_ppg;
@@ -33,13 +27,13 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
-void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
+void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir)
 {
-    scr_plot_bpt = lv_obj_create(NULL);
-    draw_scr_common(scr_plot_bpt);
+    scr_bpt_scr3 = lv_obj_create(NULL);
+    draw_scr_common(scr_bpt_scr3);
 
     /*Create a container with COLUMN flex direction*/
-    lv_obj_t *cont_col = lv_obj_create(scr_plot_bpt);
+    lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr3);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     // lv_obj_set_width(cont_col, lv_pct(100));
@@ -102,8 +96,8 @@ void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_sub, " bpm");
 
-    hpi_disp_set_curr_screen(SCR_SPL_PLOT_BPT_PPG);
-    hpi_show_screen_spl(scr_plot_bpt, m_scroll_dir, SCR_BPT);
+    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR3);
+    hpi_show_screen_spl(scr_bpt_scr3, m_scroll_dir, SCR_BPT);
 }
 
 void hpi_disp_bpt_update_progress(int progress)

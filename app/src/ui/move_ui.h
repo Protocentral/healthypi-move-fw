@@ -71,7 +71,8 @@ enum hpi_disp_spl_screens
     SCR_SPL_RAW_PPG,
     SCR_SPL_ECG_SCR2,
     SCR_SPL_PLOT_ECG,
-    SCR_SPL_PLOT_BPT_PPG,
+    SCR_SPL_BPT_SCR2,
+    SCR_SPL_BPT_SCR3,
     SCR_SPL_ECG_COMPLETE,
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
@@ -105,6 +106,7 @@ LV_IMG_DECLARE(img_temp_100);
 LV_IMG_DECLARE(icon_spo2_100);
 LV_IMG_DECLARE(img_spo2_hand);
 LV_IMG_DECLARE(img_complete_85);
+LV_IMG_DECLARE(img_bpt_finger);
 
 //LV_IMG_DECLARE(pc_move_bg_200);
 LV_IMG_DECLARE(bck_heart_200);
@@ -117,6 +119,8 @@ LV_FONT_DECLARE(ui_font_Number_extra);
 //LV_FONT_DECLARE(orbitron_90px);
 
 /******** UI Function Prototypes ********/
+
+int hpi_helper_get_date_time_str(int64_t timestamp, char* date_time_str);
 
 void display_init_styles(void);
 void hpi_display_sleep_off(void);
@@ -185,7 +189,8 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir);
 // void draw_scr_bpt_measure(void);
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
-void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);
