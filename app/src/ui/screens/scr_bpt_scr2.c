@@ -18,13 +18,15 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
+extern struct k_sem sem_bpt_check_sensor;
+
 static void scr_bpt_btn_proceed_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
-        //k_sem_give(&sem_start_one_shot_spo2);
+        k_sem_give(&sem_bpt_check_sensor); 
         hpi_move_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_UP, (uint8_t)SCR_BPT);
     }
 }
@@ -36,7 +38,7 @@ void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir)
     // lv_obj_set_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     // draw_scr_common(scr_spo2_scr2);
 
-    lv_obj_set_scrollbar_mode(scr_bpt_scr2, LV_SCROLLBAR_MODE_ON);
+    //lv_obj_set_scrollbar_mode(scr_bpt_scr2, LV_SCROLLBAR_MODE_ON);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr2);
@@ -55,7 +57,7 @@ void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "This feature requires you to wear the finger sensor as shown above");
+    lv_label_set_text(label_info, "Please wear the finger sensor as shown above");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
     btn_spo2_proceed = lv_btn_create(cont_col);

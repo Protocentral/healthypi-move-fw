@@ -681,7 +681,7 @@ void hw_init(void)
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
-    /*device_init(max32664d_dev);
+    device_init(max32664d_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
@@ -697,13 +697,14 @@ void hw_init(void)
         hw_add_boot_msg("MAX32664D", true);
 
         // To force bootloader mode
-        struct sensor_value mode_set;
+        /*struct sensor_value mode_set;
         mode_set.val1 = 1;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
+        */
 
 
         k_sem_give(&sem_ppg_finger_sm_start);
-    }*/
+    }
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     LOG_DBG("SPIM runs at 32MHz !");

@@ -70,10 +70,14 @@ enum hpi_disp_spl_screens
     SCR_SPL_SETTINGS,
     SCR_SPL_RAW_PPG,
     SCR_SPL_ECG_SCR2,
+    SCR_SPL_ECG_COMPLETE,
     SCR_SPL_PLOT_ECG,
+
     SCR_SPL_BPT_SCR2,
     SCR_SPL_BPT_SCR3,
-    SCR_SPL_ECG_COMPLETE,
+    SCR_SPL_BPT_SCR4,
+    SCR_SPL_BPT_COMPLETE,
+   
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
     SCR_SPL_SPO2_SCR2,
@@ -83,6 +87,7 @@ enum hpi_disp_spl_screens
 
     SCR_SPL_LIST_END,
 };
+
 #define SCR_SPL_SETTINGS 20
 #define SCR_SPL_BOOT 21
 

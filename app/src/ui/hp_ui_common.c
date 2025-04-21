@@ -387,6 +387,9 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_BPT_SCR3:
         draw_scr_bpt_scr3(m_scroll_dir);
         break;
+    case SCR_SPL_BPT_SCR4:
+        draw_scr_bpt_scr4(m_scroll_dir);
+        break;
     case SCR_SPL_ECG_COMPLETE:
         draw_scr_ecg_complete(m_scroll_dir);
         break;
