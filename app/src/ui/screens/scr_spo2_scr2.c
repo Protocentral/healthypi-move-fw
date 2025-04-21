@@ -217,6 +217,8 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     else if(state == SPO2_MEAS_TIMEOUT)
     {
         lv_label_set_text(label_spo2_status, "Timed Out");
+        hpi_move_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_UP, (uint8_t)SCR_SPO2);
+
     }
     else if(state == SPO2_MEAS_UNK)
     {

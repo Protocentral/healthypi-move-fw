@@ -320,6 +320,24 @@ static uint32_t bmi323_fetch_step_counter(const struct device *dev)
 	return 0;
 }
 
+static int bmi323_write_step_counter_config(const struct device *dev)
+{
+	uint16_t step_counter_base_addr = (uint16_t) (BMI3_BASE_ADDR_STEP_CNT<<8|0x00);
+	int ret;
+
+	//Write step counter base address
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_ADDR, step_counter_base_addr);
+
+	if(ret < 0)
+	{
+		LOG_ERR("Error writing step counter base address %d", ret);
+		return ret;
+	}
+
+	
+
+}
+
 static uint32_t bmi323_reset_step_counter(const struct device *dev)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;

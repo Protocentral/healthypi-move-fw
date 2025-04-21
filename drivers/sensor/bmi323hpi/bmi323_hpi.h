@@ -170,6 +170,8 @@
 /*! Address register for feature data: configurations and extended output. */
 #define BMI3_REG_FEATURE_DATA_ADDR (0x41)
 
+#define BMI3_BASE_ADDR_STEP_CNT                      UINT8_C(0x10)
+
 /*! I/O port for the data values of the feature engine. */
 #define BMI3_REG_FEATURE_DATA_TX (0x42)
 

@@ -188,6 +188,13 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 spo2_measurement_in_progress = false;
             }
 
+            if(ppg_sensor_sample.spo2_state == SPO2_MEAS_TIMEOUT)
+            {
+                LOG_DBG("SPO2 MEAS TIMEOUT");
+                k_sem_give(&sem_stop_one_shot_spo2);
+                spo2_measurement_in_progress = false;
+            }
+
             m_curr_scd_state = ppg_sensor_sample.scd_state;
 
             // LOG_DBG("SCD: %d", ppg_sensor_sample.scd_state);

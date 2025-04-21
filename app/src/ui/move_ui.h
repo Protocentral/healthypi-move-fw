@@ -83,6 +83,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_SCR2,
     SCR_SPL_SPO2_SCR3,
     SCR_SPL_SPO2_COMPLETE,
+    SCR_SPL_SPO2_TIMEOUT,
     SCR_SPL_HR_SCR2,
 
     SCR_SPL_LIST_END,
@@ -110,7 +111,10 @@ LV_IMG_DECLARE(img_heart_120);
 LV_IMG_DECLARE(img_temp_100);
 LV_IMG_DECLARE(icon_spo2_100);
 LV_IMG_DECLARE(img_spo2_hand);
+
 LV_IMG_DECLARE(img_complete_85);
+LV_IMG_DECLARE(img_failed_100);
+
 LV_IMG_DECLARE(img_bpt_finger_120);
 
 //LV_IMG_DECLARE(pc_move_bg_200);
@@ -170,6 +174,7 @@ void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int spo2, int hr);
 void hpi_disp_spo2_update_hr(int hr);
 void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir);
+void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);

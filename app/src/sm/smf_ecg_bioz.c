@@ -36,7 +36,7 @@ ZBUS_CHAN_DECLARE(ecg_timer_chan);
 ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
 #define ECG_SAMPLING_INTERVAL_MS 125
-#define ECG_RECORD_DURATION_S 60
+#define ECG_RECORD_DURATION_S 30
 
 static int ecg_last_timer_val = 0;
 static int ecg_countdown_val = 0;

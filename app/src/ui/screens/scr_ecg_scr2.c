@@ -91,7 +91,7 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
     /*label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Touch anywhere on the bezel to start");
+    lv_label_set_text(label_info, "Touch the bezel to start");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_style(label_info, &style_white_medium, 0);*/
 
@@ -117,7 +117,14 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
     ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ecg, 6, LV_PART_ITEMS);
-    //lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+    // lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+
+    // Draw Lead off label
+    label_ecg_lead_off = lv_label_create(cont_col);
+    lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_ecg_lead_off, 300);
+    lv_label_set_text(label_ecg_lead_off, "--");
+    lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, 0);
 
     // Draw BPM container
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
@@ -137,20 +144,6 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
 
     hpi_disp_set_curr_screen(SCR_SPL_ECG_SCR2);
     hpi_show_screen(scr_ecg_scr2, m_scroll_dir);
-}
-
-void scr_ecg_do_lead_on_off(bool lead_on)
-{
-    if (lead_on == true)
-    {
-        lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-    }
-    else
-    {
-        lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-    }
 }
 
 void hpi_ecg_disp_do_set_scale(int disp_window_size)
@@ -200,6 +193,8 @@ void hpi_ecg_disp_update_timer(int time_left)
     lv_label_set_text_fmt(label_timer, "%d", time_left);
 }
 
+static bool prev_lead_off_status = true;
+
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
 {
     if (chart_ecg_update == true) // && ecg_lead_off == false)
@@ -218,15 +213,6 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
                 y_max_ecg = data_ecg_i;
             }
 
-            /*if (ecg_plot_hidden == true)
-            {
-                lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-                ecg_plot_hidden = false;
-            }*/
-
-            // printk("E");
-
             lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg_i);
             hpi_ecg_disp_add_samples(1);
             hpi_ecg_disp_do_set_scale(ECG_DISP_WINDOW_SIZE);
@@ -243,9 +229,19 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
             lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
             // ecg_plot_hidden = false;
         }*/
-        // lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg);
-        // hpi_ecg_disp_add_samples(1);
-        // hpi_ecg_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
+
+        if ((ecg_lead_off == true) && (prev_lead_off_status == false))
+        {
+            lv_label_set_text(label_ecg_lead_off, "Lead Off");
+            lv_obj_add_style(label_ecg_lead_off, &style_red_medium, 0);
+            prev_lead_off_status = true;
+        }
+        else if((ecg_lead_off == false) && (prev_lead_off_status == true))
+        {
+            lv_label_set_text(label_ecg_lead_off, "Lead On");
+            lv_obj_add_style(label_ecg_lead_off, &style_white_medium, 0);
+            prev_lead_off_status = false;
+        }
     }
 }
 
