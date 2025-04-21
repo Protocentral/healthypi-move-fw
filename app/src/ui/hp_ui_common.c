@@ -589,8 +589,15 @@ void disp_screen_event(lv_event_t *e)
 int hpi_helper_get_date_time_str(int64_t in_ts, char *date_time_str)
 {
     struct tm today_time_tm = *gmtime(&in_ts);
-    snprintf(date_time_str, 74, "Last Updated: %02d:%02d\n%02d-%02d-%04d", today_time_tm.tm_hour,
-             today_time_tm.tm_min, today_time_tm.tm_mday, today_time_tm.tm_mon, today_time_tm.tm_year + 1900);
+    if (in_ts == 0)
+    {
+        snprintf(date_time_str, 30, "Last Updated: --");
+    }
+    else
+    {
+        snprintf(date_time_str, 74, "Last Updated: %02d:%02d\n%02d-%02d-%04d", today_time_tm.tm_hour,
+                 today_time_tm.tm_min, today_time_tm.tm_mday, today_time_tm.tm_mon, today_time_tm.tm_year + 1900);
+    }
     return 0;
 }
 

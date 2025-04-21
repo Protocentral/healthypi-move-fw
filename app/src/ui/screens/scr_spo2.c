@@ -74,11 +74,18 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 
     uint16_t m_spo2_val = 0;
     int64_t m_spo2_time = 0;
-    
+
     hpi_smf_ppg_get_last_spo2(&m_spo2_val, &m_spo2_time);
 
     label_spo2_percent = lv_label_create(cont_spo2);
-    lv_label_set_text_fmt(label_spo2_percent, "%d", m_spo2_val);
+    if (m_spo2_val == 0)
+    {
+        lv_label_set_text(label_spo2_percent, "--");
+    }
+    else
+    {
+        lv_label_set_text_fmt(label_spo2_percent, "%d", m_spo2_val);
+    }
     lv_obj_add_style(label_spo2_percent, &style_white_large, 0);
 
     lv_obj_t *label_spo2_percent_sign = lv_label_create(cont_spo2);

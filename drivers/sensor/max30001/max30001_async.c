@@ -81,9 +81,9 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
         // printk("ES: %d ", e_fifo_num_samples);
 
-        if (e_fifo_num_samples > 8)
+        if (e_fifo_num_samples > 16)
         {
-            e_fifo_num_samples = 8;
+            e_fifo_num_samples = 16;
         }
         *num_samples_ecg = e_fifo_num_samples;
 
@@ -168,7 +168,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
         max30001_rtor = max30001_read_reg(dev, RTOR);
         if (max30001_rtor > 0)
         {
-            data->lastRRI = (uint16_t)((max30001_rtor >> 10) * 7.8125);
+            data->lastRRI = (uint16_t)((double)((max30001_rtor >> 10) * 7.8125)*1000);
             data->lastHR = (uint16_t)(60 * 1000 / data->lastRRI);
 
             *hr = data->lastHR;

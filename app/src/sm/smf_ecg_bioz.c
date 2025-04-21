@@ -35,7 +35,7 @@ K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 ZBUS_CHAN_DECLARE(ecg_timer_chan);
 ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
-#define ECG_SAMPLING_INTERVAL_MS 65
+#define ECG_SAMPLING_INTERVAL_MS 125
 #define ECG_RECORD_DURATION_S 60
 
 static int ecg_last_timer_val = 0;
@@ -65,12 +65,14 @@ RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
 static bool ecg_active = false;
 static bool m_ecg_lead_on_off = true;
 
+
 // EXTERNS
 extern const struct device *const max30001_dev;
 extern struct k_sem sem_ecg_bioz_smf_start;
 extern struct k_sem sem_ecg_bioz_sm_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
+
 
 static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 {
@@ -99,7 +101,10 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
         }
 
         ecg_bioz_sensor_sample.hr = edata->hr;
-        ecg_bioz_sensor_sample.rrint = edata->rrint;
+        ecg_bioz_sensor_sample.rtor = edata->rri;
+        // ecg_bioz_sensor_sample.rrint = edata->rri;
+
+        LOG_DBG("RRI: %d", edata->rri);
 
         ecg_bioz_sensor_sample.ecg_lead_off = edata->ecg_lead_off;
 
@@ -379,4 +384,3 @@ void smf_ecg_bioz_thread(void)
 }
 
 K_THREAD_DEFINE(smf_ecg_bioz_thread_id, 1024, smf_ecg_bioz_thread, NULL, NULL, NULL, 10, 0, 0);
-// K_THREAD_DEFINE(ecg_bioz_sampling_trigger_thread_id, ECG_BIOZ_SAMPLING_THREAD_STACKSIZE, ecg_bioz_sampling_trigger_thread, NULL, NULL, NULL, ECG_BIOZ_SAMPLING_THREAD_PRIORITY, 0, 700);

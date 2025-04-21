@@ -6,7 +6,7 @@ HealthyPi specific common data types
 
 #include <time.h>
 
-#define ECG_POINTS_PER_SAMPLE 8
+#define ECG_POINTS_PER_SAMPLE 16
 #define BIOZ_POINTS_PER_SAMPLE 8
 #define PPG_POINTS_PER_SAMPLE 8
 #define BPT_PPG_POINTS_PER_SAMPLE 32

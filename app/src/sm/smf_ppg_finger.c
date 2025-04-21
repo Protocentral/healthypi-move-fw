@@ -346,7 +346,7 @@ static void st_ppg_fi_check_sensor_entry(void *o)
 
 static void st_ppg_fi_check_sensor_run(void *o)
 {
-    LOG_DBG("PPG Finger SM Check Sensor Running");
+    //LOG_DBG("PPG Finger SM Check Sensor Running");
 
     struct sensor_value sensor_id_get;
     sensor_id_get.val1 = 0x00;
