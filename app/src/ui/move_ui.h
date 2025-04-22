@@ -55,10 +55,10 @@ enum hpi_disp_screens
     SCR_SPO2,
     SCR_ECG,
     SCR_TEMP,
-    SCR_BPT,
     
     SCR_LIST_END,
     // Should not go here
+    SCR_BPT,
 };
 
 // Special screens
