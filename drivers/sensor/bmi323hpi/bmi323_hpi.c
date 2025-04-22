@@ -81,6 +81,8 @@ struct bosch_bmi323_data
 	uint32_t step_counter;
 };
 
+static int bmi323_write_step_counter_config(const struct device *dev, bool reset_counter);
+
 static int bmi323_read_reg_16(const struct device *dev, uint8_t addr, uint16_t *data)
 {
 	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
@@ -93,7 +95,7 @@ static int bmi323_read_reg_16(const struct device *dev, uint8_t addr, uint16_t *
 
 	if (ret < 0)
 	{
-		LOG_ERR("Error reading ID %d", ret);
+		LOG_ERR("Error reading %d", ret);
 		return ret;
 	}
 
@@ -109,6 +111,25 @@ static int bmi323_write_reg_16(const struct device *dev, uint8_t addr, uint16_t 
 	uint8_t wr_buf[3] = {addr, data & 0xFF, data >> 8};
 
 	// LOG_DBG("Reg Write: %x | %x %x", addr, wr_buf[1], wr_buf[2]);
+
+	return i2c_write_dt(&config->bus, wr_buf, sizeof(wr_buf));
+}
+
+static int bmi323_write_regs_16_n(const struct device *dev, uint8_t addr, uint16_t *data, uint16_t len)
+{
+	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
+	uint8_t wr_buf[25] = {0};
+	len = MIN(len, 12);
+
+	wr_buf[0] = addr;
+
+	for (int i = 0; i < len; i++)
+	{
+		wr_buf[1 + (i * 2)] = data[i] & 0xFF;
+		wr_buf[2 + (i * 2)] = data[i] >> 8;
+
+		LOG_DBG("Reg Write: %x | %x %x", addr, wr_buf[1 + (i * 2)], wr_buf[2 + (i * 2)]);
+	}
 
 	return i2c_write_dt(&config->bus, wr_buf, sizeof(wr_buf));
 }
@@ -156,38 +177,19 @@ static int bmi323_get_status(const struct device *dev)
 	return 0;
 }
 
-static int bmi323_set_feature_io0(const struct device *dev, uint16_t val)
-{
-	int ret;
-	uint16_t reset = 0;
-	// uint16_t feature_io0_step_counter_en = 0x0200;
-
-	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, reset);
-
-	if (ret < 0)
-	{
-		LOG_ERR("Error clearing feature IO0 %d", ret);
-		return ret;
-	}
-
-	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, val);
-
-	if (ret < 0)
-	{
-		LOG_ERR("Error setting feature IO0 %d", ret);
-		return ret;
-	}
-
-	LOG_DBG("Feature IO-0 set: 0x%x", val);
-
-	return 0;
-}
-
 static int bmi323_enable_feature_engine(const struct device *dev)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 	uint16_t tmp_data = 0;
+
+	ret = bmi323_get_status(dev);
+
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to read status");
+		return ret;
+	}
 
 	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO2, 0x012C);
 	if (ret < 0)
@@ -250,29 +252,36 @@ static int bmi323_enable_acc(const struct device *dev)
 	return 0;
 }
 
-static int bmi323_set_feature_map(const struct device *dev)
+static int bmi323_enable_step_counter(const struct device *dev)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 
-	if (data->feature_step_counter_enabled==true)
+	ret = bmi323_enable_acc(dev);
+	if (ret < 0)
 	{
-		// Enable Step Counter Bit in Feature IO0
-		//BMI3_SET_BITS(reg_feature_io0, BMI3_STEP_COUNTER_EN, 1);
-		data->chip_cfg.reg_feature_conf.bit.step_counter_en = 1;
-		LOG_DBG("Step Counter enabled");
+		LOG_ERR("Error enabling acc %d", ret);
+		return ret;
 	}
 
-	if (data->feature_single_tap_enabled==true)
+	// Write step counter config
+	ret = bmi323_write_step_counter_config(dev, false);
+	if (ret < 0)
 	{
-		data->chip_cfg.reg_feature_conf.bit.s_tap_en = 1;
-		LOG_DBG("Single Tap Detection enabled");
+		LOG_ERR("Error writing step counter config %d", ret);
+		return ret;
 	}
 
-	//printf("Feature IO0: %x\n", data->chip_cfg.reg_feature_conf.all);
+	// Reset Feature register
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, 0x0000);
+	if (ret < 0)
+	{
+		LOG_ERR("Error resetting feature register %d", ret);
+		return ret;
+	}
 
 	// Enable Step Counter
-	ret = bmi323_set_feature_io0(dev, data->chip_cfg.reg_feature_conf.all);
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, 0x0200);
 
 	if (ret < 0)
 	{
@@ -280,23 +289,20 @@ static int bmi323_set_feature_map(const struct device *dev)
 		return ret;
 	}
 
-	return 0;
-}
+	LOG_DBG("Feature IO-0 set");
 
-static int bmi323_enable_int1(const struct device *dev)
-{
-	int ret;
-	uint16_t int1_config = 0x0001;
-
-	ret = bmi323_write_reg_16(dev, BMI3_REG_IO_INT_CTRL, int1_config);
-
+	// Write IO status
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO_STATUS, 0x0001);
 	if (ret < 0)
 	{
-		LOG_ERR("Error enabling INT1 %d", ret);
+		LOG_ERR("Error setting feature IO status %d", ret);
 		return ret;
 	}
+	LOG_DBG("Feature IO status set");
 
-	LOG_DBG("INT1 enabled");
+	data->feature_step_counter_enabled = true;
+
+	LOG_DBG("Step Counter enabled");
 
 	return 0;
 }
@@ -320,30 +326,68 @@ static uint32_t bmi323_fetch_step_counter(const struct device *dev)
 	return 0;
 }
 
-static int bmi323_write_step_counter_config(const struct device *dev)
+static int bmi323_write_step_counter_config(const struct device *dev, bool reset_counter)
 {
-	uint16_t step_counter_base_addr = (uint16_t) (BMI3_BASE_ADDR_STEP_CNT<<8|0x00);
+	uint16_t step_counter_base_addr = (uint16_t)(BMI3_BASE_ADDR_STEP_CNT);
 	int ret;
 
-	//Write step counter base address
+	// Write step counter base address
 	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_ADDR, step_counter_base_addr);
 
-	if(ret < 0)
+	if (ret < 0)
 	{
 		LOG_ERR("Error writing step counter base address %d", ret);
 		return ret;
 	}
 
-	
+	// Write step counter config
+	uint16_t step_config[12] = {0};
 
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_ADDR, 0x0010);
+	if (ret < 0)
+	{
+		LOG_ERR("Error writing feature data address %d", ret);
+		return ret;
+	}
+
+	step_config[0] = 0x0401;  // SC1 Watermark =1
+	step_config[1] = 0x4653;  // SIGMO_3
+	step_config[2] = 0x4426;  // SIGMO_2
+	step_config[3] = 0x00FA;  // SIGMO_1
+	step_config[4] = 0x09CD;  // FLAT_2
+	step_config[5] = 0x2088;  // FLAT_1
+	step_config[6] = 0x600A;  // NOMO_3
+	step_config[7] = 0x0000;  // NOMO_2
+	step_config[8] = 0x0000;  // NOMO_1
+	step_config[9] = 0x0000;  // ANYMO_3
+	step_config[10] = 0x0000; // ANYMO_2
+	step_config[11] = 0x0000; // ANYMO_1
+
+	bmi323_write_regs_16_n(dev, BMI3_REG_FEATURE_DATA_TX, step_config, 12);
 }
 
-static uint32_t bmi323_reset_step_counter(const struct device *dev)
+static int bmi323_reset_step_counter(const struct device *dev)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 
-	//ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_ADDR, 0x)
+	ret = bmi323_write_step_counter_config(dev, true);
+	data->step_counter = 0;
+
+	return 0;
+}
+
+static uint32_t bmi323_soft_reset(const struct device *dev)
+{
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	int ret;
+
+	ret = bmi323_write_reg_16(dev, BMI3_REG_CMD, 0xDEAF);
+	if (ret < 0)
+	{
+		LOG_ERR("Error resetting device %d", ret);
+		return ret;
+	}
 
 	return 0;
 }
@@ -353,7 +397,7 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 											const struct sensor_value *val)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
-	int ret=0;
+	int ret = 0;
 
 	k_mutex_lock(&data->lock, K_FOREVER);
 
@@ -363,15 +407,10 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 		switch (attr)
 		{
 		case BMI323_HPI_ATTR_EN_FEATURE_ENGINE:
-			if (data->feature_engine_enabled == false)
-			{
-				ret = bmi323_enable_feature_engine(dev);
-			}
-			data->feature_engine_enabled = true;
+			
 			break;
 		case BMI323_HPI_ATTR_EN_STEP_COUNTER:
-			ret = bmi323_enable_acc(dev);
-			data->feature_step_counter_enabled = true;
+
 			break;
 		case BMI323_HPI_ATTR_RESET_STEP_COUNTER:
 			ret = bmi323_reset_step_counter(dev);
@@ -389,8 +428,6 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 			ret = -ENODEV;
 			break;
 		}
-
-		bmi323_set_feature_map(dev);
 
 		break;
 
@@ -417,8 +454,6 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 		ret = -ENODEV;
 		break;
 	}
-
-
 
 	k_mutex_unlock(&data->lock);
 
@@ -488,7 +523,7 @@ static int bosch_bmi323_driver_api_attr_get(const struct device *dev, enum senso
 
 static int bmi323_trigger_set_acc_drdy(const struct device *dev)
 {
-	//struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	// struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 
 	// ret = bmi323_write_reg_16(dev, BMI3_REG_ACC_INT_CONF_0, 0x0001);
@@ -673,7 +708,7 @@ static void bosch_bmi323_irq_callback_handler(struct k_work *item)
 static int bosch_bmi323_pm_resume(const struct device *dev)
 {
 	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
-	int ret=0;
+	int ret = 0;
 
 	// ret = bosch_bmi323_bus_init(dev);
 
@@ -821,6 +856,17 @@ static int bosch_bmi323_init(const struct device *dev)
 		return ret;
 	}
 
+	ret = bmi323_soft_reset(dev);
+
+	if (ret < 0)
+	{
+		LOG_WRN("Failed to soft reset chip");
+
+		return ret;
+	}
+
+	k_msleep(100);
+
 	ret = bmi323_get_status(dev);
 
 	if (ret < 0)
@@ -829,7 +875,7 @@ static int bosch_bmi323_init(const struct device *dev)
 		return ret;
 	}
 
-	/*ret = bmi323_enable_feature_engine(dev);
+	ret = bmi323_enable_feature_engine(dev);
 
 	if (ret < 0)
 	{
@@ -851,7 +897,7 @@ static int bosch_bmi323_init(const struct device *dev)
 	{
 		LOG_ERR("Failed to read status");
 		return ret;
-	}*/
+	}
 
 	return ret;
 }
