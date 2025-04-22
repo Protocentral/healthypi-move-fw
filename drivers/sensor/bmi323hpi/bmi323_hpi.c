@@ -333,16 +333,17 @@ static int bmi323_write_step_counter_config(const struct device *dev)
 		LOG_ERR("Error writing step counter base address %d", ret);
 		return ret;
 	}
+
+	
+
 }
 
-static uint32_t bmi323_reset_user_config(const struct device *dev)
+static uint32_t bmi323_reset_step_counter(const struct device *dev)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 
-	LOG_DBG("Resetting user config");
-
-	ret = bmi323_write_reg_16(dev, BMI3_REG_CMD, 0xDEAF);
+	//ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_ADDR, 0x)
 
 	return 0;
 }
@@ -373,9 +374,7 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 			data->feature_step_counter_enabled = true;
 			break;
 		case BMI323_HPI_ATTR_RESET_STEP_COUNTER:
-			
-			ret = bmi323_reset_user_config(dev);
-			return 0;
+			ret = bmi323_reset_step_counter(dev);
 			break;
 		case SENSOR_ATTR_SAMPLING_FREQUENCY:
 			// ret = bosch_bmi323_driver_api_set_acc_odr(dev, val);
