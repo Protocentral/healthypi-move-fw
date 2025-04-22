@@ -788,6 +788,8 @@ static uint32_t acc_get_steps(void)
     return (uint32_t)steps.val1;
 }
 
+static int acc_reset_counter=0;
+
 void hw_thread(void)
 {
     struct rtc_time rtc_sys_time;
@@ -838,6 +840,31 @@ void hw_thread(void)
             .temp_f = _temp_f,
         };
         zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
+
+        if(acc_reset_counter >= 12)
+        {
+            struct sensor_value set_val;
+            set_val.val1 = 1;
+            LOG_INF("Resetting step counter");
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
+            k_sleep(K_MSEC(500));
+
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
+
+            acc_reset_counter = 0;
+        }
+        else
+        {
+            acc_reset_counter++;
+        }
+
+        struct sensor_value set_val;
+        set_val.val1 = 1;
+        
+        //sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
+       // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+        //sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
 
         k_sleep(K_MSEC(5000));
     }
