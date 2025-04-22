@@ -573,10 +573,11 @@ void hw_init(void)
     else
     {
         hw_add_boot_msg("BMI323", true);
-        struct sensor_value set_val;
-        set_val.val1 = 1;
-        sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
-        sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
+        // struct sensor_value set_val;
+        // set_val.val1 = 1;
+
+        // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+        // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
     }
 
     // Turn 1.8v power to sensors ON
@@ -702,7 +703,6 @@ void hw_init(void)
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
         */
 
-
         k_sem_give(&sem_ppg_finger_sm_start);
     }
 
@@ -747,7 +747,7 @@ void hw_init(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    //npm_fuel_gauge_update(charger, vbus_connected);
+    // npm_fuel_gauge_update(charger, vbus_connected);
 
     fs_module_init();
 
@@ -766,7 +766,7 @@ void hw_init(void)
 
     // init_settings();
 
-    //usb_init();
+    // usb_init();
 }
 
 struct tm hw_get_sys_time(void)
@@ -791,7 +791,7 @@ static uint32_t acc_get_steps(void)
 void hw_thread(void)
 {
     struct rtc_time rtc_sys_time;
-   
+
     uint32_t _steps = 0;
     double _temp_f = 0.0;
 
@@ -803,6 +803,7 @@ void hw_thread(void)
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
 
+    int sc_reset_counter = 0;
     for (;;)
     {
         // Read and publish battery level
@@ -831,9 +832,24 @@ void hw_thread(void)
         };
         zbus_chan_pub(&steps_chan, &steps, K_SECONDS(4));
 
+        struct sensor_value set_val;
+        set_val.val1 = 1;
+
+        if (sc_reset_counter >= 3)
+        {
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
+            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
+            sc_reset_counter = 0;
+        }
+        else
+        {
+            sc_reset_counter++;
+        }
+
         // Read and publish temperature
         _temp_f = read_temp_f();
-        
+
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,
         };
