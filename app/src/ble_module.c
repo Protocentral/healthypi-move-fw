@@ -11,7 +11,7 @@
 #include <zephyr/sys/ring_buffer.h>
 
 #include <zephyr/settings/settings.h>
-
+#include <app_version.h>
 #include "cmd_module.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
@@ -391,6 +391,17 @@ void remove_separators(char *str)
 	*pw = '\0';
 }
 
+/*
+/* Runtime settings override.
+static int settings_runtime_load(void)
+{
+#if defined(CONFIG_BT_DIS_FW_REV)
+	settings_runtime_set("bt/dis/fw", APP_VERSION_STRING , sizeof(APP_VERSION_STRING));
+#endif
+	return 0;
+}*/
+
+
 void ble_module_init()
 {
 	int err = 0;
@@ -417,6 +428,4 @@ void ble_module_init()
 		return;
 	}
 	LOG_INF("Advertising successfully started");
-
-
 }

@@ -32,12 +32,17 @@ K_SEM_DEFINE(sem_bpt_est_abort, 0, 1);
 // New Sems
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
 
+K_SEM_DEFINE(sem_bpt_check_sensor, 0, 1);
+
 K_MSGQ_DEFINE(q_ppg_fi_sample, sizeof(struct hpi_ppg_fi_data_t), 64, 1);
 RTIO_DEFINE(max32664d_read_rtio_poll_ctx, 8, 8);
 
 enum ppg_fi_sm_state
 {
     PPG_FI_STATE_IDLE,
+    PPG_FI_STATE_CHECK_SENSOR,
+    PPG_FI_STATE_SENSOR_FAIL,
+
     PPG_FI_STATE_BPT_EST,
     PPG_FI_STATE_BPT_EST_DONE,
     PPG_FI_STATE_BPT_EST_FAIL,
@@ -100,7 +105,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    //printk("FNS: %d ", edata->num_samples);
+    // printk("FNS: %d ", edata->num_samples);
     if (_n_samples > 16)
     {
         _n_samples = 16;
@@ -208,12 +213,18 @@ void hpi_bpt_abort(void)
 static void st_ppg_fing_idle_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Idle Entry");
-    k_thread_suspend(ppg_finger_sampling_thread_id);
+
+    // k_thread_suspend(ppg_finger_sampling_thread_id);
 }
 
 static void st_ppg_fing_idle_run(void *o)
 {
     // LOG_DBG("PPG Finger SM Idle Running");
+
+    if (k_sem_take(&sem_bpt_check_sensor, K_NO_WAIT) == 0)
+    {
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
+    }
 
     if (k_sem_take(&sem_bpt_est_start, K_NO_WAIT) == 0)
     {
@@ -232,29 +243,11 @@ static void st_ppg_fing_idle_exit(void *o)
 static void st_ppg_fing_bpt_est_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Entry");
-
-    /*struct sensor_value sensor_id_get;
-    //sensor_attr_get(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SENSOR_ID, &sensor_id_get);
-    LOG_DBG("Sensor ID: %d", sensor_id_get.val1);
-
-    // k_sem_give(&sem_ppg_fi_hide_loading);
-
-    if (sensor_id_get.val1 != MAX30101_SENSOR_ID)
-    {
-        LOG_ERR("MAX32664D sensor not found");
-        return;
-    }
-    else
-    {*/
-    LOG_DBG("MAX32664D sensor found");
-    hw_bpt_start_est();
-    k_thread_resume(ppg_finger_sampling_thread_id);
-    //}
 }
 
 static void st_ppg_fing_bpt_est_run(void *o)
 {
-    if(k_sem_take(&sem_bpt_est_abort, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_bpt_est_abort, K_NO_WAIT) == 0)
     {
         hpi_bpt_stop();
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
@@ -262,10 +255,10 @@ static void st_ppg_fing_bpt_est_run(void *o)
 
     // LOG_DBG("PPG Finger SM BPT Estimation Running");
 
-    //struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+    // struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
-    //k_msleep(1000);
-    //smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+    // k_msleep(1000);
+    // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 
     /*if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
@@ -313,7 +306,6 @@ static void st_ppg_fing_bpt_cal_run(void *o)
 
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
-
     /*if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
         if (ppg_fi_sensor_sample.bpt_status == 1)
@@ -347,11 +339,55 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
     LOG_DBG("PPG Finger SM BPT Calibration Fail Running");
 }
 
+static void st_ppg_fi_check_sensor_entry(void *o)
+{
+    LOG_DBG("PPG Finger SM Check Sensor Entry");
+}
+
+static void st_ppg_fi_check_sensor_run(void *o)
+{
+    //LOG_DBG("PPG Finger SM Check Sensor Running");
+
+    struct sensor_value sensor_id_get;
+    sensor_id_get.val1 = 0x00;
+    sensor_attr_get(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SENSOR_ID, &sensor_id_get);
+    LOG_DBG("AFE Sensor ID: %d", sensor_id_get.val1);
+
+    // k_sem_give(&sem_ppg_fi_hide_loading);
+
+    if (sensor_id_get.val1 != MAX30101_SENSOR_ID)
+    {
+        LOG_ERR("MAX30101 AFE sensor not found");
+        // return;
+    }
+    else
+    {
+        LOG_DBG("MAX30101 sensor found !");
+        //hw_bpt_start_est();
+        // k_thread_resume(ppg_finger_sampling_thread_id);
+        // }
+    }
+}
+
+static void st_ppg_fi_sensor_fail_entry(void *o)
+{
+    LOG_DBG("PPG Finger SM Sensor Fail Entry");
+}
+
+static void st_ppg_fi_sensor_fail_run(void *o)
+{
+    LOG_DBG("PPG Finger SM Sensor Fail Running");
+}
+
 static const struct smf_state ppg_fi_states[] = {
     [PPG_FI_STATE_IDLE] = SMF_CREATE_STATE(st_ppg_fing_idle_entry, st_ppg_fing_idle_run, st_ppg_fing_idle_exit, NULL, NULL),
+    [PPG_FI_STATE_CHECK_SENSOR] = SMF_CREATE_STATE(st_ppg_fi_check_sensor_entry, st_ppg_fi_check_sensor_run, NULL, NULL, NULL),
+    [PPG_FI_STATE_SENSOR_FAIL] = SMF_CREATE_STATE(st_ppg_fi_sensor_fail_entry, st_ppg_fi_sensor_fail_run, NULL, NULL, NULL),
+
     [PPG_FI_STATE_BPT_EST] = SMF_CREATE_STATE(st_ppg_fing_bpt_est_entry, st_ppg_fing_bpt_est_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_EST_DONE] = SMF_CREATE_STATE(st_ppg_fing_bpt_est_done_entry, st_ppg_fing_bpt_est_done_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_EST_FAIL] = SMF_CREATE_STATE(st_ppg_fing_bpt_est_fail_entry, st_ppg_fing_bpt_est_fail_run, NULL, NULL, NULL),
+
     [PPG_FI_STATE_BPT_CAL] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_entry, st_ppg_fing_bpt_cal_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_CAL_DONE] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_done_entry, st_ppg_fing_bpt_cal_done_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_CAL_FAIL] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_fail_entry, st_ppg_fing_bpt_cal_fail_run, NULL, NULL, NULL),
@@ -382,7 +418,7 @@ static void smf_ppg_finger_thread(void)
             LOG_ERR("Error in PPG Finger State Machine");
             break;
         }
-        k_msleep(100);
+        k_msleep(1000);
     }
 }
 

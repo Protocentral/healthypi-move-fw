@@ -1,11 +1,6 @@
 #pragma once
 
-uint32_t hw_keypad_get_key(void);
-
 void hw_init(void);
-
-void set_current(uint16_t current_uA);
-uint16_t read_voltage(int channel_no);
 void hw_pwr_display_enable(void);
 
 void send_usb_cdc(const char *buf, size_t len);
@@ -20,19 +15,11 @@ void hpi_hw_pmic_off(void);
 void hpi_pwr_display_sleep(void);
 void hpi_pwr_display_wake(void);
 
-struct rtc_time hw_get_current_time(void);
+struct tm hw_get_sys_time(void);
+int64_t hw_get_sys_time_ts(void);
 
 bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
 int hw_max32664c_stop_algo(void);
 
-enum gpio_keypad_key
-{
-    GPIO_KEYPAD_KEY_NONE = 0,
-    GPIO_KEYPAD_KEY_OK,
-    GPIO_KEYPAD_KEY_UP,
-    GPIO_KEYPAD_KEY_DOWN,
-    GPIO_KEYPAD_KEY_LEFT,
-    GPIO_KEYPAD_KEY_RIGHT,
-};
-
+int hpi_smf_ppg_get_last_spo2(uint16_t *spo2_value, int64_t *timestamp);

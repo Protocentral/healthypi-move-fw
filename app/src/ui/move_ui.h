@@ -54,14 +54,11 @@ enum hpi_disp_screens
     SCR_HR,
     SCR_SPO2,
     SCR_ECG,
-    SCR_BPT,
     SCR_TEMP,
-
+    
     SCR_LIST_END,
     // Should not go here
-    SCR_CLOCK,
-    SCR_VITALS,
-    // SCR_BPT_HOME,
+    SCR_BPT,
 };
 
 // Special screens
@@ -71,18 +68,27 @@ enum hpi_disp_spl_screens
 
     SCR_SPL_BOOT,
     SCR_SPL_SETTINGS,
-    SCR_SPL_PLOT_PPG,
-    SCR_SPL_PLOT_ECG,
-    SCR_SPL_PLOT_BPT_PPG,
+    SCR_SPL_RAW_PPG,
+    SCR_SPL_ECG_SCR2,
     SCR_SPL_ECG_COMPLETE,
+    SCR_SPL_PLOT_ECG,
+
+    SCR_SPL_BPT_SCR2,
+    SCR_SPL_BPT_SCR3,
+    SCR_SPL_BPT_SCR4,
+    SCR_SPL_BPT_COMPLETE,
+   
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
     SCR_SPL_SPO2_SCR2,
     SCR_SPL_SPO2_SCR3,
+    SCR_SPL_SPO2_COMPLETE,
+    SCR_SPL_SPO2_TIMEOUT,
     SCR_SPL_HR_SCR2,
 
     SCR_SPL_LIST_END,
 };
+
 #define SCR_SPL_SETTINGS 20
 #define SCR_SPL_BOOT 21
 
@@ -102,19 +108,28 @@ LV_IMG_DECLARE(ecg_120);
 LV_IMG_DECLARE(bp_70);
 //LV_IMG_DECLARE(icon_spo2_30x35);
 LV_IMG_DECLARE(img_heart_120);
+LV_IMG_DECLARE(img_temp_100);
 LV_IMG_DECLARE(icon_spo2_100);
-
 LV_IMG_DECLARE(img_spo2_hand);
+
+LV_IMG_DECLARE(img_complete_85);
+LV_IMG_DECLARE(img_failed_100);
+
+LV_IMG_DECLARE(img_bpt_finger_120);
+
+//LV_IMG_DECLARE(pc_move_bg_200);
+LV_IMG_DECLARE(bck_heart_200);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(oxanium_90);
 //LV_FONT_DECLARE(fredoka_28);
 LV_FONT_DECLARE(ui_font_Number_big);
 LV_FONT_DECLARE(ui_font_Number_extra);
-
-
+//LV_FONT_DECLARE(orbitron_90px);
 
 /******** UI Function Prototypes ********/
+
+int hpi_helper_get_date_time_str(int64_t timestamp, char* date_time_str);
 
 void display_init_styles(void);
 void hpi_display_sleep_off(void);
@@ -152,10 +167,14 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir);
 void draw_scr_spo2(enum scroll_dir m_scroll_dir);
 void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir);
 void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir);
-void hpi_disp_update_spo2(uint8_t spo2,struct tm tm_last_update);
+void hpi_disp_update_spo2(uint8_t spo2, int64_t ts_last_update);
+
 void hpi_disp_spo2_load_trend(void);
 void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
-void hpi_disp_spo2_update_progress(int progress, int status, int spo2);
+void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int spo2, int hr);
+void hpi_disp_spo2_update_hr(int hr);
+void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir);
+void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -163,12 +182,12 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 void hpi_ecg_disp_update_hr(int hr);
 void hpi_ecg_disp_update_timer(int timer);
 void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir);
+void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir);
+void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);
-void hpi_ppg_disp_update_spo2(int spo2);
-void hpi_ppg_disp_update_status(uint8_t status);
 
 // EDA screen functions
 void draw_scr_pre(enum scroll_dir m_scroll_dir);
@@ -180,7 +199,8 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir);
 // void draw_scr_bpt_measure(void);
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
-void draw_scr_plot_bpt(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);
@@ -224,7 +244,7 @@ void ui_steps_button_update(uint16_t steps);
 void draw_bg(lv_obj_t *parent);
 
 // Draw special screens
-void draw_scr_spl_plot_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
 void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
 
 void draw_scr_temp(enum scroll_dir m_scroll_dir);

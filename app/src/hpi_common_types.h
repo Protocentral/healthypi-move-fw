@@ -6,10 +6,12 @@ HealthyPi specific common data types
 
 #include <time.h>
 
-#define ECG_POINTS_PER_SAMPLE 8
+#define ECG_POINTS_PER_SAMPLE 16
 #define BIOZ_POINTS_PER_SAMPLE 8
 #define PPG_POINTS_PER_SAMPLE 8
 #define BPT_PPG_POINTS_PER_SAMPLE 32
+
+#define ECG_RECORD_BUFFER_SAMPLES 3040 //128 *30 
 
 enum hpi_ppg_status 
 {
@@ -32,6 +34,8 @@ struct hpi_ecg_bioz_sensor_data_t
     uint8_t ecg_lead_off;
     uint8_t bioz_lead_off;
     bool _bioZSkipSample;
+
+    uint8_t rrint;
 };
 
 struct hpi_ppg_wr_data_t
@@ -130,12 +134,10 @@ struct hpi_bpt_t
     uint8_t progress;
 };
 
-struct hpi_spo2_t
+struct hpi_spo2_point_t
 {
-    struct tm time_tm;
-
+    int64_t timestamp;
     uint16_t spo2;
-    uint16_t hr;
 };
 
 struct hpi_batt_status_t
@@ -147,4 +149,18 @@ struct hpi_batt_status_t
 struct hpi_ecg_timer_t
 {
     uint16_t timer_val;
+};
+
+struct hpi_ecg_lead_on_off_t
+{
+    bool lead_on_off;
+};
+
+enum spo2_meas_state
+{
+    SPO2_MEAS_LED_ADJ = 0x00,
+    SPO2_MEAS_COMPUTATION,
+    SPO2_MEAS_SUCCESS,
+    SPO2_MEAS_TIMEOUT,
+    SPO2_MEAS_UNK,
 };

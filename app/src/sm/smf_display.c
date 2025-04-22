@@ -11,8 +11,9 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-#define HPI_DEFAULT_START_SCREEN SCR_HR
-LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
+
+#define HPI_DEFAULT_START_SCREEN SCR_HOME
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -24,9 +25,10 @@ K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 
+
+
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
-static int last_hr_refresh = 0;
 
 static int last_time_refresh = 0;
 static int last_settings_refresh = 0;
@@ -34,7 +36,6 @@ static int last_settings_refresh = 0;
 static int last_hr_trend_refresh = 0;
 static int last_spo2_trend_refresh = 0;
 static int last_today_trend_refresh = 0;
-static int last_bpt_trend_refresh = 0;
 static int last_temp_trend_refresh = 0;
 
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
@@ -57,34 +58,37 @@ static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct tm m_disp_sys_time;
 
+static uint32_t splash_scr_start_time = 0;
+
 // HR Screen variables
 static uint16_t m_disp_hr = 0;
-static uint16_t m_disp_hr_max = 0;
-static uint16_t m_disp_hr_min = 0;
-static uint16_t m_disp_hr_mean = 0;
+// static uint16_t m_disp_hr_max = 0;
+// static uint16_t m_disp_hr_min = 0;
+// static uint16_t m_disp_hr_mean = 0;
 static struct tm m_disp_hr_last_update_tm;
 
 // @brief Spo2 Screen variables
 static uint8_t m_disp_spo2 = 0;
-static struct tm m_disp_spo2_last_refresh_tm;
+static int64_t m_disp_spo2_last_refresh_ts;
 
 // @brief Today Screen variables
 static uint32_t m_disp_steps = 0;
 static uint16_t m_disp_kcals = 0;
-static uint16_t m_disp_active_time_s = 10;
+static uint16_t m_disp_active_time_s = 0;
 
+// @brief Temperature Screen variables
 static float m_disp_temp = 0;
 
 static uint16_t m_disp_bp_sys = 0;
 static uint16_t m_disp_bp_dia = 0;
 static uint32_t m_disp_bp_last_refresh = 0;
-
-static int m_disp_ecg_timer = 0;
-
 static uint8_t m_disp_bpt_status = 0;
 static uint8_t m_disp_bpt_progress = 0;
 
-static uint32_t splash_scr_start_time = 0;
+// @brief ECG Screen variables
+static int m_disp_ecg_timer = 0;
+static uint16_t m_disp_ecg_hr = 0;
+static bool m_lead_on_off = false;
 
 struct s_disp_object
 {
@@ -110,6 +114,13 @@ extern struct k_sem sem_crown_key_pressed;
 extern struct k_sem sem_ppg_fi_show_loading;
 extern struct k_sem sem_ppg_fi_hide_loading;
 
+extern struct k_sem sem_ecg_lead_on;
+extern struct k_sem sem_ecg_lead_off;
+
+extern struct k_sem sem_ecg_cancel;
+extern struct k_sem sem_stop_one_shot_spo2;
+extern struct k_sem sem_spo2_complete;
+
 // User Profile settings
 
 static uint16_t m_user_height = 170; // Example height in m, adjust as needed
@@ -119,10 +130,9 @@ static double m_user_met = 3.5;      // Example MET value based speed = 1.34 m/s
 static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
 {
     // KCals = time * MET * 3.5 * weight / (200*60)
+
     double _m_time = (((m_user_height / 100.000) * 0.414 * steps) / 4800.000) * 60.000; // Assuming speed of 4.8 km/h
-    // LOG_DBG("Calc Time %.3f", _m_time);
     double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
-    //
     /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
     return (uint16_t)_m_kcals;
 }
@@ -276,7 +286,7 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_BPT_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
@@ -290,39 +300,23 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
     {
         hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
-        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
 
         if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
         {
             hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
-            // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-            //  hpi_disp_update_hr(m_disp_hr);
             hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
-            hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
         }
 
         lv_disp_trig_activity(NULL);
     }
-    else if(hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
     {
         hpi_disp_spo2_plotPPG(ppg_sensor_sample);
-        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2);
-
-        // hpi_ppg_disp_update_status(ppg_sensor_sample.scd_state);
-
-        /*if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
-        {
-            hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
-            //  hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-            //  hpi_disp_update_hr(m_disp_hr);
-            hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
-            hpi_ppg_disp_update_spo2(ppg_sensor_sample.spo2);
-        }*/
+        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
     }
-
 
     else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
     {
@@ -404,9 +398,12 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_ECG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
     {
         hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
+    }
+    else
+    {
     }
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
@@ -422,10 +419,10 @@ static void st_display_active_entry(void *o)
     {
         hpi_move_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
     }
-    else
+    /*else
     {
         hpi_move_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
-    }
+    }*/
 }
 
 static void st_disp_do_bpt_stuff(void)
@@ -483,30 +480,45 @@ static void st_display_active_run(void *o)
         break;
     case SCR_HR:
         hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_tm);
+        break;
+    case SCR_SPL_HR_SCR2:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            hpi_disp_hr_load_trend();
+            //hpi_disp_hr_load_trend();
             last_hr_trend_refresh = k_uptime_get_32();
         }
         break;
     case SCR_SPO2:
         if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            //hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
-            //hpi_disp_spo2_load_trend();
+            // hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
+            // hpi_disp_spo2_load_trend();
             last_spo2_trend_refresh = k_uptime_get_32();
         }
         break;
     case SCR_BPT:
         // st_disp_do_bpt_stuff();
         break;
-    case SCR_SPL_PLOT_ECG:
-        hpi_ecg_disp_update_hr(m_disp_hr);
+    case SCR_SPL_ECG_SCR2:
+        hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
             hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
         }
+        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
+        {
+            scr_ecg_lead_on_off_handler(true);
+            m_lead_on_off = true;
+        }
+        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
+        {
+            scr_ecg_lead_on_off_handler(false);
+            m_lead_on_off = false;
+        }
+
+        lv_disp_trig_activity(NULL);
+
         break;
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
@@ -514,6 +526,13 @@ static void st_display_active_run(void *o)
             hpi_move_load_screen(SCR_ECG, SCROLL_UP);
         }
         break;
+    case SCR_SPL_SPO2_COMPLETE:
+        if(k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
+        {
+            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_ts);
+        }
+        break;
+    
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {
@@ -565,22 +584,26 @@ static void st_display_active_run(void *o)
     // Add button handlers
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
-        /*if (m_display_active == false)
-        {
 
-        }
-        else
-        {*/
         lv_disp_trig_activity(NULL);
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
             // hpi_display_sleep_on();
         }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
+        {
+            k_sem_give(&sem_ecg_cancel);
+            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        {
+            k_sem_give(&sem_stop_one_shot_spo2);
+            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+        }
         else
         {
             hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
         }
-        //}
     }
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);
@@ -697,10 +720,10 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
 static void disp_spo2_listener(const struct zbus_channel *chan)
 {
-    const struct hpi_spo2_t *hpi_spo2 = zbus_chan_const_msg(chan);
+    const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
-    m_disp_spo2_last_refresh_tm = hpi_spo2->time_tm;
-    // LOG_DBG("ZB Spo2: %d\n", hpi_spo2->spo2);
+    m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
+    LOG_DBG("ZB Spo2: %d | Time: %d", hpi_spo2->spo2, hpi_spo2->timestamp);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
 
@@ -709,6 +732,8 @@ static void disp_steps_listener(const struct zbus_channel *chan)
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     m_disp_steps = hpi_steps->steps_walk;
     m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
+
+    // LOG_DBG("ZB Steps Walk : %d | Run: %d", hpi_steps->steps_walk, hpi_steps->steps_run);
 
     // ui_steps_button_update(hpi_steps->steps_walk);
 }
@@ -741,6 +766,14 @@ static void disp_ecg_timer_listener(const struct zbus_channel *chan)
     m_disp_ecg_timer = ecg_timer->timer_val;
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_timer_lis, disp_ecg_timer_listener);
+
+static void disp_ecg_hr_listener(const struct zbus_channel *chan)
+{
+    const uint16_t *ecg_hr = zbus_chan_const_msg(chan);
+    m_disp_ecg_hr = *ecg_hr;
+    // LOG_INF("ZB ECG HR: %d", *ecg_hr);
+}
+ZBUS_LISTENER_DEFINE(disp_ecg_hr_lis, disp_ecg_hr_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 32768
 #define SMF_DISPLAY_THREAD_PRIORITY 5

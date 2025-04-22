@@ -22,13 +22,7 @@
 
 LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 
-// LV_IMG_DECLARE(pc_logo_bg3);
-LV_IMG_DECLARE(pc_move_bg_200);
-// LV_IMG_DECLARE(pc_logo_bg3);
-// LV_IMG_DECLARE(logo_round_white);
-
 // LVGL Styles
-
 static lv_style_t style_btn;
 
 // Global LVGL Styles
@@ -43,12 +37,13 @@ lv_style_t style_white_medium;
 lv_style_t style_scr_container;
 
 lv_style_t style_lbl_white_14;
-lv_style_t style_lbl_black_small;
+lv_style_t style_lbl_white_medium;
 lv_style_t style_white_large;
 
 lv_style_t style_bg_blue;
 lv_style_t style_bg_red;
 lv_style_t style_bg_green;
+lv_style_t style_bg_purple;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
@@ -69,6 +64,9 @@ K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Externs
 extern const struct device *display_dev;
+
+extern struct k_sem sem_ecg_cancel;
+extern struct k_sem sem_stop_one_shot_spo2;
 
 /*Will be called when the styles of the base theme are already added to add new styles*/
 static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
@@ -138,9 +136,9 @@ void display_init_styles(void)
     lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_24);
 
     // Label Black
-    lv_style_init(&style_lbl_black_small);
-    lv_style_set_text_color(&style_lbl_black_small, lv_color_black());
-    lv_style_set_text_font(&style_lbl_black_small, &lv_font_montserrat_34);
+    lv_style_init(&style_lbl_white_medium);
+    lv_style_set_text_color(&style_lbl_white_medium, lv_color_black());
+    lv_style_set_text_font(&style_lbl_white_medium, &lv_font_montserrat_34);
 
     // Container for scrollable screen layout
     lv_style_init(&style_scr_container);
@@ -161,9 +159,9 @@ void display_init_styles(void)
     grad.dir = LV_GRAD_DIR_VER;
     grad.stops_count = 2;
     grad.stops[0].color = lv_color_black();
-    grad.stops[1].color = lv_palette_darken(LV_PALETTE_BLUE_GREY, 4);
-    grad.stops[0].frac = 150;
-    grad.stops[1].frac = 192;
+    grad.stops[1].color = lv_palette_darken(LV_PALETTE_BLUE, 4);
+    grad.stops[0].frac = 168;
+    grad.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_blue, &grad);
 
     lv_style_init(&style_bg_red);
@@ -179,16 +177,28 @@ void display_init_styles(void)
     lv_style_set_bg_grad(&style_bg_red, &grad_red);
 
     lv_style_init(&style_bg_green);
-    lv_style_set_radius(&style_bg_green, 5);
+    lv_style_set_radius(&style_bg_green, 15);
     lv_style_set_bg_opa(&style_bg_green, LV_OPA_COVER);
     static lv_grad_dsc_t grad_green;
     grad_green.dir = LV_GRAD_DIR_VER;
     grad_green.stops_count = 2;
     grad_green.stops[0].color = lv_color_black();
-    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_GREEN, 4);
+    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_CYAN, 2);
     grad_green.stops[0].frac = 168;
     grad_green.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_green, &grad_green);
+
+    lv_style_init(&style_bg_purple);
+    lv_style_set_radius(&style_bg_purple, 15);
+    lv_style_set_bg_opa(&style_bg_purple, LV_OPA_COVER);
+    static lv_grad_dsc_t grad_purple;
+    grad_purple.dir = LV_GRAD_DIR_VER;
+    grad_purple.stops_count = 2;
+    grad_purple.stops[0].color = lv_color_black();
+    grad_purple.stops[1].color = lv_palette_darken(LV_PALETTE_PURPLE, 4);
+    grad_purple.stops[0].frac = 168;
+    grad_purple.stops[1].frac = 255;
+    lv_style_set_bg_grad(&style_bg_purple, &grad_purple);
 
     lv_disp_set_bg_color(NULL, lv_color_black());
 }
@@ -247,7 +257,7 @@ void hpi_disp_update_batt_level(int batt_level, bool charging)
     // printk("Updating battery level: %d\n", batt_level);
 
     char buf[8];
-    sprintf(buf, " %2d % ", batt_level);
+    sprintf(buf, " %2d %% ", batt_level);
     lv_label_set_text(label_batt_level_val, buf);
 
     if (batt_level > 75)
@@ -325,10 +335,10 @@ void disp_spl_scr_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printk("Spl down at %d\n", curr_screen);
 
-        if (curr_screen == SCR_SPL_PLOT_BPT_PPG)
+        /*if (curr_screen == SCR_SPL_PLOT_BPT_PPG)
         {
             hpi_bpt_abort();
-        }
+        }*/
 
         hpi_move_load_screen(*scr_parent, SCROLL_UP);
     }
@@ -362,14 +372,23 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     switch (m_screen)
     {
 
-    case SCR_SPL_PLOT_PPG:
-        draw_scr_spl_plot_ppg(m_scroll_dir, scr_parent);
+    case SCR_SPL_RAW_PPG:
+        draw_scr_spl_raw_ppg(m_scroll_dir, scr_parent);
         break;
-    case SCR_SPL_PLOT_ECG:
-        draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
+    // case SCR_SPL_PLOT_ECG:
+    //     draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
+    //     break;
+    case SCR_SPL_ECG_SCR2:
+        draw_scr_ecg_scr2(m_scroll_dir);
         break;
-    case SCR_SPL_PLOT_BPT_PPG:
-        draw_scr_plot_bpt(m_scroll_dir);
+    case SCR_SPL_BPT_SCR2:
+        draw_scr_bpt_scr2(m_scroll_dir);
+        break;
+    case SCR_SPL_BPT_SCR3:
+        draw_scr_bpt_scr3(m_scroll_dir);
+        break;
+    case SCR_SPL_BPT_SCR4:
+        draw_scr_bpt_scr4(m_scroll_dir);
         break;
     case SCR_SPL_ECG_COMPLETE:
         draw_scr_ecg_complete(m_scroll_dir);
@@ -388,6 +407,12 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
         break;
     case SCR_SPL_SPO2_SCR3:
         draw_scr_spo2_scr3(m_scroll_dir);
+        break;
+    case SCR_SPL_SPO2_COMPLETE:
+        draw_scr_spl_spo2_complete(m_scroll_dir);
+        break;
+    case SCR_SPL_SPO2_TIMEOUT:
+        draw_scr_spl_spo2_timeout(m_scroll_dir);
         break;
 
     default:
@@ -479,7 +504,6 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printf("Left at %d\n", curr_screen);
 
-        
         if ((curr_screen + 1) == SCR_LIST_END)
         {
             printk("End of list\n");
@@ -497,13 +521,13 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printf("Right at %d\n", curr_screen);
 
-        if(hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
+        if (hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
         {
             hpi_move_load_screen(SCR_HR, SCROLL_LEFT);
             return;
         }
 
-        if(hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
             hpi_move_load_screen(SCR_SPO2, SCROLL_LEFT);
             return;
@@ -529,7 +553,25 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_move_load_scr_settings(SCROLL_DOWN);
         }
-        
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
+        {
+            printk("Cancel ECG\n");
+            k_sem_give(&sem_ecg_cancel);
+            hpi_move_load_screen(SCR_ECG, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        {
+            k_sem_give(&sem_stop_one_shot_spo2);
+            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_COMPLETE)
+        {
+            hpi_move_load_screen(SCR_ECG, SCROLL_UP);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_COMPLETE)
+        {
+            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+        }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
     {
@@ -545,6 +587,21 @@ void disp_screen_event(lv_event_t *e)
             hpi_move_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR);
         }
     }
+}
+
+int hpi_helper_get_date_time_str(int64_t in_ts, char *date_time_str)
+{
+    struct tm today_time_tm = *gmtime(&in_ts);
+    if (in_ts == 0)
+    {
+        snprintf(date_time_str, 30, "Last Updated: --");
+    }
+    else
+    {
+        snprintf(date_time_str, 74, "Last Updated: %02d:%02d\n%02d-%02d-%04d", today_time_tm.tm_hour,
+                 today_time_tm.tm_min, today_time_tm.tm_mday, today_time_tm.tm_mon, today_time_tm.tm_year + 1900);
+    }
+    return 0;
 }
 
 void hdr_time_display_update(struct rtc_time in_time)
@@ -569,7 +626,7 @@ void hdr_time_display_update(struct rtc_time in_time)
 void draw_bg(lv_obj_t *parent)
 {
     lv_obj_t *logo_bg = lv_img_create(parent);
-    lv_img_set_src(logo_bg, &pc_move_bg_200);
+    lv_img_set_src(logo_bg, &bck_heart_200);
     lv_obj_set_width(logo_bg, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(logo_bg, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(logo_bg, LV_ALIGN_CENTER);

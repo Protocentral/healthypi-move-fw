@@ -64,8 +64,6 @@ static int lsdir(const char *path)
     static struct fs_dirent entry;
 
     fs_dir_t_init(&dirp);
-
-    /* Verify fs_opendir() */
     res = fs_opendir(&dirp, path);
     if (res)
     {
@@ -76,10 +74,8 @@ static int lsdir(const char *path)
     LOG_PRINTK("\nListing dir %s ...\n", path);
     for (;;)
     {
-        /* Verify fs_readdir() */
-        res = fs_readdir(&dirp, &entry);
 
-        /* entry.name[0] == 0 means end-of-dir */
+        res = fs_readdir(&dirp, &entry);
         if (res || entry.name[0] == 0)
         {
             if (res < 0)
@@ -99,58 +95,9 @@ static int lsdir(const char *path)
                        entry.name, entry.size);
         }
     }
-
-    /* Verify fs_closedir() */
     fs_closedir(&dirp);
 
     return res;
-}
-
-void record_wipe_all(void)
-{
-    int err;
-    struct fs_dir_t dir;
-
-    char file_name[100] = "";
-
-    fs_dir_t_init(&dir);
-
-    err = fs_opendir(&dir, "/lfs/trhr");
-    if (err)
-    {
-        LOG_ERR("Unable to open (err %d)", err);
-    }
-
-    while (1)
-    {
-        struct fs_dirent entry;
-
-        err = fs_readdir(&dir, &entry);
-        if (err)
-        {
-            LOG_ERR("Unable to read directory");
-            break;
-        }
-
-        /* Check for end of directory listing */
-        if (entry.name[0] == '\0')
-        {
-            break;
-        }
-
-        LOG_DBG("%s%s %d\n", entry.name,
-                (entry.type == FS_DIR_ENTRY_DIR) ? "/" : "", entry.size);
-
-        // if (strstr(entry.name, "") != NULL)
-        //{
-        strcpy(file_name, "/lfs/trhr/");
-        strcat(file_name, entry.name);
-
-        LOG_DBG("Deleting %s\n", file_name);
-        fs_unlink(file_name);
-    }
-
-    fs_closedir(&dir);
 }
 
 uint32_t transfer_get_file_length(char *m_file_name)
@@ -165,9 +112,10 @@ uint32_t transfer_get_file_length(char *m_file_name)
     LOG_DBG("%s Stat: %d", m_file_name, rc);
     if (rc >= 0)
     {
-        //printk("\nfn '%s' siz %u\n", dirent.name, dirent.size);
+        // printk("\nfn '%s' siz %u\n", dirent.name, dirent.size);
         file_len = dirent.size;
-    } else
+    }
+    else
     {
         LOG_ERR("Error getting file length %d", rc);
         return 0;
@@ -178,7 +126,7 @@ uint32_t transfer_get_file_length(char *m_file_name)
     return file_len;
 }
 
-void transfer_send_file(char* in_file_name)
+void transfer_send_file(char *in_file_name)
 {
     LOG_DBG("Start file transfer %s", in_file_name);
     uint8_t m_buffer[FILE_TRANSFER_BLE_PACKET_SIZE + 1];
@@ -234,8 +182,8 @@ void hpi_init_fs_struct(void)
 {
     int ret;
 
-    //record_wipe_all();
-    // Create FS directories
+    // record_wipe_all();
+    //  Create FS directories
     ret = fs_mkdir("/lfs/trhr");
     if (ret)
     {
@@ -275,6 +223,26 @@ void hpi_init_fs_struct(void)
     {
         LOG_DBG("Created dir");
     }
+
+    ret = fs_mkdir("/lfs/ecg");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
+
+    ret = fs_mkdir("/lfs/log");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
 }
 
 void fs_module_init(void)
@@ -303,7 +271,7 @@ void fs_module_init(void)
             sbuf.f_bsize, sbuf.f_frsize,
             sbuf.f_blocks, sbuf.f_bfree);
 
-    //record_wipe_all();
+    // record_wipe_all();
 
     rc = lsdir("/lfs");
     if (rc < 0)

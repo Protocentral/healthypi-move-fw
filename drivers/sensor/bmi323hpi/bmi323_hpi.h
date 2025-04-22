@@ -170,6 +170,8 @@
 /*! Address register for feature data: configurations and extended output. */
 #define BMI3_REG_FEATURE_DATA_ADDR (0x41)
 
+#define BMI3_BASE_ADDR_STEP_CNT                      UINT8_C(0x10)
+
 /*! I/O port for the data values of the feature engine. */
 #define BMI3_REG_FEATURE_DATA_TX (0x42)
 
@@ -819,4 +821,5 @@ enum bmi323_hpi_attribute
     BMI323_HPI_ATTR_EN_STEP_COUNTER = 0x02,
     BMI323_HPI_ATTR_EN_ANY_MOTION = 0x03,
     BMI323_HPI_ATTR_EN_NO_MOTION = 0x04,
+    BMI323_HPI_ATTR_RESET_STEP_COUNTER = 0x05,
 };

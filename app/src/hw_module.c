@@ -1,8 +1,6 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/led.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
 
@@ -27,6 +25,7 @@
 
 #include <time.h>
 #include <zephyr/posix/time.h>
+#include <zephyr/sys/timeutil.h>
 
 #include <nrfx_clock.h>
 #include <nrfx_spim.h>
@@ -124,6 +123,8 @@ ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
 
 static int64_t ref_time;
+
+struct tm sys_tm_time;
 
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
@@ -572,7 +573,11 @@ void hw_init(void)
     else
     {
         hw_add_boot_msg("BMI323", true);
-        k_sem_give(&sem_imu_smf_start);
+        // struct sensor_value set_val;
+        // set_val.val1 = 1;
+
+        // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+        // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
     }
 
     // Turn 1.8v power to sensors ON
@@ -677,7 +682,7 @@ void hw_init(void)
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
-    /*device_init(max32664d_dev);
+    device_init(max32664d_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
@@ -696,10 +701,10 @@ void hw_init(void)
         /*struct sensor_value mode_set;
         mode_set.val1 = 1;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
-
+        */
 
         k_sem_give(&sem_ppg_finger_sm_start);
-    }*/
+    }
 
 #ifdef NRF_SPIM_HAS_32_MHZ_FREQ
     LOG_DBG("SPIM runs at 32MHz !");
@@ -742,7 +747,7 @@ void hw_init(void)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
 
-    //npm_fuel_gauge_update(charger, vbus_connected);
+    // npm_fuel_gauge_update(charger, vbus_connected);
 
     fs_module_init();
 
@@ -761,22 +766,18 @@ void hw_init(void)
 
     // init_settings();
 
-    //usb_init();
+    // usb_init();
 }
 
-/**
- * @brief Retrieves the current time from the RTC (Real-Time Clock) device.
- *
- * This function calls the rtc_get_time function to get the current time from
- * the RTC device and stores it in the hw_system_time variable. It then
- * returns the current time.
- *
- * @return struct rtc_time The current time retrieved from the RTC device.
- */
-struct rtc_time hw_get_current_time(void)
+struct tm hw_get_sys_time(void)
 {
-    rtc_get_time(rtc_dev, &hw_system_time);
-    return hw_system_time;
+    return sys_tm_time;
+}
+
+int64_t hw_get_sys_time_ts(void)
+{
+    int64_t sys_time_ts = timeutil_timegm64(&sys_tm_time);
+    return sys_time_ts;
 }
 
 static uint32_t acc_get_steps(void)
@@ -790,7 +791,7 @@ static uint32_t acc_get_steps(void)
 void hw_thread(void)
 {
     struct rtc_time rtc_sys_time;
-    struct tm sys_tm_time;
+
     uint32_t _steps = 0;
     double _temp_f = 0.0;
 
@@ -802,6 +803,7 @@ void hw_thread(void)
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
 
+    int sc_reset_counter = 0;
     for (;;)
     {
         // Read and publish battery level
@@ -821,7 +823,6 @@ void hw_thread(void)
             LOG_ERR("Failed to get RTC time");
         }
         sys_tm_time = *rtc_time_to_tm(&rtc_sys_time);
-
         zbus_chan_pub(&sys_time_chan, &sys_tm_time, K_SECONDS(1));
 
         // Read and publish steps
@@ -829,11 +830,26 @@ void hw_thread(void)
         struct hpi_steps_t steps = {
             .steps_walk = _steps,
         };
-        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(1));
+        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(4));
+
+        struct sensor_value set_val;
+        set_val.val1 = 1;
+
+        if (sc_reset_counter >= 3)
+        {
+            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
+            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
+            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
+            sc_reset_counter = 0;
+        }
+        else
+        {
+            sc_reset_counter++;
+        }
 
         // Read and publish temperature
-        //_temp_f = read_temp_f();
-        
+        _temp_f = read_temp_f();
+
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,
         };

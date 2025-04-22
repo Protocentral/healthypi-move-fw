@@ -1,31 +1,28 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
-#include <app_version.h>
-#include <zephyr/logging/log.h>
+#include <zephyr/zbus/zbus.h>
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "hw_module.h"
 
-lv_obj_t *scr_plot_ecg;
+static lv_obj_t *scr_ecg_scr2;
+
+static lv_obj_t *btn_ecg_cancel;
 
 // GUI Charts
 static lv_obj_t *chart_ecg;
 static lv_chart_series_t *ser_ecg;
 
 static lv_obj_t *label_ecg_hr;
-static lv_obj_t *label_hr_bpm;
 static lv_obj_t *label_timer;
-//static lv_obj_t *label_ecg_lead_off;
+static lv_obj_t *label_ecg_lead_off;
+static lv_obj_t *label_info;
 
-static bool chart_ecg_update = false;
+static bool chart_ecg_update = true;
 static float y_max_ecg = 0;
 static float y_min_ecg = 10000;
 
@@ -35,27 +32,42 @@ static float gx = 0;
 
 // Externs
 extern lv_style_t style_red_medium;
+extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
+extern lv_style_t style_tiny;
 
-// void scr_plot_ecg_update_timer(
-void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
+extern lv_style_t style_bg_blue;
+extern lv_style_t style_bg_red;
+
+static void btn_ecg_cancel_handler(lv_event_t *e)
 {
-    scr_plot_ecg = lv_obj_create(NULL);
-    draw_scr_common(scr_plot_ecg);
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        hpi_move_load_screen(SCR_ECG, SCROLL_DOWN);
+    }
+}
+
+void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
+{
+    scr_ecg_scr2 = lv_obj_create(NULL);
+    lv_obj_add_style(scr_ecg_scr2, &style_scr_black, 0);
+    lv_obj_clear_flag(scr_ecg_scr2, LV_OBJ_FLAG_SCROLLABLE);
+    // draw_scr_common(scr_ecg_scr2);
 
     /*Create a container with COLUMN flex direction*/
-    lv_obj_t *cont_col = lv_obj_create(scr_plot_ecg);
+    lv_obj_t *cont_col = lv_obj_create(scr_ecg_scr2);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    // lv_obj_set_width(cont_col, lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
+    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-
-    lv_obj_t *label_signal = lv_label_create(cont_col);
-    lv_label_set_text(label_signal, "ECG");
+    // lv_obj_add_style(cont_col, &style_bg_red, 0);
 
     // Draw countdown timer container
     lv_obj_t *cont_timer = lv_obj_create(cont_col);
@@ -76,6 +88,21 @@ void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_label_set_text(label_timer_sub, " secs");
     lv_obj_add_style(label_timer_sub, &style_white_medium, 0);
 
+    /*label_info = lv_label_create(cont_col);
+    lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_info, 300);
+    lv_label_set_text(label_info, "Touch the bezel to start");
+    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_style(label_info, &style_white_medium, 0);*/
+
+    /*btn_ecg_cancel = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_ecg_cancel, btn_ecg_cancel_handler, LV_EVENT_ALL, NULL);
+    // lv_obj_set_height(btn_ecg_cancel, 85);
+
+    lv_obj_t *label_btn = lv_label_create(btn_ecg_cancel);
+    lv_label_set_text(label_btn, LV_SYMBOL_CLOSE);
+    lv_obj_center(label_btn);*/
+
     // Create Chart 1 - ECG
     chart_ecg = lv_chart_create(cont_col);
     lv_obj_set_size(chart_ecg, 390, 140);
@@ -88,34 +115,35 @@ void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
-    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_main(LV_PALETTE_YELLOW), LV_CHART_AXIS_PRIMARY_Y);
+    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ecg, 6, LV_PART_ITEMS);
+    // lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
 
-    /*label_ecg_lead_off = lv_label_create(scr_ecg);
-    lv_label_set_text(label_ecg_lead_off, LV_SYMBOL_UP "\nPlace finger \non sensor \nto start ECG");
-    lv_obj_align_to(label_ecg_lead_off, NULL, LV_ALIGN_CENTER, -20, -40);
+    // Draw Lead off label
+    label_ecg_lead_off = lv_label_create(cont_col);
+    lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_ecg_lead_off, 300);
+    lv_label_set_text(label_ecg_lead_off, "--");
     lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_ecg_lead_off, &style_lbl_orange, 0);
-    lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);*/
 
+    // Draw BPM container
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
-    // Draw BPM
-    lv_obj_t *img1 = lv_img_create(cont_hr);
-    lv_img_set_src(img1, &img_heart_35);
-    label_hr_bpm = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_bpm, "00");
-    lv_obj_add_style(label_hr_bpm, &style_white_medium, 0);
+    lv_obj_t *img_heart = lv_img_create(cont_hr);
+    lv_img_set_src(img_heart, &img_heart_35);
+
+    label_ecg_hr = lv_label_create(cont_hr);
+    lv_label_set_text(label_ecg_hr, "00");
+    lv_obj_add_style(label_ecg_hr, &style_white_medium, 0);
     lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_sub, " bpm");
 
-    hpi_disp_set_curr_screen(SCR_SPL_PLOT_ECG);
-    hpi_show_screen_spl(scr_plot_ecg, m_scroll_dir, scr_parent);
-    chart_ecg_update = true;
+    hpi_disp_set_curr_screen(SCR_SPL_ECG_SCR2);
+    hpi_show_screen(scr_ecg_scr2, m_scroll_dir);
 }
 
 void hpi_ecg_disp_do_set_scale(int disp_window_size)
@@ -162,8 +190,10 @@ void hpi_ecg_disp_update_timer(int time_left)
     if (label_timer == NULL)
         return;
 
-    lv_label_set_text_fmt(label_timer, "%d" , time_left);
+    lv_label_set_text_fmt(label_timer, "%d", time_left);
 }
+
+static bool prev_lead_off_status = true;
 
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
 {
@@ -183,27 +213,51 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
                 y_max_ecg = data_ecg_i;
             }
 
-            /*if (ecg_plot_hidden == true)
-            {
-                lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-                ecg_plot_hidden = false;
-            }*/
-
-            // printk("E");
-
             lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg_i);
             hpi_ecg_disp_add_samples(1);
             hpi_ecg_disp_do_set_scale(ECG_DISP_WINDOW_SIZE);
         }
-        // lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg);
-        // hpi_ecg_disp_add_samples(1);
-        // hpi_ecg_disp_do_set_scale(DISP_WINDOW_SIZE_ECG);
+
+        /*if (ecg_lead_off == true)
+        {
+            //lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+            // ecg_plot_hidden = true;
+        }
+        else
+        {
+            lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+            // ecg_plot_hidden = false;
+        }*/
+
+        if ((ecg_lead_off == true) && (prev_lead_off_status == false))
+        {
+            lv_label_set_text(label_ecg_lead_off, "Lead Off");
+            lv_obj_add_style(label_ecg_lead_off, &style_red_medium, 0);
+            prev_lead_off_status = true;
+        }
+        else if((ecg_lead_off == false) && (prev_lead_off_status == true))
+        {
+            lv_label_set_text(label_ecg_lead_off, "Lead On");
+            lv_obj_add_style(label_ecg_lead_off, &style_white_medium, 0);
+            prev_lead_off_status = false;
+        }
     }
-    /*else if (ecg_lead_off == true)
+}
+
+void scr_ecg_lead_on_off_handler(bool lead_on_off)
+{
+    if (label_info == NULL)
+        return;
+
+    if (lead_on_off == false)
     {
+        lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-        ecg_plot_hidden = true;
-    }*/
+    }
+    else
+    {
+        lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+    }
 }

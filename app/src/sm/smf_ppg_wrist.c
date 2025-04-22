@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/zbus/zbus.h>
 
 LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 
@@ -18,14 +19,17 @@ K_SEM_DEFINE(sem_ppg_wrist_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_motion_detected, 0, 1);
+
 K_SEM_DEFINE(sem_start_one_shot_spo2, 0, 1);
+K_SEM_DEFINE(sem_stop_one_shot_spo2, 0, 1);
+K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 
-extern struct k_sem sem_ppg_wrist_sm_start;
+ZBUS_CHAN_DECLARE(spo2_chan);
 
 enum ppg_fi_sm_state
 {
@@ -40,21 +44,33 @@ struct s_object
     struct smf_ctx ctx;
 } sm_ctx_ppg_wr;
 
+static uint16_t smf_ppg_spo2_last_measured_value = 0;
+static int64_t smf_ppg_spo2_last_measured_time;
+
 static int m_curr_state;
-
 int sig_wake_on_motion_count = 0;
-
+static bool spo2_measurement_in_progress = false;
 static enum max32664c_scd_states m_curr_scd_state;
+
+// Externs
+extern struct k_sem sem_ppg_wrist_sm_start;
+
+int hpi_smf_ppg_get_last_spo2(uint16_t *spo2_value, int64_t *timestamp)
+{
+    *spo2_value = smf_ppg_spo2_last_measured_value;
+    *timestamp = smf_ppg_spo2_last_measured_time;
+    
+    return 0;
+}
 
 void work_off_skin_wait_handler(struct k_work *work)
 {
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
         LOG_DBG("Still OFF SKIN");
-        //smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
+        // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
     }
 }
-
 K_WORK_DELAYABLE_DEFINE(work_off_skin, work_off_skin_wait_handler);
 
 void work_on_skin_wait_handler(struct k_work *work)
@@ -65,7 +81,6 @@ void work_on_skin_wait_handler(struct k_work *work)
         // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
     }
 }
-
 K_WORK_DELAYABLE_DEFINE(work_on_skin, work_on_skin_wait_handler);
 
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
@@ -73,8 +88,6 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
     struct hpi_ppg_wr_data_t ppg_sensor_sample;
 
-    // static uint8_t prev_hr_val = 0;
-    //  uint8_t hr_chan_value=0;
     uint16_t _n_samples = edata->num_samples;
 
     if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
@@ -88,13 +101,13 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
         }
         return;
     }
-    else if (edata->chip_op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION && sig_wake_on_motion_count<=1)
+    else if (edata->chip_op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION && sig_wake_on_motion_count <= 1)
     {
         LOG_DBG("WOKEN ON MOTION | state: %d", m_curr_state);
         sig_wake_on_motion_count++;
         hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
         k_sem_give(&sem_ppg_wrist_motion_detected);
-        //return;
+        // return;
     }
     else if (edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AGC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
@@ -152,16 +165,34 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 LOG_DBG("OFF SKIN");
                 k_work_schedule(&work_off_skin, K_SECONDS(HPI_OFFSKIN_THRESHOLD_S));
             }
-            else if(ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN && (m_curr_scd_state != MAX32664C_SCD_STATE_ON_SKIN))
+            else if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN && (m_curr_scd_state != MAX32664C_SCD_STATE_ON_SKIN))
             {
                 LOG_DBG("ON SKIN");
                 k_work_schedule(&work_on_skin, K_SECONDS(HPI_PROBE_DURATION_S));
             }
 
-            if (ppg_sensor_sample.spo2_valid_percent_complete == 100)
+            if ((ppg_sensor_sample.spo2_valid_percent_complete == 100) && spo2_measurement_in_progress)
             {
-                hw_max32664c_stop_algo();
-                k_msleep(600);
+                k_sem_give(&sem_stop_one_shot_spo2);
+                if (ppg_sensor_sample.spo2_confidence > 50)
+                {
+                    struct hpi_spo2_point_t spo2_chan_value = {
+                        .timestamp = hw_get_sys_time_ts(),
+                        .spo2 = ppg_sensor_sample.spo2,
+                    };
+                    zbus_chan_pub(&spo2_chan, &spo2_chan_value, K_SECONDS(1));
+
+                    smf_ppg_spo2_last_measured_value = ppg_sensor_sample.spo2;
+                    smf_ppg_spo2_last_measured_time = hw_get_sys_time_ts();
+                }
+                spo2_measurement_in_progress = false;
+            }
+
+            if(ppg_sensor_sample.spo2_state == SPO2_MEAS_TIMEOUT)
+            {
+                LOG_DBG("SPO2 MEAS TIMEOUT");
+                k_sem_give(&sem_stop_one_shot_spo2);
+                spo2_measurement_in_progress = false;
             }
 
             m_curr_scd_state = ppg_sensor_sample.scd_state;
@@ -174,36 +205,6 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
         }
     }
 }
-
-/*
-void ppg_wrist_sampling_trigger_thread(void)
-{
-    k_sem_take(&sem_ppg_wrist_thread_start, K_FOREVER);
-
-    int ret;
-    uint8_t wrist_buf[512];
-
-    LOG_INF("PPG Wrist Sampling starting");
-    for (;;)
-    {
-        ret = sensor_read(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, wrist_buf, sizeof(wrist_buf));
-        if (ret < 0)
-        {
-            LOG_ERR("Error reading sensor data");
-            continue;
-        }
-        sensor_ppg_wrist_decode(wrist_buf, sizeof(wrist_buf));
-
-        // sensor_read_async_mempool(&maxm86146_iodev, &maxm86146_read_rtio_ctx, NULL);
-        // sensor_processing_with_callback(&maxm86146_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
-
-        // sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_ctx, NULL);
-        // sensor_processing_with_callback(&max32664c_read_rtio_ctx, sensor_ppg_wrist_processing_callback);
-
-        k_sleep(K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
-    }
-}
-*/
 
 void work_sample_handler(struct k_work *work)
 {
@@ -238,16 +239,6 @@ static void st_ppg_samp_active_entry(void *o)
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
 }
 
-static void ppg_wr_start_oneshot_spo2(void)
-{
-    LOG_DBG("PPG Wrist starting one-shot SpO2");
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
-    k_msleep(600);
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
-    k_msleep(600);
-    k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
-}
-
 static void st_ppg_samp_active_run(void *o)
 {
     LOG_DBG("PPG SM Active Run");
@@ -277,23 +268,6 @@ static void st_ppg_samp_probing_run(void *o)
     }
 }
 
-/*
-static void st_ppg_samp_off_skin_entry(void *o)
-{
-    LOG_DBG("PPG SM Off Skin Entry");
-    m_curr_state = PPG_SAMP_STATE_OFF_SKIN;
-
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AGC, MAX32664C_ALGO_MODE_CONT_HRM);
-    k_msleep(1000);
-}
-
-static void st_ppg_samp_off_skin_run(void *o)
-{
-    LOG_DBG("PPG SM Off Skin Running");
-    smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
-}*/
-
 static void st_ppg_samp_motion_detect_entry(void *o)
 {
     LOG_DBG("PPG SM Motion Detect Entry");
@@ -307,7 +281,7 @@ static void st_ppg_samp_motion_detect_run(void *o)
     LOG_DBG("PPG SM Motion Detect Running");
 
     if (k_sem_take(&sem_ppg_wrist_motion_detected, K_FOREVER) == 0)
-    {      
+    {
         k_msleep(1000);
         LOG_DBG("Switching to Probing");
         smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
@@ -335,8 +309,8 @@ static void smf_ppg_wrist_thread(void)
 
     smf_set_initial(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
-    //k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
-    
+    k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+
     LOG_INF("PPG State Machine Thread starting");
     for (;;)
     {
@@ -361,13 +335,34 @@ static void ppg_wrist_ctrl_thread(void)
             // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
             LOG_DBG("Stopping PPG Sampling");
             k_timer_stop(&tmr_ppg_wrist_sampling);
+
             LOG_DBG("Starting One Shot SpO2");
-            ppg_wr_start_oneshot_spo2();
+
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+            k_msleep(600);
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
+            k_msleep(600);
+            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+
+            spo2_measurement_in_progress = true;
         }
 
-        // LOG_DBG("PPG WR control Running");
+        if (k_sem_take(&sem_stop_one_shot_spo2, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("Stopping One Shot SpO2");
+            k_timer_stop(&tmr_ppg_wrist_sampling);
+            spo2_measurement_in_progress = false;
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
 
-        k_msleep(1000);
+            k_msleep(1000);
+
+            LOG_DBG("Switching to Continuous Sampling HR");
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+            k_msleep(600);
+            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+        }
+
+        k_msleep(100);
     }
 }
 

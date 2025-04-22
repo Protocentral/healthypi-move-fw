@@ -37,7 +37,8 @@
         "trends.h": "c",
         "kernel.h": "c",
         "littlefs.h": "c",
-        "ctime": "c"
+        "ctime": "c",
+        "conn.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",
