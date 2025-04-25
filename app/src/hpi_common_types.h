@@ -112,9 +112,7 @@ struct hpi_hr_t
 struct hpi_steps_t
 {
     int64_t timestamp;
-    
-    uint32_t steps_run;
-    uint32_t steps_walk;
+    uint16_t steps;
 };
 
 struct hpi_temp_t

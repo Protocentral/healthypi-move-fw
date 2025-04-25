@@ -127,7 +127,7 @@ static int bmi323_write_regs_16_n(const struct device *dev, uint8_t addr, uint16
 	{
 		wr_buf[1 + (i * 2)] = data[i] & 0xFF;
 		wr_buf[2 + (i * 2)] = data[i] >> 8;
-
+		
 		// LOG_DBG("Reg Write: %x | %x %x", addr, wr_buf[1 + (i * 2)], wr_buf[2 + (i * 2)]);
 	}
 

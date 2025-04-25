@@ -202,12 +202,9 @@ void hpi_trend_record_thread(void)
         if (k_msgq_get(&q_steps_trend, &trend_steps, K_NO_WAIT) == 0)
         {
             int64_t today_ts = hpi_trend_get_day_start_ts(&trend_steps.timestamp);
-            LOG_DBG("Recd Steps point: %" PRId64 "| %d | %d", trend_steps.timestamp, trend_steps.steps_run, trend_steps.steps_walk);
-            // hpi_steps_trend_wr_point_to_file(trend_steps, today_ts);
+            LOG_DBG("Recd Steps point: %" PRId64 "| %d ", trend_steps.timestamp, trend_steps.steps);
+            hpi_steps_trend_wr_point_to_file(trend_steps, today_ts);
         }
-
-
-
 
         k_sleep(K_SECONDS(2));
     }

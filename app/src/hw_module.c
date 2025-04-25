@@ -116,7 +116,6 @@ ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
 
 static int64_t ref_time;
-
 struct tm sys_tm_time;
 
 static const struct battery_model battery_model = {
@@ -126,12 +125,34 @@ static const struct battery_model battery_model = {
 static float max_charge_current;
 static float term_charge_current;
 
+static uint16_t today_total_steps = 0;
+K_MUTEX_DEFINE(mutex_today_steps);
+
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
 extern struct k_sem sem_disp_ready;
 extern struct k_msgq q_disp_boot_msg;
 
 extern struct k_msgq q_steps_trend;
+
+static int today_add_steps(uint16_t steps)
+{
+    k_mutex_lock(&mutex_today_steps, K_FOREVER);
+    today_total_steps += steps;
+    k_mutex_unlock(&mutex_today_steps);
+
+    return 0;
+}
+
+static uint16_t today_get_steps(void)
+{
+    uint16_t steps = 0;
+    k_mutex_lock(&mutex_today_steps, K_FOREVER);
+    steps = today_total_steps;
+    k_mutex_unlock(&mutex_today_steps);
+
+    return steps;
+}
 
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
@@ -822,10 +843,13 @@ void hw_thread(void)
 
         // Read and publish steps
         _steps = acc_get_steps();
-        struct hpi_steps_t steps = {
-            .steps_walk = _steps,
+        LOG_DBG("Inc. Steps: %d", _steps);
+
+        struct hpi_steps_t steps_point = {
+            .timestamp = hw_get_sys_time_ts(),
+            .steps = today_get_steps(),
         };
-        zbus_chan_pub(&steps_chan, &steps, K_SECONDS(4));
+        zbus_chan_pub(&steps_chan, &steps_point, K_SECONDS(4));
 
         struct sensor_value set_val;
         set_val.val1 = 1;
@@ -833,6 +857,19 @@ void hw_thread(void)
         // Write to file Reset step counter every 60 seconds
         if (sc_reset_counter >= 12)
         {
+            today_add_steps(_steps);
+
+            struct hpi_steps_t tr_steps_point = {
+                .timestamp = hw_get_sys_time_ts(),
+                .steps = _steps,
+            };
+
+            if (_steps > 0)
+            {
+                k_msgq_put(&q_steps_trend, &tr_steps_point, K_NO_WAIT);
+            }
+
+            LOG_DBG("Resetting step counter");
             sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
             sc_reset_counter = 0;
         }
