@@ -131,6 +131,8 @@ extern struct k_msgq q_session_cmd_msg;
 extern struct k_sem sem_disp_ready;
 extern struct k_msgq q_disp_boot_msg;
 
+extern struct k_msgq q_steps_trend;
+
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
     // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d type=%d\n",
