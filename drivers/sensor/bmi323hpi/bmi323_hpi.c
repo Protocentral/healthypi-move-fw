@@ -128,7 +128,7 @@ static int bmi323_write_regs_16_n(const struct device *dev, uint8_t addr, uint16
 		wr_buf[1 + (i * 2)] = data[i] & 0xFF;
 		wr_buf[2 + (i * 2)] = data[i] >> 8;
 
-		LOG_DBG("Reg Write: %x | %x %x", addr, wr_buf[1 + (i * 2)], wr_buf[2 + (i * 2)]);
+		// LOG_DBG("Reg Write: %x | %x %x", addr, wr_buf[1 + (i * 2)], wr_buf[2 + (i * 2)]);
 	}
 
 	return i2c_write_dt(&config->bus, wr_buf, sizeof(wr_buf));
@@ -265,12 +265,12 @@ static int bmi323_enable_step_counter(const struct device *dev)
 	}
 
 	// Write step counter config
-	ret = bmi323_write_step_counter_config(dev, false);
-	if (ret < 0)
+	// ret = bmi323_write_step_counter_config(dev, false);
+	/*if (ret < 0)
 	{
 		LOG_ERR("Error writing step counter config %d", ret);
 		return ret;
-	}
+	}*/
 
 	// Reset Feature register
 	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, 0x0000);
@@ -341,29 +341,18 @@ static int bmi323_write_step_counter_config(const struct device *dev, bool reset
 	}
 
 	// Write step counter config
-	uint16_t step_config[12] = {0};
+	uint16_t step_config = 0;
 
-	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_ADDR, 0x0010);
-	if (ret < 0)
+	if (reset_counter == true)
 	{
-		LOG_ERR("Error writing feature data address %d", ret);
-		return ret;
+		step_config = 0x0401; // SC1 Reset
+	}
+	else
+	{
+		step_config = 0x0001; // SC1 No Reset
 	}
 
-	step_config[0] = 0x0401;  // SC1 Watermark =1
-	step_config[1] = 0x4653;  // SIGMO_3
-	step_config[2] = 0x4426;  // SIGMO_2
-	step_config[3] = 0x00FA;  // SIGMO_1
-	step_config[4] = 0x09CD;  // FLAT_2
-	step_config[5] = 0x2088;  // FLAT_1
-	step_config[6] = 0x600A;  // NOMO_3
-	step_config[7] = 0x0000;  // NOMO_2
-	step_config[8] = 0x0000;  // NOMO_1
-	step_config[9] = 0x0000;  // ANYMO_3
-	step_config[10] = 0x0000; // ANYMO_2
-	step_config[11] = 0x0000; // ANYMO_1
-
-	bmi323_write_regs_16_n(dev, BMI3_REG_FEATURE_DATA_TX, step_config, 12);
+	bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_TX, step_config);
 }
 
 static int bmi323_reset_step_counter(const struct device *dev)
@@ -374,12 +363,13 @@ static int bmi323_reset_step_counter(const struct device *dev)
 	ret = bmi323_write_step_counter_config(dev, true);
 	data->step_counter = 0;
 
+	LOG_DBG("Step Counter reset");
+
 	return 0;
 }
 
 static uint32_t bmi323_soft_reset(const struct device *dev)
 {
-	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 
 	ret = bmi323_write_reg_16(dev, BMI3_REG_CMD, 0xDEAF);
@@ -407,10 +397,8 @@ static int bosch_bmi323_driver_api_attr_set(const struct device *dev, enum senso
 		switch (attr)
 		{
 		case BMI323_HPI_ATTR_EN_FEATURE_ENGINE:
-			
 			break;
 		case BMI323_HPI_ATTR_EN_STEP_COUNTER:
-
 			break;
 		case BMI323_HPI_ATTR_RESET_STEP_COUNTER:
 			ret = bmi323_reset_step_counter(dev);

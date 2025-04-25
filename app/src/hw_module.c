@@ -91,13 +91,6 @@ volatile bool max32664d_device_present = false;
 
 static volatile bool vbus_connected;
 
-// static const struct device npm_gpio_keys = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buttons));
-// static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET(DT_ALIAS(gpio_button0), gpios);
-
-static struct rtc_time hw_system_time;
-
-uint8_t hw_second_boot __attribute__((section(".noinit")));
-
 // USB CDC UART
 #define RING_BUF_SIZE 1024
 uint8_t ring_buffer[RING_BUF_SIZE];
@@ -137,6 +130,8 @@ static float term_charge_current;
 extern struct k_msgq q_session_cmd_msg;
 extern struct k_sem sem_disp_ready;
 extern struct k_msgq q_disp_boot_msg;
+
+extern struct k_msgq q_steps_trend;
 
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
@@ -835,11 +830,10 @@ void hw_thread(void)
         struct sensor_value set_val;
         set_val.val1 = 1;
 
-        if (sc_reset_counter >= 3)
+        // Write to file Reset step counter every 60 seconds
+        if (sc_reset_counter >= 12)
         {
             sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
-            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
-            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
             sc_reset_counter = 0;
         }
         else
