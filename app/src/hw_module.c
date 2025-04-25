@@ -828,11 +828,10 @@ void hw_thread(void)
         struct sensor_value set_val;
         set_val.val1 = 1;
 
-        if (sc_reset_counter >= 3)
+        // Write to file Reset step counter every 60 seconds
+        if (sc_reset_counter >= 12)
         {
             sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
-            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
-            // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
             sc_reset_counter = 0;
         }
         else

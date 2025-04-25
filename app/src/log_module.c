@@ -171,6 +171,34 @@ void hpi_temp_trend_wr_point_to_file(struct hpi_temp_trend_point_t m_temp_point,
     ret = fs_sync(&file);
 }
 
+void hpi_steps_trend_wr_point_to_file(struct hpi_steps_t m_steps_point, int64_t day_ts)
+{
+    struct fs_file_t file;
+    int ret = 0;
+    char fname[30];
+
+    fs_file_t_init(&file);
+
+    sprintf(fname, "/lfs/trsteps/%" PRId64, day_ts);
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_steps_point));
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+    ret = fs_write(&file, &m_steps_point, sizeof(m_steps_point));
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}
+
+
 struct hpi_log_header_t log_get_file_header(char *file_path_name)
 {
     LOG_DBG("Getting header for file %s\n", file_path_name);

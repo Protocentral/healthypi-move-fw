@@ -32,6 +32,10 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 
 #define TEMP_TREND_MINUTE_PTS 12
 
+#define NUM_HOURS 24
+#define MAX_POINTS_PER_HOUR 60
+#define MAX_POINTS_SPO2_PER_HOUR 10
+
 // Store raw HR values for the current minute
 static uint16_t m_hr_curr_minute[60] = {0};   // Assumed max 60 points per minute
 static uint16_t m_temp_curr_minute[13] = {0}; // Assumed max 10 points per minute
@@ -52,6 +56,7 @@ static int64_t m_trend_time_ts;
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_point_t), 8, 4);
 K_MSGQ_DEFINE(q_temp_trend, sizeof(struct hpi_temp_trend_point_t), 8, 1);
+K_MSGQ_DEFINE(q_steps_trend, sizeof(struct hpi_steps_t), 8, 1);
 
 static int hpi_trend_process_points()
 {
@@ -166,6 +171,7 @@ void hpi_trend_record_thread(void)
     struct hpi_hr_trend_point_t trend_hr_minute;
     struct hpi_spo2_point_t trend_spo2;
     struct hpi_temp_trend_point_t trend_temp;
+    struct hpi_steps_t trend_steps;
 
     /* start a periodic timer that expires once every second */
     k_timer_start(&tmr_trend_process, K_SECONDS(1), K_SECONDS(1));
@@ -192,6 +198,16 @@ void hpi_trend_record_thread(void)
             LOG_DBG("Recd SpO2 point: %" PRId64 "| %d ", trend_spo2.timestamp, trend_spo2.spo2);
             hpi_spo2_trend_wr_point_to_file(trend_spo2, today_ts);
         }
+
+        if (k_msgq_get(&q_steps_trend, &trend_steps, K_NO_WAIT) == 0)
+        {
+            int64_t today_ts = hpi_trend_get_day_start_ts(&trend_steps.timestamp);
+            LOG_DBG("Recd Steps point: %" PRId64 "| %d | %d", trend_steps.timestamp, trend_steps.steps_run, trend_steps.steps_walk);
+            // hpi_steps_trend_wr_point_to_file(trend_steps, today_ts);
+        }
+
+
+
 
         k_sleep(K_SECONDS(2));
     }

@@ -1,8 +1,5 @@
 #pragma once
 
-#define NUM_HOURS 24
-#define MAX_POINTS_PER_HOUR 60
-#define MAX_POINTS_SPO2_PER_HOUR 10
 
 struct hpi_hr_trend_point_t
 {
