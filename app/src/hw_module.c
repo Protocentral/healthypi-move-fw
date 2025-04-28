@@ -536,6 +536,8 @@ void hw_module_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
+    ble_module_init();
+
     if (!device_is_ready(pmic))
     {
         LOG_ERR("PMIC device not ready");
@@ -847,7 +849,7 @@ void hw_thread(void)
 
         struct hpi_steps_t steps_point = {
             .timestamp = hw_get_sys_time_ts(),
-            .steps = _steps, //today_get_steps(),
+            .steps = today_get_steps(),
         };
         zbus_chan_pub(&steps_chan, &steps_point, K_SECONDS(4));
 
@@ -855,7 +857,7 @@ void hw_thread(void)
         set_val.val1 = 1;
 
         // Write to file Reset step counter every 60 seconds
-        /*if (sc_reset_counter >= 12)
+        if (sc_reset_counter >= 12)
         {
             today_add_steps(_steps);
 
@@ -876,7 +878,7 @@ void hw_thread(void)
         else
         {
             sc_reset_counter++;
-        }*/
+        }
 
         // Read and publish temperature
         _temp_f = read_temp_f();

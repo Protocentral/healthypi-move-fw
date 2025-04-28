@@ -352,7 +352,7 @@ static int bmi323_write_step_counter_config(const struct device *dev, bool reset
 		step_config = 0x0001; // SC1 No Reset
 	}
 
-	bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_TX, step_config);
+	return bmi323_write_reg_16(dev, BMI3_REG_FEATURE_DATA_TX, step_config);
 }
 
 static int bmi323_reset_step_counter(const struct device *dev)
@@ -362,6 +362,8 @@ static int bmi323_reset_step_counter(const struct device *dev)
 
 	ret = bmi323_write_step_counter_config(dev, true);
 	data->step_counter = 0;
+
+	k_msleep(10);
 
 	LOG_DBG("Step Counter reset");
 
@@ -514,13 +516,7 @@ static int bmi323_trigger_set_acc_drdy(const struct device *dev)
 	// struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
 	int ret;
 
-	// ret = bmi323_write_reg_16(dev, BMI3_REG_ACC_INT_CONF_0, 0x0001);
-
-	if (ret < 0)
-	{
-		LOG_ERR("Error setting acc drdy trigger %d", ret);
-		return ret;
-	}
+	
 
 	return 0;
 }
@@ -853,7 +849,7 @@ static int bosch_bmi323_init(const struct device *dev)
 		return ret;
 	}
 
-	k_msleep(100);
+	k_msleep(10);
 
 	ret = bmi323_get_status(dev);
 
@@ -871,6 +867,8 @@ static int bosch_bmi323_init(const struct device *dev)
 		return ret;
 	}
 
+	k_msleep(10);
+
 	ret = bmi323_enable_step_counter(dev);
 
 	if (ret < 0)
@@ -878,6 +876,8 @@ static int bosch_bmi323_init(const struct device *dev)
 		LOG_ERR("Failed to enable step counter");
 		return ret;
 	}
+
+	k_msleep(10);
 
 	ret = bmi323_get_status(dev);
 

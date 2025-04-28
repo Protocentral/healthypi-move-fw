@@ -584,9 +584,6 @@ static int max30001_chip_init(const struct device *dev)
     //_max30001RegWrite(dev, CNFG_GEN, 0xC0004); // ECG, BIOZ Enabled, DC LOFF disabled
     k_sleep(K_MSEC(100));
 
-    // max30001_enable_ecg(dev);
-    // LOG_INF("Enabling MAX30001 ECG");
-
     _max30001RegWrite(dev, CNFG_ECG, data->chip_cfg.reg_cnfg_ecg.all);
     //_max30001RegWrite(dev, CNFG_ECG, 0x835000); // Gain 160
     k_sleep(K_MSEC(100));

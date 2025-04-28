@@ -1,6 +1,3 @@
-
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
 #include <zephyr/sys/reboot.h>
 #include <lvgl.h>
 #include <stdio.h>
@@ -19,8 +16,6 @@ LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 int main(void)
 {
 	hw_module_init();
-
-	ble_module_init();
 
 	LOG_INF("HealthyPi Move %d.%d.%d started!", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 
