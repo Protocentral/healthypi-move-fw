@@ -38,7 +38,7 @@ extern lv_style_t style_tiny;
 
 static void draw_event_cb(lv_event_t *e)
 {
-    lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
+    /*lv_obj_draw_part_dsc_t *dsc = lv_event_get_draw_part_dsc(e);
     if (!lv_obj_draw_part_check_type(dsc, &lv_chart_class, LV_CHART_DRAW_PART_TICK_LABEL))
         return;
 
@@ -46,7 +46,7 @@ static void draw_event_cb(lv_event_t *e)
     {
         const char *hour[] = {"00", "06", "12", "18", "23"};
         lv_snprintf(dsc->text, dsc->text_length, "%s", hour[dsc->value]);
-    }
+    }*/
 }
 
 static void scr_spo2_btn_live_event_handler(lv_event_t *e)
@@ -113,17 +113,17 @@ void draw_scr_spo2_trends(enum scroll_dir m_scroll_dir)
 
     // Hide the lines and show the points
     lv_obj_set_style_line_width(chart_spo2_trend, 0, LV_PART_ITEMS);
-    lv_obj_set_style_size(chart_spo2_trend, 8, LV_PART_INDICATOR);
+    //lv_obj_set_style_size(chart_spo2_trend, 8, LV_PART_INDICATOR);
 
-    lv_obj_add_event_cb(chart_spo2_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
+    //lv_obj_add_event_cb(chart_spo2_trend, draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
     // lv_obj_align_to(chart_spo2_trend, NULL, LV_ALIGN_CENTER, 15, 40);
 
     lv_obj_set_style_bg_color(chart_spo2_trend, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_spo2_trend, 0, LV_PART_MAIN);
     lv_chart_set_div_line_count(chart_spo2_trend, 0, 24);
 
-    lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
-    lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 80);
+    //lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_X, 10, 5, 5, 5, true, 40);
+    //lv_chart_set_axis_tick(chart_spo2_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 0, 3, 2, true, 80);
 
     ser_max_trend = lv_chart_add_series(chart_spo2_trend, lv_color_hex(0xFFEA00), LV_CHART_AXIS_PRIMARY_Y);
     ser_min_trend = lv_chart_add_series(chart_spo2_trend, lv_color_hex(0x00B0FF), LV_CHART_AXIS_PRIMARY_Y);

@@ -1,0 +1,1 @@
+ ../../../../../external/modules/lib/gui/lvgl/scripts/LVGLImage.py --ofmt C --cf I8 ecg_120.png

@@ -180,11 +180,11 @@ static void set_angle(void *obj, int32_t v)
 
 static void hpi_disp_show_loading(lv_obj_t *scr_parent, char *message)
 {
-    obj_msgbox = lv_msgbox_create(scr_parent, "Please wait...", NULL, NULL, false);
+    /*    obj_msgbox = lv_msgbox_create(scr_parent, "Please wait...", NULL, NULL, false);
     lv_obj_center(obj_msgbox);
     lv_obj_set_size(obj_msgbox, 250, 250);
 
-    /* setting's content*/
+   
     lv_obj_t *content = lv_msgbox_get_content(obj_msgbox);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -193,12 +193,12 @@ static void hpi_disp_show_loading(lv_obj_t *scr_parent, char *message)
     lv_obj_t *lbl_msg = lv_label_create(content);
     lv_label_set_text(lbl_msg, message);
 
-    /*Create an Arc*/
+   
     lv_obj_t *arc = lv_arc_create(content);
     lv_arc_set_rotation(arc, 270);
     lv_arc_set_bg_angles(arc, 0, 360);
-    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);  /*Be sure the knob is not displayed*/
-    lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE); /*To not allow adjusting by click*/
+    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);  
+    lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE); 
     lv_obj_set_size(arc, 100, 100);
     lv_obj_center(arc);
 
@@ -207,10 +207,9 @@ static void hpi_disp_show_loading(lv_obj_t *scr_parent, char *message)
     lv_anim_set_var(&a, arc);
     lv_anim_set_exec_cb(&a, set_angle);
     lv_anim_set_time(&a, 1000);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE); /*Just for the demo*/
-    lv_anim_set_repeat_delay(&a, 500);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE); 
     lv_anim_set_values(&a, 0, 100);
-    lv_anim_start(&a);
+    lv_anim_start(&a);*/
 }
 
 static void hpi_disp_hide_loading(void)

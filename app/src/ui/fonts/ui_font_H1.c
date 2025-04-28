@@ -4,19 +4,9 @@
  * Opts: --bpp 8 --size 35 --font C:\!SVN\SquareLine\gfx\editor_prj\SmartWatch_2\assets\fonts\Montserrat-Light.ttf -o C:\!SVN\SquareLine\gfx\editor_prj\SmartWatch_2\assets\fonts\ui_font_H1.c --format lvgl -r 0x20-0xff --no-compress --no-prefilter
  ******************************************************************************/
 
-#ifdef __has_include
-    #if __has_include("lvgl.h")
-        #ifndef LV_LVGL_H_INCLUDE_SIMPLE
-            #define LV_LVGL_H_INCLUDE_SIMPLE
-        #endif
-    #endif
-#endif
 
-#if defined(LV_LVGL_H_INCLUDE_SIMPLE)
     #include "lvgl.h"
-#else
-    #include "lvgl/lvgl.h"
-#endif
+
 
 #ifndef UI_FONT_H1
 #define UI_FONT_H1 1

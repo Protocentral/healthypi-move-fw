@@ -44,9 +44,9 @@ void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_info, "Checking sensor status...");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
-     lv_obj_t * spinner = lv_spinner_create(cont_col, 1000, 60);
+     /*lv_obj_t * spinner = lv_spinner_create(cont_col, 1000, 60);
      lv_obj_set_size(spinner, 100, 100);
-     lv_obj_center(spinner);
+     lv_obj_center(spinner);*/
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR2);
     hpi_show_screen(scr_bpt_scr3, m_scroll_dir);

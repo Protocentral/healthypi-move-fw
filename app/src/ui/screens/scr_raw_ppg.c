@@ -72,7 +72,7 @@ static void btn_close_event_handler(lv_event_t *e)
 
 static void hpi_disp_ppg_settings_open(void)
 {
-    msg_box_settings = lv_msgbox_create(scr_raw_ppg, "PPG Settings", NULL, NULL, false);
+    /*msg_box_settings = lv_msgbox_create(scr_raw_ppg, "PPG Settings", NULL, NULL, false);
     lv_obj_set_style_clip_corner(msg_box_settings, true, 0);
 
     // /lv_obj_set_size(msg_box_settings, 320, 320);
@@ -86,7 +86,6 @@ static void hpi_disp_ppg_settings_open(void)
     lv_obj_t *lbl_plot_signal = lv_label_create(content);
     lv_label_set_text(lbl_plot_signal, "Plot Signal : ");
 
-    /*Create a normal drop down list*/
     lv_obj_t *dd = lv_dropdown_create(content);
     lv_dropdown_set_options(dd, "Red\n"
                                 "IR\n"
@@ -105,7 +104,7 @@ static void hpi_disp_ppg_settings_open(void)
     lv_obj_t *slider_speed = lv_slider_create(cont_speed);
     lv_obj_set_width(slider_speed, lv_pct(100));
     lv_slider_set_value(slider_speed, 80, LV_ANIM_OFF);
-    */
+    
 
     btn_settings_close = lv_btn_create(content);
     lv_obj_add_event_cb(btn_settings_close, btn_close_event_handler, LV_EVENT_ALL, NULL);
@@ -114,7 +113,7 @@ static void hpi_disp_ppg_settings_open(void)
 
     lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_settings_close);
     lv_label_set_text(label_btn_bpt_measure, "Close");
-    lv_obj_center(label_btn_bpt_measure);
+    lv_obj_center(label_btn_bpt_measure);*/
 }
 
 static void ppg_settings_button_cb(lv_event_t *e)
@@ -144,7 +143,7 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_set_size(chart_ppg, 380, 130);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
-    lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
+    //lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ppg, PPG_RAW_WINDOW_SIZE);
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
