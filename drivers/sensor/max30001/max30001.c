@@ -83,7 +83,6 @@ uint32_t max30001_read_reg(const struct device *dev, uint8_t reg)
     const struct spi_buf_set rx = {.buffers = rx_buf, .count = 2};
 
     spi_transceive_dt(&config->spi, &tx, &rx); // regRxBuffer 0 contains NULL (for sent command), so read from 1 onwards
-    // printk("Reg: %x %x %x\n", (uint8_t)buf[0], (uint8_t)buf[1], (uint8_t)buf[2]);
 
     return (uint32_t)(buf[0] << 16) | (buf[1] << 8) | buf[2];
 }
@@ -129,7 +128,6 @@ static int _max30001_read_ecg_fifo(const struct device *dev, int num_bytes)
     spi_transceive_dt(&config->spi, &tx, &rx);
 
     // regRxBuffer 0 contains NULL (for sent command), so read from 1 onwards
-    // printk("%x %x %x %x\n", regRxBuffer[0], regRxBuffer[1], regRxBuffer[2], regRxBuffer[3]);
 
     for (int i = 0; i < num_bytes; i += 3)
     {
@@ -476,10 +474,6 @@ static int max30001_chip_init(const struct device *dev)
 
     int err;
 
-    // bool en_bioz = true;
-    // bool en_rtor = true;
-    // bool en_dcloff = false;
-
     err = spi_is_ready_dt(&config->spi);
     if (err < 0)
     {
@@ -498,7 +492,6 @@ static int max30001_chip_init(const struct device *dev)
         LOG_ERR("MAX30001 not found");
         return -ENODEV;
     }
-    // Load settings from the device tree
 
     // General Configuration
     data->chip_cfg.reg_cnfg_gen.bit.en_ulp_lon = 0;
@@ -581,29 +574,22 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_bmux.bit.fbist = 0;
 
     _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
-    //_max30001RegWrite(dev, CNFG_GEN, 0xC0004); // ECG, BIOZ Enabled, DC LOFF disabled
     k_sleep(K_MSEC(100));
 
     _max30001RegWrite(dev, CNFG_ECG, data->chip_cfg.reg_cnfg_ecg.all);
-    //_max30001RegWrite(dev, CNFG_ECG, 0x835000); // Gain 160
     k_sleep(K_MSEC(100));
 
     _max30001RegWrite(dev, CNFG_EMUX, data->chip_cfg.reg_cnfg_emux.all);
-    //_max30001RegWrite(dev, CNFG_EMUX, 0x0B0000); // Pins internally connection to ECG Channels
     k_sleep(K_MSEC(100));
 
     // Set MAX30001G specific BioZ LC
     _max30001RegWrite(dev, CNFG_BIOZ_LC, 0x800000); // Turn OFF low current mode
     k_sleep(K_MSEC(100));
 
-    // max30001_enable_bioz(dev);
-    // LOG_INF("Enabling MAX30001 BioZ");
     _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
-    //_max30001RegWrite(dev, CNFG_BIOZ, 0x201433);
     k_sleep(K_MSEC(100));
 
     _max30001RegWrite(dev, CNFG_BMUX, data->chip_cfg.reg_cnfg_bmux.all);
-    //_max30001RegWrite(dev, CNFG_BMUX, 0x000040);
     k_sleep(K_MSEC(100));
 
     max30001_enable_rtor(dev);
