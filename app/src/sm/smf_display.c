@@ -146,15 +146,13 @@ static void st_display_init_entry(void *o)
 {
     LOG_DBG("Display SM Init Entry");
 
-    LOG_DBG("Disp ON");
+    //LOG_DBG("Disp ON");
 
     if (!device_is_ready(display_dev))
     {
         LOG_ERR("Device not ready");
         // return;
     }
-
-    LOG_DBG("Display device: %s", display_dev->name);
 
     sh8601_reinit(display_dev);
     k_msleep(500);

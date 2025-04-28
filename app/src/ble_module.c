@@ -419,7 +419,7 @@ void ble_module_init()
 		// settings_load();
 	}
 
-	bt_conn_auth_cb_register(&auth_cb_display);
+	//bt_conn_auth_cb_register(&auth_cb_display);
 
 	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err)

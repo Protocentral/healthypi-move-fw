@@ -531,7 +531,7 @@ static int hw_enable_pmic_callback(void)
     return 0;
 }
 
-void hw_init(void)
+void hw_module_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
@@ -843,11 +843,11 @@ void hw_thread(void)
 
         // Read and publish steps
         _steps = acc_get_steps();
-        LOG_DBG("Inc. Steps: %d", _steps);
+        //LOG_DBG("Inc. Steps: %d", _steps);
 
         struct hpi_steps_t steps_point = {
             .timestamp = hw_get_sys_time_ts(),
-            .steps = today_get_steps(),
+            .steps = _steps, //today_get_steps(),
         };
         zbus_chan_pub(&steps_chan, &steps_point, K_SECONDS(4));
 
@@ -855,7 +855,7 @@ void hw_thread(void)
         set_val.val1 = 1;
 
         // Write to file Reset step counter every 60 seconds
-        if (sc_reset_counter >= 12)
+        /*if (sc_reset_counter >= 12)
         {
             today_add_steps(_steps);
 
@@ -876,7 +876,7 @@ void hw_thread(void)
         else
         {
             sc_reset_counter++;
-        }
+        }*/
 
         // Read and publish temperature
         _temp_f = read_temp_f();
