@@ -91,6 +91,11 @@ struct hpi_ppg_fi_data_t
     uint8_t scd_state;
 };
 
+/*struct hpi_ppg_fi_bpt_cal_t
+{
+    uint32_t 
+}*/
+
 struct hpi_computed_hrv_t
 {
     int32_t hrv_max;

@@ -26,12 +26,18 @@ enum hpi_cmds
     HPI_CMD_GET_DEVICE_STATUS = 0x40,
     HPI_CMD_SET_DEVICE_TIME = 0x41,
     HPI_CMD_DEVICE_RESET = 0x42,
+    HPI_CMD_PAIR_DEVICE = 0x43,
+    HPI_CMD_UNPAIR_DEVICE = 0x44,
+    HPI_CMD_PAIR_CHECK_PIN = 0x45,
 
     HPI_CMD_LOG_GET_INDEX = 0x50, //No arguments
     HPI_CMD_LOG_GET_FILE = 0x51,       //Needs session ID (uint16) as argument
     HPI_CMD_LOG_DELETE = 0x52,    //Needs session ID (uint16) as argument
     HPI_CMD_LOG_WIPE_ALL = 0x53,  //No arguments
     HPI_CMD_LOG_GET_COUNT = 0x54, //No arguments
+
+    HPI_CMD_START_BPT_CAL = 0x60, //Needs Sys/Diastolic (as uint8/uint8) as argument
+    
 };
 
 enum cmdif_pkt_type

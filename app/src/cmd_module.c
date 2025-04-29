@@ -46,6 +46,36 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         k_sleep(K_MSEC(1000));
         sys_reboot(SYS_REBOOT_COLD);
         break;
+    case HPI_CMD_START_BPT_CAL:
+        LOG_DBG("RX CMD Start BPT Cal");
+        uint8_t bpt_cal_index = in_pkt_buf[1];
+        uint8_t bpt_cal_value_sys = in_pkt_buf[2];
+        uint8_t bpt_cal_value_dia = in_pkt_buf[3];
+        LOG_DBG("Sys: %d Dia: %d", bpt_cal_value_sys, bpt_cal_value_dia);
+        //hpi_bpt_start_cal(sys, dia);
+        break;
+
+    case HPI_CMD_PAIR_DEVICE:
+        LOG_DBG("RX CMD Pair Device");
+        //uint8_t pin_code = in_pkt_buf[1];
+        //LOG_DBG("PIN: %d", pin_code);
+        //hpi_pair_device(pin_code);
+        break;
+    case HPI_CMD_UNPAIR_DEVICE:
+        LOG_DBG("RX CMD Unpair Device");
+        //hpi_unpair_device();
+        break;
+    case HPI_CMD_PAIR_CHECK_PIN:
+        LOG_DBG("RX CMD Check PIN");
+        uint8_t hpi_pin[6]; 
+        for (int i = 0; i < 6; i++)
+        {
+            hpi_pin[i] = in_pkt_buf[1 + i];
+        }
+        LOG_DBG("PIN: %02X %02X %02X %02X %02X %02X", hpi_pin[0], hpi_pin[1], hpi_pin[2], hpi_pin[3], hpi_pin[4], hpi_pin[5]);
+        //hpi_check_pin(hpi_pin);
+        break;
+    
 
     // File System Commands
     case HPI_CMD_LOG_GET_COUNT:
@@ -75,6 +105,8 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         LOG_DBG("RX CMD Log Wipe");
         log_wipe_all();
         break;
+
+    
     default:
         LOG_DBG("RX CMD Unknown");
         break;
