@@ -3,11 +3,8 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
-
 #include <zephyr/dfu/mcuboot.h>
-
 #include <stdio.h>
-
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/fuel_gauge.h>
 #include <zephyr/sys/ring_buffer.h>
@@ -18,10 +15,16 @@
 #include <zephyr/drivers/sensor/npm1300_charger.h>
 #include <zephyr/dt-bindings/regulator/npm1300.h>
 #include <zephyr/drivers/mfd/npm1300.h>
+#include <zephyr/drivers/regulator.h>
 
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/zbus/zbus.h>
+
+#include <zephyr/sys/reboot.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/pm/device_runtime.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -32,30 +35,14 @@
 
 #include "max30001.h"
 #include "max32664d.h"
-
 #include "bmi323_hpi.h"
-
-#ifdef CONFIG_SENSOR_MAX32664C
 #include "max32664c.h"
-#endif
+#include "nrf_fuel_gauge.h"
+#include "display_sh8601.h"
 
 #include "hw_module.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
-
-// #include "max32664c_msbl.h"
-
-#include <zephyr/sys/reboot.h>
-#include <zephyr/drivers/mfd/npm1300.h>
-#include <zephyr/drivers/regulator.h>
-
-#include <zephyr/pm/device.h>
-#include <zephyr/pm/pm.h>
-#include <zephyr/pm/device_runtime.h>
-
-#include "nrf_fuel_gauge.h"
-
-#include "display_sh8601.h"
 
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 char curr_string[40];
