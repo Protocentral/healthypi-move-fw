@@ -298,7 +298,7 @@ uint16_t log_get_count(uint8_t m_log_type)
                 LOG_ERR("Error reading dir [%d]\n", res);
             }
 
-            printk("Total log count: %d\n", log_count);
+            LOG_DBG("Total log count: %d\n", log_count);
             break;
         }
 
@@ -333,7 +333,7 @@ int log_get_index(uint8_t m_log_type)
         return res;
     }
 
-    LOG_PRINTK("\nGet Index CMD %s ...\n", m_path);
+    LOG_DBG("Getting Index %s", m_path);
     for (;;)
     {
         res = fs_readdir(&dirp, &entry);

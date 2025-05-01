@@ -162,14 +162,15 @@ static ssize_t on_receive_cmd(struct bt_conn *conn,
 {
 	const uint8_t *buffer = buf;
 
-	printk("Received CMD len %d \n", len);
+	//LOG_DBG("Received CMD len %d \n", len);
 
-	for (uint8_t i = 0; i < len; i++)
+	/*for (uint8_t i = 0; i < len; i++)
 	{
 		in_data_buffer[i] = buffer[i];
 		printk("%02X", buffer[i]);
 	}
 	printk("\n");
+	*/
 
 	struct hpi_cmd_data_obj_t cmd_data_obj;
 	cmd_data_obj.pkt_type = 0x00;
@@ -311,7 +312,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	}
 	else
 	{
-		LOG_DBG("Connected");
+		LOG_INF("BLE Connected");
 		// send_status_serial(BLE_STATUS_CONNECTED);
 		current_conn = bt_conn_ref(conn);
 	}
@@ -319,7 +320,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	LOG_DBG("Disconnected (reason 0x%02x)", reason);
+	LOG_INF("BLE Disconnected (reason 0x%02x)", reason);
 	// send_status_serial(BLE_STATUS_DISCONNECTED);
 	if (current_conn)
 	{

@@ -29,7 +29,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
     uint8_t cmd_cmd_id = in_pkt_buf[0];
 
-    LOG_DBG("Recd Command: %X", cmd_cmd_id);
+    LOG_DBG("RX Command: %X", cmd_cmd_id);
 
     switch (cmd_cmd_id)
     {
@@ -144,7 +144,7 @@ void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
 
 void hpi_cmdif_send_ble_cmd_rsp(uint8_t m_cmd, uint16_t m_value)
 {
-    printk("Sending BLE Command Response: %X %X\n", m_cmd, m_value);
+    LOG_DBG("Sending BLE Command Response: %X %X\n", m_cmd, m_value);
     uint8_t cmd_pkt[4];
 
     cmd_pkt[0] = CES_CMDIF_TYPE_CMD_RSP;
@@ -165,12 +165,13 @@ void cmd_thread(void)
     {
         k_msgq_get(&q_cmd_msg, &rx_cmd_data_obj, K_FOREVER);
 
-        LOG_DBG("Recd BLE Packet len: %d", rx_cmd_data_obj.data_len);
+        /*LOG_DBG("Recd BLE Packet len: %d", rx_cmd_data_obj.data_len);
         for (int i = 0; i < rx_cmd_data_obj.data_len; i++)
         {
             printk("%02X ", rx_cmd_data_obj.data[i]);
         }
         printk("\n");
+        */
         hpi_decode_data_packet(rx_cmd_data_obj.data, rx_cmd_data_obj.data_len);
 
         k_sleep(K_MSEC(1000));
