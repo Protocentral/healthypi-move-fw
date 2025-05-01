@@ -243,6 +243,16 @@ void hpi_init_fs_struct(void)
     {
         LOG_DBG("Created dir");
     }
+
+    ret = fs_mkdir("/lfs/sys");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
 }
 
 void fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
@@ -307,7 +317,6 @@ void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer
     }
 }
 
-
 void fs_module_init(void)
 {
     int rc;
@@ -330,8 +339,7 @@ void fs_module_init(void)
 
     LOG_DBG("%s: bsize = %lu ; frsize = %lu ;"
             " blocks = %lu ; bfree = %lu\n",
-            mp->mnt_point,
-            sbuf.f_bsize, sbuf.f_frsize,
+            mp->mnt_point, sbuf.f_bsize, sbuf.f_frsize,
             sbuf.f_blocks, sbuf.f_bfree);
 
     // record_wipe_all();
@@ -342,12 +350,12 @@ void fs_module_init(void)
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
 
-    rc = lsdir("/lfs/trhr");
+    /*rc = lsdir("/lfs/trhr");
     if (rc < 0)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         LOG_INF("Creating trend directory structure");
         hpi_init_fs_struct();
         lsdir("/lfs/trhr");
-    }
+    }*/
 }
