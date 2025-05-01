@@ -38,7 +38,8 @@
         "kernel.h": "c",
         "littlefs.h": "c",
         "ctime": "c",
-        "conn.h": "c"
+        "conn.h": "c",
+        "byteorder.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

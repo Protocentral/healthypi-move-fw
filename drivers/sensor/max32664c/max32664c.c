@@ -714,7 +714,7 @@ static int max32664c_attr_set(const struct device *dev,
         }
         break;
     case MAX32664C_ATTR_ENTER_BOOTLOADER:
-        max32664c_do_enter_bl(dev);
+        //max32664c_do_enter_bl(dev);
         break;
     default:
         LOG_ERR("Unsupported sensor attribute");

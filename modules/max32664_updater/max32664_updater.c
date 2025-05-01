@@ -1,9 +1,10 @@
-#define DT_DRV_COMPAT maxim_max32664c
+
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/gpio.h>
 
 #include <zephyr/logging/log.h>
-#include <zephyr/pm/device.h>
-#include <zephyr/drivers/gpio.h>
-#include "max32664c.h"
+
+#include "max32664_updater.h"
 
 //#include "max32664c_msbl_33_13.h"
 //  #include "max32664cc_msbl.h"
@@ -11,10 +12,12 @@
 
 //#include "max32664c_msbl_30_13_31.h"
 
-LOG_MODULE_REGISTER(MAX32664C_BL, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(MAX32664C_BL, CONFIG_MAX32664_UPDATER_LOG_LEVEL);
 
 uint8_t max32664c_fw_init_vector[11] = {0};
 uint8_t max32664c_fw_auth_vector[16] = {0};
+
+#define MAX32664C_DEFAULT_CMD_DELAY 10
 
 #define MAX32664C_FW_UPDATE_WRITE_SIZE 8208 // Page size 8192 + 16 bytes for CRC
 #define MAX32664C_FW_UPDATE_START_ADDR 0x4C
@@ -22,9 +25,16 @@ uint8_t max32664c_fw_auth_vector[16] = {0};
 #define MAX32664C_FW_BIN_INCLUDE 0
 #define MAX32664C_WR_SIM_ONLY 0
 
+struct max32664_config
+{
+	struct i2c_dt_spec i2c;
+	struct gpio_dt_spec reset_gpio;
+	struct gpio_dt_spec mfio_gpio;
+};
+
 static int m_read_bl_ver(const struct device *dev)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t rd_buf[4] = {0x00, 0x00, 0x00, 0x00};
 	uint8_t wr_buf[2] = {0x81, 0x00};
 
@@ -44,7 +54,7 @@ static int m_read_bl_ver(const struct device *dev)
 
 static int m_wr_cmd_enter_bl(const struct device *dev)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t wr_buf[3] = {0x01, 0x00, 0x08};
 	uint8_t rd_buf[1] = {0x00};
 
@@ -59,7 +69,7 @@ static int m_wr_cmd_enter_bl(const struct device *dev)
 
 static int m_read_bl_page_size(const struct device *dev, uint16_t *bl_page_size)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t rd_buf[3] = {0x00, 0x00, 0x00};
 	uint8_t wr_buf[2] = {0x81, 0x01};
 
@@ -78,7 +88,7 @@ static int m_read_bl_page_size(const struct device *dev, uint16_t *bl_page_size)
 
 static int m_write_set_num_pages(const struct device *dev, uint8_t num_pages)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t wr_buf[4] = {0x80, 0x02, 0x00, 0x00};
 	uint8_t rd_buf[1] = {0x00};
 
@@ -95,7 +105,7 @@ static int m_write_set_num_pages(const struct device *dev, uint8_t num_pages)
 
 static int m_write_init_vector(const struct device *dev, uint8_t *init_vector)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t wr_buf[13];
 	uint8_t rd_buf[1] = {0x00};
 
@@ -118,7 +128,7 @@ static int m_write_init_vector(const struct device *dev, uint8_t *init_vector)
 
 static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t wr_buf[18];
 	uint8_t rd_buf[1] = {0x00};
 
@@ -143,7 +153,7 @@ static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
 /*
 static int m_fw_write_page_single(const struct device *dev, uint8_t *msbl_data, uint32_t msbl_page_offset)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 
 	uint8_t rd_buf[1] = {0x00};
 	uint8_t cmd_wr_buf[2] = {0x80, 0x04};
@@ -169,7 +179,7 @@ static uint8_t tmp_wr_buf[8][1026];
 
 static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_t msbl_page_offset)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 
 	uint8_t rd_buf[1] = {0x00};
 	uint8_t cmd_wr_buf[2] = {0x80, 0x04};
@@ -219,7 +229,7 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 
 static int m_erase_app(const struct device *dev)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t wr_buf[2] = {0x80, 0x03};
 	uint8_t rd_buf[1] = {0x00};
 
@@ -239,7 +249,7 @@ static int m_erase_app(const struct device *dev)
 
 static int m_read_mcu_id(const struct device *dev)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 	uint8_t wr_buf[2] = {0xFF, 0x00};
 
@@ -259,22 +269,21 @@ static int max32664c_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 {
 	uint8_t msbl_num_pages = 0;
 
-#if (MAX32664C_FW_BIN_INCLUDE == 1)
 	printk("---\nLoading MSBL\n");
-	printk("MSBL Array Size: %d\n", sizeof(max32664c_msbl));
+	printk("MSBL Array Size: %d\n", sizeof(fw_bin_array));
 
-	msbl_num_pages = max32664c_msbl[0x44];
+	msbl_num_pages = fw_bin_array[0x44];
 	printk("MSBL Load: Pages: %d (%x)\n", msbl_num_pages, msbl_num_pages);
 
 	m_read_mcu_id(dev);
 
 	m_write_set_num_pages(dev, msbl_num_pages);
 
-	memcpy(max32664c_fw_init_vector, &max32664c_msbl[0x28], 11);
+	memcpy(max32664c_fw_init_vector, fw_bin_array[0x28], 11);
 	m_write_init_vector(dev, max32664c_fw_init_vector);
 	printk("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x\n", max32664c_fw_init_vector[0], max32664c_fw_init_vector[1], max32664c_fw_init_vector[2], max32664c_fw_init_vector[3], max32664c_fw_init_vector[4], max32664c_fw_init_vector[5], max32664c_fw_init_vector[6], max32664c_fw_init_vector[7], max32664c_fw_init_vector[8], max32664c_fw_init_vector[9], max32664c_fw_init_vector[10]);
 
-	memcpy(max32664c_fw_auth_vector, &max32664c_msbl[0x34], 16);
+	memcpy(max32664c_fw_auth_vector, fw_bin_array[0x34], 16);
 	m_write_auth_vector(dev, max32664c_fw_auth_vector);
 
 	m_erase_app(dev);
@@ -289,15 +298,14 @@ static int max32664c_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 		// memcpy(max32664c_fw_page_buf, &fw_bin_array[MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE)], MAX32664C_FW_UPDATE_WRITE_SIZE);
 		uint32_t msbl_page_offset = (MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE));
 		printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
-		m_fw_write_page(dev, max32664c_msbl, msbl_page_offset);
+		m_fw_write_page(dev, fw_bin_array, msbl_page_offset);
 		//m_fw_write_page_single(dev, max32664c_msbl, msbl_page_offset);
 
 		// k_sleep(K_MSEC(500));
 	}
 	max32664c_do_enter_app(dev);
-#endif
 
-#endif
+	#endif
 
 	printk("End Load MSBL\n---\n");
 	return 0;
@@ -305,7 +313,7 @@ static int max32664c_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 
 static int m_read_op_mode(const struct device *dev)
 { 
-    const struct max32664c_config *config = dev->config;
+    const struct max32664_config *config = dev->config;
     uint8_t rd_buf[2] = {0x00, 0x00};
     uint8_t wr_buf[2] = {0x02, 0x00};
 
@@ -325,7 +333,7 @@ static int m_read_op_mode(const struct device *dev)
 
 void max32664c_do_enter_bl(const struct device *dev)
 {
-	const struct max32664c_config *config = dev->config;
+	const struct max32664_config *config = dev->config;
 
 	printk("Entering Bootloader mode\n");
 
@@ -341,9 +349,7 @@ void max32664c_do_enter_bl(const struct device *dev)
 	k_sleep(K_MSEC(1000));
 
 	m_wr_cmd_enter_bl(dev);
-
 	m_read_op_mode(dev);
-
 	m_read_bl_ver(dev);
 
 	uint16_t bl_page_size;
