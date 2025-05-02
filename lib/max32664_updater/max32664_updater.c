@@ -6,16 +6,18 @@
 
 #include "max32664_updater.h"
 
-//#include "max32664c_msbl_33_13.h"
-//  #include "max32664cc_msbl.h"
-//  #include "max32664cd_msbl.h"
+// #include "max32664_msbl_33_13.h"
+//   #include "max32664c_msbl.h"
+//   #include "max32664d_msbl.h"
 
-//#include "max32664c_msbl_30_13_31.h"
+// #include "max32664c_msbl_30_13_31.h"
 
-LOG_MODULE_REGISTER(MAX32664C_BL, CONFIG_MAX32664_UPDATER_LOG_LEVEL);
+#include "msbl/max32664c_30_13_31.h"
 
-uint8_t max32664c_fw_init_vector[11] = {0};
-uint8_t max32664c_fw_auth_vector[16] = {0};
+LOG_MODULE_REGISTER(max32664_updater, CONFIG_MAX32664_UPDATER_LOG_LEVEL);
+
+uint8_t max32664_fw_init_vector[11] = {0};
+uint8_t max32664_fw_auth_vector[16] = {0};
 
 #define MAX32664C_DEFAULT_CMD_DELAY 10
 
@@ -147,8 +149,7 @@ static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
 	return rd_buf[0];
 }
 
-//volatile uint8_t fw_data_wr_buf[MAX32664C_FW_UPDATE_WRITE_SIZE + 2];
-
+// volatile uint8_t fw_data_wr_buf[MAX32664C_FW_UPDATE_WRITE_SIZE + 2];
 
 /*
 static int m_fw_write_page_single(const struct device *dev, uint8_t *msbl_data, uint32_t msbl_page_offset)
@@ -184,35 +185,35 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 	uint8_t rd_buf[1] = {0x00};
 	uint8_t cmd_wr_buf[2] = {0x80, 0x04};
 
-	// memcpy(&fw_data_wr_buf[2], &max32664cd_msbl[msbl_page_offset], (MAX32664C_FW_UPDATE_WRITE_SIZE+2));
-	// memcpy(fw_data_wr_buf, &max32664c_msbl[msbl_page_offset], MAX32664C_FW_UPDATE_WRITE_SIZE);
+	// memcpy(&fw_data_wr_buf[2], &max32664d_msbl[msbl_page_offset], (MAX32664C_FW_UPDATE_WRITE_SIZE+2));
+	// memcpy(fw_data_wr_buf, &max32664_msbl[msbl_page_offset], MAX32664C_FW_UPDATE_WRITE_SIZE);
 
 	int msg_len = 1026;
 	int num_msgs = ((MAX32664C_FW_UPDATE_WRITE_SIZE) / msg_len);
 
-	struct i2c_msg max32664c_i2c_msgs[9];
+	struct i2c_msg max32664_i2c_msgs[9];
 
 	printk("Num Msgs: %d\n", num_msgs);
 
-	max32664c_i2c_msgs[0].buf = cmd_wr_buf; // fw_data_wr_buf[0];
-	max32664c_i2c_msgs[0].len = 2;
-	max32664c_i2c_msgs[0].flags = I2C_MSG_WRITE;
+	max32664_i2c_msgs[0].buf = cmd_wr_buf; // fw_data_wr_buf[0];
+	max32664_i2c_msgs[0].len = 2;
+	max32664_i2c_msgs[0].flags = I2C_MSG_WRITE;
 
 #if (MAX32664C_FW_BIN_INCLUDE == 1)
 	for (int i = 0; i < 8; i++)
 	{
-		memcpy(tmp_wr_buf[i], &max32664c_msbl[(i * msg_len) + msbl_page_offset], msg_len);
+		memcpy(tmp_wr_buf[i], &max32664_msbl[(i * msg_len) + msbl_page_offset], msg_len);
 
-		max32664c_i2c_msgs[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
-		max32664c_i2c_msgs[i + 1].len = msg_len;
-		max32664c_i2c_msgs[i + 1].flags = I2C_MSG_WRITE;
-		printk("Msg %d: L %d msg_len: %d\n", (i + 1), max32664c_i2c_msgs[i + 1].len, msg_len);
+		max32664_i2c_msgs[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
+		max32664_i2c_msgs[i + 1].len = msg_len;
+		max32664_i2c_msgs[i + 1].flags = I2C_MSG_WRITE;
+		printk("Msg %d: L %d msg_len: %d\n", (i + 1), max32664_i2c_msgs[i + 1].len, msg_len);
 	}
 #endif
 
-	max32664c_i2c_msgs[8].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
-	
-	int ret = i2c_transfer_dt(&config->i2c, max32664c_i2c_msgs, 9);
+	max32664_i2c_msgs[8].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
+
+	int ret = i2c_transfer_dt(&config->i2c, max32664_i2c_msgs, 9);
 
 	printk("Num Msgs: %d\n", num_msgs);
 	printk("Transfer Ret: %d\n", ret);
@@ -265,7 +266,7 @@ static int m_read_mcu_id(const struct device *dev)
 	return 0;
 }
 
-static int max32664c_load_fw(const struct device *dev, uint8_t *fw_bin_array)
+static int max32664_load_fw(const struct device *dev, uint8_t *fw_bin_array, bool is_sim)
 {
 	uint8_t msbl_num_pages = 0;
 
@@ -279,63 +280,62 @@ static int max32664c_load_fw(const struct device *dev, uint8_t *fw_bin_array)
 
 	m_write_set_num_pages(dev, msbl_num_pages);
 
-	memcpy(max32664c_fw_init_vector, fw_bin_array[0x28], 11);
-	m_write_init_vector(dev, max32664c_fw_init_vector);
-	printk("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x\n", max32664c_fw_init_vector[0], max32664c_fw_init_vector[1], max32664c_fw_init_vector[2], max32664c_fw_init_vector[3], max32664c_fw_init_vector[4], max32664c_fw_init_vector[5], max32664c_fw_init_vector[6], max32664c_fw_init_vector[7], max32664c_fw_init_vector[8], max32664c_fw_init_vector[9], max32664c_fw_init_vector[10]);
+	memcpy(max32664_fw_init_vector, &fw_bin_array[0x28], 11);
+	m_write_init_vector(dev, max32664_fw_init_vector);
+	printk("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x\n", max32664_fw_init_vector[0], max32664_fw_init_vector[1], max32664_fw_init_vector[2], max32664_fw_init_vector[3], max32664_fw_init_vector[4], max32664_fw_init_vector[5], max32664_fw_init_vector[6], max32664_fw_init_vector[7], max32664_fw_init_vector[8], max32664_fw_init_vector[9], max32664_fw_init_vector[10]);
 
-	memcpy(max32664c_fw_auth_vector, fw_bin_array[0x34], 16);
-	m_write_auth_vector(dev, max32664c_fw_auth_vector);
+	memcpy(max32664_fw_auth_vector, &fw_bin_array[0x34], 16);
+	m_write_auth_vector(dev, max32664_fw_auth_vector);
 
 	m_erase_app(dev);
 
-// Write MSBL
-#if (MAX32664C_WR_SIM_ONLY != 1)
-
-	for (int i = 0; i < msbl_num_pages; i++)
+	// Write MSBL
+	if (is_sim == false)
 	{
-		printk("Writing Page: %d of %d\n", (i + 1), msbl_num_pages);
+		for (int i = 0; i < msbl_num_pages; i++)
+		{
+			printk("Writing Page: %d of %d\n", (i + 1), msbl_num_pages);
 
-		// memcpy(max32664c_fw_page_buf, &fw_bin_array[MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE)], MAX32664C_FW_UPDATE_WRITE_SIZE);
-		uint32_t msbl_page_offset = (MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE));
-		printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
-		m_fw_write_page(dev, fw_bin_array, msbl_page_offset);
-		//m_fw_write_page_single(dev, max32664c_msbl, msbl_page_offset);
+			// memcpy(max32664_fw_page_buf, &fw_bin_array[MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE)], MAX32664C_FW_UPDATE_WRITE_SIZE);
+			uint32_t msbl_page_offset = (MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE));
+			printk("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
+			m_fw_write_page(dev, fw_bin_array, msbl_page_offset);
+			// m_fw_write_page_single(dev, max32664_msbl, msbl_page_offset);
 
-		// k_sleep(K_MSEC(500));
+			// k_sleep(K_MSEC(500));
+		}
+		max32664_do_enter_app(dev);
 	}
-	max32664c_do_enter_app(dev);
-
-	#endif
 
 	printk("End Load MSBL\n---\n");
 	return 0;
 }
 
 static int m_read_op_mode(const struct device *dev)
-{ 
-    const struct max32664_config *config = dev->config;
-    uint8_t rd_buf[2] = {0x00, 0x00};
-    uint8_t wr_buf[2] = {0x02, 0x00};
+{
+	const struct max32664_config *config = dev->config;
+	uint8_t rd_buf[2] = {0x00, 0x00};
+	uint8_t wr_buf[2] = {0x02, 0x00};
 
-    k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(45));
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-    k_sleep(K_MSEC(45));
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
+	k_sleep(K_USEC(300));
+	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	k_sleep(K_MSEC(45));
+	gpio_pin_set_dt(&config->mfio_gpio, 0);
+	k_sleep(K_USEC(300));
+	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	k_sleep(K_MSEC(45));
+	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_INF("Op mode = %x\n", rd_buf[1]);
+	// LOG_INF("Op mode = %x\n", rd_buf[1]);
 
-    return rd_buf[1];
+	return rd_buf[1];
 }
 
-void max32664c_do_enter_bl(const struct device *dev)
+void max32664_updater_start(const struct device *dev, enum max32664_updater_device_type type)
 {
 	const struct max32664_config *config = dev->config;
 
-	printk("Entering Bootloader mode\n");
+	LOG_DBG("Entering Bootloader mode");
 
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
@@ -356,7 +356,7 @@ void max32664c_do_enter_bl(const struct device *dev)
 	m_read_bl_page_size(dev, &bl_page_size);
 	printk("BL Page Size: %d\n", bl_page_size);
 
-#if (MAX32664C_FW_BIN_INCLUDE == 1)
-	max32664c_load_fw(dev, max32664c_msbl);
-#endif
+//#if (MAX32664C_FW_BIN_INCLUDE == 1)
+	max32664_load_fw(dev, max32664c_msbl, true);
+//#endif
 }

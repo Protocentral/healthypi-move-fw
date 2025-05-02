@@ -44,6 +44,8 @@
 #include "fs_module.h"
 #include "ui/move_ui.h"
 
+#include <max32664_updater.h>
+
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 char curr_string[40];
 
@@ -703,9 +705,13 @@ void hw_module_init(void)
         hw_add_boot_msg("MAX32664D", true);
 
         // To force bootloader mode
-        struct sensor_value mode_set;
+        /*struct sensor_value mode_set;
         mode_set.val1 = 1;
         sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
+        */
+
+        max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+
 
         k_sem_give(&sem_ppg_finger_sm_start);
     }

@@ -56,6 +56,8 @@ zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES $${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_bl.c LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES $${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_msbl.h LOCATION EXTFLASH_TEXT NOCOPY)
 
+zephyr_code_relocate(LIBRARY max32664_updater LOCATION EXTFLASH_TEXT NOCOPY)
+
 zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__mgmt LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__transport LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__util LOCATION EXTFLASH_TEXT NOCOPY)
