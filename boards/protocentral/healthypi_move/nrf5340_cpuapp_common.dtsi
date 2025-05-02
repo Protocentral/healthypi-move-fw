@@ -149,8 +149,9 @@
 	pinctrl-1 = <&i2c1_sleep>;
 	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
-	zephyr,concat-buf-size = <128>;
-	zephyr,flash-buf-max-size = <128>;
+	zephyr,concat-buf-size = <8250>;
+	zephyr,flash-buf-max-size = <8250>;
+
 
 	npm_pmic: pmic@6b {
 		compatible = "nordic,npm1300";
