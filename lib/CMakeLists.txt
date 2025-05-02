@@ -6,4 +6,4 @@
 
 #zephyr_include_directories(include)
 
-add_subdirectory_ifdef(CONFIG_MAX32664_UPDATER max32664_updater)
+add_subdirectory_ifdef(CONFIG_MAX32664_UPDATER max32664-updater)
