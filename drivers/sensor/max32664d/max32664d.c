@@ -35,20 +35,20 @@ static uint8_t buf[2048]; // 23 byte/sample * 32 samples = 736 bytes
 
 uint8_t m_date_time_vector[DATE_TIME_VECTOR_SIZE] = {0x50, 0x04, 0x04, 0x5c, 0xc2, 0x02, 0x00, 0xe0, 0x7f, 0x02, 0x00};
 
-int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t* m_bpt_cal_vector)
+int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector)
 {
 	const struct max32664d_config *config = dev->config;
 	struct max32664d_data *data = dev->data;
 
 	LOG_DBG("Setting BPT calibration vector data");
 
-	if(m_bpt_cal_vector == NULL)
+	if (m_bpt_cal_vector == NULL)
 	{
 		LOG_ERR("BPT calibration vector data is NULL");
 		return -EINVAL;
 	}
 
-	if(sizeof(m_bpt_cal_vector) != CALIBVECTOR_SIZE)
+	if (sizeof(m_bpt_cal_vector) != CALIBVECTOR_SIZE)
 	{
 		LOG_ERR("BPT calibration vector data size is not %d", CALIBVECTOR_SIZE);
 		return -EINVAL;
@@ -60,14 +60,14 @@ int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t* m_bpt_cal_ve
 	return 0;
 }
 
-int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t* m_bpt_cal_vector)
+int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector)
 {
 	const struct max32664d_config *config = dev->config;
 	struct max32664d_data *data = dev->data;
 
 	LOG_DBG("Getting BPT calibration vector data");
 
-	if(m_bpt_cal_vector == NULL)
+	if (m_bpt_cal_vector == NULL)
 	{
 		LOG_ERR("BPT calibration vector data is NULL");
 		return -EINVAL;
@@ -101,10 +101,10 @@ static int m_read_op_mode(const struct device *dev)
 	return rd_buf[1];
 }
 
-static int max32664d_write_calib_data(const struct device *dev, uint8_t* m_cal_vector)
+static int max32664d_write_calib_data(const struct device *dev, uint8_t *m_cal_vector)
 {
 	const struct max32664d_config *config = dev->config;
-	uint8_t wr_buf[CALIBVECTOR_SIZE+3];
+	uint8_t wr_buf[CALIBVECTOR_SIZE + 3];
 
 	LOG_DBG("Writing calibration data");
 
@@ -323,6 +323,7 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 int max32664d_do_enter_app(const struct device *dev)
 {
 	const struct max32664d_config *config = dev->config;
+	struct max32664d_data *data = dev->data;
 
 	LOG_DBG("Entering app mode");
 
@@ -343,10 +344,9 @@ int max32664d_do_enter_app(const struct device *dev)
 
 	m_read_op_mode(dev);
 
-	uint8_t ver_buf[4] = {0};
-	if (m_get_ver(dev, ver_buf) == 0)
+	if (m_get_ver(dev, data->hub_ver) == 0)
 	{
-		LOG_INF("Hub version: %d.%d.%d", ver_buf[1], ver_buf[2], ver_buf[3]);
+		LOG_INF("Hub version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);
 	}
 	else
 	{
@@ -497,7 +497,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 
 	// Load calib vector
 	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
-	//m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
+	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
 	max32664d_write_calib_data(dev, data->bpt_cal_vector);
 
 	// Set date and time
@@ -756,6 +756,8 @@ static int max32664_attr_set(const struct device *dev,
 	struct max32664d_data *data = dev->data;
 	switch (attr)
 	{
+
+		break;
 	case MAX32664_ATTR_OP_MODE:
 		if (val->val1 == MAX32664D_OP_MODE_RAW)
 		{
@@ -793,13 +795,13 @@ static int max32664_attr_set(const struct device *dev,
 		m_set_bp_cal_values(dev, m_sys, m_dia); // va1 = sys, val2 = dia
 		break;
 	case MAX32664_ATTR_LOAD_CALIB:
-		//max32664_load_calib(dev);
+		// max32664_load_calib(dev);
 		break;
 	case MAX32664_ATTR_STOP_EST:
 		max32664_stop_estimation(dev);
 		break;
 	case MAX32664_ATTR_ENTER_BOOTLOADER:
-		//max32664_do_enter_bl(dev);
+		// max32664_do_enter_bl(dev);
 		break;
 	default:
 		LOG_ERR("Unsupported sensor attribute");
@@ -821,6 +823,9 @@ static int max32664d_attr_get(const struct device *dev,
 	case MAX32664D_ATTR_SENSOR_ID:
 		val->val1 = max32664d_get_afe_sensor_id(dev);
 		break;
+	case MAX32664D_ATTR_APP_VER:
+		val->val1 = data->hub_ver[2];
+		val->val2 = data->hub_ver[3];
 	}
 }
 

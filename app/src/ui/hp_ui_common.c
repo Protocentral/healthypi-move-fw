@@ -1,11 +1,9 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
 #include <app_version.h>
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -414,7 +412,6 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_SPO2_TIMEOUT:
         draw_scr_spl_spo2_timeout(m_scroll_dir);
         break;
-
     default:
         printk("Invalid screen: %d", m_screen);
     }

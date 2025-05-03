@@ -11,7 +11,7 @@
 
 #define MAX32664D_HUB_STAT_DRDY_MASK 0x08
 #define MAX32664_DEFAULT_CMD_DELAY 10
-#define CALIBVECTOR_SIZE 824 //824 bytes of calib vector data
+#define CALIBVECTOR_SIZE 824 // 824 bytes of calib vector data
 
 enum max32664_channel
 {
@@ -43,6 +43,8 @@ enum max32664_attribute
 	MAX32664_ATTR_DO_FW_UPDATE = 0x09,
 
 	MAX32664D_ATTR_SENSOR_ID = 0x10,
+	MAX32664D_ATTR_APP_VER = 0x11,
+	MAX32664D_ATTR_SENSOR_IDS = 0x12,
 
 };
 
@@ -122,6 +124,9 @@ struct max32664d_data
 	uint16_t spo2_r_val;
 	uint8_t hr_above_resting;
 
+	// Chip info
+	uint8_t hub_ver[4];
+
 	uint8_t bpt_cal_vector[824];
 };
 
@@ -143,20 +148,6 @@ struct max32664_decoder_header
 {
 	uint64_t timestamp;
 } __attribute__((__packed__));
-
-/*struct max32664_sample
-{
-	uint32_t timestamp_delta;
-
-	uint8_t bpt_status;
-	uint8_t bpt_progress;
-	uint16_t hr;
-	uint8_t bpt_sys;
-	uint8_t bpt_dia;
-	uint16_t spo2;
-	uint16_t spo2_r_val;
-	uint8_t hr_above_resting;
-};*/
 
 struct max32664d_encoded_data
 {
@@ -191,7 +182,7 @@ int max32664_get_sample_fifo(const struct device *dev);
 void max32664_do_enter_bl(const struct device *dev);
 int max32664d_do_enter_app(const struct device *dev);
 
-int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t* m_bpt_cal_vector);
-int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t* m_bpt_cal_vector);
+int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector);
+int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector);
 int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);

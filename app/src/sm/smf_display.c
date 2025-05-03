@@ -25,8 +25,6 @@ K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 
-
-
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
 
@@ -146,7 +144,7 @@ static void st_display_init_entry(void *o)
 {
     LOG_DBG("Display SM Init Entry");
 
-    //LOG_DBG("Disp ON");
+    // LOG_DBG("Disp ON");
 
     if (!device_is_ready(display_dev))
     {
@@ -257,12 +255,13 @@ static void st_display_boot_run(void *o)
         {
             hpi_boot_all_passed = false;
         }
-        scr_boot_add_status(boot_msg.msg, boot_msg.status);
+        scr_boot_add_status(boot_msg.msg, boot_msg.status, boot_msg.show_status);
     }
 
     // Stay in this state until the boot is complete
     if (k_sem_take(&sem_disp_boot_complete, K_NO_WAIT) == 0)
     {
+        k_msleep(2000);
         if (hpi_boot_all_passed)
         {
             smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
@@ -482,7 +481,7 @@ static void st_display_active_run(void *o)
     case SCR_SPL_HR_SCR2:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
         {
-            //hpi_disp_hr_load_trend();
+            // hpi_disp_hr_load_trend();
             last_hr_trend_refresh = k_uptime_get_32();
         }
         break;
@@ -525,12 +524,12 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_SPL_SPO2_COMPLETE:
-        if(k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
         {
             hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_ts);
         }
         break;
-    
+
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {

@@ -468,8 +468,6 @@ static int max32664c_stop_algo(const struct device *dev)
     // Disable Accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, 20);
 
- 
-
     return 0;
 }
 
@@ -536,7 +534,7 @@ static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
     // Disable Accel
     m_i2c_write_cmd_3(dev, 0x44, 0x04, 0x00, 30);
 
-    //Exit wake on motion mode
+    // Exit wake on motion mode
     m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x00, 0xFF, 0xFF);
 
     return 0;
@@ -702,7 +700,7 @@ static int max32664c_attr_set(const struct device *dev,
             max32664c_exit_mode_wake_on_motion(dev);
             data->op_mode = MAX32664C_OP_MODE_IDLE;
         }
-        else if(val->val1 == MAX32664C_OP_MODE_STOP_ALGO)
+        else if (val->val1 == MAX32664C_OP_MODE_STOP_ALGO)
         {
             max32664c_stop_algo(dev);
             data->op_mode = MAX32664C_OP_MODE_IDLE;
@@ -714,7 +712,7 @@ static int max32664c_attr_set(const struct device *dev,
         }
         break;
     case MAX32664C_ATTR_ENTER_BOOTLOADER:
-        //max32664c_do_enter_bl(dev);
+        // max32664c_do_enter_bl(dev);
         break;
     default:
         LOG_ERR("Unsupported sensor attribute");

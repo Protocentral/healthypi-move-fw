@@ -169,3 +169,10 @@ enum spo2_meas_state
     SPO2_MEAS_TIMEOUT,
     SPO2_MEAS_UNK,
 };
+
+struct hpi_version_desc_t
+{
+    uint8_t major;
+    uint8_t minor;
+    uint8_t patch;
+};

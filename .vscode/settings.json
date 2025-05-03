@@ -46,5 +46,6 @@
         "${workspaceFolder}/app/build": "Launch build",
         "${workspaceFolder}/app/build_min": "Launch build_min"
     },
-    "C_Cpp.configurationWarnings": "disabled"
+    "C_Cpp.configurationWarnings": "disabled",
+    "idf.pythonInstallPath": "/opt/homebrew/opt/python/libexec/bin/python"
 }

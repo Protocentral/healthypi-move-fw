@@ -32,8 +32,11 @@
 
 struct hpi_boot_msg_t
 {
-    char msg[15];
+    char msg[25];
     bool status;
+    bool show_status;
+    bool show_progress;
+    uint8_t progress;
 };
 
 enum scroll_dir
@@ -86,11 +89,10 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_TIMEOUT,
     SCR_SPL_HR_SCR2,
 
+    SCR_SPL_PROGRESS,
+
     SCR_SPL_LIST_END,
 };
-
-#define SCR_SPL_SETTINGS 20
-#define SCR_SPL_BOOT 21
 
 enum hpi_disp_subscreens
 {
@@ -138,8 +140,12 @@ void hpi_display_sleep_on(void);
 // Boot Screen functions
 void draw_scr_splash(void);
 void draw_scr_boot(void);
-void scr_boot_add_status(char *dev_label, bool status);
+void scr_boot_add_status(char *dev_label, bool status, bool show_status);
 void scr_boot_add_final(bool status);
+
+// Progress Screen functions
+void draw_scr_progress(char *title, char *message);
+void scr_progress_update_progress(uint8_t progress);
 
 // Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);
