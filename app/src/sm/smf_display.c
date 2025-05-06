@@ -100,7 +100,10 @@ extern const struct device *touch_dev;
 extern lv_obj_t *scr_bpt;
 
 extern struct k_sem sem_disp_smf_start;
+
 extern struct k_sem sem_disp_boot_complete;
+extern struct k_sem sem_boot_update_req;
+
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_plot_ecg_bioz;
@@ -272,6 +275,12 @@ static void st_display_boot_run(void *o)
             // smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
         }
     }
+
+    /*if (k_sem_take(&sem_boot_update_req, K_NO_WAIT) == 0)
+    {
+        draw_scr_progress("Bootloader update required", "Please wait...");
+    }*/
+
     // LOG_DBG("Display SM Boot Run");
 }
 

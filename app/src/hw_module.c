@@ -101,6 +101,8 @@ K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
+K_SEM_DEFINE(sem_boot_update_req, 0, 1);
+
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
@@ -734,6 +736,7 @@ void hw_module_init(void)
         {
             LOG_INF("MAX32664D App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+            k_sem_give(&sem_boot_update_req);
             //max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
         }
 
