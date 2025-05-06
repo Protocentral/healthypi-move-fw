@@ -350,12 +350,12 @@ void fs_module_init(void)
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
 
-    /*rc = lsdir("/lfs/trhr");
+    rc = lsdir("/lfs/trhr");
     if (rc < 0)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         LOG_INF("Creating trend directory structure");
         hpi_init_fs_struct();
         lsdir("/lfs/trhr");
-    }*/
+    }
 }

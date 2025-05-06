@@ -22,6 +22,8 @@ uint8_t ces_pkt_data_buffer[1000]; // = new char[1000];
 volatile bool cmd_module_ble_connected = false;
 uint8_t data_pkt_buffer[256];
 
+uint8_t log_type=0;
+
 // Externs
 extern int global_dev_status;
 
@@ -81,11 +83,13 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
     case HPI_CMD_LOG_GET_COUNT:
         LOG_DBG("RX CMD Get Log Count");
         uint16_t log_count = log_get_count(in_pkt_buf[1]);
-        hpi_cmdif_send_ble_cmd_rsp(HPI_CMD_LOG_GET_COUNT, log_count);
+        log_type = in_pkt_buf[1];
+        hpi_cmdif_send_count_rsp(HPI_CMD_LOG_GET_COUNT, log_type, log_count);
         break;
     case HPI_CMD_LOG_GET_INDEX:
         LOG_DBG("RX CMD Get Index");
-        log_get_index(in_pkt_buf[1]);
+        log_type = in_pkt_buf[1];
+        log_get_index(log_type);
         break;
     case HPI_CMD_LOG_GET_FILE:
         LOG_DBG("RX CMD Get Log");
@@ -142,17 +146,18 @@ void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
     hpi_ble_send_data(cmd_pkt, 1 + m_data_len);
 }
 
-void hpi_cmdif_send_ble_cmd_rsp(uint8_t m_cmd, uint16_t m_value)
+void hpi_cmdif_send_count_rsp(uint8_t m_cmd, uint8_t m_log_type, uint16_t m_value)
 {
     LOG_DBG("Sending BLE Command Response: %X %X\n", m_cmd, m_value);
-    uint8_t cmd_pkt[4];
+    uint8_t cmd_pkt[5];
 
     cmd_pkt[0] = CES_CMDIF_TYPE_CMD_RSP;
     cmd_pkt[1] = m_cmd;
-    cmd_pkt[2] = (uint8_t)(m_value & 0x00FF);
-    cmd_pkt[3] = (uint8_t)((m_value >> 8) & 0x00FF);
+    cmd_pkt[2] = m_log_type;
+    cmd_pkt[3] = (uint8_t)(m_value & 0x00FF);
+    cmd_pkt[4] = (uint8_t)((m_value >> 8) & 0x00FF);
 
-    hpi_ble_send_data(cmd_pkt, 4);
+    hpi_ble_send_data(cmd_pkt, 5);
 }
 
 void cmd_thread(void)
