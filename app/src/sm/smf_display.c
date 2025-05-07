@@ -10,6 +10,7 @@
 #include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
+#include "max32664_updater.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
@@ -45,6 +46,7 @@ enum display_state
     HPI_DISPLAY_STATE_INIT,
     HPI_DISPLAY_STATE_SPLASH,
     HPI_DISPLAY_STATE_BOOT,
+    HPI_DISPLAY_STATE_SCR_PROGRESS,
     HPI_DISPLAY_STATE_ACTIVE,
     HPI_DISPLAY_STATE_SLEEP,
     HPI_DISPLAY_STATE_ON,
@@ -91,6 +93,8 @@ static bool m_lead_on_off = false;
 struct s_disp_object
 {
     struct smf_ctx ctx;
+    char title[100];
+    char subtitle[100];
 
 } s_disp_obj;
 
@@ -250,6 +254,8 @@ static void st_display_boot_entry(void *o)
 
 static void st_display_boot_run(void *o)
 {
+    struct s_disp_object *s = (struct s_disp_object *)o;
+
     struct hpi_boot_msg_t boot_msg;
 
     if (k_msgq_get(&q_disp_boot_msg, &boot_msg, K_NO_WAIT) == 0)
@@ -276,10 +282,13 @@ static void st_display_boot_run(void *o)
         }
     }
 
-    /*if (k_sem_take(&sem_boot_update_req, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_boot_update_req, K_NO_WAIT) == 0)
     {
-        draw_scr_progress("Bootloader update required", "Please wait...");
-    }*/
+        const char msg[] = "MAX32664D \n FW Update Required";
+        memcpy(s->title, msg, sizeof(msg));
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SCR_PROGRESS]);
+        
+    }
 
     // LOG_DBG("Display SM Boot Run");
 }
@@ -287,6 +296,59 @@ static void st_display_boot_run(void *o)
 static void st_display_boot_exit(void *o)
 {
     LOG_DBG("Display SM Boot Exit");
+    lv_disp_trig_activity(NULL);
+}
+
+static int max32664_update_progress=0;
+static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
+
+static void hpi_max32664_update_progress(int progress, int status)
+{
+    LOG_DBG("MAX32664 Update Progress: %d", progress);
+    max32664_update_progress = progress;
+    max32664_update_status = status;
+}
+
+static void st_display_progress_entry(void *o)
+{
+    struct s_disp_object *s = (struct s_disp_object *)o;
+    
+    LOG_DBG("Display SM Progress Entry");
+    draw_scr_progress(s->title, "Please wait...");
+    max32664_set_progress_callback(hpi_max32664_update_progress);
+    max32664_update_progress = 0;
+    hpi_disp_scr_update_progress(max32664_update_progress, "Starting...");
+}
+
+static void st_display_progress_run(void *o)
+{
+    struct s_disp_object *s = (struct s_disp_object *)o;
+
+    if(max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
+    {
+        hpi_disp_scr_update_progress(max32664_update_progress, "Updating...");
+    }
+    else if(max32664_update_status == MAX32664_UPDATER_STATUS_SUCCESS)
+    {
+        hpi_disp_scr_update_progress(max32664_update_progress, "Update Success");
+        k_msleep(2000);
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
+    }
+    else if(max32664_update_status == MAX32664_UPDATER_STATUS_FAILED)
+    {
+        hpi_disp_scr_update_progress(max32664_update_progress, "Update Failed");
+        k_msleep(2000);
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+    }
+    //k_msleep(4000);
+
+    //smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
+    
+}
+
+static void st_display_progress_exit(void *o)
+{
+    LOG_DBG("Display SM Progress Exit");
     lv_disp_trig_activity(NULL);
 }
 
@@ -668,9 +730,12 @@ static const struct smf_state display_states[] = {
     [HPI_DISPLAY_STATE_INIT] = SMF_CREATE_STATE(st_display_init_entry, NULL, NULL, NULL, NULL),
     [HPI_DISPLAY_STATE_SPLASH] = SMF_CREATE_STATE(st_display_splash_entry, st_display_splash_run, NULL, NULL, NULL),
     [HPI_DISPLAY_STATE_BOOT] = SMF_CREATE_STATE(st_display_boot_entry, st_display_boot_run, st_display_boot_exit, NULL, NULL),
+    
+    [HPI_DISPLAY_STATE_SCR_PROGRESS] = SMF_CREATE_STATE(st_display_progress_entry, st_display_progress_run, st_display_progress_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ACTIVE] = SMF_CREATE_STATE(st_display_active_entry, st_display_active_run, st_display_active_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_SLEEP] = SMF_CREATE_STATE(st_display_sleep_entry, st_display_sleep_run, st_display_sleep_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ON] = SMF_CREATE_STATE(st_display_on_entry, NULL, NULL, NULL, NULL),
+
 };
 
 void smf_display_thread(void)

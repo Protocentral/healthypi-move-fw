@@ -121,15 +121,13 @@ static uint16_t today_total_steps = 0;
 K_MUTEX_DEFINE(mutex_today_steps);
 
 static struct hpi_version_desc_t hpi_max32664c_req_ver = {
-    .major = 30,
-    .minor = 13,
-    .patch = 31,
+    .major = 13,
+    .minor = 31,
 };
 
 static struct hpi_version_desc_t hpi_max32664d_req_ver = {
-    .major = 40,
-    .minor = 6,
-    .patch = 0,
+    .major = 6,
+    .minor = 0,
 };
 
 /*******EXTERNS******/
@@ -686,25 +684,13 @@ void hw_module_init(void)
             hw_add_boot_msg("\t Acc", true, true, false, 0);
         }
 
-        if (ver_get.val1 < MAX32664C_LATEST_APP_VER1)
+        if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
         {
-            LOG_INF("App update required");
-
-            struct sensor_value mode_set;
-            mode_set.val1 = 1;
-            sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
+            LOG_INF("MAX32664C App update required");
+            hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+            k_sem_give(&sem_boot_update_req);
+            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
         }
-
-        // To force bootloader mode
-        // mode_get.val1 = 8;
-
-        /*if (mode_get.val1 == 8)
-        {
-            LOG_INF("MAX32664C App not present. Starting bootloader mode");
-            struct sensor_value mode_set;
-            mode_set.val1 = 1;
-            sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
-        }*/
 
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
@@ -737,7 +723,7 @@ void hw_module_init(void)
             LOG_INF("MAX32664D App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
             k_sem_give(&sem_boot_update_req);
-            //max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+            max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
         }
 
         k_sem_give(&sem_ppg_finger_sm_start);

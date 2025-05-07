@@ -282,7 +282,7 @@ static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 	return 0;
 }
 
-int max32664_do_enter_app(const struct device *dev)
+static int max32664_do_enter_app(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
 
@@ -323,6 +323,21 @@ int max32664_do_enter_app(const struct device *dev)
 	return 0;
 }
 
+static void (*progress_callback)(int progress, int status) = NULL;
+
+void max32664_set_progress_callback(void (*callback)(int progress, int status))
+{
+	progress_callback = callback;
+}
+
+static void update_progress(int progress, int status)
+{
+	if (progress_callback)
+	{
+		progress_callback(progress, status);
+	}
+}
+
 static int max32664_load_fw(const struct device *dev, const int8_t *fw_bin_array, bool is_sim)
 {
 	uint8_t msbl_num_pages = 0;
@@ -347,6 +362,11 @@ static int max32664_load_fw(const struct device *dev, const int8_t *fw_bin_array
 
 	m_erase_app(dev);
 
+	int _progress_counter = 0;
+	int _progress_step = (100/msbl_num_pages);
+
+	update_progress(_progress_counter, MAX32664_UPDATER_STATUS_IN_PROGRESS);
+
 	// Write MSBL
 	if (is_sim == false)
 	{
@@ -359,10 +379,14 @@ static int max32664_load_fw(const struct device *dev, const int8_t *fw_bin_array
 			LOG_DBG("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
 			m_fw_write_page(dev, fw_bin_array, msbl_page_offset);
 			// m_fw_write_page_single(dev, max32664_msbl, msbl_page_offset);
+			_progress_counter += _progress_step;
+			update_progress(_progress_counter, MAX32664_UPDATER_STATUS_IN_PROGRESS);
 
 			// k_sleep(K_MSEC(500));
 		}
 		max32664_do_enter_app(dev);
+
+		update_progress(100, MAX32664_UPDATER_STATUS_SUCCESS);		
 	}
 
 	LOG_DBG("End Load MSBL");
@@ -388,6 +412,7 @@ static int m_read_op_mode(const struct device *dev)
 
 	return rd_buf[1];
 }
+
 
 void max32664_updater_start(const struct device *dev, enum max32664_updater_device_type type)
 {
@@ -416,10 +441,10 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 
 	if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664C)
 	{
-		max32664_load_fw(dev, max32664c_msbl, true);
+		max32664_load_fw(dev, max32664c_msbl, false);
 	}
 	else if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664D)
 	{
-		max32664_load_fw(dev, max32664d_40_6_0, true);
+		max32664_load_fw(dev, max32664d_40_6_0, false);
 	}
 }

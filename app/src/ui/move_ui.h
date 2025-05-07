@@ -145,7 +145,7 @@ void scr_boot_add_final(bool status);
 
 // Progress Screen functions
 void draw_scr_progress(char *title, char *message);
-void scr_progress_update_progress(uint8_t progress);
+void hpi_disp_scr_update_progress(int progress, char *status);
 
 // Clock Screen functions
 void draw_scr_clockface(enum scroll_dir m_scroll_dir);

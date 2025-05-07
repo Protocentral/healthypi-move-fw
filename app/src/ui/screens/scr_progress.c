@@ -12,7 +12,9 @@ LOG_MODULE_REGISTER(scr_progress, LOG_LEVEL_WRN);
 
 lv_obj_t *scr_progress;
 
-lv_obj_t *label_progress_title;
+lv_obj_t *label_title;
+lv_obj_t *label_subtitle;
+
 lv_obj_t *label_progress;
 lv_obj_t *label_progress_status;
 
@@ -41,18 +43,36 @@ void draw_scr_progress(char *title, char *message)
     lv_obj_set_style_bg_color(cont_col, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(cont_col, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    label_progress_title = lv_label_create(cont_col);
-    lv_label_set_text(label_progress_title, title);
-    lv_obj_align(label_progress_title, LV_ALIGN_TOP_MID, 0, 20);
+    label_title = lv_label_create(cont_col);
+    lv_label_set_text(label_title, title);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 20);
+
+    label_subtitle = lv_label_create(cont_col);
+    lv_label_set_text(label_subtitle, message);
+    lv_obj_align_to(label_subtitle, label_title, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
+
+    bar_progress = lv_bar_create(cont_col);
+    lv_obj_set_size(bar_progress, 300, 40);
 
     label_progress = lv_label_create(cont_col);
-    lv_label_set_text(label_progress, message);
-    lv_obj_align_to(label_progress, label_progress_title, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
-
-    label_progress_status = lv_label_create(cont_col);
-    lv_label_set_text(label_progress_status, "0%");
-    lv_obj_align_to(label_progress_status, label_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
+    lv_label_set_text(label_progress, "0%");
+    lv_obj_set_style_text_align(label_progress, LV_TEXT_ALIGN_CENTER, 0);
 
     hpi_disp_set_curr_screen(SCR_SPL_PROGRESS);
     hpi_show_screen(scr_progress, SCROLL_NONE);
+}
+
+void hpi_disp_scr_update_progress(int progress, char *status)
+{
+    if (label_progress == NULL)
+        return;
+
+    lv_label_set_text_fmt(label_progress, "%d %%", progress);
+    lv_bar_set_value(bar_progress, progress, LV_ANIM_ON);
+
+    if (status != NULL)
+    {
+        lv_label_set_text(label_subtitle, status);
+    }
 }
