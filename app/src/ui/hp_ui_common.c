@@ -450,6 +450,7 @@ void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ECG:
         draw_scr_ecg(m_scroll_dir);
         break;
+   
     /*case SCR_PLOT_EDA:
         draw_scr_pre(m_scroll_dir);
         break;
@@ -461,9 +462,7 @@ void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_VITALS:
         draw_scr_vitals_home(m_scroll_dir);
         break;
-     case SCR_BPT_HOME:
-         draw_scr_bpt_home(m_scroll_dir);
-         break;*/
+    */
     default:
         printk("Invalid screen: %d", m_screen);
     }

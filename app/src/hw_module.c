@@ -44,6 +44,7 @@
 #include "fs_module.h"
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
+#include "ble_module.h"
 
 #include <max32664_updater.h>
 

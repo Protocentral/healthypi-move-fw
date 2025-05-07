@@ -58,10 +58,11 @@ enum hpi_disp_screens
     SCR_SPO2,
     SCR_ECG,
     SCR_TEMP,
-    
+    SCR_BPT,
+
     SCR_LIST_END,
     // Should not go here
-    SCR_BPT,
+    
 };
 
 // Special screens
@@ -207,6 +208,7 @@ void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
 void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);

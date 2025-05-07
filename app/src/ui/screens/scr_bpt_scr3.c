@@ -48,6 +48,6 @@ void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir)
      lv_obj_set_size(spinner, 100, 100);
      lv_obj_center(spinner);
 
-    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR2);
+    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR3);
     hpi_show_screen(scr_bpt_scr3, m_scroll_dir);
 }

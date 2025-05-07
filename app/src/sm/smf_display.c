@@ -126,6 +126,8 @@ extern struct k_sem sem_ecg_cancel;
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
 
+extern struct k_sem sem_bpt_sensor_found;
+
 // User Profile settings
 
 static uint16_t m_user_height = 170; // Example height in m, adjust as needed
@@ -287,7 +289,6 @@ static void st_display_boot_run(void *o)
         const char msg[] = "MAX32664D \n FW Update Required";
         memcpy(s->title, msg, sizeof(msg));
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SCR_PROGRESS]);
-        
     }
 
     // LOG_DBG("Display SM Boot Run");
@@ -299,7 +300,7 @@ static void st_display_boot_exit(void *o)
     lv_disp_trig_activity(NULL);
 }
 
-static int max32664_update_progress=0;
+static int max32664_update_progress = 0;
 static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
 
 static void hpi_max32664_update_progress(int progress, int status)
@@ -312,7 +313,7 @@ static void hpi_max32664_update_progress(int progress, int status)
 static void st_display_progress_entry(void *o)
 {
     struct s_disp_object *s = (struct s_disp_object *)o;
-    
+
     LOG_DBG("Display SM Progress Entry");
     draw_scr_progress(s->title, "Please wait...");
     max32664_set_progress_callback(hpi_max32664_update_progress);
@@ -324,26 +325,25 @@ static void st_display_progress_run(void *o)
 {
     struct s_disp_object *s = (struct s_disp_object *)o;
 
-    if(max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
+    if (max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
     {
         hpi_disp_scr_update_progress(max32664_update_progress, "Updating...");
     }
-    else if(max32664_update_status == MAX32664_UPDATER_STATUS_SUCCESS)
+    else if (max32664_update_status == MAX32664_UPDATER_STATUS_SUCCESS)
     {
         hpi_disp_scr_update_progress(max32664_update_progress, "Update Success");
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
     }
-    else if(max32664_update_status == MAX32664_UPDATER_STATUS_FAILED)
+    else if (max32664_update_status == MAX32664_UPDATER_STATUS_FAILED)
     {
         hpi_disp_scr_update_progress(max32664_update_progress, "Update Failed");
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
-    //k_msleep(4000);
+    // k_msleep(4000);
 
-    //smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
-    
+    // smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
 }
 
 static void st_display_progress_exit(void *o)
@@ -354,7 +354,7 @@ static void st_display_progress_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR4)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
@@ -600,7 +600,13 @@ static void st_display_active_run(void *o)
             hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_ts);
         }
         break;
-
+    case SCR_SPL_BPT_SCR3:
+        if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("Loading BPT SCR4");
+            hpi_move_load_scr_spl(SCR_SPL_BPT_SCR4, SCROLL_NONE, SCR_SPL_BPT_SCR3);
+        }
+        break;
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {
@@ -730,7 +736,7 @@ static const struct smf_state display_states[] = {
     [HPI_DISPLAY_STATE_INIT] = SMF_CREATE_STATE(st_display_init_entry, NULL, NULL, NULL, NULL),
     [HPI_DISPLAY_STATE_SPLASH] = SMF_CREATE_STATE(st_display_splash_entry, st_display_splash_run, NULL, NULL, NULL),
     [HPI_DISPLAY_STATE_BOOT] = SMF_CREATE_STATE(st_display_boot_entry, st_display_boot_run, st_display_boot_exit, NULL, NULL),
-    
+
     [HPI_DISPLAY_STATE_SCR_PROGRESS] = SMF_CREATE_STATE(st_display_progress_entry, st_display_progress_run, st_display_progress_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ACTIVE] = SMF_CREATE_STATE(st_display_active_entry, st_display_active_run, st_display_active_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_SLEEP] = SMF_CREATE_STATE(st_display_sleep_entry, st_display_sleep_run, st_display_sleep_exit, NULL, NULL),
