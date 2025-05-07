@@ -20,18 +20,19 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/images/*.c
                         src/ui/fonts/*.c
                         src/ui/screens/*.c
-                        src/sm/*.c
-                        )  
+                        src/sm/*.c)  
 
 FILE(GLOB image_sources src/ui/images/*.c
                         src/ui/images/img_spo2_hand.c
                         src/ui/fonts/*.c
                         src/ui/screens/*.c
-                        src/ui/hp_ui_common.c
-
-)                        
-
+                        src/ui/hp_ui_common.c)
+                        
 target_sources(app PRIVATE ${app_sources})
+
+#add_subdirectory(lib/max32664_updater)
+#target_link_libraries(app PUBLIC max32664_updater)
+#target_include_directories((app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/lib/max32664_updater))
 
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -40,7 +41,9 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 # This places images in the external flash memory
+
 zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
+
 #zephyr_code_relocate(FILES src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
 
 #zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/components/*.c LOCATION EXTFLASH_TEXT NOCOPY)
@@ -58,6 +61,10 @@ zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/bmi323hpi/*.* LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES $${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_bl.c LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES $${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_msbl.h LOCATION EXTFLASH_TEXT NOCOPY)
+
+zephyr_code_relocate(FILES ../lib/max32664_updater/max32664_updater.c LOCATION EXTFLASH_TEXT NOCOPY)
+zephyr_code_relocate(FILES ../lib/max32664_updater/max32664c_30_13_31.c LOCATION EXTFLASH_RODATA NOCOPY)
+zephyr_code_relocate(FILES ../lib/max32664_updater/max32664d_40_6_0.c LOCATION EXTFLASH_RODATA NOCOPY)
 
 zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__mgmt LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__transport LOCATION EXTFLASH_TEXT NOCOPY)

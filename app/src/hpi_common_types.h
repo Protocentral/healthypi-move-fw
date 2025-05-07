@@ -91,6 +91,11 @@ struct hpi_ppg_fi_data_t
     uint8_t scd_state;
 };
 
+/*struct hpi_ppg_fi_bpt_cal_t
+{
+    uint32_t 
+}*/
+
 struct hpi_computed_hrv_t
 {
     int32_t hrv_max;
@@ -163,4 +168,11 @@ enum spo2_meas_state
     SPO2_MEAS_SUCCESS,
     SPO2_MEAS_TIMEOUT,
     SPO2_MEAS_UNK,
+};
+
+struct hpi_version_desc_t
+{
+    uint8_t major;
+    uint8_t minor;
+    uint8_t patch;
 };

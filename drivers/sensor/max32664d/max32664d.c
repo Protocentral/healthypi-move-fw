@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, NXP
+ * Copyright (c) 2025 Protocentral Electronics
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -23,7 +23,6 @@ LOG_MODULE_REGISTER(MAX32664D, CONFIG_MAX32664D_LOG_LEVEL);
 
 static uint8_t buf[2048]; // 23 byte/sample * 32 samples = 736 bytes
 
-#define CALIBVECTOR_SIZE 827 // Command 3 bytes + 824 bytes of calib vectors
 #define DATE_TIME_VECTOR_SIZE 11
 #define SPO2_CAL_COEFFS_SIZE 15
 
@@ -36,45 +35,49 @@ static uint8_t buf[2048]; // 23 byte/sample * 32 samples = 736 bytes
 
 uint8_t m_date_time_vector[DATE_TIME_VECTOR_SIZE] = {0x50, 0x04, 0x04, 0x5c, 0xc2, 0x02, 0x00, 0xe0, 0x7f, 0x02, 0x00};
 
-uint8_t m_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3, 33, 75, 0, 0, 0, 0, 15, 198, 2, 100, 3, 32, 0, 0, 3, 207, 0, // calib vector sample
-											  4, 0, 3, 175, 170, 3, 33, 134, 0, 0, 0, 0, 15, 199, 2, 100, 3, 32, 0, 0, 3,
-											  207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
-											  0, 3, 207, 0, 4, 0, 3, 176, 102, 3, 33, 203, 0, 0, 0, 0, 15, 201, 2, 100, 3,
-											  32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 178, 3, 33, 236, 0, 0, 0, 0, 15, 202, 2,
-											  100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 255, 3, 34, 16, 0, 0, 0, 0, 15,
-											  203, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 64, 3, 34, 41, 0, 0, 0, 0,
-											  15, 204, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 130, 3, 34, 76, 0, 0,
-											  0, 0, 15, 205, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 189, 3, 34, 90,
-											  0, 0, 0, 0, 15, 206, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 248, 3, 34,
-											  120, 0, 0, 0, 0, 15, 207, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 178, 69, 3,
-											  34, 137, 0, 0, 0, 0, 15, 208, 2, 100, 3, 32, 0, 0, 3, 0, 0, 175, 63, 3, 33,
-											  75, 0, 0, 0, 0, 15, 198, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 175, 170, 3,
-											  33, 134, 0, 0, 0, 0, 15, 199, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176,
-											  22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3,
-											  176, 102, 3, 33, 203, 0, 0, 0, 0, 15, 201, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4,
-											  0, 3, 176, 178, 3, 33, 236, 0, 0, 0, 0, 15, 202, 2, 100, 3, 32, 0, 0, 3, 207,
-											  0, 4, 0, 3, 176, 255, 3, 34, 16, 0, 0, 0, 0, 15, 203, 2, 100, 3, 32, 0, 0, 3,
-											  207, 0, 4, 0, 3, 177, 64, 3, 34, 41, 0, 0, 0, 0, 15, 204, 2, 100, 3, 32, 0, 0,
-											  3, 207, 0, 4, 0, 3, 177, 130, 3, 34, 76, 0, 0, 0, 0, 15, 205, 2, 100, 3, 32,
-											  0, 0, 3, 207, 0, 4, 0, 3, 177, 189, 3, 34, 90, 0, 0, 0, 0, 15, 206, 2, 100, 3,
-											  32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 248, 3, 34, 120, 0, 0, 0, 0, 15, 207, 2,
-											  100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 178, 69, 3, 34, 137, 0, 0, 0, 0, 15,
-											  208, 2, 100, 3, 32, 0, 0, 3, 0, 0, 175, 63, 3, 33, 75, 0, 0, 0, 0, 15, 198, 2,
-											  100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 175, 170, 3, 33, 134, 0, 0, 0, 0, 15,
-											  199, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0,
-											  15, 200, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 102, 3, 33, 203, 0, 0,
-											  0, 0, 15, 201, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 178, 3, 33, 236,
-											  0, 0, 0, 0, 15, 202, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 255, 3, 34,
-											  16, 0, 0, 0, 0, 15, 203, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 64, 3,
-											  34, 41, 0, 0, 0, 0, 15, 204, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177,
-											  130, 3, 34, 76, 0, 0, 0, 0, 15, 205, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3,
-											  177, 189, 3, 34, 90, 0, 0, 0, 0, 15, 206, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4,
-											  0, 3, 177, 248, 3, 34, 120, 0, 0, 0, 0, 15, 207, 2, 100, 3, 32, 0, 0, 3, 207,
-											  0, 4, 0, 3, 178, 69, 3, 34, 137, 0, 0, 0, 0, 15, 208, 2, 100, 3, 32, 0, 0, 3,
-											  0, 0, 175, 63, 3, 33, 75, 0, 0, 0, 0, 15, 198, 2, 100, 3, 32, 0, 0, 3, 207, 0,
-											  4, 0, 3, 175, 170, 3, 33, 134, 0, 0, 0, 0, 15, 199, 2, 100, 3, 32, 0, 0, 3,
-											  207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
-											  0, 3, 207, 0, 4, 0, 3, 176, 102, 3};
+int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector)
+{
+	const struct max32664d_config *config = dev->config;
+	struct max32664d_data *data = dev->data;
+
+	LOG_DBG("Setting BPT calibration vector data");
+
+	if (m_bpt_cal_vector == NULL)
+	{
+		LOG_ERR("BPT calibration vector data is NULL");
+		return -EINVAL;
+	}
+
+	if (sizeof(m_bpt_cal_vector) != CALIBVECTOR_SIZE)
+	{
+		LOG_ERR("BPT calibration vector data size is not %d", CALIBVECTOR_SIZE);
+		return -EINVAL;
+	}
+
+	memcpy(data->bpt_cal_vector, m_bpt_cal_vector, CALIBVECTOR_SIZE);
+	LOG_DBG("BPT calibration data set");
+
+	return 0;
+}
+
+int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector)
+{
+	const struct max32664d_config *config = dev->config;
+	struct max32664d_data *data = dev->data;
+
+	LOG_DBG("Getting BPT calibration vector data");
+
+	if (m_bpt_cal_vector == NULL)
+	{
+		LOG_ERR("BPT calibration vector data is NULL");
+		return -EINVAL;
+	}
+
+	memcpy(m_bpt_cal_vector, data->bpt_cal_vector, CALIBVECTOR_SIZE);
+	LOG_DBG("BPT calibration data fetched");
+
+	return 0;
+}
 
 static int m_read_op_mode(const struct device *dev)
 {
@@ -96,6 +99,25 @@ static int m_read_op_mode(const struct device *dev)
 	LOG_DBG("Op mode %x", rd_buf[1]);
 
 	return rd_buf[1];
+}
+
+static int max32664d_write_calib_data(const struct device *dev, uint8_t *m_cal_vector)
+{
+	const struct max32664d_config *config = dev->config;
+	uint8_t wr_buf[CALIBVECTOR_SIZE + 3];
+
+	LOG_DBG("Writing calibration data");
+
+	wr_buf[0] = 0x50;
+	wr_buf[1] = 0x04;
+	wr_buf[2] = 0x03;
+
+	memcpy(&wr_buf[3], m_cal_vector, CALIBVECTOR_SIZE);
+
+	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
+
+	return 0;
 }
 
 static int m_read_mcu_id(const struct device *dev)
@@ -192,35 +214,6 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
 	return 0;
 }
 
-static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5)
-{
-	const struct max32664d_config *config = dev->config;
-	uint8_t wr_buf[5];
-	uint8_t rd_buf[1];
-
-	wr_buf[0] = byte1;
-	wr_buf[1] = byte2;
-	wr_buf[2] = byte3;
-	wr_buf[3] = byte4;
-	wr_buf[4] = byte5;
-
-	gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_USEC(300));
-
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
-	i2c_read_dt(&config->i2c, rd_buf, 1);
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
-
-	gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-	LOG_DBG("CMD: %x %x %x %x %x | RSP: %x", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
-
-	k_sleep(K_MSEC(45));
-
-	return 0;
-}
-
 int max32664d_get_fifo_count(const struct device *dev)
 {
 	const struct max32664d_config *config = dev->config;
@@ -263,37 +256,6 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
 	LOG_DBG("CMD: %x %x %x | RSP: %x", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
-
-	k_sleep(K_MSEC(10));
-
-	return 0;
-}
-
-static int m_i2c_write_cmd_3_rsp_2(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3)
-{
-	const struct max32664d_config *config = dev->config;
-	uint8_t wr_buf[3];
-
-	uint8_t rd_buf[2] = {0x00, 0x00};
-
-	wr_buf[0] = byte1;
-	wr_buf[1] = byte2;
-	wr_buf[2] = byte3;
-
-	gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_USEC(300));
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
-
-	// gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_USEC(300));
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-	k_sleep(K_MSEC(500));
-
-	gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-	LOG_DBG("CMD: %x %x %x | RSP: %x %x", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1]);
 
 	k_sleep(K_MSEC(10));
 
@@ -361,6 +323,7 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 int max32664d_do_enter_app(const struct device *dev)
 {
 	const struct max32664d_config *config = dev->config;
+	struct max32664d_data *data = dev->data;
 
 	LOG_DBG("Entering app mode");
 
@@ -381,10 +344,9 @@ int max32664d_do_enter_app(const struct device *dev)
 
 	m_read_op_mode(dev);
 
-	uint8_t ver_buf[4] = {0};
-	if (m_get_ver(dev, ver_buf) == 0)
+	if (m_get_ver(dev, data->hub_ver) == 0)
 	{
-		LOG_INF("Hub version: %d.%d.%d", ver_buf[1], ver_buf[2], ver_buf[3]);
+		LOG_INF("Hub version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);
 	}
 	else
 	{
@@ -525,21 +487,9 @@ static int max32664_set_mode_raw(const struct device *dev)
 	return 0;
 }
 
-static int max32664_load_calib(const struct device *dev)
-{
-	LOG_DBG("Loading calibration vector...\n");
-
-	struct max32664d_data *data = dev->data;
-
-	// Load calib vector
-	m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
-	k_sleep(K_MSEC(100));
-
-	return 0;
-}
-
 static int max32664_set_mode_bpt_est(const struct device *dev)
 {
+	struct max32664d_data *data = dev->data;
 	LOG_DBG("MAX32664 Entering BPT estimation mode...");
 
 	// Enter appl mode
@@ -547,7 +497,8 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 
 	// Load calib vector
 	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
-	m_i2c_write(dev, m_bpt_cal_vector, sizeof(m_bpt_cal_vector));
+	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
+	max32664d_write_calib_data(dev, data->bpt_cal_vector);
 
 	// Set date and time
 	m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
@@ -805,6 +756,8 @@ static int max32664_attr_set(const struct device *dev,
 	struct max32664d_data *data = dev->data;
 	switch (attr)
 	{
+
+		break;
 	case MAX32664_ATTR_OP_MODE:
 		if (val->val1 == MAX32664D_OP_MODE_RAW)
 		{
@@ -842,13 +795,13 @@ static int max32664_attr_set(const struct device *dev,
 		m_set_bp_cal_values(dev, m_sys, m_dia); // va1 = sys, val2 = dia
 		break;
 	case MAX32664_ATTR_LOAD_CALIB:
-		max32664_load_calib(dev);
+		// max32664_load_calib(dev);
 		break;
 	case MAX32664_ATTR_STOP_EST:
 		max32664_stop_estimation(dev);
 		break;
 	case MAX32664_ATTR_ENTER_BOOTLOADER:
-		max32664_do_enter_bl(dev);
+		// max32664_do_enter_bl(dev);
 		break;
 	default:
 		LOG_ERR("Unsupported sensor attribute");
@@ -870,6 +823,9 @@ static int max32664d_attr_get(const struct device *dev,
 	case MAX32664D_ATTR_SENSOR_ID:
 		val->val1 = max32664d_get_afe_sensor_id(dev);
 		break;
+	case MAX32664D_ATTR_APP_VER:
+		val->val1 = data->hub_ver[2];
+		val->val2 = data->hub_ver[3];
 	}
 }
 

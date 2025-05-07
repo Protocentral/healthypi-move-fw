@@ -243,6 +243,78 @@ void hpi_init_fs_struct(void)
     {
         LOG_DBG("Created dir");
     }
+
+    ret = fs_mkdir("/lfs/sys");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
+}
+
+void fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
+{
+    LOG_DBG("Loading file %s to buffer", m_file_name);
+
+    struct fs_file_t m_file;
+    int rc = 0;
+
+    fs_file_t_init(&m_file);
+
+    rc = fs_open(&m_file, m_file_name, FS_O_READ);
+    if (rc != 0)
+    {
+        LOG_ERR("Error opening file %d", rc);
+        return;
+    }
+
+    rc = fs_read(&m_file, buffer, buffer_len);
+    if (rc < 0)
+    {
+        LOG_ERR("Error reading file %d", rc);
+        return;
+    }
+
+    rc = fs_close(&m_file);
+    if (rc != 0)
+    {
+        LOG_ERR("Error closing file %d", rc);
+        return;
+    }
+}
+
+void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
+{
+    LOG_DBG("Writing buffer to file %s", m_file_name);
+
+    struct fs_file_t m_file;
+    int rc = 0;
+
+    fs_file_t_init(&m_file);
+
+    rc = fs_open(&m_file, m_file_name, FS_O_CREATE | FS_O_RDWR);
+    if (rc != 0)
+    {
+        LOG_ERR("Error opening file %d", rc);
+        return;
+    }
+
+    rc = fs_write(&m_file, buffer, buffer_len);
+    if (rc < 0)
+    {
+        LOG_ERR("Error writing file %d", rc);
+        return;
+    }
+
+    rc = fs_close(&m_file);
+    if (rc != 0)
+    {
+        LOG_ERR("Error closing file %d", rc);
+        return;
+    }
 }
 
 void fs_module_init(void)
@@ -267,8 +339,7 @@ void fs_module_init(void)
 
     LOG_DBG("%s: bsize = %lu ; frsize = %lu ;"
             " blocks = %lu ; bfree = %lu\n",
-            mp->mnt_point,
-            sbuf.f_bsize, sbuf.f_frsize,
+            mp->mnt_point, sbuf.f_bsize, sbuf.f_frsize,
             sbuf.f_blocks, sbuf.f_bfree);
 
     // record_wipe_all();

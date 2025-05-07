@@ -20,17 +20,13 @@ static int max32664_async_calib_fetch(const struct device *dev, uint8_t calib_ve
     k_sleep(K_USEC(300));
     i2c_read_dt(&config->i2c, rd_buf, 826);
 
-    data->calib_vector[0] = 0x50;
-    data->calib_vector[1] = 0x04;
-    data->calib_vector[2] = 0x03;
-
     for (int i = 0; i < 824; i++)
     {
         calib_vector[i] = rd_buf[i + 2];
-        data->calib_vector[i + 3] = calib_vector[i];
+        //data->calib_vector[i + 3] = calib_vector[i];
         // printk("%x ", calib_vector[i]);
     }
-    printk("Calibration vector fetched\n");
+    LOG_DBG("Calibration vector fetched\n");
 
     data->op_mode = MAX32664D_OP_MODE_IDLE;
 

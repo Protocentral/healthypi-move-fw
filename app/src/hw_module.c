@@ -3,11 +3,8 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
-
 #include <zephyr/dfu/mcuboot.h>
-
 #include <stdio.h>
-
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/fuel_gauge.h>
 #include <zephyr/sys/ring_buffer.h>
@@ -18,10 +15,16 @@
 #include <zephyr/drivers/sensor/npm1300_charger.h>
 #include <zephyr/dt-bindings/regulator/npm1300.h>
 #include <zephyr/drivers/mfd/npm1300.h>
+#include <zephyr/drivers/regulator.h>
 
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/zbus/zbus.h>
+
+#include <zephyr/sys/reboot.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/pm.h>
+#include <zephyr/pm/device_runtime.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -32,30 +35,17 @@
 
 #include "max30001.h"
 #include "max32664d.h"
-
 #include "bmi323_hpi.h"
-
-#ifdef CONFIG_SENSOR_MAX32664C
 #include "max32664c.h"
-#endif
+#include "nrf_fuel_gauge.h"
+#include "display_sh8601.h"
 
 #include "hw_module.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
+#include "hpi_common_types.h"
 
-// #include "max32664c_msbl.h"
-
-#include <zephyr/sys/reboot.h>
-#include <zephyr/drivers/mfd/npm1300.h>
-#include <zephyr/drivers/regulator.h>
-
-#include <zephyr/pm/device.h>
-#include <zephyr/pm/pm.h>
-#include <zephyr/pm/device_runtime.h>
-
-#include "nrf_fuel_gauge.h"
-
-#include "display_sh8601.h"
+#include <max32664_updater.h>
 
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 char curr_string[40];
@@ -111,6 +101,8 @@ K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
+K_SEM_DEFINE(sem_boot_update_req, 0, 1);
+
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
@@ -127,6 +119,16 @@ static float term_charge_current;
 
 static uint16_t today_total_steps = 0;
 K_MUTEX_DEFINE(mutex_today_steps);
+
+static struct hpi_version_desc_t hpi_max32664c_req_ver = {
+    .major = 13,
+    .minor = 31,
+};
+
+static struct hpi_version_desc_t hpi_max32664d_req_ver = {
+    .major = 6,
+    .minor = 0,
+};
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
@@ -492,11 +494,13 @@ static void pmic_event_callback(const struct device *dev, struct gpio_callback *
     }
 }
 
-static void hw_add_boot_msg(char *msg, bool status)
+static void hw_add_boot_msg(char *msg, bool status, bool show_status, bool show_progress, int progress)
 {
     struct hpi_boot_msg_t boot_msg = {
-
+        .show_status = show_status,
         .status = status,
+        .show_progress = show_progress,
+        .progress = progress,
     };
     strcpy(boot_msg.msg, msg);
 
@@ -571,11 +575,11 @@ void hw_module_init(void)
     if (npm_fuel_gauge_init(charger) < 0)
     {
         LOG_ERR("Could not initialise fuel gauge.\n");
-        hw_add_boot_msg("PMIC", false);
+        hw_add_boot_msg("PMIC", true, true, false, 0);
     }
     else
     {
-        hw_add_boot_msg("PMIC", true);
+        hw_add_boot_msg("PMIC", true, true, false, 0);
         hw_enable_pmic_callback();
     }
 
@@ -586,11 +590,11 @@ void hw_module_init(void)
     if (!device_is_ready(imu_dev))
     {
         LOG_ERR("Error: IMU device not ready");
-        hw_add_boot_msg("BMI323", false);
+        hw_add_boot_msg("BMI323", false, true, false, 0);
     }
     else
     {
-        hw_add_boot_msg("BMI323", true);
+        hw_add_boot_msg("BMI323", true, true, false, 0);
         // struct sensor_value set_val;
         // set_val.val1 = 1;
 
@@ -611,11 +615,11 @@ void hw_module_init(void)
     {
         LOG_ERR("MAX30001 device not found!");
         max30001_device_present = false;
-        hw_add_boot_msg("MAX30001", false);
+        hw_add_boot_msg("MAX30001", false, true, false, 0);
     }
     else
     {
-        hw_add_boot_msg("MAX30001", true);
+        hw_add_boot_msg("MAX30001", true, true, false, 0);
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
 
@@ -640,17 +644,20 @@ void hw_module_init(void)
     {
         LOG_ERR("MAX32664C device not present!");
         max32664c_device_present = false;
-        hw_add_boot_msg("MAX32664C", false);
+        hw_add_boot_msg("MAX32664C", false, true, false, 0);
     }
     else
     {
-        hw_add_boot_msg("MAX32664C", true);
+        hw_add_boot_msg("MAX32664C", true, true, false, 0);
         LOG_INF("MAX32664C device present!");
         max32664c_device_present = true;
 
         struct sensor_value ver_get;
         sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_APP_VER, &ver_get);
         LOG_INF("MAX32664C App Version: %d.%d", ver_get.val1, ver_get.val2);
+        char ver_msg[10] = {0};
+        snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
+        hw_add_boot_msg(ver_msg, true, false, false, 0);
 
         struct sensor_value sensor_ids_get;
         sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_SENSOR_IDS, &sensor_ids_get);
@@ -658,44 +665,32 @@ void hw_module_init(void)
         if (sensor_ids_get.val1 != MAX32664C_AFE_ID)
         {
             LOG_ERR("MAX32664C AFE Not Present");
-            hw_add_boot_msg("\t AFE", false);
+            hw_add_boot_msg("\t AFE", false, true, false, 0);
         }
         else
         {
             LOG_INF("MAX32664C AFE OK: %x", sensor_ids_get.val1);
-            hw_add_boot_msg("\t AFE", true);
+            hw_add_boot_msg("\t AFE", true, true, false, 0);
         }
 
         if (sensor_ids_get.val2 != MAX32664C_ACC_ID)
         {
             LOG_ERR("MAX32664C Accel Not Present");
-            hw_add_boot_msg("\t Acc", false);
+            hw_add_boot_msg("\t Acc", false, true, false, 0);
         }
         else
         {
             LOG_INF("MAX32664C Accel OK: %x", sensor_ids_get.val2);
-            hw_add_boot_msg("\t Acc", true);
+            hw_add_boot_msg("\t Acc", true, true, false, 0);
         }
 
-        if (ver_get.val1 < MAX32664C_LATEST_APP_VER1)
+        if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
         {
-            LOG_INF("App update required");
-
-            struct sensor_value mode_set;
-            mode_set.val1 = 1;
-            sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
+            LOG_INF("MAX32664C App update required");
+            hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+            k_sem_give(&sem_boot_update_req);
+            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
         }
-
-        // To force bootloader mode
-        // mode_get.val1 = 8;
-
-        /*if (mode_get.val1 == 8)
-        {
-            LOG_INF("MAX32664C App not present. Starting bootloader mode");
-            struct sensor_value mode_set;
-            mode_set.val1 = 1;
-            sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_ENTER_BOOTLOADER, &mode_set);
-        }*/
 
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
@@ -707,19 +702,29 @@ void hw_module_init(void)
     {
         LOG_ERR("MAX32664D device not present!");
         max32664d_device_present = false;
-        hw_add_boot_msg("MAX32664D", false);
+        hw_add_boot_msg("MAX32664D", false, true, false, 0);
     }
     else
     {
         LOG_INF("MAX32664D device present!");
         max32664d_device_present = true;
-        hw_add_boot_msg("MAX32664D", true);
+        hw_add_boot_msg("MAX32664D", true, true, false, 0);
 
-        // To force bootloader mode
-        /*struct sensor_value mode_set;
-        mode_set.val1 = 1;
-        sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_ENTER_BOOTLOADER, &mode_set);
-        */
+        struct sensor_value ver_get;
+        sensor_attr_get(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_APP_VER, &ver_get);
+        LOG_INF("MAX32664D App Version: %d.%d", ver_get.val1, ver_get.val2);
+
+        char ver_msg[10] = {0};
+        snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
+        hw_add_boot_msg(ver_msg, true, false, false, 0);
+
+        if ((ver_get.val1 < hpi_max32664d_req_ver.major) || (ver_get.val2 < hpi_max32664d_req_ver.minor))
+        {
+            LOG_INF("MAX32664D App update required");
+            hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+            k_sem_give(&sem_boot_update_req);
+            max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+        }
 
         k_sem_give(&sem_ppg_finger_sm_start);
     }
@@ -754,12 +759,12 @@ void hw_module_init(void)
     if (!device_is_ready(max30208_dev))
     {
         LOG_ERR("MAX30208 device not found!");
-        hw_add_boot_msg("MAX30208", false);
+        hw_add_boot_msg("MAX30208", false, true, false, 0);
     }
     else
     {
         LOG_INF("MAX30208 device found!");
-        hw_add_boot_msg("MAX30208", true);
+        hw_add_boot_msg("MAX30208", true, true, false, 0);
     }
 
     rtc_get_time(rtc_dev, &curr_time);
@@ -845,7 +850,7 @@ void hw_thread(void)
 
         // Read and publish steps
         _steps = acc_get_steps();
-        //LOG_DBG("Inc. Steps: %d", _steps);
+        // LOG_DBG("Inc. Steps: %d", _steps);
 
         struct hpi_steps_t steps_point = {
             .timestamp = hw_get_sys_time_ts(),

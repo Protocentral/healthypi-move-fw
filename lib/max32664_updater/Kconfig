@@ -1,0 +1,13 @@
+# Configuration options
+
+config MAX32664_UPDATER
+	bool "MAX32664 Updater"
+	default y
+	select I2C
+	help
+		Enable the driver for the Maxim MAX32664 Updater
+
+module = MAX32664_UPDATER
+module-str = max32664_updater
+
+source "subsys/logging/Kconfig.template.log_config"

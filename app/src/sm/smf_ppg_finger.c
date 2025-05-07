@@ -7,6 +7,7 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 #include "hw_module.h"
 #include "max32664d.h"
 #include "hpi_common_types.h"
+#include "fs_module.h"
 
 #define PPG_FINGER_SAMPLING_INTERVAL_MS 40
 
@@ -17,6 +18,48 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 #define DEFAULT_FUTURE_TIME 121213 // HHMMSS 12:12:13
 
 #define MAX30101_SENSOR_ID 0x15
+
+static uint8_t test_bpt_cal_vector[CALIBVECTOR_SIZE] = {0x50, 0x04, 0x03, 0, 0, 175, 63, 3, 33, 75, 0, 0, 0, 0, 15, 198, 2, 100, 3, 32, 0, 0, 3, 207, 0, // calib vector sample
+                                                        4, 0, 3, 175, 170, 3, 33, 134, 0, 0, 0, 0, 15, 199, 2, 100, 3, 32, 0, 0, 3,
+                                                        207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
+                                                        0, 3, 207, 0, 4, 0, 3, 176, 102, 3, 33, 203, 0, 0, 0, 0, 15, 201, 2, 100, 3,
+                                                        32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 178, 3, 33, 236, 0, 0, 0, 0, 15, 202, 2,
+                                                        100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 255, 3, 34, 16, 0, 0, 0, 0, 15,
+                                                        203, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 64, 3, 34, 41, 0, 0, 0, 0,
+                                                        15, 204, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 130, 3, 34, 76, 0, 0,
+                                                        0, 0, 15, 205, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 189, 3, 34, 90,
+                                                        0, 0, 0, 0, 15, 206, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 248, 3, 34,
+                                                        120, 0, 0, 0, 0, 15, 207, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 178, 69, 3,
+                                                        34, 137, 0, 0, 0, 0, 15, 208, 2, 100, 3, 32, 0, 0, 3, 0, 0, 175, 63, 3, 33,
+                                                        75, 0, 0, 0, 0, 15, 198, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 175, 170, 3,
+                                                        33, 134, 0, 0, 0, 0, 15, 199, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176,
+                                                        22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3,
+                                                        176, 102, 3, 33, 203, 0, 0, 0, 0, 15, 201, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4,
+                                                        0, 3, 176, 178, 3, 33, 236, 0, 0, 0, 0, 15, 202, 2, 100, 3, 32, 0, 0, 3, 207,
+                                                        0, 4, 0, 3, 176, 255, 3, 34, 16, 0, 0, 0, 0, 15, 203, 2, 100, 3, 32, 0, 0, 3,
+                                                        207, 0, 4, 0, 3, 177, 64, 3, 34, 41, 0, 0, 0, 0, 15, 204, 2, 100, 3, 32, 0, 0,
+                                                        3, 207, 0, 4, 0, 3, 177, 130, 3, 34, 76, 0, 0, 0, 0, 15, 205, 2, 100, 3, 32,
+                                                        0, 0, 3, 207, 0, 4, 0, 3, 177, 189, 3, 34, 90, 0, 0, 0, 0, 15, 206, 2, 100, 3,
+                                                        32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 248, 3, 34, 120, 0, 0, 0, 0, 15, 207, 2,
+                                                        100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 178, 69, 3, 34, 137, 0, 0, 0, 0, 15,
+                                                        208, 2, 100, 3, 32, 0, 0, 3, 0, 0, 175, 63, 3, 33, 75, 0, 0, 0, 0, 15, 198, 2,
+                                                        100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 175, 170, 3, 33, 134, 0, 0, 0, 0, 15,
+                                                        199, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0,
+                                                        15, 200, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 102, 3, 33, 203, 0, 0,
+                                                        0, 0, 15, 201, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 178, 3, 33, 236,
+                                                        0, 0, 0, 0, 15, 202, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 176, 255, 3, 34,
+                                                        16, 0, 0, 0, 0, 15, 203, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177, 64, 3,
+                                                        34, 41, 0, 0, 0, 0, 15, 204, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3, 177,
+                                                        130, 3, 34, 76, 0, 0, 0, 0, 15, 205, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4, 0, 3,
+                                                        177, 189, 3, 34, 90, 0, 0, 0, 0, 15, 206, 2, 100, 3, 32, 0, 0, 3, 207, 0, 4,
+                                                        0, 3, 177, 248, 3, 34, 120, 0, 0, 0, 0, 15, 207, 2, 100, 3, 32, 0, 0, 3, 207,
+                                                        0, 4, 0, 3, 178, 69, 3, 34, 137, 0, 0, 0, 0, 15, 208, 2, 100, 3, 32, 0, 0, 3,
+                                                        0, 0, 175, 63, 3, 33, 75, 0, 0, 0, 0, 15, 198, 2, 100, 3, 32, 0, 0, 3, 207, 0,
+                                                        4, 0, 3, 175, 170, 3, 33, 134, 0, 0, 0, 0, 15, 199, 2, 100, 3, 32, 0, 0, 3,
+                                                        207, 0, 4, 0, 3, 176, 22, 3, 33, 165, 0, 0, 0, 0, 15, 200, 2, 100, 3, 32, 0,
+                                                        0, 3, 207, 0, 4, 0, 3, 176, 102, 3};
+
+uint8_t bpt_cal_vector[CALIBVECTOR_SIZE] = {0};
 
 static const struct smf_state ppg_fi_states[];
 
@@ -165,7 +208,7 @@ void ppg_finger_sampling_thread_runner(void *, void *, void *)
  * This function sets the date and time for the BPT estimation, then sets the
  * operation mode to BPT and starts the estimation process.
  */
-void hw_bpt_start_est(void)
+static void hw_bpt_start_est(void)
 {
     struct sensor_value load_cal;
     load_cal.val1 = 0x00000000;
@@ -183,6 +226,18 @@ void hw_bpt_start_est(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664_ATTR_OP_MODE, &mode_set);
 
     k_sleep(K_MSEC(1000));
+}
+
+static int hpi_bpt_load_cal_data(uint8_t *bpt_cal_vector)
+{
+    fs_load_file_to_buffer("/sys/bpt_cal_vector", bpt_cal_vector, CALIBVECTOR_SIZE);
+    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector);
+}
+
+static int hpi_bpt_save_cal_data(uint8_t *bpt_cal_vector)
+{
+    max32664d_get_bpt_cal_vector(max32664d_dev, bpt_cal_vector);
+    fs_save_buffer_to_file("/sys/bpt_cal_vector", bpt_cal_vector, CALIBVECTOR_SIZE);
 }
 
 void hpi_bpt_stop(void)
@@ -346,7 +401,7 @@ static void st_ppg_fi_check_sensor_entry(void *o)
 
 static void st_ppg_fi_check_sensor_run(void *o)
 {
-    //LOG_DBG("PPG Finger SM Check Sensor Running");
+    // LOG_DBG("PPG Finger SM Check Sensor Running");
 
     struct sensor_value sensor_id_get;
     sensor_id_get.val1 = 0x00;
@@ -363,9 +418,9 @@ static void st_ppg_fi_check_sensor_run(void *o)
     else
     {
         LOG_DBG("MAX30101 sensor found !");
-        //hw_bpt_start_est();
-        // k_thread_resume(ppg_finger_sampling_thread_id);
-        // }
+        // hw_bpt_start_est();
+        //  k_thread_resume(ppg_finger_sampling_thread_id);
+        //  }
     }
 }
 

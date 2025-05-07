@@ -22,6 +22,8 @@ uint8_t ces_pkt_data_buffer[1000]; // = new char[1000];
 volatile bool cmd_module_ble_connected = false;
 uint8_t data_pkt_buffer[256];
 
+uint8_t log_type=0;
+
 // Externs
 extern int global_dev_status;
 
@@ -29,7 +31,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
     uint8_t cmd_cmd_id = in_pkt_buf[0];
 
-    LOG_DBG("Recd Command: %X", cmd_cmd_id);
+    LOG_DBG("RX Command: %X", cmd_cmd_id);
 
     switch (cmd_cmd_id)
     {
@@ -46,16 +48,48 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         k_sleep(K_MSEC(1000));
         sys_reboot(SYS_REBOOT_COLD);
         break;
+    case HPI_CMD_START_BPT_CAL:
+        LOG_DBG("RX CMD Start BPT Cal");
+        uint8_t bpt_cal_index = in_pkt_buf[1];
+        uint8_t bpt_cal_value_sys = in_pkt_buf[2];
+        uint8_t bpt_cal_value_dia = in_pkt_buf[3];
+        LOG_DBG("Sys: %d Dia: %d", bpt_cal_value_sys, bpt_cal_value_dia);
+        //hpi_bpt_start_cal(sys, dia);
+        break;
+
+    case HPI_CMD_PAIR_DEVICE:
+        LOG_DBG("RX CMD Pair Device");
+        //uint8_t pin_code = in_pkt_buf[1];
+        //LOG_DBG("PIN: %d", pin_code);
+        //hpi_pair_device(pin_code);
+        break;
+    case HPI_CMD_UNPAIR_DEVICE:
+        LOG_DBG("RX CMD Unpair Device");
+        //hpi_unpair_device();
+        break;
+    case HPI_CMD_PAIR_CHECK_PIN:
+        LOG_DBG("RX CMD Check PIN");
+        uint8_t hpi_pin[6]; 
+        for (int i = 0; i < 6; i++)
+        {
+            hpi_pin[i] = in_pkt_buf[1 + i];
+        }
+        LOG_DBG("PIN: %02X %02X %02X %02X %02X %02X", hpi_pin[0], hpi_pin[1], hpi_pin[2], hpi_pin[3], hpi_pin[4], hpi_pin[5]);
+        //hpi_check_pin(hpi_pin);
+        break;
+    
 
     // File System Commands
     case HPI_CMD_LOG_GET_COUNT:
         LOG_DBG("RX CMD Get Log Count");
         uint16_t log_count = log_get_count(in_pkt_buf[1]);
-        hpi_cmdif_send_ble_cmd_rsp(HPI_CMD_LOG_GET_COUNT, log_count);
+        log_type = in_pkt_buf[1];
+        hpi_cmdif_send_count_rsp(HPI_CMD_LOG_GET_COUNT, log_type, log_count);
         break;
     case HPI_CMD_LOG_GET_INDEX:
         LOG_DBG("RX CMD Get Index");
-        log_get_index(in_pkt_buf[1]);
+        log_type = in_pkt_buf[1];
+        log_get_index(log_type);
         break;
     case HPI_CMD_LOG_GET_FILE:
         LOG_DBG("RX CMD Get Log");
@@ -75,6 +109,8 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         LOG_DBG("RX CMD Log Wipe");
         log_wipe_all();
         break;
+
+    
     default:
         LOG_DBG("RX CMD Unknown");
         break;
@@ -110,17 +146,18 @@ void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
     hpi_ble_send_data(cmd_pkt, 1 + m_data_len);
 }
 
-void hpi_cmdif_send_ble_cmd_rsp(uint8_t m_cmd, uint16_t m_value)
+void hpi_cmdif_send_count_rsp(uint8_t m_cmd, uint8_t m_log_type, uint16_t m_value)
 {
-    printk("Sending BLE Command Response: %X %X\n", m_cmd, m_value);
-    uint8_t cmd_pkt[4];
+    LOG_DBG("Sending BLE Command Response: %X %X\n", m_cmd, m_value);
+    uint8_t cmd_pkt[5];
 
     cmd_pkt[0] = CES_CMDIF_TYPE_CMD_RSP;
     cmd_pkt[1] = m_cmd;
-    cmd_pkt[2] = (uint8_t)(m_value & 0x00FF);
-    cmd_pkt[3] = (uint8_t)((m_value >> 8) & 0x00FF);
+    cmd_pkt[2] = m_log_type;
+    cmd_pkt[3] = (uint8_t)(m_value & 0x00FF);
+    cmd_pkt[4] = (uint8_t)((m_value >> 8) & 0x00FF);
 
-    hpi_ble_send_data(cmd_pkt, 4);
+    hpi_ble_send_data(cmd_pkt, 5);
 }
 
 void cmd_thread(void)
@@ -133,12 +170,13 @@ void cmd_thread(void)
     {
         k_msgq_get(&q_cmd_msg, &rx_cmd_data_obj, K_FOREVER);
 
-        LOG_DBG("Recd BLE Packet len: %d", rx_cmd_data_obj.data_len);
+        /*LOG_DBG("Recd BLE Packet len: %d", rx_cmd_data_obj.data_len);
         for (int i = 0; i < rx_cmd_data_obj.data_len; i++)
         {
             printk("%02X ", rx_cmd_data_obj.data[i]);
         }
         printk("\n");
+        */
         hpi_decode_data_packet(rx_cmd_data_obj.data, rx_cmd_data_obj.data_len);
 
         k_sleep(K_MSEC(1000));

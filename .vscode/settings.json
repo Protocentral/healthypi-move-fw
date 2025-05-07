@@ -38,11 +38,14 @@
         "kernel.h": "c",
         "littlefs.h": "c",
         "ctime": "c",
-        "conn.h": "c"
+        "conn.h": "c",
+        "byteorder.h": "c",
+        "max32664c_30_13_31.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",
         "${workspaceFolder}/app/build_min": "Launch build_min"
     },
-    "C_Cpp.configurationWarnings": "disabled"
+    "C_Cpp.configurationWarnings": "disabled",
+    "idf.pythonInstallPath": "/opt/homebrew/opt/python/libexec/bin/python"
 }
