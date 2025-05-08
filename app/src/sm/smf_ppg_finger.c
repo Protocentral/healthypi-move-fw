@@ -33,7 +33,9 @@ K_SEM_DEFINE(sem_bpt_est_abort, 0, 1);
 
 // New Sems
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
-K_SEM_DEFINE(sem_bpt_check_sensor, 0, 1);
+K_SEM_DEFINE(sem_bpt_cal_start, 0, 1);
+
+//K_SEM_DEFINE(sem_bpt_check_sensor, 0, 1);
 K_SEM_DEFINE(sem_bpt_sensor_found, 0, 1);
 
 K_SEM_DEFINE(sem_start_bpt_sampling, 0, 1);
@@ -51,7 +53,7 @@ enum ppg_fi_op_modes
     PPG_FI_OP_MODE_BPT_CAL,
 };
 
-static uint8_t ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
+//static uint8_t ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
 
 enum ppg_fi_sm_state
 {
@@ -68,23 +70,28 @@ enum ppg_fi_sm_state
     PPG_FI_STATE_BPT_CAL_FAIL,
 };
 
-struct s_object
+struct s_ppg_fi_object
 {
     struct smf_ctx ctx;
+    uint8_t ppg_fi_op_mode;
+    uint8_t bpt_cal_curr_index;
+
 } sf_obj;
 
-static uint8_t bpt_cal_vector[CAL_VECTOR_SIZE] = {0};
+static uint8_t sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
+
+static uint8_t bpt_cal_vector_buf[CAL_VECTOR_SIZE] = {0};
 
 //Forward declaration
 static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia);
-static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector);
+static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf);
 
 static bool bpt_process_done = false;
 
 extern const struct device *const max32664d_dev;
 extern struct k_sem sem_ppg_finger_sm_start;
 
-static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
+static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_ppg_op_mode)
 {
     const struct max32664d_encoded_data *edata = (const struct max32664d_encoded_data *)buf;
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
@@ -117,17 +124,17 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len)
         k_msgq_put(&q_ppg_fi_sample, &ppg_sensor_sample, K_MSEC(1));
         // k_sem_give(&sem_ppg_finger_sample_trigger);
 
-        LOG_DBG("Status: %d Progress: %d\n", edata->bpt_status, edata->bpt_progress);
+        LOG_DBG("Status: %d Progress: %d", edata->bpt_status, edata->bpt_progress);
 
         if(edata->bpt_progress==100 && bpt_process_done==false)
         {
-            if(ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+            if(m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
             {
                 // BPT Calibration done
                 LOG_INF("BPT Calibration Done");
                 k_sem_give(&sem_bpt_cal_complete);
             }
-            else if(ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
+            else if(m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST)
             {
                 // BPT Estimation done
                 LOG_INF("BPT Estimation Done");
@@ -171,7 +178,7 @@ void work_fi_sample_handler(struct k_work *work)
         LOG_ERR("Error reading sensor data");
         return;
     }
-    sensor_ppg_finger_decode(data_buf, sizeof(data_buf));
+    sensor_ppg_finger_decode(data_buf, sizeof(data_buf), sens_decode_ppg_fi_op_mode);
 }
 K_WORK_DEFINE(work_fi_sample, work_fi_sample_handler);
 
@@ -191,6 +198,28 @@ K_TIMER_DEFINE(tmr_ppg_fi_sampling, ppg_fi_sampling_handler, NULL);
 static void hw_bpt_start_est(void)
 {
     LOG_INF("Starting BPT Estimation");
+    //ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
+    bpt_process_done = false;
+
+    // Load calibration vector 0
+    struct sensor_value cal_idx_val;
+    cal_idx_val.val1 = 0;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    fs_load_file_to_buffer("/lfs/sys/bpt_cal_0", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+
+    // Load calibration vector 1
+    cal_idx_val.val1 = 1;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    fs_load_file_to_buffer("/lfs/sys/bpt_cal_1", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+
+    // TODO: load cal vectors 1-4 if needed
+
+    struct sensor_value mode_val;
+    mode_val.val1 = MAX32664D_OP_MODE_BPT;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_OP_MODE, &mode_val);
+
     /*struct sensor_value load_cal;
     load_cal.val1 = 0x00000000;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_LOAD_CALIB, &load_cal);
@@ -229,7 +258,7 @@ static void hw_bpt_encode_date_time(struct tm  *curr_time, uint32_t *date, uint3
 static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia)
 {
     LOG_INF("Starting BPT Calibration");
-    ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
+    //ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
     bpt_process_done = false;
     //Set the date and time for the BPT calibration
     struct tm curr_time = hw_get_sys_time();
@@ -257,13 +286,6 @@ static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia)
     struct sensor_value mode_val;
     mode_val.val1 = MAX32664D_OP_MODE_BPT_CAL_START;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_OP_MODE, &mode_val);
-
-}
-
-static int hpi_bpt_load_cal_data(uint8_t *bpt_cal_vector)
-{
-    fs_load_file_to_buffer("/lfs/sys/bpt_cal_vector", bpt_cal_vector, CAL_VECTOR_SIZE);
-    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector);
 }
 
 void hpi_bpt_stop(void)
@@ -273,15 +295,15 @@ void hpi_bpt_stop(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_STOP_EST, &mode_val);
 }
 
-static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector)
+static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf)
 {
     struct sensor_value fetch_cal;
     fetch_cal.val1 = 0;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_FETCH_VECTOR, &fetch_cal);
 
-    max32664d_get_bpt_cal_vector(max32664d_dev, bpt_cal_vector);
-    LOG_HEXDUMP_INF(bpt_cal_vector, CAL_VECTOR_SIZE, "BPT Cal Vector");
-    fs_write_buffer_to_file("/lfs/sys/bpt_cal_0", bpt_cal_vector, CAL_VECTOR_SIZE);
+    max32664d_get_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+    LOG_HEXDUMP_INF(bpt_cal_vector_buf, CAL_VECTOR_SIZE, "BPT Cal Vector");
+    fs_write_buffer_to_file("/lfs/sys/bpt_cal_0", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
 
     /*struct sensor_value mode_val;
     mode_val.val1 = MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR;
@@ -304,20 +326,25 @@ static void st_ppg_fing_idle_entry(void *o)
 static void st_ppg_fing_idle_run(void *o)
 {
     // LOG_DBG("PPG Finger SM Idle Running");
+    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
 
-    if (k_sem_take(&sem_bpt_check_sensor, K_NO_WAIT) == 0)
+    if(k_sem_take(&sem_bpt_est_start, K_NO_WAIT) == 0)
     {
+        s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 
-    if (k_sem_take(&sem_bpt_est_start, K_NO_WAIT) == 0)
+    /*if (k_sem_take(&sem_bpt_check_sensor, K_NO_WAIT) == 0)
     {
-        k_msleep(1000);
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
+    }*/
 
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
+    if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
+    {
+        //k_msleep(1000);
+        s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
-
-
 }
 
 static void st_ppg_fing_idle_exit(void *o)
@@ -329,8 +356,9 @@ static void st_ppg_fing_idle_exit(void *o)
 static void st_ppg_fing_bpt_est_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Entry");
-    // k_sem_give(&sem_bpt_est_
-    
+    hw_bpt_start_est();
+    sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
+    k_sem_give(&sem_start_bpt_sampling);    
 }
 
 static void st_ppg_fing_bpt_est_run(void *o)
@@ -389,7 +417,10 @@ static void st_ppg_fing_bpt_est_fail_run(void *o)
 
 static void st_ppg_fing_bpt_cal_entry(void *o)
 {
+    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
+    
     LOG_DBG("PPG Finger SM BPT Calibration Entry");
+    sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
     hw_bpt_start_cal(0, 120, 80);
     k_sem_give(&sem_start_bpt_sampling);   
     // hpi_bpt_get_calib();
@@ -401,7 +432,7 @@ static void st_ppg_fing_bpt_cal_run(void *o)
     if(k_sem_take(&sem_bpt_cal_complete, K_NO_WAIT) == 0)
     {
         k_sem_give(&sem_stop_bpt_sampling);
-        hpi_bpt_fetch_cal_vector(bpt_cal_vector);
+        hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
     }
 }
@@ -435,6 +466,8 @@ static void st_ppg_fi_check_sensor_entry(void *o)
 static void st_ppg_fi_check_sensor_run(void *o)
 {
     // LOG_DBG("PPG Finger SM Check Sensor Running");
+    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
+
 
     struct sensor_value sensor_id_get;
     sensor_id_get.val1 = 0x00;
@@ -452,7 +485,14 @@ static void st_ppg_fi_check_sensor_run(void *o)
     {
         LOG_DBG("MAX30101 sensor found !");
         k_sem_give(&sem_bpt_sensor_found);
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
+        if(s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
+        {
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
+        }
+        else if(s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+        {
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
+        }
     }
 }
 

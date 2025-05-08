@@ -129,23 +129,11 @@ struct max32664d_data
 	uint8_t hub_ver[4];
 
 	uint8_t bpt_cal_vector[512];
-
+	
 	// User calibration process data
 	uint8_t curr_cal_index;
 	uint8_t curr_cal_sys;
 	uint8_t curr_cal_dia;
-};
-
-struct sensor_ppg_data
-{
-	struct sensor_data_header header;
-	int8_t shift;
-	struct sensor_ppg_sample_data
-	{
-		uint32_t timestamp_delta;
-		q31_t sample_red;
-		q31_t sample_ir;
-	} readings[1];
 };
 
 // Async API types
@@ -189,6 +177,6 @@ void max32664_do_enter_bl(const struct device *dev);
 int max32664d_do_enter_app(const struct device *dev);
 
 int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector);
-int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector);
+int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE]);
 int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);

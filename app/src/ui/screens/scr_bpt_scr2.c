@@ -18,7 +18,8 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
-extern struct k_sem sem_bpt_check_sensor;
+extern struct k_sem sem_bpt_est_start;
+extern struct k_sem sem_bpt_cal_start;
 
 static void scr_bpt_btn_proceed_handler(lv_event_t *e)
 {
@@ -26,7 +27,8 @@ static void scr_bpt_btn_proceed_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        k_sem_give(&sem_bpt_check_sensor); 
+        k_sem_give(&sem_bpt_est_start); 
+        //k_sem_give(&sem_bpt_cal_start);
         hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_UP, (uint8_t)SCR_BPT);
     }
 }

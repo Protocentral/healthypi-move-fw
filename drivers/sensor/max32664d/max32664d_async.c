@@ -8,8 +8,6 @@ LOG_MODULE_REGISTER(max32664d_async, CONFIG_SENSOR_LOG_LEVEL);
 
 #define MAX32664D_SENSOR_DATA_OFFSET 1
 
-
-
 static int max32664_async_sample_fetch(const struct device *dev,
                                        uint32_t ir_samples[32], uint32_t red_samples[32], uint8_t *num_samples, uint16_t *spo2,
                                        uint16_t *hr, uint8_t *bpt_status, uint8_t *bpt_progress, uint8_t *bpt_sys, uint8_t *bpt_dia)
@@ -20,20 +18,18 @@ static int max32664_async_sample_fetch(const struct device *dev,
     uint8_t wr_buf[2] = {0x12, 0x01};
     static uint8_t buf[2048];
 
-    static int sample_len=23;
+    static int sample_len = 29;
 
     uint8_t hub_stat = max32664d_read_hub_status(dev);
-    while(!(hub_stat & MAX32664D_HUB_STAT_DRDY_MASK))
+    while (!(hub_stat & MAX32664D_HUB_STAT_DRDY_MASK))
     {
         hub_stat = max32664d_read_hub_status(dev);
-    }   
+    }
 
     if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)
-    //if(1)
     {
-        // printk("DRDY ");
         int fifo_count = max32664d_get_fifo_count(dev);
-        //printk("F: %d | ", fifo_count);
+        // printk("F: %d | ", fifo_count);
 
         if (fifo_count > 32)
         {
@@ -54,7 +50,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
             }
 
             i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-            //k_sleep(K_USEC(300));
+            // k_sleep(K_USEC(300));
             i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664D_SENSOR_DATA_OFFSET));
 
             for (int i = 0; i < fifo_count; i++)
@@ -76,8 +72,8 @@ static int max32664_async_sample_fetch(const struct device *dev,
                 *bpt_status = buf[(sample_len * i) + 12 + MAX32664D_SENSOR_DATA_OFFSET];
                 *bpt_progress = buf[(sample_len * i) + 13 + MAX32664D_SENSOR_DATA_OFFSET];
 
-                uint16_t bpt_hr = (uint16_t)buf[(sample_len * i) + 14 +MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                bpt_hr |= (uint16_t)buf[(sample_len * i) + 15 +MAX32664D_SENSOR_DATA_OFFSET];
+                uint16_t bpt_hr = (uint16_t)buf[(sample_len * i) + 14 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+                bpt_hr |= (uint16_t)buf[(sample_len * i) + 15 + MAX32664D_SENSOR_DATA_OFFSET];
 
                 *hr = (bpt_hr / 10);
 
@@ -85,28 +81,15 @@ static int max32664_async_sample_fetch(const struct device *dev,
                 *bpt_dia = buf[(sample_len * i) + 17 + MAX32664D_SENSOR_DATA_OFFSET];
 
                 uint16_t bpt_spo2 = (uint16_t)buf[(sample_len * i) + 18 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 19 +MAX32664D_SENSOR_DATA_OFFSET];
+                bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 19 + MAX32664D_SENSOR_DATA_OFFSET];
 
                 *spo2 = (bpt_spo2 / 10);
 
-                uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 20 +MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 +MAX32664D_SENSOR_DATA_OFFSET];
-
-                // data->spo2_r_val = (spo2_r_val / 1000);
-                // data->hr_above_resting = buf[(sample_len * i) + 23];*/
+                uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 20 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+                spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 + MAX32664D_SENSOR_DATA_OFFSET];
             }
         }
-        /*else
-        {
-            printk("FIFO empty\n");
-            return 4;
-        }*/
     }
-    /*else
-    {
-        // printk("FIFO empty\n");
-        return 4;
-    }*/
 
     return 0;
 }
@@ -139,22 +122,15 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         rc = max32664_async_sample_fetch(dev, edata->ir_samples, edata->red_samples, &edata->num_samples, &edata->spo2,
                                          &edata->hr, &edata->bpt_status, &edata->bpt_progress, &edata->bpt_sys, &edata->bpt_dia);
     }
-    /*else if (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR)
-    {
-        // Get calibration vector
-        calib_data = (struct max32664_enc_calib_data *)buf;
-
-        rc = max32664_async_calib_fetch(dev, calib_data->calib_vector);
-    }*/
     else
     {
         LOG_ERR("Invalid operation mode\n");
-        //return 4;
+        // return 4;
     }
 
     if (rc != 0)
     {
-        //LOG_ERR("Failed: %d", rc);
+        // LOG_ERR("Failed: %d", rc);
         rtio_iodev_sqe_err(iodev_sqe, rc);
         return rc;
     }

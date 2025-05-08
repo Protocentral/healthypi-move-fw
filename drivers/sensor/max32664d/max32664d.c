@@ -35,12 +35,14 @@ static uint8_t buf[2048]; // 23 byte/sample * 32 samples = 736 bytes
 
 uint8_t m_date_time_vector[DATE_TIME_VECTOR_SIZE] = {0x50, 0x04, 0x04, 0x5c, 0xc2, 0x02, 0x00, 0xe0, 0x7f, 0x02, 0x00};
 
-int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector)
+static int max32664d_write_cal_data(const struct device *dev, uint8_t *m_cal_vector);
+
+int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE])
 {
 	const struct max32664d_config *config = dev->config;
 	struct max32664d_data *data = dev->data;
 
-	LOG_DBG("Setting BPT calibration vector data");
+	LOG_DBG("Setting BPT calibration vector");
 
 	if (m_bpt_cal_vector == NULL)
 	{
@@ -48,13 +50,9 @@ int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_ve
 		return -EINVAL;
 	}
 
-	if (sizeof(m_bpt_cal_vector) != CAL_VECTOR_SIZE)
-	{
-		LOG_ERR("BPT calibration vector data size is not %d", CAL_VECTOR_SIZE);
-		return -EINVAL;
-	}
-
 	memcpy(data->bpt_cal_vector, m_bpt_cal_vector, CAL_VECTOR_SIZE);
+
+	max32664d_write_cal_data(dev, data->bpt_cal_vector);
 	LOG_DBG("BPT calibration data set");
 
 	return 0;
@@ -100,7 +98,7 @@ static int m_read_op_mode(const struct device *dev)
 	return rd_buf[1];
 }
 
-static int max32664d_write_calib_data(const struct device *dev, uint8_t *m_cal_vector)
+static int max32664d_write_cal_data(const struct device *dev, uint8_t *m_cal_vector)
 {
 	const struct max32664d_config *config = dev->config;
 	uint8_t wr_buf[CAL_VECTOR_SIZE + 3];
@@ -525,16 +523,8 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	struct max32664d_data *data = dev->data;
 	LOG_DBG("MAX32664 Entering BPT estimation mode...");
 
-	// Enter appl mode
-	// m_i2c_write_cmd_3(dev, 0x01, 0x00, 0x00);
-
-	// Load calib vector
-	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
-	// m_i2c_write(dev, data->calib_vector, sizeof(data->calib_vector));
-	max32664d_write_calib_data(dev, data->bpt_cal_vector);
-
 	// Set date and time
-	m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
+	//m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
 
 	// Set SpO2 calibration coeffs (A, B, C)
 	m_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
@@ -546,16 +536,15 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x0F, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Enable AGC
-	m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x01, MAX32664_DEFAULT_CMD_DELAY);
-	k_sleep(K_MSEC(200));
-
+	m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x01, 25);
+	
 	// Enable AFE
-	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x01, MAX32664_DEFAULT_CMD_DELAY);
+	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x01, 50);
 	k_sleep(K_MSEC(200));
 
 	// Enable BPT estimation mode
-	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x02, MAX32664_DEFAULT_CMD_DELAY);
-	k_sleep(K_MSEC(100));
+	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x02, 550);
+	k_sleep(K_MSEC(125));
 
 	return 0;
 }

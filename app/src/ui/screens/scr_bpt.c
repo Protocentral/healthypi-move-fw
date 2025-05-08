@@ -22,8 +22,6 @@ lv_obj_t *scr_bpt;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_scr_container;
 
-extern struct k_sem sem_bpt_est_start;
-
 static void scr_bpt_measure_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
