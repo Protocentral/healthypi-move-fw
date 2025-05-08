@@ -11,7 +11,8 @@
 
 #define MAX32664D_HUB_STAT_DRDY_MASK 0x08
 #define MAX32664_DEFAULT_CMD_DELAY 10
-#define CALIBVECTOR_SIZE 824 // 824 bytes of calib vector data
+#define CAL_VECTOR_SIZE 512 // 512 bytes of calib vector data
+#define MAX32664D_MAX_CAL_INDEX 4
 
 enum max32664_channel
 {
@@ -32,15 +33,15 @@ enum max32664_channel
 
 enum max32664_attribute
 {
-	MAX32664_ATTR_OP_MODE = 0x01,
-	MAX32664_ATTR_DATE_TIME = 0x02,
-	MAX32664_ATTR_BP_CAL_SYS = 0x03,
-	MAX32664_ATTR_BP_CAL = 0x04,
-	MAX32664_ATTR_START_EST = 0x05,
-	MAX32664_ATTR_STOP_EST = 0x06,
-	MAX32664_ATTR_LOAD_CALIB = 0x07,
-	MAX32664_ATTR_ENTER_BOOTLOADER = 0x08,
-	MAX32664_ATTR_DO_FW_UPDATE = 0x09,
+	MAX32664D_ATTR_OP_MODE = 0x01,
+	MAX32664D_ATTR_SET_DATE_TIME = 0x02,
+	MAX32664D_ATTR_START_EST = 0x05,
+	MAX32664D_ATTR_STOP_EST = 0x06,
+	MAX32664D_ATTR_LOAD_CALIB = 0x07,
+	MAX32664D_ATTR_CAL_SET_CURR_INDEX = 0x08,
+	MAX32664D_ATTR_CAL_SET_CURR_SYS = 0x09,
+	MAX32664D_ATTR_CAL_SET_CURR_DIA = 0x0A,
+	MAX32664D_ATTR_CAL_FETCH_VECTOR = 0x0B,
 
 	MAX32664D_ATTR_SENSOR_ID = 0x10,
 	MAX32664D_ATTR_APP_VER = 0x11,
@@ -127,7 +128,12 @@ struct max32664d_data
 	// Chip info
 	uint8_t hub_ver[4];
 
-	uint8_t bpt_cal_vector[824];
+	uint8_t bpt_cal_vector[512];
+
+	// User calibration process data
+	uint8_t curr_cal_index;
+	uint8_t curr_cal_sys;
+	uint8_t curr_cal_dia;
 };
 
 struct sensor_ppg_data

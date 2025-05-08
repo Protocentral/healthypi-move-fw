@@ -80,6 +80,8 @@ enum hpi_disp_spl_screens
     SCR_SPL_BPT_SCR2,
     SCR_SPL_BPT_SCR3,
     SCR_SPL_BPT_SCR4,
+    SCR_SPL_BPT_CAL_COMPLETE,
+    SCR_SPL_BPT_CAL,
     SCR_SPL_BPT_COMPLETE,
    
     SCR_SPL_PLOT_HRV,
@@ -227,8 +229,8 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir);
 
 // Helper objects
 void draw_scr_common(lv_obj_t *parent);
-void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir);
-void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir);
+void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent);
 
 void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir);
 

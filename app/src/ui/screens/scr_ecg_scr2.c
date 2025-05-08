@@ -46,7 +46,7 @@ static void btn_ecg_cancel_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_screen(SCR_ECG, SCROLL_DOWN);
+        hpi_load_screen(SCR_ECG, SCROLL_DOWN);
     }
 }
 

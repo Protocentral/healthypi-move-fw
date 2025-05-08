@@ -27,7 +27,7 @@ static void scr_bpt_btn_proceed_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         k_sem_give(&sem_bpt_check_sensor); 
-        hpi_move_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_UP, (uint8_t)SCR_BPT);
+        hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_UP, (uint8_t)SCR_BPT);
     }
 }
 
@@ -35,6 +35,7 @@ void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir)
 {
     scr_bpt_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_scr2, &style_scr_black, 0);
+    //lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     // lv_obj_set_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     // draw_scr_common(scr_spo2_scr2);
 
@@ -45,6 +46,7 @@ void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir)
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);

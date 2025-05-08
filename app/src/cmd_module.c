@@ -119,7 +119,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 
 void cmdif_send_ble_data(uint8_t *m_data, uint8_t m_data_len)
 {
-    LOG_DBG("Sending BLE Data: %d", m_data_len);
+    //LOG_DBG("Sending BLE Data: %d", m_data_len);
 
     data_pkt_buffer[0] = CES_CMDIF_TYPE_DATA;
     for (int i = 0; i < m_data_len; i++)

@@ -14,7 +14,7 @@
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
-#define HPI_DEFAULT_START_SCREEN SCR_HOME
+#define HPI_DEFAULT_START_SCREEN SCR_BPT
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -485,11 +485,11 @@ static void st_display_active_entry(void *o)
 
     if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
     {
-        hpi_move_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
+        hpi_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
     }
     /*else
     {
-        hpi_move_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
+        hpi_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
     }*/
 }
 
@@ -572,7 +572,7 @@ static void st_display_active_run(void *o)
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
-            hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
+            hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
         }
         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
@@ -591,7 +591,7 @@ static void st_display_active_run(void *o)
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
-            hpi_move_load_screen(SCR_ECG, SCROLL_UP);
+            hpi_load_screen(SCR_ECG, SCROLL_UP);
         }
         break;
     case SCR_SPL_SPO2_COMPLETE:
@@ -604,7 +604,7 @@ static void st_display_active_run(void *o)
         if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
         {
             LOG_DBG("Loading BPT SCR4");
-            hpi_move_load_scr_spl(SCR_SPL_BPT_SCR4, SCROLL_NONE, SCR_SPL_BPT_SCR3);
+            hpi_load_scr_spl(SCR_SPL_BPT_SCR4, SCROLL_NONE, SCR_SPL_BPT_SCR3);
         }
         break;
     case SCR_TODAY:
@@ -667,16 +667,16 @@ static void st_display_active_run(void *o)
         else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
         {
             k_sem_give(&sem_ecg_cancel);
-            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+            hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
-            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+            hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
         else
         {
-            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+            hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
     }
 
@@ -831,8 +831,8 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
     m_disp_bp_dia = hpi_bpt->dia;
     m_disp_bpt_status = hpi_bpt->status;
     m_disp_bpt_progress = hpi_bpt->progress;
-    printk("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
-    printk("ZB BPT: %d / %d\n", hpi_bpt->sys, hpi_bpt->dia);
+    //printk("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
+    //printk("ZB BPT: %d / %d\n", hpi_bpt->sys, hpi_bpt->dia);
     // hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);

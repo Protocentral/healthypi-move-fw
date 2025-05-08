@@ -223,7 +223,7 @@ void hpi_display_sleep_off(void)
     hpi_disp_set_brightness(hpi_disp_get_brightness());
 
     // display_blanking_on(display_dev);
-    hpi_move_load_screen(curr_screen, SCROLL_NONE);
+    hpi_load_screen(curr_screen, SCROLL_NONE);
     // display_blanking_off(display_dev);
     hpi_pwr_display_wake();
 }
@@ -338,7 +338,7 @@ void disp_spl_scr_event(lv_event_t *e)
             hpi_bpt_abort();
         }*/
 
-        hpi_move_load_screen(*scr_parent, SCROLL_UP);
+        hpi_load_screen(*scr_parent, SCROLL_UP);
     }
 }
 
@@ -364,7 +364,7 @@ void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8
     }
 }
 
-void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
+void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
 {
     LOG_DBG("Loading screen %d Parent: %d", m_screen, scr_parent);
     switch (m_screen)
@@ -388,6 +388,9 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     case SCR_SPL_BPT_SCR4:
         draw_scr_bpt_scr4(m_scroll_dir);
         break;
+    case SCR_SPL_BPT_CAL_COMPLETE:
+        draw_scr_bpt_cal_complete(m_scroll_dir);
+        break;    
     case SCR_SPL_ECG_COMPLETE:
         draw_scr_ecg_complete(m_scroll_dir);
         break;
@@ -417,7 +420,7 @@ void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t s
     }
 }
 
-void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
+void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
     switch (m_screen)
     {
@@ -485,7 +488,7 @@ void disp_spl_screen_event(lv_event_t *e)
 
         if (curr_screen == SCR_SPL_SETTINGS)
         {
-            hpi_move_load_screen(SCR_HOME, SCROLL_DOWN);
+            hpi_load_screen(SCR_HOME, SCROLL_DOWN);
         }
     }
 }
@@ -508,7 +511,7 @@ void disp_screen_event(lv_event_t *e)
         else
         {
             printk("Loading screen %d\n", curr_screen + 1);
-            hpi_move_load_screen(curr_screen + 1, SCROLL_LEFT);
+            hpi_load_screen(curr_screen + 1, SCROLL_LEFT);
         }
     }
 
@@ -519,13 +522,13 @@ void disp_screen_event(lv_event_t *e)
 
         if (hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
         {
-            hpi_move_load_screen(SCR_HR, SCROLL_LEFT);
+            hpi_load_screen(SCR_HR, SCROLL_LEFT);
             return;
         }
 
         if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
-            hpi_move_load_screen(SCR_SPO2, SCROLL_LEFT);
+            hpi_load_screen(SCR_SPO2, SCROLL_LEFT);
             return;
         }
 
@@ -537,7 +540,7 @@ void disp_screen_event(lv_event_t *e)
         else
         {
             printk("Loading screen %d\n", curr_screen - 1);
-            hpi_move_load_screen(curr_screen - 1, SCROLL_RIGHT);
+            hpi_load_screen(curr_screen - 1, SCROLL_RIGHT);
         }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
@@ -553,20 +556,20 @@ void disp_screen_event(lv_event_t *e)
         {
             printk("Cancel ECG\n");
             k_sem_give(&sem_ecg_cancel);
-            hpi_move_load_screen(SCR_ECG, SCROLL_DOWN);
+            hpi_load_screen(SCR_ECG, SCROLL_DOWN);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
-            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_COMPLETE)
         {
-            hpi_move_load_screen(SCR_ECG, SCROLL_UP);
+            hpi_load_screen(SCR_ECG, SCROLL_UP);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_COMPLETE)
         {
-            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
         }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
@@ -576,11 +579,11 @@ void disp_screen_event(lv_event_t *e)
 
         if (curr_screen == SCR_SPL_SETTINGS)
         {
-            hpi_move_load_screen(SCR_HOME, SCROLL_UP);
+            hpi_load_screen(SCR_HOME, SCROLL_UP);
         }
         else if (hpi_disp_get_curr_screen() == SCR_HR)
         {
-            hpi_move_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR);
+            hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR);
         }
     }
 }

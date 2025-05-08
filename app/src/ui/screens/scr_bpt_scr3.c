@@ -41,7 +41,7 @@ void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Checking sensor status...");
+    lv_label_set_text(label_info, "Waiting for sensor to connect...");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
      lv_obj_t * spinner = lv_spinner_create(cont_col, 1000, 60);

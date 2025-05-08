@@ -8,30 +8,7 @@ LOG_MODULE_REGISTER(max32664d_async, CONFIG_SENSOR_LOG_LEVEL);
 
 #define MAX32664D_SENSOR_DATA_OFFSET 1
 
-static int max32664_async_calib_fetch(const struct device *dev, uint8_t calib_vector[824])
-{
-    const struct max32664d_config *config = dev->config;
-    struct max32664d_data *data = dev->data;
 
-    static uint8_t rd_buf[1024];
-    uint8_t wr_buf[3] = {0x51, 0x04, 0x03};
-
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, 826);
-
-    for (int i = 0; i < 824; i++)
-    {
-        calib_vector[i] = rd_buf[i + 2];
-        //data->calib_vector[i + 3] = calib_vector[i];
-        // printk("%x ", calib_vector[i]);
-    }
-    LOG_DBG("Calibration vector fetched\n");
-
-    data->op_mode = MAX32664D_OP_MODE_IDLE;
-
-    return 0;
-}
 
 static int max32664_async_sample_fetch(const struct device *dev,
                                        uint32_t ir_samples[32], uint32_t red_samples[32], uint8_t *num_samples, uint16_t *spo2,
@@ -56,7 +33,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
     {
         // printk("DRDY ");
         int fifo_count = max32664d_get_fifo_count(dev);
-        printk("F: %d | ", fifo_count);
+        //printk("F: %d | ", fifo_count);
 
         if (fifo_count > 32)
         {
@@ -73,7 +50,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
             }
             else if ((data->op_mode == MAX32664D_OP_MODE_BPT) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
             {
-                sample_len = 23;
+                sample_len = 29;
             }
 
             i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
@@ -162,13 +139,13 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         rc = max32664_async_sample_fetch(dev, edata->ir_samples, edata->red_samples, &edata->num_samples, &edata->spo2,
                                          &edata->hr, &edata->bpt_status, &edata->bpt_progress, &edata->bpt_sys, &edata->bpt_dia);
     }
-    else if (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR)
+    /*else if (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR)
     {
         // Get calibration vector
         calib_data = (struct max32664_enc_calib_data *)buf;
 
         rc = max32664_async_calib_fetch(dev, calib_data->calib_vector);
-    }
+    }*/
     else
     {
         LOG_ERR("Invalid operation mode\n");
