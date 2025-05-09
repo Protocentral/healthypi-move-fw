@@ -520,7 +520,6 @@ static int max32664_set_mode_raw(const struct device *dev)
 
 static int max32664_set_mode_bpt_est(const struct device *dev)
 {
-	struct max32664d_data *data = dev->data;
 	LOG_DBG("MAX32664 Entering BPT estimation mode...");
 
 	// Set date and time
@@ -543,7 +542,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	k_sleep(K_MSEC(200));
 
 	// Enable BPT estimation mode
-	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x02, 550);
+	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x02, 600);
 	k_sleep(K_MSEC(125));
 
 	return 0;
