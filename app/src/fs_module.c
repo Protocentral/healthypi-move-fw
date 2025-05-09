@@ -349,7 +349,13 @@ void fs_module_init(void)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
-
+    
+    rc= lsdir("/lfs/trtemp");
+    if (rc < 0)
+    {
+        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+    }
+    
     rc = lsdir("/lfs/sys");
     if (rc < 0)
     {

@@ -214,6 +214,12 @@ static void hw_bpt_start_est(void)
     fs_load_file_to_buffer("/lfs/sys/bpt_cal_1", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
     max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
 
+     // Load calibration vector 1
+     cal_idx_val.val1 = 2;
+     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+     fs_load_file_to_buffer("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+     max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+
     // TODO: load cal vectors 1-4 if needed
 
     struct sensor_value mode_val;
@@ -303,7 +309,7 @@ static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf)
 
     max32664d_get_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
     LOG_HEXDUMP_INF(bpt_cal_vector_buf, CAL_VECTOR_SIZE, "BPT Cal Vector");
-    fs_write_buffer_to_file("/lfs/sys/bpt_cal_0", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    fs_write_buffer_to_file("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
 
     /*struct sensor_value mode_val;
     mode_val.val1 = MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR;
@@ -421,7 +427,7 @@ static void st_ppg_fing_bpt_cal_entry(void *o)
     
     LOG_DBG("PPG Finger SM BPT Calibration Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
-    hw_bpt_start_cal(0, 120, 80);
+    hw_bpt_start_cal(2, 140, 90);
     k_sem_give(&sem_start_bpt_sampling);   
     // hpi_bpt_get_calib();
 }

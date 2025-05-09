@@ -132,7 +132,7 @@ void cmdif_send_ble_data(uint8_t *m_data, uint8_t m_data_len)
 // Send index of all logs
 void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len)
 {
-    LOG_DBG("Sending BLE Index Data: %d", m_data_len);
+    //LOG_DBG("Sending BLE Index Data: %d", m_data_len);
     uint8_t cmd_pkt[1 + m_data_len];
 
     cmd_pkt[0] = CES_CMDIF_TYPE_LOG_IDX;
