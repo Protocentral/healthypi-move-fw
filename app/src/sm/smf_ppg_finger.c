@@ -9,8 +9,9 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
+#include "cmd_module.h"
 
-#define PPG_FI_SAMPLING_INTERVAL_MS 40
+#define PPG_FI_SAMPLING_INTERVAL_MS 60
 
 #define DEFAULT_DATE 240428 // YYMMDD 28th April 2024
 #define DEFAULT_TIME 121212 // HHMMSS 12:12:12
@@ -35,13 +36,14 @@ K_SEM_DEFINE(sem_bpt_est_abort, 0, 1);
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
 K_SEM_DEFINE(sem_bpt_cal_start, 0, 1);
 
-//K_SEM_DEFINE(sem_bpt_check_sensor, 0, 1);
 K_SEM_DEFINE(sem_bpt_sensor_found, 0, 1);
 
 K_SEM_DEFINE(sem_start_bpt_sampling, 0, 1);
 K_SEM_DEFINE(sem_stop_bpt_sampling, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_cal_complete, 0, 1);
+K_SEM_DEFINE(sem_bpt_set_mode_cal, 0, 1);
+// K_SEM_DEFINE(sem_bpt)
 
 K_MSGQ_DEFINE(q_ppg_fi_sample, sizeof(struct hpi_ppg_fi_data_t), 64, 1);
 RTIO_DEFINE(max32664d_read_rtio_poll_ctx, 8, 8);
@@ -53,7 +55,7 @@ enum ppg_fi_op_modes
     PPG_FI_OP_MODE_BPT_CAL,
 };
 
-//static uint8_t ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
+// static uint8_t ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
 
 enum ppg_fi_sm_state
 {
@@ -66,6 +68,7 @@ enum ppg_fi_sm_state
     PPG_FI_STATE_BPT_EST_FAIL,
 
     PPG_FI_STATE_BPT_CAL,
+    PPG_FI_STATE_BPT_CAL_WAIT,
     PPG_FI_STATE_BPT_CAL_DONE,
     PPG_FI_STATE_BPT_CAL_FAIL,
 };
@@ -82,14 +85,30 @@ static uint8_t sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
 
 static uint8_t bpt_cal_vector_buf[CAL_VECTOR_SIZE] = {0};
 
-//Forward declaration
+// Forward declaration
 static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia);
 static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf);
 
 static bool bpt_process_done = false;
 
+static uint8_t m_cal_index;
+static uint8_t m_cal_sys;
+static uint8_t m_cal_dia;
+K_MUTEX_DEFINE(mutex_bpt_cal_set);
+
+// Externs
+
 extern const struct device *const max32664d_dev;
 extern struct k_sem sem_ppg_finger_sm_start;
+
+void hpi_bpt_set_cal_vals(uint8_t cal_index, uint8_t cal_sys, uint8_t cal_dia)
+{
+    k_mutex_lock(&mutex_bpt_cal_set, K_FOREVER);
+    m_cal_index = cal_index;
+    m_cal_sys = cal_sys;
+    m_cal_dia = cal_dia;
+    k_mutex_unlock(&mutex_bpt_cal_set);
+}
 
 static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_ppg_op_mode)
 {
@@ -126,47 +145,25 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
 
         LOG_DBG("Status: %d Progress: %d", edata->bpt_status, edata->bpt_progress);
 
-        if(edata->bpt_progress==100 && bpt_process_done==false)
+        
+        if (edata->bpt_progress == 100 && bpt_process_done == false)
         {
-            if(m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+            if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
             {
                 // BPT Calibration done
                 LOG_INF("BPT Calibration Done");
                 k_sem_give(&sem_bpt_cal_complete);
             }
-            else if(m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST)
+            else if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST)
             {
                 // BPT Estimation done
                 LOG_INF("BPT Estimation Done");
-                //k_sem_give(&sem_bpt_est_abort);
+                // k_sem_give(&sem_bpt_est_abort);
             }
             bpt_process_done = true;
         }
     }
 }
-
-/*void ppg_finger_sampling_thread_runner(void *, void *, void *)
-{
-    int ret;
-    uint8_t fing_data_buf[768];
-
-    LOG_INF("PPG Finger Sampling starting");
-    for (;;)
-    {
-        ret = sensor_read(&max32664d_iodev, &max32664d_read_rtio_poll_ctx, fing_data_buf, sizeof(fing_data_buf));
-        if (ret < 0)
-        {
-            LOG_ERR("Error reading sensor data");
-            continue;
-        }
-        sensor_ppg_finger_decode(fing_data_buf, sizeof(fing_data_buf));
-
-        // sensor_read_async_mempool(&max32664d_iodev, &max32664d_read_rtio_ctx, NULL);
-        // sensor_processing_with_callback(&max32664d_read_rtio_ctx, sensor_ppg_finger_processing_callback);
-
-        k_sleep(K_MSEC(PPG_FINGER_SAMPLING_INTERVAL_MS));
-    }
-}*/
 
 void work_fi_sample_handler(struct k_work *work)
 {
@@ -198,7 +195,7 @@ K_TIMER_DEFINE(tmr_ppg_fi_sampling, ppg_fi_sampling_handler, NULL);
 static void hw_bpt_start_est(void)
 {
     LOG_INF("Starting BPT Estimation");
-    //ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
+    // ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
     bpt_process_done = false;
 
     // Load calibration vector 0
@@ -214,11 +211,11 @@ static void hw_bpt_start_est(void)
     fs_load_file_to_buffer("/lfs/sys/bpt_cal_1", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
     max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
 
-     // Load calibration vector 1
-     cal_idx_val.val1 = 2;
-     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
-     fs_load_file_to_buffer("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-     max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+    // Load calibration vector 2
+    cal_idx_val.val1 = 2;
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    fs_load_file_to_buffer("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
 
     // TODO: load cal vectors 1-4 if needed
 
@@ -230,7 +227,7 @@ static void hw_bpt_start_est(void)
     load_cal.val1 = 0x00000000;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_LOAD_CALIB, &load_cal);
 
-    
+
     struct sensor_value data_time_val;
     data_time_val.val1 = DEFAULT_FUTURE_DATE; // Date // TODO: Update to local time
     data_time_val.val2 = DEFAULT_FUTURE_TIME; // Time
@@ -245,7 +242,7 @@ static void hw_bpt_start_est(void)
     k_sleep(K_MSEC(1000));
 }
 
-static void hw_bpt_encode_date_time(struct tm  *curr_time, uint32_t *date, uint32_t *time)
+static void hw_bpt_encode_date_time(struct tm *curr_time, uint32_t *date, uint32_t *time)
 {
     struct tm timeinfo;
     timeinfo.tm_year = curr_time->tm_year;
@@ -264,14 +261,14 @@ static void hw_bpt_encode_date_time(struct tm  *curr_time, uint32_t *date, uint3
 static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia)
 {
     LOG_INF("Starting BPT Calibration");
-    //ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
+    // ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
     bpt_process_done = false;
-    //Set the date and time for the BPT calibration
+    // Set the date and time for the BPT calibration
     struct tm curr_time = hw_get_sys_time();
-    
+
     uint32_t date, time;
     hw_bpt_encode_date_time(&curr_time, &date, &time);
-    
+
     struct sensor_value data_time_val;
     data_time_val.val1 = date; // Date
     data_time_val.val2 = time; // Time
@@ -308,13 +305,11 @@ static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_FETCH_VECTOR, &fetch_cal);
 
     max32664d_get_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
-    LOG_HEXDUMP_INF(bpt_cal_vector_buf, CAL_VECTOR_SIZE, "BPT Cal Vector");
-    fs_write_buffer_to_file("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    LOG_HEXDUMP_INF(bpt_cal_vector_buf, CAL_VECTOR_SIZE, "BPT Cal Vector 1");
+    char cal_file_name[32];
+    snprintf(cal_file_name, sizeof(cal_file_name), "/lfs/sys/bpt_cal_%d", m_cal_index);
 
-    /*struct sensor_value mode_val;
-    mode_val.val1 = MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_OP_MODE, &mode_val);
-    */
+    fs_write_buffer_to_file(cal_file_name, bpt_cal_vector_buf, CAL_VECTOR_SIZE);
 }
 
 void hpi_bpt_abort(void)
@@ -334,29 +329,92 @@ static void st_ppg_fing_idle_run(void *o)
     // LOG_DBG("PPG Finger SM Idle Running");
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
 
-    if(k_sem_take(&sem_bpt_est_start, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_bpt_est_start, K_NO_WAIT) == 0)
     {
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 
-    /*if (k_sem_take(&sem_bpt_check_sensor, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_bpt_set_mode_cal, K_NO_WAIT) == 0)
     {
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
-    }*/
+        s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
+    }
+    // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
 
-    if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
+    /*if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
-        //k_msleep(1000);
+        // k_msleep(1000);
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
+    }*/
+}
+
+// Define a timeout duration (e.g., 10 seconds)
+#define BPT_CAL_TIMEOUT_MS 60000
+
+// Timeout handler function
+static void bpt_cal_timeout_handler(struct k_timer *timer_id)
+{
+    LOG_ERR("BPT Calibration Timeout");
+    k_sem_give(&sem_stop_bpt_sampling);                                         // Stop sampling if needed
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_FAIL]); // Transition to failure state
+}
+
+// Declare a timer for the timeout
+K_TIMER_DEFINE(tmr_bpt_cal_timeout, bpt_cal_timeout_handler, NULL);
+
+static void st_ppg_fi_cal_wait_entry(void *o)
+{
+    LOG_DBG("PPG Finger SM BPT Calibration Wait Entry");
+    hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT);
+
+    // Start the timeout timer
+    k_timer_start(&tmr_bpt_cal_timeout, K_MSEC(BPT_CAL_TIMEOUT_MS), K_NO_WAIT);
+}
+
+static void st_ppg_fi_cal_wait_run(void *o)
+{
+    LOG_DBG("PPG Finger SM BPT Calibration Wait Running");
+
+    // LOG_DBG("PPG Finger SM BPT Calibration Running");
+    if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
+    {
+        // Turn off timeout
+        k_timer_stop(&tmr_bpt_cal_timeout);
+
+        sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
     }
 }
 
-static void st_ppg_fing_idle_exit(void *o)
+static void st_ppg_fing_bpt_cal_entry(void *o)
 {
-    LOG_DBG("PPG Finger SM Idle Exit");
-    // k_sem_give(&sem_ppg_fi_show_loading);
+    LOG_DBG("PPG Finger SM BPT Calibration Entry");
+    hw_bpt_start_cal(m_cal_index, m_cal_sys, m_cal_dia);
+    k_sem_give(&sem_start_bpt_sampling);
+}
+
+static void st_ppg_fing_bpt_cal_run(void *o)
+{
+    if (k_sem_take(&sem_bpt_cal_complete, K_NO_WAIT) == 0)
+    {
+        k_sem_give(&sem_stop_bpt_sampling);
+        hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf);
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
+    }
+}
+
+static void st_ppg_fing_bpt_cal_done_entry(void *o)
+{
+    LOG_DBG("PPG Finger SM BPT Calibration Done Entry");
+    hpi_load_scr_spl(SCR_SPL_BPT_CAL_COMPLETE, SCROLL_NONE, SCR_BPT);
+}
+
+static void st_ppg_fing_bpt_cal_done_run(void *o)
+{
+    k_msleep(2000);
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
 static void st_ppg_fing_bpt_est_entry(void *o)
@@ -364,13 +422,13 @@ static void st_ppg_fing_bpt_est_entry(void *o)
     LOG_DBG("PPG Finger SM BPT Estimation Entry");
     hw_bpt_start_est();
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
-    k_sem_give(&sem_start_bpt_sampling);    
+    k_sem_give(&sem_start_bpt_sampling);
 }
 
 static void st_ppg_fing_bpt_est_run(void *o)
 {
 
-    //LOG_DBG("PPG Finger SM BPT Estimation Running");
+    // LOG_DBG("PPG Finger SM BPT Estimation Running");
 
     // hw_bpt_start_est();
     //   k_thread_resume(ppg_finger_sampling_thread_id);
@@ -403,7 +461,6 @@ static void st_ppg_fing_bpt_est_run(void *o)
 static void st_ppg_fing_bpt_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Entry");
-
 }
 
 static void st_ppg_fing_bpt_est_done_run(void *o)
@@ -421,42 +478,12 @@ static void st_ppg_fing_bpt_est_fail_run(void *o)
     LOG_DBG("PPG Finger SM BPT Estimation Fail Running");
 }
 
-static void st_ppg_fing_bpt_cal_entry(void *o)
-{
-    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
-    
-    LOG_DBG("PPG Finger SM BPT Calibration Entry");
-    sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
-    hw_bpt_start_cal(2, 140, 90);
-    k_sem_give(&sem_start_bpt_sampling);   
-    // hpi_bpt_get_calib();
-}
 
-static void st_ppg_fing_bpt_cal_run(void *o)
-{
-    //LOG_DBG("PPG Finger SM BPT Calibration Running");
-    if(k_sem_take(&sem_bpt_cal_complete, K_NO_WAIT) == 0)
-    {
-        k_sem_give(&sem_stop_bpt_sampling);
-        hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf);
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
-    }
-}
-
-static void st_ppg_fing_bpt_cal_done_entry(void *o)
-{
-    LOG_DBG("PPG Finger SM BPT Calibration Done Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_CAL_COMPLETE, SCROLL_NONE, SCR_BPT);
-}
-
-static void st_ppg_fing_bpt_cal_done_run(void *o)
-{
-    // LOG_DBG("PPG Finger SM B
-}
 
 static void st_ppg_fing_bpt_cal_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Fail Entry");
+    hpi_load_scr_spl(SCR_SPL_BPT_FAILED, SCROLL_NONE, SCR_BPT);
 }
 
 static void st_ppg_fing_bpt_cal_fail_run(void *o)
@@ -467,13 +494,13 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
 static void st_ppg_fi_check_sensor_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Check Sensor Entry");
+    hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_NONE, SCR_BPT);
 }
 
 static void st_ppg_fi_check_sensor_run(void *o)
 {
     // LOG_DBG("PPG Finger SM Check Sensor Running");
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
-
 
     struct sensor_value sensor_id_get;
     sensor_id_get.val1 = 0x00;
@@ -491,11 +518,11 @@ static void st_ppg_fi_check_sensor_run(void *o)
     {
         LOG_DBG("MAX30101 sensor found !");
         k_sem_give(&sem_bpt_sensor_found);
-        if(s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
+        if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
         {
             smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
         }
-        else if(s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+        else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
         {
             smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
         }
@@ -513,7 +540,7 @@ static void st_ppg_fi_sensor_fail_run(void *o)
 }
 
 static const struct smf_state ppg_fi_states[] = {
-    [PPG_FI_STATE_IDLE] = SMF_CREATE_STATE(st_ppg_fing_idle_entry, st_ppg_fing_idle_run, st_ppg_fing_idle_exit, NULL, NULL),
+    [PPG_FI_STATE_IDLE] = SMF_CREATE_STATE(st_ppg_fing_idle_entry, st_ppg_fing_idle_run, NULL, NULL, NULL),
     [PPG_FI_STATE_CHECK_SENSOR] = SMF_CREATE_STATE(st_ppg_fi_check_sensor_entry, st_ppg_fi_check_sensor_run, NULL, NULL, NULL),
     [PPG_FI_STATE_SENSOR_FAIL] = SMF_CREATE_STATE(st_ppg_fi_sensor_fail_entry, st_ppg_fi_sensor_fail_run, NULL, NULL, NULL),
 
@@ -521,6 +548,7 @@ static const struct smf_state ppg_fi_states[] = {
     [PPG_FI_STATE_BPT_EST_DONE] = SMF_CREATE_STATE(st_ppg_fing_bpt_est_done_entry, st_ppg_fing_bpt_est_done_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_EST_FAIL] = SMF_CREATE_STATE(st_ppg_fing_bpt_est_fail_entry, st_ppg_fing_bpt_est_fail_run, NULL, NULL, NULL),
 
+    [PPG_FI_STATE_BPT_CAL_WAIT] = SMF_CREATE_STATE(st_ppg_fi_cal_wait_entry, st_ppg_fi_cal_wait_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_CAL] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_entry, st_ppg_fing_bpt_cal_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_CAL_DONE] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_done_entry, st_ppg_fing_bpt_cal_done_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_CAL_FAIL] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_fail_entry, st_ppg_fing_bpt_cal_fail_run, NULL, NULL, NULL),
@@ -557,6 +585,7 @@ static void ppg_fi_ctrl_thread(void)
         if (k_sem_take(&sem_start_bpt_sampling, K_NO_WAIT) == 0)
         {
             LOG_INF("Start sampling");
+            k_msleep(1000);
             k_timer_start(&tmr_ppg_fi_sampling, K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS), K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS));
         }
 

@@ -18,7 +18,7 @@
 #include <zephyr/device.h>
 #endif
 
-LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_DBG);
 
 K_SEM_DEFINE(sem_fs_module, 0, 1);
 #define PARTITION_NODE DT_NODELABEL(lfs1)
@@ -295,7 +295,9 @@ void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer
 
     fs_file_t_init(&m_file);
 
-    rc = fs_open(&m_file, m_file_name, FS_O_CREATE | FS_O_RDWR);
+    
+
+    rc = fs_open(&m_file, m_file_name, FS_O_CREATE | FS_O_WRITE);
     if (rc != 0)
     {
         LOG_ERR("Error opening file %d", rc);

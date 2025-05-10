@@ -199,7 +199,7 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
     lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
 
     hpi_disp_set_curr_screen(SCR_SPL_RAW_PPG);
-    hpi_show_screen_spl(scr_raw_ppg, m_scroll_dir, scr_parent);
+    hpi_show_screen(scr_raw_ppg, m_scroll_dir);
 }
 
 void hpi_ppg_disp_update_hr(int hr)

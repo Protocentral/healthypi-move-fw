@@ -567,6 +567,9 @@ static void st_display_active_run(void *o)
     case SCR_BPT:
         // st_disp_do_bpt_stuff();
         break;
+    case SCR_SPL_BPT_CAL_PROGRESS:
+        lv_disp_trig_activity(NULL);
+        break;
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
@@ -831,9 +834,9 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
     m_disp_bp_dia = hpi_bpt->dia;
     m_disp_bpt_status = hpi_bpt->status;
     m_disp_bpt_progress = hpi_bpt->progress;
-    //printk("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
-    //printk("ZB BPT: %d / %d\n", hpi_bpt->sys, hpi_bpt->dia);
-    // hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
+    // printk("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
+    // printk("ZB BPT: %d / %d\n", hpi_bpt->sys, hpi_bpt->dia);
+    //  hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 

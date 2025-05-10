@@ -342,80 +342,39 @@ void disp_spl_scr_event(lv_event_t *e)
     }
 }
 
-void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
-{
-    LOG_DBG("Adding event to screen %d", scr_parent);
+typedef void (*screen_draw_func_t)(enum scroll_dir, uint8_t);
 
-    tmp_scr_parent = scr_parent;
-
-    lv_obj_add_event_cb(m_screen, disp_spl_scr_event, LV_EVENT_GESTURE, &tmp_scr_parent);
-
-    if (m_scroll_dir == SCROLL_UP)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, true);
-    }
-    else if (m_scroll_dir == SCROLL_DOWN)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, true);
-    }
-    else
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
-    }
-}
+// Array of function pointers for screen drawing functions
+static const screen_draw_func_t screen_draw_funcs[] = {
+    [SCR_SPL_RAW_PPG] = draw_scr_spl_raw_ppg,
+    [SCR_SPL_ECG_SCR2] = draw_scr_ecg_scr2,
+    [SCR_SPL_BPT_SCR2] = draw_scr_bpt_scr2,
+    [SCR_SPL_BPT_SCR3] = draw_scr_bpt_scr3,
+    [SCR_SPL_BPT_SCR4] = draw_scr_bpt_scr4,
+    [SCR_SPL_BPT_CAL_COMPLETE] = draw_scr_bpt_cal_complete,
+    [SCR_SPL_ECG_COMPLETE] = draw_scr_ecg_complete,
+    [SCR_SPL_PLOT_HRV] = draw_scr_hrv,
+    [SCR_SPL_PLOT_HRV_SCATTER] = draw_scr_hrv_scatter,
+    [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
+    [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
+    [SCR_SPL_SPO2_SCR3] = draw_scr_spo2_scr3,
+    [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
+    [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
+    [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
+    [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,
+    
+};
 
 void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
 {
     LOG_DBG("Loading screen %d Parent: %d", m_screen, scr_parent);
-    switch (m_screen)
-    {
 
-    case SCR_SPL_RAW_PPG:
-        draw_scr_spl_raw_ppg(m_scroll_dir, scr_parent);
-        break;
-    // case SCR_SPL_PLOT_ECG:
-    //     draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
-    //     break;
-    case SCR_SPL_ECG_SCR2:
-        draw_scr_ecg_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_BPT_SCR2:
-        draw_scr_bpt_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_BPT_SCR3:
-        draw_scr_bpt_scr3(m_scroll_dir);
-        break;
-    case SCR_SPL_BPT_SCR4:
-        draw_scr_bpt_scr4(m_scroll_dir);
-        break;
-    case SCR_SPL_BPT_CAL_COMPLETE:
-        draw_scr_bpt_cal_complete(m_scroll_dir);
-        break;    
-    case SCR_SPL_ECG_COMPLETE:
-        draw_scr_ecg_complete(m_scroll_dir);
-        break;
-    case SCR_SPL_PLOT_HRV:
-        draw_scr_hrv(m_scroll_dir);
-        break;
-    case SCR_SPL_PLOT_HRV_SCATTER:
-        draw_scr_hrv_scatter(m_scroll_dir);
-        break;
-    case SCR_SPL_HR_SCR2:
-        draw_scr_hr_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_SCR2:
-        draw_scr_spo2_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_SCR3:
-        draw_scr_spo2_scr3(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_COMPLETE:
-        draw_scr_spl_spo2_complete(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_TIMEOUT:
-        draw_scr_spl_spo2_timeout(m_scroll_dir);
-        break;
-    default:
+    if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_draw_funcs) && screen_draw_funcs[m_screen] != NULL)
+    {
+        screen_draw_funcs[m_screen](m_scroll_dir, scr_parent);
+    }
+    else
+    {
         printk("Invalid screen: %d", m_screen);
     }
 }
@@ -453,19 +412,11 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ECG:
         draw_scr_ecg(m_scroll_dir);
         break;
+    
    
     /*case SCR_PLOT_EDA:
         draw_scr_pre(m_scroll_dir);
-        break;
-
-    /*
-    case SCR_CLOCK:
-        draw_scr_clockface(m_scroll_dir);
-        break;
-    case SCR_VITALS:
-        draw_scr_vitals_home(m_scroll_dir);
-        break;
-    */
+        break;*/
     default:
         printk("Invalid screen: %d", m_screen);
     }

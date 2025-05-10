@@ -541,8 +541,6 @@ void hw_module_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
-    ble_module_init();
-
     if (!device_is_ready(pmic))
     {
         LOG_ERR("PMIC device not ready");
@@ -775,10 +773,17 @@ void hw_module_init(void)
 
     fs_module_init();
 
+    ret = settings_subsys_init();
+	if (ret) {
+		printk("settings subsys initialization: fail (err %d)\n", ret);
+		return;
+	}
+
     pm_device_runtime_get(gpio_keys_dev);
 
     INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler, NULL);
 
+    ble_module_init();
     // pm_device_runtime_put(w25_flash_dev);
 
     k_sem_give(&sem_hw_inited);

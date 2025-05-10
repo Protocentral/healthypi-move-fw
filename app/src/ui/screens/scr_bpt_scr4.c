@@ -97,7 +97,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_sub, " bpm");
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR4);
-    hpi_show_screen_spl(scr_bpt_scr4, m_scroll_dir, SCR_BPT);
+    hpi_show_screen(scr_bpt_scr4, m_scroll_dir);
 }
 
 void hpi_disp_bpt_update_progress(int progress)

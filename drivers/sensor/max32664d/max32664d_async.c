@@ -1,7 +1,5 @@
 #include <zephyr/drivers/sensor.h>
-
 #include <zephyr/logging/log.h>
-
 LOG_MODULE_REGISTER(max32664d_async, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "max32664d.h"
@@ -114,7 +112,6 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         return rc;
     }
 
-    // printk("Fetching samples...\n");
     if ((data->op_mode == MAX32664D_OP_MODE_BPT) || (data->op_mode == MAX32664D_OP_MODE_RAW) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
     {
         edata = (struct max32664d_encoded_data *)buf;

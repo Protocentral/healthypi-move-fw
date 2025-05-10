@@ -21,17 +21,19 @@ int cmd_pkt_pkttype;
 uint8_t ces_pkt_data_buffer[1000]; // = new char[1000];
 volatile bool cmd_module_ble_connected = false;
 uint8_t data_pkt_buffer[256];
-
 uint8_t log_type=0;
 
 // Externs
 extern int global_dev_status;
 
+extern struct k_sem sem_bpt_set_mode_cal;
+extern struct k_sem sem_bpt_cal_start;
+
 void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
     uint8_t cmd_cmd_id = in_pkt_buf[0];
 
-    LOG_DBG("RX Command: %X", cmd_cmd_id);
+    LOG_DBG("RX Command: %X Len: %d", cmd_cmd_id, pkt_len);
 
     switch (cmd_cmd_id)
     {
@@ -48,12 +50,18 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         k_sleep(K_MSEC(1000));
         sys_reboot(SYS_REBOOT_COLD);
         break;
-    case HPI_CMD_START_BPT_CAL:
-        LOG_DBG("RX CMD Start BPT Cal");
-        uint8_t bpt_cal_index = in_pkt_buf[1];
-        uint8_t bpt_cal_value_sys = in_pkt_buf[2];
-        uint8_t bpt_cal_value_dia = in_pkt_buf[3];
-        LOG_DBG("Sys: %d Dia: %d", bpt_cal_value_sys, bpt_cal_value_dia);
+    case HPI_CMD_BPT_SEL_CAL_MODE:
+        LOG_DBG("RX CMD Select BPT Cal Mode");
+        //TODO: Check is the device is busy
+        k_sem_give(&sem_bpt_set_mode_cal);
+        break;
+    case HPI_CMD_START_BPT_CAL_START:
+        uint8_t bpt_cal_index = in_pkt_buf[3];
+        uint8_t bpt_cal_value_sys = in_pkt_buf[1];
+        uint8_t bpt_cal_value_dia = in_pkt_buf[2];
+        LOG_DBG("RX CMD Start Cal Index: %d Sys: %d Dia: %d", bpt_cal_index, bpt_cal_value_sys, bpt_cal_value_dia);
+        hpi_bpt_set_cal_vals(bpt_cal_index, bpt_cal_value_sys, bpt_cal_value_dia);        
+        k_sem_give(&sem_bpt_cal_start);
         //hpi_bpt_start_cal(sys, dia);
         break;
 

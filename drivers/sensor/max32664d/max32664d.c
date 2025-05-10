@@ -10,10 +10,6 @@
 #include <zephyr/pm/device.h>
 #include <zephyr/drivers/gpio.h>
 
-// #include "maxm86146_msbl.h"
-//  #include "max32664c_msbl.h"
-//  #include "max32664d_msbl.h"
-
 #include "max32664d.h"
 
 LOG_MODULE_REGISTER(MAX32664D, CONFIG_MAX32664D_LOG_LEVEL);
@@ -866,10 +862,7 @@ static int max32664_pm_action(const struct device *dev,
 }
 #endif /* CONFIG_PM_DEVICE */
 
-/*
- * Main instantiation macro, which selects the correct bus-specific
- * instantiation macros for the instance.
- */
+
 #define MAX32664_DEFINE(inst)                                       \
 	static struct max32664d_data max32664_data_##inst;              \
 	static const struct max32664d_config max32664d_config_##inst =  \

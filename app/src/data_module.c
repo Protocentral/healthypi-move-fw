@@ -303,6 +303,8 @@ void data_thread(void)
                 //.timestamp =
             };
             zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
+
+            ble_bpt_cal_progress_notify(ppg_fi_sensor_sample.bpt_status, ppg_fi_sensor_sample.bpt_progress);
         }
 
         // Check if PPG data is available

@@ -122,56 +122,8 @@ enum
   SH8601_HighContrast
 };
 
-/*
-static const uint8_t sh8601_regs[] =
-    {
-        BEGIN_WRITE,
-
-        WRITE_COMMAND_8, SH8601_C_SLPOUT,
-
-        END_WRITE,
-
-        DELAY, SH8601_SLPOUT_DELAY,
-
-        BEGIN_WRITE,
-
-        // WRITE_C8_D8, SH8601_WC_TEARON, 0x00,
-
-        WRITE_COMMAND_8, SH8601_C_NORON,
-
-        WRITE_COMMAND_8, SH8601_C_INVOFF,
-
-        // WRITE_COMMAND_8, SH8601_C_ALLPON,
-
-        // WRITE_C8_D8, SH8601_W_MADCTL, SH8601_MADCTL_COLOR_ORDER, // RGB/BGR
-
-        WRITE_C8_D8, SH8601_W_PIXFMT, 0x05, // Interface Pixel Format 16bit/pixel
-        // WRITE_C8_D8, SH8601_W_PIXFMT, 0x06, // Interface Pixel Format 18bit/pixel
-        // WRITE_C8_D8, SH8601_W_PIXFMT, 0x07, // Interface Pixel Format 24bit/pixel
-
-        WRITE_COMMAND_8, SH8601_C_DISPON,
-
-        // WRITE_COMMAND_8, SH8601_W_WDBRIGHTNESSVALNOR,
-        // WRITE_BYTES, 2,
-        // 0x03, 0xFF,
-
-        WRITE_C8_D8, SH8601_W_WCTRLD1, 0x28, // Brightness Control On and Display Dimming On
-
-        WRITE_C8_D8, SH8601_W_WDBRIGHTNESSVALNOR, 0x00, // Brightness adjustment
-
-        // High contrast mode (Sunlight Readability Enhancement)
-        WRITE_C8_D8, SH8601_W_WCE, 0x00, // Off
-        // WRITE_C8_D8, SH8601_W_WCE, 0x05, // On Low
-        // WRITE_C8_D8, SH8601_W_WCE, 0x06, // On Medium
-        // WRITE_C8_D8, SH8601_W_WCE, 0x07, // On High
-
-        END_WRITE,
-
-        DELAY, 10}
-};
-*/
 int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd,
-                     const void *tx_data, size_t tx_len);
+                        const void *tx_data, size_t tx_len);
 
 int sh8601_reinit(const struct device *dev);
 

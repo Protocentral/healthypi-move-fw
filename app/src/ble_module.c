@@ -61,6 +61,18 @@ static uint8_t temp_att_ble[2];
 #define UUID_HPI_CMD_SERVICE_CHAR_TX BT_UUID_DECLARE_128(CMD_TX_CHARACTERISTIC_UUID)
 #define UUID_HPI_CMD_SERVICE_CHAR_RX BT_UUID_DECLARE_128(CMD_RX_CHARACTERISTIC_UUID)
 
+static const struct bt_data ad[] = {
+	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+	BT_DATA_BYTES(BT_DATA_UUID16_ALL,
+				  BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
+				  // BT_UUID_16_ENCODE(BT_UUID_POS_VAL)
+				  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
+				  BT_UUID_16_ENCODE(BT_UUID_DIS_VAL))};
+
+static const struct bt_data sd[] = {
+	BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_BMS_VAL)),
+};
+
 extern struct k_msgq q_cmd_msg;
 
 static void spo2_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
@@ -95,19 +107,11 @@ static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t v
 
 uint8_t in_data_buffer[50];
 
-static const struct bt_data ad[] = {
-	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-	BT_DATA_BYTES(BT_DATA_UUID16_ALL,
-				  BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
-				  // BT_UUID_16_ENCODE(BT_UUID_POS_VAL)
-				  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
-				  BT_UUID_16_ENCODE(BT_UUID_DIS_VAL))};
-
 BT_GATT_SERVICE_DEFINE(hpi_spo2_service,
 					   BT_GATT_PRIMARY_SERVICE(HPI_SPO2_SERVICE),
 					   BT_GATT_CHARACTERISTIC(HPI_SPO2_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
+											  BT_GATT_PERM_READ_ENCRYPT,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(spo2_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
@@ -116,25 +120,9 @@ BT_GATT_SERVICE_DEFINE(hpi_temp_service,
 					   BT_GATT_PRIMARY_SERVICE(HPI_TEMP_SERVICE),
 					   BT_GATT_CHARACTERISTIC(HPI_TEMP_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
+											  BT_GATT_PERM_READ_ENCRYPT,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(temp_on_cccd_changed,
-								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
-
-BT_GATT_SERVICE_DEFINE(hpi_ecg_resp_service,
-					   // BT_GATT_PRIMARY_SERVICE(&hpi_ecg_resp_serv_uuid.uuid),
-					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_ECG_RESP_SERV),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_ECG_CHAR,
-											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
-											  NULL, NULL, NULL),
-					   BT_GATT_CCC(ecg_resp_on_cccd_changed,
-								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_RESP_CHAR,
-											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
-											  NULL, NULL, NULL),
-					   BT_GATT_CCC(ecg_resp_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 BT_GATT_SERVICE_DEFINE(hpi_ppg_resp_service,
@@ -162,7 +150,7 @@ static ssize_t on_receive_cmd(struct bt_conn *conn,
 {
 	const uint8_t *buffer = buf;
 
-	//LOG_DBG("Received CMD len %d \n", len);
+	// LOG_DBG("Received CMD len %d \n", len);
 
 	/*for (uint8_t i = 0; i < len; i++)
 	{
@@ -188,7 +176,7 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-	LOG_DBG("CMD RX/TX CCCD subscribed");
+		LOG_DBG("CMD RX/TX CCCD subscribed");
 		break;
 
 	case BT_GATT_CCC_INDICATE:
@@ -196,11 +184,11 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 		break;
 
 	case 0:
-	LOG_DBG("CMD RX/TX CCCD unsubscribed");
+		LOG_DBG("CMD RX/TX CCCD unsubscribed");
 		break;
 
 	default:
-	LOG_DBG("Error, CCCD has been set to an invalid value");
+		LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
 }
 
@@ -208,11 +196,11 @@ BT_GATT_SERVICE_DEFINE(hpi_cmd_service,
 					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_CMD_SERVICE),
 					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_TX,
 											  BT_GATT_CHRC_WRITE | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
+											  BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN,
 											  NULL, on_receive_cmd, NULL),
 					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_RX,
 											  BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ,
+											  BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(cmd_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
@@ -225,51 +213,6 @@ void hpi_ble_send_data(const uint8_t *data, uint16_t len)
 	// printk("Sending data len %d \n", len);
 
 	bt_gatt_notify(NULL, attr, data, len);
-}
-void ble_spo2_notify(uint16_t spo2_val)
-{
-	spo2_att_ble[0] = 0x00;
-	spo2_att_ble[1] = (uint8_t)spo2_val;
-	spo2_att_ble[2] = (uint8_t)(spo2_val >> 8);
-	spo2_att_ble[3] = 0;
-	spo2_att_ble[4] = 0;
-
-	bt_gatt_notify(NULL, &hpi_spo2_service.attrs[1], &spo2_att_ble, sizeof(spo2_att_ble));
-}
-
-void ble_resp_rate_notify(uint16_t resp_rate)
-{
-	bt_gatt_notify(NULL, &hpi_ppg_resp_service.attrs[4], &resp_rate, sizeof(resp_rate));
-}
-
-void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
-{
-	uint8_t out_data[128];
-
-	for (int i = 0; i < len; i++)
-	{
-		out_data[i * 4] = (uint8_t)ecg_data[i];
-		out_data[i * 4 + 1] = (uint8_t)(ecg_data[i] >> 8);
-		out_data[i * 4 + 2] = (uint8_t)(ecg_data[i] >> 16);
-		out_data[i * 4 + 3] = (uint8_t)(ecg_data[i] >> 24);
-	}
-
-	bt_gatt_notify(NULL, &hpi_ecg_resp_service.attrs[1], &out_data, len * 4);
-}
-
-void ble_bioz_notify(int32_t *resp_data, uint8_t len)
-{
-	uint8_t out_data[128];
-
-	for (int i = 0; i < len; i++)
-	{
-		out_data[i * 4] = (uint8_t)resp_data[i];
-		out_data[i * 4 + 1] = (uint8_t)(resp_data[i] >> 8);
-		out_data[i * 4 + 2] = (uint8_t)(resp_data[i] >> 16);
-		out_data[i * 4 + 3] = (uint8_t)(resp_data[i] >> 24);
-	}
-
-	bt_gatt_notify(NULL, &hpi_ecg_resp_service.attrs[4], &out_data, len * 4);
 }
 
 void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
@@ -285,13 +228,15 @@ void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
 	bt_gatt_notify(NULL, &hpi_ppg_resp_service.attrs[1], &out_data, len * 2);
 }
 
-void ble_temp_notify(uint16_t temp_val)
+void ble_bpt_cal_progress_notify(uint8_t bpt_status, uint8_t bpt_progress)
 {
-	temp_val = temp_val / 10;
-	temp_att_ble[0] = (uint8_t)temp_val;
-	temp_att_ble[1] = (uint8_t)(temp_val >> 8);
+	uint8_t out_data[3];
 
-	bt_gatt_notify(NULL, &hpi_temp_service.attrs[2], &temp_att_ble, sizeof(temp_att_ble));
+	out_data[0] = bpt_status;
+	out_data[1] = bpt_progress;
+	out_data[2] = 0x00;
+
+	bt_gatt_notify(NULL, &hpi_cmd_service.attrs[4], &out_data, sizeof(out_data));
 }
 
 void ble_hrs_notify(uint16_t hr_val)
@@ -329,40 +274,13 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	}
 }
 
-/*static void security_changed(struct bt_conn *conn, bt_security_t level,
-							 enum bt_security_err err)
-{
-	char addr[BT_ADDR_LE_STR_LEN];
-
-	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-	if (!err)
-	{
-		printk("Security changed: %s level %u\n", addr, level);
-	}
-	else
-	{
-		printk("Security failed: %s level %u err %d\n", addr, level,
-			   err);
-	}
-}*/
-
-BT_CONN_CB_DEFINE(conn_callbacks) = {
-	.connected = connected,
-	.disconnected = disconnected,
-	//.security_changed = security_changed,
-};
-
 static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 {
-	char passkey_str[7];
 	char addr[BT_ADDR_LE_STR_LEN];
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	snprintk(passkey_str, ARRAY_SIZE(passkey_str), "%06u", passkey);
-
-	LOG_DBG("Passkey for %s: %s", addr, passkey_str);
+	printk("Passkey for %s: %06u\n", addr, passkey);
 }
 
 static void auth_cancel(struct bt_conn *conn)
@@ -371,37 +289,37 @@ static void auth_cancel(struct bt_conn *conn)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	LOG_DBG("Pairing cancelled: %s\n", addr);
+	printk("Pairing cancelled: %s\n", addr);
 }
 
-static struct bt_conn_auth_cb auth_cb_display = {
+static void pairing_complete(struct bt_conn *conn, bool bonded)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Pairing completed: %s, bonded: %d\n", addr, bonded);
+}
+
+static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Pairing failed conn: %s, reason %d %s\n", addr, reason,
+		   bt_security_err_to_str(reason));
+}
+
+static struct bt_conn_auth_cb conn_auth_callbacks = {
 	.passkey_display = auth_passkey_display,
-	.passkey_entry = NULL,
 	.cancel = auth_cancel,
 };
 
-void remove_separators(char *str)
-{
-	char *pr = str, *pw = str;
-	char c = ':';
-	while (*pr)
-	{
-		*pw = *pr++;
-		pw += (*pw != c);
-	}
-	*pw = '\0';
-}
-
-/*
-/* Runtime settings override.
-static int settings_runtime_load(void)
-{
-#if defined(CONFIG_BT_DIS_FW_REV)
-	settings_runtime_set("bt/dis/fw", APP_VERSION_STRING , sizeof(APP_VERSION_STRING));
-#endif
-	return 0;
-}*/
-
+static struct bt_conn_auth_info_cb conn_auth_info_callbacks = {
+	.pairing_complete = pairing_complete,
+	.pairing_failed = pairing_failed,
+};
 
 void ble_module_init()
 {
@@ -413,20 +331,23 @@ void ble_module_init()
 		LOG_ERR("Bluetooth init failed (err %d)", err);
 		return;
 	}
-	LOG_DBG("Bluetooth init !");
 
-	if (IS_ENABLED(CONFIG_SETTINGS))
-	{
-		// settings_load();
-	}
+	settings_load();
 
-	//bt_conn_auth_cb_register(&auth_cb_display);
-
-	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
+	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
+						  sd, ARRAY_SIZE(sd));
 	if (err)
 	{
 		LOG_ERR("Advertising failed to start (err %d)\n", err);
 		return;
 	}
-	LOG_INF("Advertising successfully started");
+	else
+	{
+		LOG_INF("Advertising successfully started");
+	}
+
+	bt_conn_auth_cb_register(&conn_auth_callbacks);
+	bt_conn_auth_info_cb_register(&conn_auth_info_callbacks);
+
+	LOG_DBG("Bluetooth init !");
 }

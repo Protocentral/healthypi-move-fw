@@ -44,24 +44,6 @@ set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
 
-#zephyr_code_relocate(FILES src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-
-#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/components/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/move_ui.h LOCATION EXTFLASH_TEXT NOCOPY)
-
-#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sm/*.c LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/data_module.c LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/max32664d_msbl.c LOCATION EXTFLASH_TEXT NOCOPY)
-
-#zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/screens/scr_splash.c LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/max32664dmax32664d_bl.c LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_msbl.c LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/max32664c/*.* LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/max32664d/*.* LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES ${WEST_TOPDIR}/application/drivers/sensor/bmi323hpi/*.* LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES $${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_bl.c LOCATION EXTFLASH_TEXT NOCOPY)
-#zephyr_code_relocate(FILES $${WEST_TOPDIR}/application/drivers/sensor/max32664d/max32664d_msbl.h LOCATION EXTFLASH_TEXT NOCOPY)
-
 zephyr_code_relocate(FILES ../lib/max32664_updater/max32664_updater.c LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(FILES ../lib/max32664_updater/max32664c_30_13_31.c LOCATION EXTFLASH_RODATA NOCOPY)
 zephyr_code_relocate(FILES ../lib/max32664_updater/max32664d_40_6_0.c LOCATION EXTFLASH_RODATA NOCOPY)

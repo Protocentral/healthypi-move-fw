@@ -36,7 +36,8 @@ enum hpi_cmds
     HPI_CMD_LOG_WIPE_ALL = 0x53,  //No arguments
     HPI_CMD_LOG_GET_COUNT = 0x54, //No arguments
 
-    HPI_CMD_START_BPT_CAL = 0x60, //Needs Sys/Diastolic (as uint8/uint8) as argument
+    HPI_CMD_BPT_SEL_CAL_MODE = 0x60,
+    HPI_CMD_START_BPT_CAL_START = 0x61, //Needs Sys/Diastolic (as uint8/uint8) as argument
     
 };
 
@@ -70,3 +71,4 @@ struct hpi_cmd_data_obj_t
 void cmdif_send_ble_data(uint8_t *m_data, uint8_t m_data_len);
 void hpi_cmdif_send_count_rsp(uint8_t m_cmd, uint8_t m_log_type, uint16_t m_value);
 void cmdif_send_ble_data_idx(uint8_t *m_data, uint8_t m_data_len);
+void hpi_bpt_set_cal_vals(uint8_t cal_index, uint8_t cal_sys, uint8_t cal_dia);

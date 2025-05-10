@@ -65,5 +65,5 @@ void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir)
 
 
     hpi_disp_set_curr_screen(SCR_SPL_ECG_COMPLETE);
-    hpi_show_screen_spl(scr_ecg_complete, m_scroll_dir, SCR_ECG);
+    hpi_show_screen(scr_ecg_complete, m_scroll_dir);
 }

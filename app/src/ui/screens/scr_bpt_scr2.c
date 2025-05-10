@@ -19,7 +19,6 @@ extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
 extern struct k_sem sem_bpt_est_start;
-extern struct k_sem sem_bpt_cal_start;
 
 static void scr_bpt_btn_proceed_handler(lv_event_t *e)
 {
@@ -27,8 +26,7 @@ static void scr_bpt_btn_proceed_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        k_sem_give(&sem_bpt_est_start); 
-        //k_sem_give(&sem_bpt_cal_start);
+        k_sem_give(&sem_bpt_est_start);
         hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_UP, (uint8_t)SCR_BPT);
     }
 }
@@ -37,11 +35,11 @@ void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir)
 {
     scr_bpt_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_scr2, &style_scr_black, 0);
-    //lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
-    // lv_obj_set_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    // draw_scr_common(scr_spo2_scr2);
+    // lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
+    //  lv_obj_set_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    //  draw_scr_common(scr_spo2_scr2);
 
-    //lv_obj_set_scrollbar_mode(scr_bpt_scr2, LV_SCROLLBAR_MODE_ON);
+    // lv_obj_set_scrollbar_mode(scr_bpt_scr2, LV_SCROLLBAR_MODE_ON);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr2);
