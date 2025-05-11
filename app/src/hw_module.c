@@ -541,6 +541,10 @@ void hw_module_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
+    //To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
+    NRF_TWIM2->FREQUENCY = 0x06200000;
+    NRF_TWIM1->FREQUENCY = 0x06200000;
+
     if (!device_is_ready(pmic))
     {
         LOG_ERR("PMIC device not ready");
@@ -774,10 +778,11 @@ void hw_module_init(void)
     fs_module_init();
 
     ret = settings_subsys_init();
-	if (ret) {
-		printk("settings subsys initialization: fail (err %d)\n", ret);
-		return;
-	}
+    if (ret)
+    {
+        printk("settings subsys initialization: fail (err %d)\n", ret);
+        return;
+    }
 
     pm_device_runtime_get(gpio_keys_dev);
 

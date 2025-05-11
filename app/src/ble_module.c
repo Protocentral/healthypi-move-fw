@@ -65,12 +65,11 @@ static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL,
 				  BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
-				  // BT_UUID_16_ENCODE(BT_UUID_POS_VAL)
 				  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
 				  BT_UUID_16_ENCODE(BT_UUID_DIS_VAL))};
 
 static const struct bt_data sd[] = {
-	BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_BMS_VAL)),
+	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 
 extern struct k_msgq q_cmd_msg;
@@ -251,28 +250,53 @@ void ble_bas_notify(uint8_t batt_level)
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
-	if (err)
-	{
-		LOG_ERR("Connection failed (err 0x%02x)", err);
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	if (err) {
+		printk("Failed to connect to %s, err 0x%02x %s\n", addr,
+		       err, bt_hci_err_to_str(err));
+		return;
 	}
-	else
-	{
-		LOG_INF("BLE Connected");
-		// send_status_serial(BLE_STATUS_CONNECTED);
-		current_conn = bt_conn_ref(conn);
+
+	printk("Connected %s\n", addr);
+
+	if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
+		printk("Failed to set security\n");
 	}
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	LOG_INF("BLE Disconnected (reason 0x%02x)", reason);
-	// send_status_serial(BLE_STATUS_DISCONNECTED);
-	if (current_conn)
-	{
-		bt_conn_unref(current_conn);
-		current_conn = NULL;
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Disconnected from %s, reason 0x%02x %s\n", addr,
+	       reason, bt_hci_err_to_str(reason));
+}
+
+static void security_changed(struct bt_conn *conn, bt_security_t level,
+			     enum bt_security_err err)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	if (!err) {
+		printk("Security changed: %s level %u\n", addr, level);
+	} else {
+		printk("Security failed: %s level %u err %s(%d)\n", addr, level,
+		       bt_security_err_to_str(err), err);
 	}
 }
+
+BT_CONN_CB_DEFINE(conn_callbacks) = {
+	.connected = connected,
+	.disconnected = disconnected,
+	.security_changed = security_changed,
+};
 
 static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 {
@@ -321,6 +345,9 @@ static struct bt_conn_auth_info_cb conn_auth_info_callbacks = {
 	.pairing_failed = pairing_failed,
 };
 
+
+
+
 void ble_module_init()
 {
 	int err = 0;
@@ -334,8 +361,7 @@ void ble_module_init()
 
 	settings_load();
 
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
-						  sd, ARRAY_SIZE(sd));
+	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 	if (err)
 	{
 		LOG_ERR("Advertising failed to start (err %d)\n", err);
