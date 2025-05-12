@@ -897,7 +897,7 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        _temp_f = read_temp_f();
+        //_temp_f = read_temp_f();
 
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,

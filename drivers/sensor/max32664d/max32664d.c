@@ -40,13 +40,9 @@ int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_ind
 
 	LOG_DBG("Setting BPT calibration vector");
 
-	if (m_bpt_cal_vector == NULL)
-	{
-		LOG_ERR("BPT calibration vector data is NULL");
-		return -EINVAL;
-	}
-
 	memcpy(data->bpt_cal_vector, m_bpt_cal_vector, CAL_VECTOR_SIZE);
+
+	//LOG_HEXDUMP_INF(data->bpt_cal_vector, CAL_VECTOR_SIZE, "Sensor Cal Vector");
 
 	max32664d_write_cal_data(dev, m_bpt_cal_index, data->bpt_cal_vector);
 	LOG_DBG("BPT calibration data set");
@@ -54,7 +50,7 @@ int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_ind
 	return 0;
 }
 
-int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector)
+int max32664d_load_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector)
 {
 	struct max32664d_data *data = dev->data;
 
@@ -124,7 +120,7 @@ static int max32664d_write_cal_data(const struct device *dev, uint8_t m_bpt_cal_
 	uint8_t wr_buf[CAL_VECTOR_SIZE + 3];
 	uint8_t rd_buf[1] = {0x00};
 
-	m_i2c_write_cmd_4(dev, 0x50, 0x04, 0x08, m_bpt_cal_index, 40);
+	m_i2c_write_cmd_4(dev, 0x50, 0x04, 0x08, m_bpt_cal_index, 6);
 
 	LOG_DBG("Writing calibration data");
 
@@ -132,7 +128,9 @@ static int max32664d_write_cal_data(const struct device *dev, uint8_t m_bpt_cal_
 	wr_buf[1] = 0x04;
 	wr_buf[2] = 0x03;
 
-	memcpy(&wr_buf[3], m_cal_vector, CAL_VECTOR_SIZE);
+	memcpy((wr_buf+3), m_cal_vector, CAL_VECTOR_SIZE);
+
+	//LOG_HEXDUMP_INF(wr_buf, CAL_VECTOR_SIZE+3, "WR Buffer");
 
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 	k_sleep(K_MSEC(30));
@@ -236,19 +234,22 @@ static int max32664_fetch_cal_vector(const struct device *dev)
     const struct max32664d_config *config = dev->config;
     struct max32664d_data *data = dev->data;
 
-    static uint8_t rd_buf[1024];
+    uint8_t rd_buf[513]={0};
     uint8_t wr_buf[3] = {0x51, 0x04, 0x03};
 
     i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, 826);
+    i2c_read_dt(&config->i2c, rd_buf, 514);
 
-    for (int i = 0; i < 512; i++)
-    {
-        data->bpt_cal_vector[i] = rd_buf[i + 2];
-    }
+	memcpy(data->bpt_cal_vector, &rd_buf[1], 512);
+
+    //for (int i = 0; i < 512; i++)
+    //{
+        //data->bpt_cal_vector[i] = rd_buf[i + 2];
+    //}
+	
     LOG_DBG("Calibration vector fetched\n");
-	LOG_HEXDUMP_INF(data->bpt_cal_vector, 512, "BPT_CAL_VECTOR");
+	//LOG_HEXDUMP_INF(data->bpt_cal_vector, 512, "BPT_CAL_VECTOR");
 
     data->op_mode = MAX32664D_OP_MODE_IDLE;
 
@@ -595,20 +596,18 @@ static int max32664_stop_estimation(const struct device *dev)
 	LOG_DBG("MAX32664 Stopping BPT estimation...");
 
 	// Disable AFE
-	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x00, MAX32664_DEFAULT_CMD_DELAY);
-	k_sleep(K_MSEC(40));
+	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x00, 45);
 
 	// Disable BPT estimation mode
-	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x00, MAX32664_DEFAULT_CMD_DELAY);
-	k_sleep(K_MSEC(20));
+	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x00, 550);
 
 	// Disable AGC
-	m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x00, MAX32664_DEFAULT_CMD_DELAY);
-	k_sleep(K_MSEC(20));
+	//m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x00, MAX32664_DEFAULT_CMD_DELAY);
 
 	return 0;
 }
 
+/*
 int max32664_get_sample_fifo(const struct device *dev)
 {
 	struct max32664d_data *data = dev->data;
@@ -689,7 +688,7 @@ int max32664_get_sample_fifo(const struct device *dev)
 	}
 
 	return 0;
-}
+}*/
 
 static int max32664_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
@@ -699,7 +698,7 @@ static int max32664_sample_fetch(const struct device *dev,
 
 	// Sensor Get/Fetch is not implemented
 
-	return max32664_get_sample_fifo(dev);
+	return -ENOTSUP;
 }
 
 static int max32664_channel_get(const struct device *dev,
@@ -736,10 +735,10 @@ static int max32664_attr_set(const struct device *dev,
 			max32664_set_mode_raw(dev);
 			data->op_mode = MAX32664D_OP_MODE_RAW;
 		}
-		else if (val->val1 == MAX32664D_OP_MODE_BPT)
+		else if (val->val1 == MAX32664D_OP_MODE_BPT_EST)
 		{
 			max32664_set_mode_bpt_est(dev);
-			data->op_mode = MAX32664D_OP_MODE_BPT;
+			data->op_mode = MAX32664D_OP_MODE_BPT_EST;
 		}
 		else if (val->val1 == MAX32664D_OP_MODE_BPT_CAL_START)
 		{

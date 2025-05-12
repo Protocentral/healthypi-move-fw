@@ -81,13 +81,13 @@ struct s_ppg_fi_object
 
 } sf_obj;
 
-static uint8_t sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
+static uint8_t volatile sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
 
-static uint8_t bpt_cal_vector_buf[CAL_VECTOR_SIZE] = {0};
+uint8_t bpt_cal_vector_buf[CAL_VECTOR_SIZE] = {0};
 
 // Forward declaration
 static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia);
-static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf);
+static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf, uint8_t l_cal_index);
 
 static bool bpt_process_done = false;
 
@@ -95,6 +95,8 @@ static uint8_t m_cal_index;
 static uint8_t m_cal_sys;
 static uint8_t m_cal_dia;
 K_MUTEX_DEFINE(mutex_bpt_cal_set);
+
+
 
 // Externs
 
@@ -116,7 +118,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    // printk("FNS: %d ", edata->num_samples);
+    printk("FNS: %d ", edata->num_samples);
     if (_n_samples > 16)
     {
         _n_samples = 16;
@@ -143,10 +145,11 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
         k_msgq_put(&q_ppg_fi_sample, &ppg_sensor_sample, K_MSEC(1));
         // k_sem_give(&sem_ppg_finger_sample_trigger);
 
-        LOG_DBG("Status: %d Progress: %d", edata->bpt_status, edata->bpt_progress);
+        LOG_DBG("Status: %d Progress: %d Sys: %d Dia: %d SpO2: %d", edata->bpt_status, edata->bpt_progress, edata->bpt_sys, edata->bpt_dia, edata->spo2);
 
         if (edata->bpt_progress == 100 && bpt_process_done == false)
         {
+            hpi_bpt_stop();
             if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
             {
                 // BPT Calibration done
@@ -166,7 +169,8 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
 
 void work_fi_sample_handler(struct k_work *work)
 {
-    uint8_t data_buf[512];
+    uint8_t data_buf[384];
+
     int ret = 0;
     ret = sensor_read(&max32664d_iodev, &max32664d_read_rtio_poll_ctx, data_buf, sizeof(data_buf));
     if (ret < 0)
@@ -218,12 +222,6 @@ static void hw_bpt_encode_date_time(struct tm *curr_time, uint32_t *date, uint32
     *time = encoded_time;
 }
 
-/**
- * @brief Starts the Blood Pressure Trend (BPT) estimation process.
- *
- * This function sets the date and time for the BPT estimation, then sets the
- * operation mode to BPT and starts the estimation process.
- */
 static void hw_bpt_start_est(void)
 {
     LOG_INF("Starting BPT Estimation");
@@ -241,40 +239,38 @@ static void hw_bpt_start_est(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SET_DATE_TIME, &data_time_val);
 
     // Load calibration vector 0
-    // struct sensor_value cal_idx_val;
-    // cal_idx_val.val1 = 0;
-    // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
-    fs_load_file_to_buffer("/lfs/sys/bpt_cal_0", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-    //max32664d_set_bpt_cal_vector(max32664d_dev, 0, bpt_cal_vector_buf);
+    fs_load_file_to_buffer("/lfs/sys/bpt_cal_0", (volatile uint8_t*)bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    //LOG_HEXDUMP_INF(bpt_cal_vector_buf, CAL_VECTOR_SIZE, "Loaded Cal Vector");
+    max32664d_set_bpt_cal_vector(max32664d_dev, 0, (volatile uint8_t*)bpt_cal_vector_buf);
 
     // Load calibration vector 1
     // cal_idx_val.val1 = 1;
     // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
-    fs_load_file_to_buffer("/lfs/sys/bpt_cal_1", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-   // max32664d_set_bpt_cal_vector(max32664d_dev, 1, bpt_cal_vector_buf);
+    //fs_load_file_to_buffer("/lfs/sys/bpt_cal_1", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    // max32664d_set_bpt_cal_vector(max32664d_dev, 1, bpt_cal_vector_buf);
 
     // Load calibration vector 2
     // cal_idx_val.val1 = 2;
     // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
-    fs_load_file_to_buffer("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-   // max32664d_set_bpt_cal_vector(max32664d_dev, 2, bpt_cal_vector_buf);
+    //fs_load_file_to_buffer("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    // max32664d_set_bpt_cal_vector(max32664d_dev, 2, bpt_cal_vector_buf);
 
     // Load calibration vector 3
     // cal_idx_val.val1 = 3;
     // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
-    fs_load_file_to_buffer("/lfs/sys/bpt_cal_3", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-    //max32664d_set_bpt_cal_vector(max32664d_dev, 3, bpt_cal_vector_buf);
+    //fs_load_file_to_buffer("/lfs/sys/bpt_cal_3", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    // max32664d_set_bpt_cal_vector(max32664d_dev, 3, bpt_cal_vector_buf);
 
     // Load calibration vector 4
     // cal_idx_val.val1 = 4;
     // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
-    fs_load_file_to_buffer("/lfs/sys/bpt_cal_4", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-    //max32664d_set_bpt_cal_vector(max32664d_dev, 4, bpt_cal_vector_buf);
+    //fs_load_file_to_buffer("/lfs/sys/bpt_cal_4", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    // max32664d_set_bpt_cal_vector(max32664d_dev, 4, bpt_cal_vector_buf);
 
     // TODO: load cal vectors 1-4 if needed
 
     struct sensor_value mode_val;
-    mode_val.val1 = MAX32664D_OP_MODE_BPT;
+    mode_val.val1 = MAX32664D_OP_MODE_BPT_EST;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_OP_MODE, &mode_val);
 
     /*struct sensor_value load_cal;
@@ -295,8 +291,6 @@ static void hw_bpt_start_est(void)
 
     k_sleep(K_MSEC(1000));
 }
-
-
 
 static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia)
 {
@@ -338,16 +332,17 @@ void hpi_bpt_stop(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_STOP_EST, &mode_val);
 }
 
-static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf)
+static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf, uint8_t l_cal_index)
 {
+    char cal_file_name[32];
     struct sensor_value fetch_cal;
     fetch_cal.val1 = 0;
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_FETCH_VECTOR, &fetch_cal);
 
-    max32664d_get_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
-    LOG_HEXDUMP_INF(bpt_cal_vector_buf, CAL_VECTOR_SIZE, "BPT Cal Vector 1");
-    char cal_file_name[32];
-    snprintf(cal_file_name, sizeof(cal_file_name), "/lfs/sys/bpt_cal_%d", m_cal_index);
+    max32664d_load_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+    //LOG_HEXDUMP_INF(bpt_cal_vector_buf, CAL_VECTOR_SIZE, "BPT Cal Vector");
+
+    snprintf(cal_file_name, sizeof(cal_file_name), "/lfs/sys/bpt_cal_%d", l_cal_index);
 
     fs_write_buffer_to_file(cal_file_name, bpt_cal_vector_buf, CAL_VECTOR_SIZE);
 }
@@ -440,7 +435,8 @@ static void st_ppg_fing_bpt_cal_run(void *o)
     if (k_sem_take(&sem_bpt_cal_complete, K_NO_WAIT) == 0)
     {
         k_sem_give(&sem_stop_bpt_sampling);
-        hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf);
+        k_sleep(K_MSEC(1000)); // Wait for the sampling to stop
+        hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf, m_cal_index);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
     }
 }
@@ -454,14 +450,14 @@ static void st_ppg_fing_bpt_cal_done_entry(void *o)
 static void st_ppg_fing_bpt_cal_done_run(void *o)
 {
     k_msleep(2000);
-    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
 }
 
 static void st_ppg_fing_bpt_est_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Entry");
-    hw_bpt_start_est();
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
+    hw_bpt_start_est();
     k_sem_give(&sem_start_bpt_sampling);
 }
 

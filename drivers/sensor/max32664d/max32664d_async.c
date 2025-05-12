@@ -42,7 +42,7 @@ static int max32664_async_sample_fetch(const struct device *dev,
             {
                 sample_len = 12;
             }
-            else if ((data->op_mode == MAX32664D_OP_MODE_BPT) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
+            else if ((data->op_mode == MAX32664D_OP_MODE_BPT_EST) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
             {
                 sample_len = 29;
             }
@@ -112,7 +112,7 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         return rc;
     }
 
-    if ((data->op_mode == MAX32664D_OP_MODE_BPT) || (data->op_mode == MAX32664D_OP_MODE_RAW) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
+    if ((data->op_mode == MAX32664D_OP_MODE_BPT_EST) || (data->op_mode == MAX32664D_OP_MODE_RAW) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
     {
         edata = (struct max32664d_encoded_data *)buf;
         edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
