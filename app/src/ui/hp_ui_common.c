@@ -214,7 +214,7 @@ void hpi_display_sleep_on(void)
     // display_blanking_on(display_dev);
     display_set_brightness(display_dev, 0);
 
-    hpi_pwr_display_sleep();
+    //hpi_pwr_display_sleep();
 }
 
 void hpi_display_sleep_off(void)
@@ -223,9 +223,9 @@ void hpi_display_sleep_off(void)
     hpi_disp_set_brightness(hpi_disp_get_brightness());
 
     // display_blanking_on(display_dev);
-    hpi_load_screen(curr_screen, SCROLL_NONE);
+    //hpi_load_screen(curr_screen, SCROLL_NONE);
     // display_blanking_off(display_dev);
-    hpi_pwr_display_wake();
+    //hpi_pwr_display_wake();
 }
 
 void hpi_disp_set_brightness(uint8_t brightness_percent)
@@ -362,7 +362,7 @@ static const screen_draw_func_t screen_draw_funcs[] = {
     [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
     [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
     [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,
-    
+    [SCR_SPL_BLE] = draw_scr_ble,    
 };
 
 void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)

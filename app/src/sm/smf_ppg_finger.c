@@ -145,7 +145,6 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
 
         LOG_DBG("Status: %d Progress: %d", edata->bpt_status, edata->bpt_progress);
 
-        
         if (edata->bpt_progress == 100 && bpt_process_done == false)
         {
             if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
@@ -186,6 +185,39 @@ static void ppg_fi_sampling_handler(struct k_timer *timer_id)
 
 K_TIMER_DEFINE(tmr_ppg_fi_sampling, ppg_fi_sampling_handler, NULL);
 
+static void hw_bpt_encode_date_time(struct tm *curr_time, uint32_t *date, uint32_t *time)
+{
+    struct tm timeinfo;
+    timeinfo.tm_year = curr_time->tm_year;
+    timeinfo.tm_mon = curr_time->tm_mon;
+    timeinfo.tm_mday = curr_time->tm_mday;
+    timeinfo.tm_hour = curr_time->tm_hour;
+    timeinfo.tm_min = curr_time->tm_min;
+    timeinfo.tm_sec = curr_time->tm_sec;
+
+    uint32_t cal_year = (timeinfo.tm_year + 1900) * 10000;
+    uint32_t cal_month = (timeinfo.tm_mon + 1) * 100; // tm_mon is 0-11
+    uint32_t cal_day = timeinfo.tm_mday;
+
+    uint32_t cal_hour = timeinfo.tm_hour * 10000;
+    uint32_t cal_min = timeinfo.tm_min * 100;
+    uint32_t cal_sec = timeinfo.tm_sec;
+
+    LOG_DBG("Current Date: %d-%d-%d", cal_year, cal_month, cal_day);
+    LOG_DBG("Current Time: %d:%d:%d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+
+    //*date = (timeinfo.tm_year << 16) | (timeinfo.tm_mon << 8) | timeinfo.tm_mday;
+    //*time = (timeinfo.tm_hour << 16) | (timeinfo.tm_min << 8) | timeinfo.tm_sec;
+
+    uint32_t encoded_date = (cal_year + cal_month + cal_day);
+    uint32_t encoded_time = (cal_hour + cal_min + cal_sec);
+
+    LOG_DBG("Encoded Date: %d, Time: %d", encoded_date, encoded_time);
+
+    *date = encoded_date;
+    *time = encoded_time;
+}
+
 /**
  * @brief Starts the Blood Pressure Trend (BPT) estimation process.
  *
@@ -198,24 +230,46 @@ static void hw_bpt_start_est(void)
     // ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
     bpt_process_done = false;
 
+    struct tm curr_time = hw_get_sys_time();
+
+    uint32_t date, time;
+    hw_bpt_encode_date_time(&curr_time, &date, &time);
+
+    struct sensor_value data_time_val;
+    data_time_val.val1 = date; // Date
+    data_time_val.val2 = time; // Time
+    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SET_DATE_TIME, &data_time_val);
+
     // Load calibration vector 0
-    struct sensor_value cal_idx_val;
-    cal_idx_val.val1 = 0;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    // struct sensor_value cal_idx_val;
+    // cal_idx_val.val1 = 0;
+    // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
     fs_load_file_to_buffer("/lfs/sys/bpt_cal_0", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+    //max32664d_set_bpt_cal_vector(max32664d_dev, 0, bpt_cal_vector_buf);
 
     // Load calibration vector 1
-    cal_idx_val.val1 = 1;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    // cal_idx_val.val1 = 1;
+    // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
     fs_load_file_to_buffer("/lfs/sys/bpt_cal_1", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+   // max32664d_set_bpt_cal_vector(max32664d_dev, 1, bpt_cal_vector_buf);
 
     // Load calibration vector 2
-    cal_idx_val.val1 = 2;
-    sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    // cal_idx_val.val1 = 2;
+    // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
     fs_load_file_to_buffer("/lfs/sys/bpt_cal_2", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
-    max32664d_set_bpt_cal_vector(max32664d_dev, bpt_cal_vector_buf);
+   // max32664d_set_bpt_cal_vector(max32664d_dev, 2, bpt_cal_vector_buf);
+
+    // Load calibration vector 3
+    // cal_idx_val.val1 = 3;
+    // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    fs_load_file_to_buffer("/lfs/sys/bpt_cal_3", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    //max32664d_set_bpt_cal_vector(max32664d_dev, 3, bpt_cal_vector_buf);
+
+    // Load calibration vector 4
+    // cal_idx_val.val1 = 4;
+    // sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_CAL_SET_CURR_INDEX, &cal_idx_val);
+    fs_load_file_to_buffer("/lfs/sys/bpt_cal_4", bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    //max32664d_set_bpt_cal_vector(max32664d_dev, 4, bpt_cal_vector_buf);
 
     // TODO: load cal vectors 1-4 if needed
 
@@ -242,21 +296,7 @@ static void hw_bpt_start_est(void)
     k_sleep(K_MSEC(1000));
 }
 
-static void hw_bpt_encode_date_time(struct tm *curr_time, uint32_t *date, uint32_t *time)
-{
-    struct tm timeinfo;
-    timeinfo.tm_year = curr_time->tm_year;
-    timeinfo.tm_mon = curr_time->tm_mon;
-    timeinfo.tm_mday = curr_time->tm_mday;
-    timeinfo.tm_hour = curr_time->tm_hour;
-    timeinfo.tm_min = curr_time->tm_min;
-    timeinfo.tm_sec = curr_time->tm_sec;
 
-    *date = (timeinfo.tm_year << 16) | (timeinfo.tm_mon << 8) | timeinfo.tm_mday;
-    *time = (timeinfo.tm_hour << 16) | (timeinfo.tm_min << 8) | timeinfo.tm_sec;
-
-    LOG_DBG("Encoded Date: %d, Time: %d", *date, *time);
-}
 
 static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia)
 {
@@ -478,8 +518,6 @@ static void st_ppg_fing_bpt_est_fail_run(void *o)
     LOG_DBG("PPG Finger SM BPT Estimation Fail Running");
 }
 
-
-
 static void st_ppg_fing_bpt_cal_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Fail Entry");
@@ -488,7 +526,7 @@ static void st_ppg_fing_bpt_cal_fail_entry(void *o)
 
 static void st_ppg_fing_bpt_cal_fail_run(void *o)
 {
-    LOG_DBG("PPG Finger SM BPT Calibration Fail Running");
+    // LOG_DBG("PPG Finger SM BPT Calibration Fail Running");
 }
 
 static void st_ppg_fi_check_sensor_entry(void *o)

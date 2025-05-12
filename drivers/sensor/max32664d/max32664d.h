@@ -177,6 +177,6 @@ void max32664_do_enter_bl(const struct device *dev);
 int max32664d_do_enter_app(const struct device *dev);
 
 int max32664d_get_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_vector);
-int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE]);
+int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_index, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE]);
 int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);

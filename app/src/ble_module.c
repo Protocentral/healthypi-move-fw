@@ -255,15 +255,15 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	if (err) {
-		printk("Failed to connect to %s, err 0x%02x %s\n", addr,
+		LOG_ERR("Failed to connect to %s, err 0x%02x %s\n", addr,
 		       err, bt_hci_err_to_str(err));
 		return;
 	}
 
-	printk("Connected %s\n", addr);
+	LOG_INF("Connected to %s\n", addr);
 
 	if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
-		printk("Failed to set security\n");
+		LOG_ERR("Failed to set security\n");
 	}
 }
 
@@ -273,7 +273,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	printk("Disconnected from %s, reason 0x%02x %s\n", addr,
+	LOG_INF("Disconnected from %s, reason 0x%02x %s\n", addr,
 	       reason, bt_hci_err_to_str(reason));
 }
 
@@ -313,7 +313,7 @@ static void auth_cancel(struct bt_conn *conn)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	printk("Pairing cancelled: %s\n", addr);
+	LOG_INF("Pairing cancelled: %s\n", addr);
 }
 
 static void pairing_complete(struct bt_conn *conn, bool bonded)
@@ -322,7 +322,7 @@ static void pairing_complete(struct bt_conn *conn, bool bonded)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	printk("Pairing completed: %s, bonded: %d\n", addr, bonded);
+	LOG_INF("Pairing completed: %s, bonded: %d\n", addr, bonded);
 }
 
 static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
@@ -331,7 +331,7 @@ static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	printk("Pairing failed conn: %s, reason %d %s\n", addr, reason,
+	LOG_ERR("Pairing failed conn: %s, reason %d %s\n", addr, reason,
 		   bt_security_err_to_str(reason));
 }
 
@@ -344,9 +344,6 @@ static struct bt_conn_auth_info_cb conn_auth_info_callbacks = {
 	.pairing_complete = pairing_complete,
 	.pairing_failed = pairing_failed,
 };
-
-
-
 
 void ble_module_init()
 {

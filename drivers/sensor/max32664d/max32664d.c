@@ -31,9 +31,9 @@ static uint8_t buf[2048]; // 23 byte/sample * 32 samples = 736 bytes
 
 uint8_t m_date_time_vector[DATE_TIME_VECTOR_SIZE] = {0x50, 0x04, 0x04, 0x5c, 0xc2, 0x02, 0x00, 0xe0, 0x7f, 0x02, 0x00};
 
-static int max32664d_write_cal_data(const struct device *dev, uint8_t *m_cal_vector);
+static int max32664d_write_cal_data(const struct device *dev, uint8_t m_bpt_cal_index, uint8_t *m_cal_vector);
 
-int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE])
+int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_index, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE])
 {
 	const struct max32664d_config *config = dev->config;
 	struct max32664d_data *data = dev->data;
@@ -48,7 +48,7 @@ int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_vec
 
 	memcpy(data->bpt_cal_vector, m_bpt_cal_vector, CAL_VECTOR_SIZE);
 
-	max32664d_write_cal_data(dev, data->bpt_cal_vector);
+	max32664d_write_cal_data(dev, m_bpt_cal_index, data->bpt_cal_vector);
 	LOG_DBG("BPT calibration data set");
 
 	return 0;
@@ -94,10 +94,37 @@ static int m_read_op_mode(const struct device *dev)
 	return rd_buf[1];
 }
 
-static int max32664d_write_cal_data(const struct device *dev, uint8_t *m_cal_vector)
+static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint16_t cmd_delay)
+{
+	const struct max32664d_config *config = dev->config;
+	uint8_t wr_buf[4];
+	uint8_t rd_buf[1] = {0x00};
+
+	wr_buf[0] = byte1;
+	wr_buf[1] = byte2;
+	wr_buf[2] = byte3;
+	wr_buf[3] = byte4;
+
+	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	k_sleep(K_MSEC(cmd_delay));
+
+	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	k_sleep(K_USEC(300));
+
+	LOG_DBG("CMD: %x %x %x %x | RSP: %x", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
+
+	k_sleep(K_MSEC(10));
+
+	return 0;
+}
+
+static int max32664d_write_cal_data(const struct device *dev, uint8_t m_bpt_cal_index, uint8_t *m_cal_vector)
 {
 	const struct max32664d_config *config = dev->config;
 	uint8_t wr_buf[CAL_VECTOR_SIZE + 3];
+	uint8_t rd_buf[1] = {0x00};
+
+	m_i2c_write_cmd_4(dev, 0x50, 0x04, 0x08, m_bpt_cal_index, 40);
 
 	LOG_DBG("Writing calibration data");
 
@@ -108,7 +135,11 @@ static int max32664d_write_cal_data(const struct device *dev, uint8_t *m_cal_vec
 	memcpy(&wr_buf[3], m_cal_vector, CAL_VECTOR_SIZE);
 
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
+	k_sleep(K_MSEC(30));
+	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	k_sleep(K_MSEC(1));
+
+	LOG_DBG("CMD: %x %x %x | RSP: %x", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
 
 	return 0;
 }
@@ -179,33 +210,7 @@ static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 	return 0;
 }
 
-static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4)
-{
-	const struct max32664d_config *config = dev->config;
-	uint8_t wr_buf[4];
-	uint8_t rd_buf[1];
 
-	wr_buf[0] = byte1;
-	wr_buf[1] = byte2;
-	wr_buf[2] = byte3;
-	wr_buf[3] = byte4;
-
-	gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_USEC(300));
-
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
-	i2c_read_dt(&config->i2c, rd_buf, 1);
-	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
-
-	gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-	LOG_DBG("CMD: %x %x %x %x | RSP: %x", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
-
-	k_sleep(K_MSEC(45));
-
-	return 0;
-}
 
 int max32664d_get_fifo_count(const struct device *dev)
 {
@@ -504,11 +509,11 @@ static int max32664_set_mode_raw(const struct device *dev)
 	m_i2c_write_cmd_3(dev, 0x52, 0x01, 0x00, MAX32664_DEFAULT_CMD_DELAY);
 
 	// Set MAX30101 LED1 current
-	m_i2c_write_cmd_4(dev, 0x40, 0x03, 0x0C, 0x1F);
+	m_i2c_write_cmd_4(dev, 0x40, 0x03, 0x0C, 0x1F, MAX32664_DEFAULT_CMD_DELAY);
 	k_sleep(K_MSEC(200));
 
 	// Set MAX30101 LED2 current
-	m_i2c_write_cmd_4(dev, 0x40, 0x03, 0x0D, 0x1F);
+	m_i2c_write_cmd_4(dev, 0x40, 0x03, 0x0D, 0x1F, MAX32664_DEFAULT_CMD_DELAY);
 	k_sleep(K_MSEC(200));
 
 	return 0;
