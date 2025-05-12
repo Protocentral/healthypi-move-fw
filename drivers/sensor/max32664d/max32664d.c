@@ -26,11 +26,6 @@ static uint8_t buf[2048]; // 23 byte/sample * 32 samples = 736 bytes
 #define DEFAULT_SPO2_B -34.659664
 #define DEFAULT_SPO2_C 112.68987
 
-#define DEFAULT_DATE 0x5cc20200
-#define DEFAULT_TIME 0xe07f0200
-
-uint8_t m_date_time_vector[DATE_TIME_VECTOR_SIZE] = {0x50, 0x04, 0x04, 0x5c, 0xc2, 0x02, 0x00, 0xe0, 0x7f, 0x02, 0x00};
-
 static int max32664d_write_cal_data(const struct device *dev, uint8_t m_bpt_cal_index, uint8_t *m_cal_vector);
 
 int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_index, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE])
@@ -42,7 +37,7 @@ int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_ind
 
 	memcpy(data->bpt_cal_vector, m_bpt_cal_vector, CAL_VECTOR_SIZE);
 
-	//LOG_HEXDUMP_INF(data->bpt_cal_vector, CAL_VECTOR_SIZE, "Sensor Cal Vector");
+	// LOG_HEXDUMP_INF(data->bpt_cal_vector, CAL_VECTOR_SIZE, "Sensor Cal Vector");
 
 	max32664d_write_cal_data(dev, m_bpt_cal_index, data->bpt_cal_vector);
 	LOG_DBG("BPT calibration data set");
@@ -70,7 +65,6 @@ int max32664d_load_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_v
 
 static int m_read_op_mode(const struct device *dev)
 {
-	// struct max32664d_data *data = dev->data;
 	const struct max32664d_config *config = dev->config;
 	uint8_t rd_buf[2] = {0x00, 0x00};
 
@@ -128,9 +122,9 @@ static int max32664d_write_cal_data(const struct device *dev, uint8_t m_bpt_cal_
 	wr_buf[1] = 0x04;
 	wr_buf[2] = 0x03;
 
-	memcpy((wr_buf+3), m_cal_vector, CAL_VECTOR_SIZE);
+	memcpy((wr_buf + 3), m_cal_vector, CAL_VECTOR_SIZE);
 
-	//LOG_HEXDUMP_INF(wr_buf, CAL_VECTOR_SIZE+3, "WR Buffer");
+	// LOG_HEXDUMP_INF(wr_buf, CAL_VECTOR_SIZE+3, "WR Buffer");
 
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 	k_sleep(K_MSEC(30));
@@ -208,8 +202,6 @@ static int m_get_ver(const struct device *dev, uint8_t *ver_buf)
 	return 0;
 }
 
-
-
 int max32664d_get_fifo_count(const struct device *dev)
 {
 	const struct max32664d_config *config = dev->config;
@@ -231,29 +223,24 @@ int max32664d_get_fifo_count(const struct device *dev)
 
 static int max32664_fetch_cal_vector(const struct device *dev)
 {
-    const struct max32664d_config *config = dev->config;
-    struct max32664d_data *data = dev->data;
+	const struct max32664d_config *config = dev->config;
+	struct max32664d_data *data = dev->data;
 
-    uint8_t rd_buf[513]={0};
-    uint8_t wr_buf[3] = {0x51, 0x04, 0x03};
+	uint8_t rd_buf[CAL_VECTOR_SIZE + 1] = {0};
+	uint8_t wr_buf[3] = {0x51, 0x04, 0x03};
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, 514);
+	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	k_sleep(K_USEC(300));
+	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
 	memcpy(data->bpt_cal_vector, &rd_buf[1], 512);
 
-    //for (int i = 0; i < 512; i++)
-    //{
-        //data->bpt_cal_vector[i] = rd_buf[i + 2];
-    //}
-	
-    LOG_DBG("Calibration vector fetched\n");
-	//LOG_HEXDUMP_INF(data->bpt_cal_vector, 512, "BPT_CAL_VECTOR");
+	LOG_DBG("Calibration vector fetched\n");
+	// LOG_HEXDUMP_INF(data->bpt_cal_vector, 512, "BPT_CAL_VECTOR");
 
-    data->op_mode = MAX32664D_OP_MODE_IDLE;
+	data->op_mode = MAX32664D_OP_MODE_IDLE;
 
-    return 0;
+	return 0;
 }
 
 static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint16_t cmd_delay)
@@ -525,7 +512,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 	LOG_DBG("MAX32664 Entering BPT estimation mode...");
 
 	// Set date and time
-	//m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
+	// m_set_date_time(dev, DEFAULT_DATE, DEFAULT_TIME);
 
 	// Set SpO2 calibration coeffs (A, B, C)
 	m_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
@@ -538,7 +525,7 @@ static int max32664_set_mode_bpt_est(const struct device *dev)
 
 	// Enable AGC
 	m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x01, 25);
-	
+
 	// Enable AFE
 	m_i2c_write_cmd_3(dev, 0x44, 0x03, 0x01, 50);
 	k_sleep(K_MSEC(200));
@@ -601,94 +588,8 @@ static int max32664_stop_estimation(const struct device *dev)
 	// Disable BPT estimation mode
 	m_i2c_write_cmd_3(dev, 0x52, 0x04, 0x00, 550);
 
-	// Disable AGC
-	//m_i2c_write_cmd_3(dev, 0x52, 0x00, 0x00, MAX32664_DEFAULT_CMD_DELAY);
-
 	return 0;
 }
-
-/*
-int max32664_get_sample_fifo(const struct device *dev)
-{
-	struct max32664d_data *data = dev->data;
-	const struct max32664d_config *config = dev->config;
-
-	uint8_t wr_buf[2] = {0x12, 0x01};
-
-	uint8_t hub_stat = max32664d_read_hub_status(dev);
-	if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)
-	{
-		int fifo_count = max32664d_get_fifo_count(dev);
-
-		if (fifo_count > 0)
-		{
-			int sample_len = 12;
-			// printk("F: %d | ", fifo_count);
-			data->num_samples = fifo_count;
-
-			if (data->op_mode == MAX32664D_OP_MODE_RAW)
-			{
-				sample_len = 12;
-			}
-			else if (data->op_mode == MAX32664D_OP_MODE_BPT)
-			{
-				sample_len = 23;
-			}
-
-			i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-			k_sleep(K_USEC(300));
-			i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + 1));
-
-			for (int i = 0; i < fifo_count; i++)
-			{
-				uint32_t led_ir = (uint32_t)buf[(sample_len * i) + 1] << 16;
-				led_ir |= (uint32_t)buf[(sample_len * i) + 2] << 8;
-				led_ir |= (uint32_t)buf[(sample_len * i) + 3];
-
-				data->samples_led_ir[i] = led_ir;
-
-				uint32_t led_red = (uint32_t)buf[(sample_len * i) + 4] << 16;
-				led_red |= (uint32_t)buf[(sample_len * i) + 5] << 8;
-				led_red |= (uint32_t)buf[(sample_len * i) + 6];
-
-				data->samples_led_red[i] = led_red;
-
-				// bytes 7,8,9, 10,11,12 are ignored
-
-				if (data->op_mode == MAX32664D_OP_MODE_BPT)
-				{
-					data->bpt_status = buf[(sample_len * i) + 13];
-					data->bpt_progress = buf[(sample_len * i) + 14];
-
-					uint16_t bpt_hr = (uint16_t)buf[(sample_len * i) + 15] << 8;
-					bpt_hr |= (uint16_t)buf[(sample_len * i) + 16];
-
-					data->hr = (bpt_hr / 10);
-
-					data->bpt_sys = buf[(sample_len * i) + 17];
-					data->bpt_dia = buf[(sample_len * i) + 18];
-
-					uint16_t bpt_spo2 = (uint16_t)buf[(sample_len * i) + 19] << 8;
-					bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 20];
-
-					data->spo2 = (bpt_spo2 / 10);
-
-					uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 21] << 8;
-					spo2_r_val |= (uint16_t)buf[(sample_len * i) + 22];
-
-					data->spo2_r_val = (spo2_r_val / 1000);
-					data->hr_above_resting = buf[(sample_len * i) + 23];
-				}
-			}
-		}
-	}
-	else
-	{
-		// printk("FIFO empty\n");
-	}
-
-	return 0;
-}*/
 
 static int max32664_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
@@ -865,7 +766,6 @@ static int max32664_pm_action(const struct device *dev,
 	return ret;
 }
 #endif /* CONFIG_PM_DEVICE */
-
 
 #define MAX32664_DEFINE(inst)                                       \
 	static struct max32664d_data max32664_data_##inst;              \

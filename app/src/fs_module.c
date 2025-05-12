@@ -255,7 +255,7 @@ void hpi_init_fs_struct(void)
     }
 }
 
-void fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
+int fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
 {
     LOG_DBG("Loading file %s to buffer", m_file_name);
 
@@ -268,22 +268,24 @@ void fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_
     if (rc != 0)
     {
         LOG_ERR("Error opening file %d", rc);
-        return;
+        return rc;
     }
 
     rc = fs_read(&m_file, buffer, buffer_len);
     if (rc < 0)
     {
         LOG_ERR("Error reading file %d", rc);
-        return;
+        return rc;
     }
 
     rc = fs_close(&m_file);
     if (rc != 0)
     {
         LOG_ERR("Error closing file %d", rc);
-        return;
+        return rc;
     }
+
+    return 0;
 }
 
 void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)

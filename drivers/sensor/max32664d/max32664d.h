@@ -53,7 +53,6 @@ enum max32664d_mode
 {
 	MAX32664D_OP_MODE_RAW = 0,
 	MAX32664D_OP_MODE_CAL,
-	//MAX32664D_OP_MODE_BPT,
 	MAX32664D_OP_MODE_BPT_EST,
 	MAX32664D_OP_MODE_BPT_CAL_START,
 	MAX32664D_OP_MODE_BPT_CAL_GET_VECTOR,
@@ -171,8 +170,6 @@ struct max32664_enc_calib_data
 
 uint8_t max32664d_read_hub_status(const struct device *dev);
 int max32664d_get_fifo_count(const struct device *dev);
-int _max32664_fifo_get_samples(const struct device *dev, uint8_t *buf, int len);
-int max32664_get_sample_fifo(const struct device *dev);
 
 void max32664_do_enter_bl(const struct device *dev);
 int max32664d_do_enter_app(const struct device *dev);

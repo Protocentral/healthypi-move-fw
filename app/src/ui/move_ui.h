@@ -82,8 +82,9 @@ enum hpi_disp_spl_screens
     SCR_SPL_BPT_SCR4,
     SCR_SPL_BPT_CAL_COMPLETE,
     SCR_SPL_BPT_CAL_PROGRESS,
-    SCR_SPL_BPT_COMPLETE,
+    SCR_SPL_BPT_EST_COMPLETE,
     SCR_SPL_BPT_FAILED,
+
    
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
@@ -273,6 +274,7 @@ void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8
 void draw_scr_bpt_cal_complete(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir);
 void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir);
 
 void draw_scr_ble(enum scroll_dir m_scroll_dir);
 

@@ -493,19 +493,6 @@ static void st_display_active_entry(void *o)
     }*/
 }
 
-static void st_disp_do_bpt_stuff(void)
-{
-    if (k_sem_take(&sem_ppg_fi_show_loading, K_NO_WAIT) == 0)
-    {
-        hpi_disp_show_loading(scr_bpt, "Starting estimation");
-    }
-
-    if (k_sem_take(&sem_ppg_fi_hide_loading, K_NO_WAIT) == 0)
-    {
-        hpi_disp_hide_loading();
-    }
-}
-
 static void st_display_active_run(void *o)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
@@ -565,7 +552,7 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_BPT:
-        // st_disp_do_bpt_stuff();
+        
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
