@@ -27,7 +27,7 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
-void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
+void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_scr4 = lv_obj_create(NULL);
     draw_scr_common(scr_bpt_scr4);
@@ -52,11 +52,11 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
     // Draw Progress bar
     bar_bpt_progress = lv_bar_create(cont_col);
     lv_obj_set_size(bar_bpt_progress, 200, 5);
-    lv_bar_set_value(bar_bpt_progress, 50, LV_ANIM_OFF);
+    lv_bar_set_value(bar_bpt_progress, 0, LV_ANIM_OFF);
 
     // Draw Progress bar label
     label_progress = lv_label_create(cont_col);
-    lv_label_set_text(label_progress, "50%");
+    lv_label_set_text(label_progress, "--");
     lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     // Create Chart 1 - ECG

@@ -122,7 +122,7 @@ static void ppg_settings_button_cb(lv_event_t *e)
     hpi_disp_ppg_settings_open();
 }
 
-void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent)
+void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_raw_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_raw_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags

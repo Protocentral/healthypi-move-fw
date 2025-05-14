@@ -31,7 +31,7 @@ static void scr_bpt_btn_measure_handler(lv_event_t *e)
     }
 }
 
-void draw_scr_bpt_cal_complete(enum scroll_dir m_scroll_dir)
+void draw_scr_bpt_cal_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_cal_complete = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_cal_complete, &style_scr_black, 0);

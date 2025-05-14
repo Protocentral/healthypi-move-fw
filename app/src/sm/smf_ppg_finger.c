@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/zbus/zbus.h>
 
 LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 
@@ -27,6 +28,8 @@ K_SEM_DEFINE(sem_bpt_cal_complete, 0, 1);
 K_SEM_DEFINE(sem_bpt_set_mode_cal, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_est_complete, 0, 1);
+
+ZBUS_CHAN_DECLARE(bpt_chan);
 
 K_MSGQ_DEFINE(q_ppg_fi_sample, sizeof(struct hpi_ppg_fi_data_t), 64, 1);
 
@@ -82,6 +85,11 @@ static uint8_t m_cal_index;
 static uint8_t m_cal_sys;
 static uint8_t m_cal_dia;
 
+static uint8_t m_est_sys;
+static uint8_t m_est_dia;
+static uint8_t m_est_hr;
+static uint8_t m_est_spo2;
+
 K_MUTEX_DEFINE(mutex_bpt_cal_set);
 
 // Externs
@@ -103,7 +111,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    //printk("FNS: %d ", edata->num_samples);
+    // printk("FNS: %d ", edata->num_samples);
     if (_n_samples > 16)
     {
         _n_samples = 16;
@@ -130,7 +138,17 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
         k_msgq_put(&q_ppg_fi_sample, &ppg_sensor_sample, K_MSEC(1));
         // k_sem_give(&sem_ppg_finger_sample_trigger);
 
-        LOG_DBG("Status: %d Progress: %d Sys: %d Dia: %d SpO2: %d", edata->bpt_status, edata->bpt_progress, edata->bpt_sys, edata->bpt_dia, edata->spo2);
+        //LOG_DBG("Status: %d Progress: %d Sys: %d Dia: %d SpO2: %d", edata->bpt_status, edata->bpt_progress, edata->bpt_sys, edata->bpt_dia, edata->spo2);
+
+        struct hpi_bpt_t bpt_data = {
+            .timestamp = hw_get_sys_time_ts(),
+            .sys = edata->bpt_sys,
+            .dia = edata->bpt_dia,
+            .hr = edata->hr,
+            .status = edata->bpt_status,
+            .progress = edata->bpt_progress,
+        };
+        zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
 
         if (edata->bpt_progress == 100 && bpt_process_done == false)
         {
@@ -146,7 +164,10 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
                 // BPT Estimation done
                 LOG_INF("BPT Estimation Done");
                 k_sem_give(&sem_bpt_est_complete);
-
+                m_est_dia = edata->bpt_dia;
+                m_est_sys = edata->bpt_sys;
+                m_est_hr = edata->hr;
+                m_est_spo2 = edata->spo2;
             }
             bpt_process_done = true;
         }
@@ -186,7 +207,7 @@ static void hw_bpt_encode_date_time(struct tm *curr_time, uint32_t *date, uint32
     timeinfo.tm_sec = curr_time->tm_sec;
 
     uint32_t encoded_date = (((timeinfo.tm_year + 1900) * 10000) + ((timeinfo.tm_mon + 1) * 100) + timeinfo.tm_mday);
-    uint32_t encoded_time = ( (timeinfo.tm_hour * 10000) + (timeinfo.tm_min * 100) + timeinfo.tm_sec);
+    uint32_t encoded_time = ((timeinfo.tm_hour * 10000) + (timeinfo.tm_min * 100) + timeinfo.tm_sec);
 
     LOG_DBG("Encoded Date: %d, Time: %d", encoded_date, encoded_time);
 
@@ -211,14 +232,14 @@ static void hw_bpt_start_est(void)
     sensor_attr_set(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SET_DATE_TIME, &data_time_val);
 
     char m_file_name[32];
-        
+
     for (int i = 0; i < 5; i++)
     {
         snprintf(m_file_name, sizeof(m_file_name), "/lfs/sys/bpt_cal_%d", i);
         // Load calibration vector 0
-        if (fs_load_file_to_buffer(m_file_name, (volatile uint8_t *)bpt_cal_vector_buf, CAL_VECTOR_SIZE) == 0)
-        { 
-            max32664d_set_bpt_cal_vector(max32664d_dev, i, (volatile uint8_t *)bpt_cal_vector_buf);
+        if (fs_load_file_to_buffer(m_file_name, bpt_cal_vector_buf, CAL_VECTOR_SIZE) == 0)
+        {
+            max32664d_set_bpt_cal_vector(max32664d_dev, i, bpt_cal_vector_buf);
             LOG_INF("Loaded calibration vector %d", i);
         }
         else
@@ -339,15 +360,15 @@ K_TIMER_DEFINE(tmr_bpt_cal_timeout, bpt_cal_timeout_handler, NULL);
 static void st_ppg_fi_cal_wait_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Wait Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT);
+    hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT, 0, 0, 0);
 
     // Start the timeout timer
-    k_timer_start(&tmr_bpt_cal_timeout, K_MSEC(BPT_CAL_TIMEOUT_MS), K_NO_WAIT);
+    // k_timer_start(&tmr_bpt_cal_timeout, K_MSEC(BPT_CAL_TIMEOUT_MS), K_NO_WAIT);
 }
 
 static void st_ppg_fi_cal_wait_run(void *o)
 {
-    LOG_DBG("PPG Finger SM BPT Calibration Wait Running");
+    //LOG_DBG("PPG Finger SM BPT Calibration Wait Running");
 
     // LOG_DBG("PPG Finger SM BPT Calibration Running");
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
@@ -381,7 +402,7 @@ static void st_ppg_fing_bpt_cal_run(void *o)
 static void st_ppg_fing_bpt_cal_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Done Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_CAL_COMPLETE, SCROLL_NONE, SCR_BPT);
+    hpi_load_scr_spl(SCR_SPL_BPT_CAL_COMPLETE, SCROLL_NONE, SCR_BPT, 0, 0, 0);
 }
 
 static void st_ppg_fing_bpt_cal_done_run(void *o)
@@ -434,12 +455,15 @@ static void st_ppg_fing_bpt_est_run(void *o)
 static void st_ppg_fing_bpt_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, SCR_BPT);
+    hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2); 
 }
 
 static void st_ppg_fing_bpt_est_done_run(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Running");
+    //k_msleep(2000);
+    //hpi_load_screen(SCR_BPT, SCROLL_NONE);
+    //smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
 static void st_ppg_fing_bpt_est_fail_entry(void *o)
@@ -449,13 +473,13 @@ static void st_ppg_fing_bpt_est_fail_entry(void *o)
 
 static void st_ppg_fing_bpt_est_fail_run(void *o)
 {
-    LOG_DBG("PPG Finger SM BPT Estimation Fail Running");
+    //LOG_DBG("PPG Finger SM BPT Estimation Fail Running");
 }
 
 static void st_ppg_fing_bpt_cal_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Fail Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_FAILED, SCROLL_NONE, SCR_BPT);
+    hpi_load_scr_spl(SCR_SPL_BPT_FAILED, SCROLL_NONE, SCR_BPT, 0, 0, 0);
 }
 
 static void st_ppg_fing_bpt_cal_fail_run(void *o)
@@ -466,7 +490,7 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
 static void st_ppg_fi_check_sensor_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Check Sensor Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_NONE, SCR_BPT);
+    hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_NONE, SCR_BPT, 0, 0, 0);
 }
 
 static void st_ppg_fi_check_sensor_run(void *o)

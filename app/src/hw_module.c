@@ -91,15 +91,16 @@ static bool rx_throttled;
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
-// Signals to start the SMF threads
+// Signals to start dependent threads
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
+K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
+K_SEM_DEFINE(sem_ble_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
-K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
 K_SEM_DEFINE(sem_boot_update_req, 0, 1);
@@ -541,7 +542,7 @@ void hw_module_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
-    //To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
+    // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
     NRF_TWIM2->FREQUENCY = 0x06200000;
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
@@ -789,7 +790,7 @@ void hw_module_init(void)
     INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler, NULL);
 
     ble_module_init();
-    // pm_device_runtime_put(w25_flash_dev);
+    k_sem_give(&sem_ble_thread_start);
 
     k_sem_give(&sem_hw_inited);
 
@@ -847,7 +848,6 @@ void hw_thread(void)
             .batt_level = (uint8_t)sys_batt_level,
             .batt_charging = sys_batt_charging,
         };
-
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
         // Read and publish time
@@ -897,8 +897,7 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        //_temp_f = read_temp_f();
-
+        _temp_f = read_temp_f();
         struct hpi_temp_t temp = {
             .temp_f = _temp_f,
         };

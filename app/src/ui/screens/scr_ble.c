@@ -31,7 +31,7 @@ static void scr_btn_cancel_handler(lv_event_t *e)
     }
 }
 
-void draw_scr_ble(enum scroll_dir m_scroll_dir)
+void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_ble = lv_obj_create(NULL);
     lv_obj_add_style(scr_ble, &style_scr_black, 0);
@@ -58,7 +58,7 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_info2 = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info2, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info2, 300);
-    lv_label_set_text(label_info2, "Another device is trying to pair with your HealthyPi Move through BLE.\nEnter the code below to pair if you initiated it.");
+    lv_label_set_text(label_info2, "If you initiated the pairing, please enter the code on your device.");
     lv_obj_set_style_text_align(label_info2, LV_TEXT_ALIGN_CENTER, 0);
 
     lbl_pair_code = lv_label_create(cont_col);

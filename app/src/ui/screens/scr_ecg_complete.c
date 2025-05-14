@@ -16,7 +16,7 @@ extern lv_style_t style_white_medium;
 
 extern lv_style_t style_scr_black;
 
-void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir)
+void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_ecg_complete = lv_obj_create(NULL);
     draw_scr_common(scr_ecg_complete);

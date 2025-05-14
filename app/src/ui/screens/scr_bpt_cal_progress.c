@@ -18,7 +18,7 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
-void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir)
+void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_cal_progress = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_cal_progress, &style_scr_black, 0);
@@ -34,6 +34,10 @@ void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
+
+    lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
+    lv_label_set_text(lbl_info_scroll, LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_darken(LV_PALETTE_RED, 2), LV_PART_MAIN);
 
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
@@ -62,6 +66,6 @@ void scr_bpt_cal_progress_update_text(char *text)
     {
         return;
     }
-    
+
     lv_label_set_text(label_info2, text);
 }

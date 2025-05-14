@@ -39,6 +39,9 @@ static int last_temp_trend_refresh = 0;
 
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
 
+static int scr_to_change = SCR_HOME;
+K_SEM_DEFINE(sem_change_screen, 0, 1);
+
 static const struct smf_state display_states[];
 
 enum display_state
@@ -62,9 +65,6 @@ static uint32_t splash_scr_start_time = 0;
 
 // HR Screen variables
 static uint16_t m_disp_hr = 0;
-// static uint16_t m_disp_hr_max = 0;
-// static uint16_t m_disp_hr_min = 0;
-// static uint16_t m_disp_hr_mean = 0;
 static struct tm m_disp_hr_last_update_tm;
 
 // @brief Spo2 Screen variables
@@ -98,6 +98,32 @@ struct s_disp_object
 
 } s_disp_obj;
 
+typedef void (*screen_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
+// Array of function pointers for screen drawing functions
+static const screen_draw_func_t screen_draw_funcs[] = {
+    [SCR_SPL_RAW_PPG] = draw_scr_spl_raw_ppg,
+    [SCR_SPL_ECG_SCR2] = draw_scr_ecg_scr2,
+    [SCR_SPL_BPT_SCR2] = draw_scr_bpt_scr2,
+    [SCR_SPL_BPT_SCR3] = draw_scr_bpt_scr3,
+    [SCR_SPL_BPT_SCR4] = draw_scr_bpt_scr4,
+    [SCR_SPL_BPT_CAL_COMPLETE] = draw_scr_bpt_cal_complete,
+    [SCR_SPL_ECG_COMPLETE] = draw_scr_ecg_complete,
+    [SCR_SPL_PLOT_HRV] = draw_scr_hrv,
+    [SCR_SPL_PLOT_HRV_SCATTER] = draw_scr_hrv_scatter,
+    [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
+    [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
+    [SCR_SPL_SPO2_SCR3] = draw_scr_spo2_scr3,
+    [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
+    [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
+
+    [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
+    [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,
+    [SCR_SPL_BPT_EST_COMPLETE] = draw_scr_bpt_est_complete,
+    [SCR_SPL_BLE] = draw_scr_ble,
+};
+
+typedef void (*screen_static_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
+
 // Externs
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
@@ -115,9 +141,6 @@ extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_hrv;
 
 extern struct k_sem sem_crown_key_pressed;
-
-extern struct k_sem sem_ppg_fi_show_loading;
-extern struct k_sem sem_ppg_fi_hide_loading;
 
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
@@ -363,6 +386,8 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
             m_disp_bp_last_refresh = k_uptime_get_32();
             hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
         }
+
+        lv_disp_trig_activity(NULL);
     }
 }
 
@@ -409,59 +434,6 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }*/
-
-    /*
-    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
-    {
-    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
-    {
-        if (bpt_meas_started == true)
-        {
-            hpi_disp_draw_plotPPG((float)((ppg_sensor_sample.raw_red * 1.0000)));
-
-            if (bpt_meas_done_flag == false)
-            {
-                if (bpt_meas_last_status != ppg_sensor_sample.bpt_status)
-                {
-                    bpt_meas_last_status = ppg_sensor_sample.bpt_status;
-                    printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-                }
-                if (bpt_meas_last_progress != ppg_sensor_sample.bpt_progress)
-                {
-                    hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                    bpt_meas_last_progress = ppg_sensor_sample.bpt_progress;
-                }
-                if (bpt_meas_last_progress >= 100)
-                {
-                    printk("BPT Meas progress 100");
-
-                    global_bp_dia = ppg_sensor_sample.bp_dia;
-                    global_bp_sys = ppg_sensor_sample.bp_sys;
-
-                    hw_bpt_stop();
-                    ppg_data_stop();
-
-                    printk("BPT Done: %d / %d", global_bp_sys, global_bp_dia);
-                    bpt_meas_done_flag = true;
-                    bpt_meas_started = false;
-                    hpi_disp_update_bp(global_bp_sys, global_bp_dia);
-
-                    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
-                    {
-                        lv_obj_clear_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-
-                        lv_obj_add_flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(btn_bpt_measure_exit, LV_OBJ_FLAG_HIDDEN);
-                    }
-                    hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                }
-            }
-            lv_disp_trig_activity(NULL);
-        }
-        */
 }
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
@@ -493,29 +465,8 @@ static void st_display_active_entry(void *o)
     }*/
 }
 
-static void st_display_active_run(void *o)
+static void hpi_disp_update_screens(void)
 {
-    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
-    struct hpi_ppg_wr_data_t ppg_sensor_sample;
-    struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
-    // LOG_DBG("Display SM Active Run");
-
-    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
-    {
-        hpi_disp_process_ppg_wr_data(ppg_sensor_sample);
-    }
-
-    if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
-    {
-        hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
-    }
-
-    if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
-    {
-        hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
-    }
-
-    // Do screen specific updates
     switch (hpi_disp_get_curr_screen())
     {
     case SCR_HOME:
@@ -552,7 +503,7 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_BPT:
-        
+
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
@@ -562,7 +513,7 @@ static void st_display_active_run(void *o)
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
-            hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
+            hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
         }
         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
@@ -594,7 +545,7 @@ static void st_display_active_run(void *o)
         if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
         {
             LOG_DBG("Loading BPT SCR4");
-            hpi_load_scr_spl(SCR_SPL_BPT_SCR4, SCROLL_NONE, SCR_SPL_BPT_SCR3);
+            hpi_load_scr_spl(SCR_SPL_BPT_SCR4, SCROLL_NONE, SCR_SPL_BPT_SCR3, 0, 0, 0);
         }
         break;
     case SCR_TODAY:
@@ -614,6 +565,63 @@ static void st_display_active_run(void *o)
     default:
         break;
     }
+}
+
+static int g_screen = SCR_HOME;
+static enum scroll_dir g_scroll_dir = SCROLL_NONE;
+static uint32_t g_arg1 = 0;
+static uint32_t g_arg2 = 0;
+static uint32_t g_arg3 = 0;
+static uint32_t g_arg4 = 0;
+
+static uint8_t g_scr_parent = SCR_HOME;
+
+void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+{
+    LOG_DBG("Loading screen", m_screen);
+
+    if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_draw_funcs) && screen_draw_funcs[m_screen] != NULL)
+    {
+        g_screen = m_screen;
+        g_scroll_dir = m_scroll_dir;
+        g_scr_parent = arg1;
+        g_arg1 = arg1;
+        g_arg2 = arg2;
+        g_arg3 = arg3;
+        g_arg4 = arg4;
+
+        k_sem_give(&sem_change_screen);
+    }
+    else
+    {
+        LOG_ERR("Invalid screen: %d", m_screen);
+    }
+}
+
+static void st_display_active_run(void *o)
+{
+    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_ppg_wr_data_t ppg_sensor_sample;
+    struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+    // LOG_DBG("Display SM Active Run");
+
+    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_process_ppg_wr_data(ppg_sensor_sample);
+    }
+
+    if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
+    }
+
+    if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
+    }
+
+    // Do screen specific updates
+    hpi_disp_update_screens();
 
     if (k_uptime_get_32() - last_batt_refresh > HPI_DISP_BATT_REFR_INT)
     {
@@ -681,6 +689,14 @@ static void st_display_active_run(void *o)
     {
         // hpi_display_sleep_off();
     }
+
+    if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("Change Screen: %d", scr_to_change);
+        screen_draw_funcs[g_screen](g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
+        // hpi_load_screen(scr_to_change, SCROLL_NONE);
+        // k_sem_give(&sem_change_screen);
+    }
     //}
 }
 
@@ -699,7 +715,7 @@ static void st_display_sleep_run(void *o)
 {
     // LOG_DBG("Display SM Sleep Run");
     int inactivity_time = lv_disp_get_inactive_time(NULL);
-    // LOG_DBG("Inactivity Time: %d", inactivity_time);
+    LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time < DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();

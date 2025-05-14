@@ -46,6 +46,7 @@ lv_style_t style_bg_purple;
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
 static int curr_screen = SCR_HOME;
+K_MUTEX_DEFINE(mutex_curr_screen);
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
@@ -55,10 +56,7 @@ static lv_obj_t *lbl_hdr_min;
 static lv_obj_t *ui_label_date;
 
 lv_obj_t *cui_battery_percent;
-
 int tmp_scr_parent = 0;
-
-K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Externs
 extern const struct device *display_dev;
@@ -223,8 +221,8 @@ void hpi_display_sleep_off(void)
     hpi_disp_set_brightness(hpi_disp_get_brightness());
 
     // display_blanking_on(display_dev);
-    // hpi_load_screen(curr_screen, SCROLL_NONE);
-    // display_blanking_off(display_dev);
+    hpi_load_screen(curr_screen, SCROLL_NONE);
+    display_blanking_off(display_dev);
     // hpi_pwr_display_wake();
 }
 
@@ -339,45 +337,6 @@ void disp_spl_scr_event(lv_event_t *e)
         }*/
 
         hpi_load_screen(*scr_parent, SCROLL_UP);
-    }
-}
-
-typedef void (*screen_draw_func_t)(enum scroll_dir, uint8_t);
-
-// Array of function pointers for screen drawing functions
-static const screen_draw_func_t screen_draw_funcs[] = {
-    [SCR_SPL_RAW_PPG] = draw_scr_spl_raw_ppg,
-    [SCR_SPL_ECG_SCR2] = draw_scr_ecg_scr2,
-    [SCR_SPL_BPT_SCR2] = draw_scr_bpt_scr2,
-    [SCR_SPL_BPT_SCR3] = draw_scr_bpt_scr3,
-    [SCR_SPL_BPT_SCR4] = draw_scr_bpt_scr4,
-    [SCR_SPL_BPT_CAL_COMPLETE] = draw_scr_bpt_cal_complete,
-    [SCR_SPL_ECG_COMPLETE] = draw_scr_ecg_complete,
-    [SCR_SPL_PLOT_HRV] = draw_scr_hrv,
-    [SCR_SPL_PLOT_HRV_SCATTER] = draw_scr_hrv_scatter,
-    [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
-    [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
-    [SCR_SPL_SPO2_SCR3] = draw_scr_spo2_scr3,
-    [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
-    [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
-
-    [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
-    [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,
-    [SCR_SPL_BPT_EST_COMPLETE] = draw_scr_bpt_est_complete,
-    [SCR_SPL_BLE] = draw_scr_ble,
-};
-
-void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
-{
-    LOG_DBG("Loading screen %d Parent: %d", m_screen, scr_parent);
-
-    if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_draw_funcs) && screen_draw_funcs[m_screen] != NULL)
-    {
-        screen_draw_funcs[m_screen](m_scroll_dir, scr_parent);
-    }
-    else
-    {
-        printk("Invalid screen: %d", m_screen);
     }
 }
 
@@ -516,6 +475,19 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
         }
+        else if ((hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR2) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3) || (hpi_disp_get_curr_screen == SCR_SPL_BPT_SCR4) ||
+                 (hpi_disp_get_curr_screen() == SCR_SPL_BPT_EST_COMPLETE))
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_COMPLETE)
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS)
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
     {
@@ -528,7 +500,7 @@ void disp_screen_event(lv_event_t *e)
         }
         else if (hpi_disp_get_curr_screen() == SCR_HR)
         {
-            hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR);
+            hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR, 0, 0, 0);
         }
     }
 }

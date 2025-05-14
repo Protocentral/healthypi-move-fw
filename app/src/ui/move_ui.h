@@ -124,7 +124,7 @@ LV_IMG_DECLARE(img_spo2_hand);
 LV_IMG_DECLARE(img_complete_85);
 LV_IMG_DECLARE(img_failed_100);
 
-LV_IMG_DECLARE(img_bpt_finger_120);
+LV_IMG_DECLARE(img_bpt_finger_90);
 
 //LV_IMG_DECLARE(pc_move_bg_200);
 LV_IMG_DECLARE(bck_heart_200);
@@ -194,7 +194,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir);
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
 void hpi_ecg_disp_update_hr(int hr);
 void hpi_ecg_disp_update_timer(int timer);
-void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir);
+void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir);
 void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
@@ -212,9 +212,9 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir);
 // void draw_scr_bpt_measure(void);
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
-void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr3(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir);
-void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr4(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);
@@ -234,7 +234,7 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir);
 // Helper objects
 void draw_scr_common(lv_obj_t *parent);
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir);
-void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir);
 
@@ -258,8 +258,8 @@ void ui_steps_button_update(uint16_t steps);
 void draw_bg(lv_obj_t *parent);
 
 // Draw special screens
-void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
-void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 void draw_scr_temp(enum scroll_dir m_scroll_dir);
 
@@ -269,13 +269,13 @@ void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
 void hpi_temp_disp_update_temp_f(double temp_f);
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
-void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent);
+void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir);
 
-void draw_scr_bpt_cal_complete(enum scroll_dir m_scroll_dir);
-void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir);
-void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir);
-void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_cal_complete(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
-void draw_scr_ble(enum scroll_dir m_scroll_dir);
+void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 void disp_screen_event(lv_event_t *e);

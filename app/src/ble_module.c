@@ -9,18 +9,19 @@
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/services/hrs.h>
 #include <zephyr/sys/ring_buffer.h>
+#include <zephyr/zbus/zbus.h>
 
 #include <zephyr/settings/settings.h>
 #include <app_version.h>
+
 #include "cmd_module.h"
+#include "hpi_common_types.h"
+#include "ble_module.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-LOG_MODULE_REGISTER(ble_module);
+LOG_MODULE_REGISTER(ble_module, LOG_LEVEL_DBG);
 
 struct bt_conn *current_conn;
-
-static uint8_t spo2_att_ble[5];
-static uint8_t temp_att_ble[2];
 
 // BLE GATT Identifiers
 
@@ -73,6 +74,7 @@ static const struct bt_data sd[] = {
 };
 
 extern struct k_msgq q_cmd_msg;
+extern struct k_sem sem_ble_thread_start;
 
 static void spo2_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
@@ -374,3 +376,41 @@ void ble_module_init()
 
 	LOG_DBG("Bluetooth init !");
 }
+
+static uint8_t m_ble_prev_progress = 0;
+static uint8_t m_ble_prev_status = 0;
+
+static void ble_bpt_listener(const struct zbus_channel *chan)
+{
+	const struct hpi_bpt_t *hpi_bpt = zbus_chan_const_msg(chan);
+	if(hpi_bpt->progress == m_ble_prev_progress &&
+	   hpi_bpt->status == m_ble_prev_status)
+	{
+		return;
+	}
+	m_ble_prev_progress = hpi_bpt->progress;
+	m_ble_prev_status = hpi_bpt->status;
+	
+	ble_bpt_cal_progress_notify(hpi_bpt->status, hpi_bpt->progress);
+	LOG_DBG("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
+}
+ZBUS_LISTENER_DEFINE(ble_bpt_lis, ble_bpt_listener);
+
+void ble_thread(void)
+{
+	k_sem_take(&sem_ble_thread_start, K_FOREVER);
+	
+	LOG_INF("BLE Thread started");
+
+	for(;;)
+	{
+		k_sleep(K_MSEC(1000));
+	}
+}
+
+#define BLE_THREAD_STACKSIZE 1024
+#define BLE_THREAD_PRIORITY 7
+
+K_THREAD_DEFINE(ble_thread_id, BLE_THREAD_STACKSIZE, ble_thread, NULL, NULL, NULL, BLE_THREAD_PRIORITY, 0, 1000);
+
+
