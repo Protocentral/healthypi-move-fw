@@ -713,9 +713,8 @@ static void st_display_sleep_entry(void *o)
 
 static void st_display_sleep_run(void *o)
 {
-    // LOG_DBG("Display SM Sleep Run");
     int inactivity_time = lv_disp_get_inactive_time(NULL);
-    LOG_DBG("Inactivity Time: %d", inactivity_time);
+    //LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time < DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();
@@ -747,7 +746,6 @@ static const struct smf_state display_states[] = {
     [HPI_DISPLAY_STATE_ACTIVE] = SMF_CREATE_STATE(st_display_active_entry, st_display_active_run, st_display_active_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_SLEEP] = SMF_CREATE_STATE(st_display_sleep_entry, st_display_sleep_run, st_display_sleep_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ON] = SMF_CREATE_STATE(st_display_on_entry, NULL, NULL, NULL, NULL),
-
 };
 
 void smf_display_thread(void)

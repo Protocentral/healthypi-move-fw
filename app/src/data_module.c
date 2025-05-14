@@ -293,10 +293,6 @@ void data_thread(void)
             {
                 k_msgq_put(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT);
             }
-
-            
-
-            ble_bpt_cal_progress_notify(ppg_fi_sensor_sample.bpt_status, ppg_fi_sensor_sample.bpt_progress);
         }
 
         // Check if PPG data is available

@@ -17,6 +17,7 @@
 #include "cmd_module.h"
 #include "hpi_common_types.h"
 #include "ble_module.h"
+#include "ui/move_ui.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 LOG_MODULE_REGISTER(ble_module, LOG_LEVEL_DBG);
@@ -256,15 +257,17 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	if (err) {
+	if (err)
+	{
 		LOG_ERR("Failed to connect to %s, err 0x%02x %s\n", addr,
-		       err, bt_hci_err_to_str(err));
+				err, bt_hci_err_to_str(err));
 		return;
 	}
 
 	LOG_INF("Connected to %s\n", addr);
 
-	if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
+	if (bt_conn_set_security(conn, BT_SECURITY_L2))
+	{
 		LOG_ERR("Failed to set security\n");
 	}
 }
@@ -276,21 +279,24 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	LOG_INF("Disconnected from %s, reason 0x%02x %s\n", addr,
-	       reason, bt_hci_err_to_str(reason));
+			reason, bt_hci_err_to_str(reason));
 }
 
 static void security_changed(struct bt_conn *conn, bt_security_t level,
-			     enum bt_security_err err)
+							 enum bt_security_err err)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	if (!err) {
+	if (!err)
+	{
 		printk("Security changed: %s level %u\n", addr, level);
-	} else {
+	}
+	else
+	{
 		printk("Security failed: %s level %u err %s(%d)\n", addr, level,
-		       bt_security_err_to_str(err), err);
+			   bt_security_err_to_str(err), err);
 	}
 }
 
@@ -306,7 +312,8 @@ static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	printk("Passkey for %s: %06u\n", addr, passkey);
+	LOG_INF("Passkey for %s: %06u\n", addr, passkey);
+	hpi_load_scr_spl(SCR_SPL_BLE, SCROLL_NONE, passkey, 0, 0, 0);
 }
 
 static void auth_cancel(struct bt_conn *conn)
@@ -334,7 +341,7 @@ static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	LOG_ERR("Pairing failed conn: %s, reason %d %s\n", addr, reason,
-		   bt_security_err_to_str(reason));
+			bt_security_err_to_str(reason));
 }
 
 static struct bt_conn_auth_cb conn_auth_callbacks = {
@@ -383,14 +390,14 @@ static uint8_t m_ble_prev_status = 0;
 static void ble_bpt_listener(const struct zbus_channel *chan)
 {
 	const struct hpi_bpt_t *hpi_bpt = zbus_chan_const_msg(chan);
-	if(hpi_bpt->progress == m_ble_prev_progress &&
-	   hpi_bpt->status == m_ble_prev_status)
+	if (hpi_bpt->progress == m_ble_prev_progress &&
+		hpi_bpt->status == m_ble_prev_status)
 	{
 		return;
 	}
 	m_ble_prev_progress = hpi_bpt->progress;
 	m_ble_prev_status = hpi_bpt->status;
-	
+
 	ble_bpt_cal_progress_notify(hpi_bpt->status, hpi_bpt->progress);
 	LOG_DBG("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
 }
@@ -399,10 +406,10 @@ ZBUS_LISTENER_DEFINE(ble_bpt_lis, ble_bpt_listener);
 void ble_thread(void)
 {
 	k_sem_take(&sem_ble_thread_start, K_FOREVER);
-	
+
 	LOG_INF("BLE Thread started");
 
-	for(;;)
+	for (;;)
 	{
 		k_sleep(K_MSEC(1000));
 	}
@@ -412,5 +419,3 @@ void ble_thread(void)
 #define BLE_THREAD_PRIORITY 7
 
 K_THREAD_DEFINE(ble_thread_id, BLE_THREAD_STACKSIZE, ble_thread, NULL, NULL, NULL, BLE_THREAD_PRIORITY, 0, 1000);
-
-

@@ -454,11 +454,20 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
         }
-        else if ((hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR2) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3) || (hpi_disp_get_curr_screen == SCR_SPL_BPT_SCR4))                 
+        else if ((hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR2) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR4))
         {
             hpi_load_screen(SCR_BPT, SCROLL_DOWN);
         }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_COMPLETE)
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_COMPLETE || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS) ||
+                 (hpi_disp_get_curr_screen() == SCR_SPL_BPT_EST_COMPLETE))
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_BLE)
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_HRV)
         {
             hpi_load_screen(SCR_BPT, SCROLL_DOWN);
         }

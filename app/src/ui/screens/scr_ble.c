@@ -40,12 +40,9 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_ble);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
+    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
     lv_obj_t *label_info = lv_label_create(cont_col);
@@ -58,13 +55,13 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_t *label_info2 = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info2, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info2, 300);
-    lv_label_set_text(label_info2, "If you initiated the pairing, please enter the code on your device.");
+    lv_label_set_text(label_info2, "Enter the below PIN to pair");
     lv_obj_set_style_text_align(label_info2, LV_TEXT_ALIGN_CENTER, 0);
 
     lbl_pair_code = lv_label_create(cont_col);
-    lv_label_set_text(lbl_pair_code, "123456");
+    lv_label_set_text_fmt(lbl_pair_code, "%06d", arg1);
     lv_obj_set_style_text_align(lbl_pair_code, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(lbl_pair_code, &style_white_medium, 0);
+    lv_obj_add_style(lbl_pair_code, &style_white_large, 0);
 
     btn_cancel = lv_btn_create(cont_col);
     lv_obj_add_event_cb(btn_cancel, scr_btn_cancel_handler, LV_EVENT_ALL, NULL);
