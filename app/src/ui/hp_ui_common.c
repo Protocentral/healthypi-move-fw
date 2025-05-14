@@ -319,27 +319,6 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
     }
 }
 
-void disp_spl_scr_event(lv_event_t *e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-
-    // lv_obj_t *target = lv_event_get_target(e);
-    int *scr_parent = lv_event_get_user_data(e);
-
-    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printk("Spl down at %d\n", curr_screen);
-
-        /*if (curr_screen == SCR_SPL_PLOT_BPT_PPG)
-        {
-            hpi_bpt_abort();
-        }*/
-
-        hpi_load_screen(*scr_parent, SCROLL_UP);
-    }
-}
-
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
     switch (m_screen)
@@ -475,8 +454,7 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
         }
-        else if ((hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR2) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3) || (hpi_disp_get_curr_screen == SCR_SPL_BPT_SCR4) ||
-                 (hpi_disp_get_curr_screen() == SCR_SPL_BPT_EST_COMPLETE))
+        else if ((hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR2) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3) || (hpi_disp_get_curr_screen == SCR_SPL_BPT_SCR4))                 
         {
             hpi_load_screen(SCR_BPT, SCROLL_DOWN);
         }

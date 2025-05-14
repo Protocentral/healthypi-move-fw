@@ -16,7 +16,7 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_white_large;
 
-void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir)
+void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_spo2_timeout = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_timeout, &style_scr_black, 0);

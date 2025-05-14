@@ -30,7 +30,9 @@ extern lv_style_t style_scr_black;
 void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_scr4 = lv_obj_create(NULL);
-    draw_scr_common(scr_bpt_scr4);
+    lv_obj_add_style(scr_bpt_scr4, &style_scr_black, 0);
+    lv_obj_clear_flag(scr_bpt_scr4, LV_OBJ_FLAG_SCROLLABLE); /// Flagsx
+    //draw_scr_common(scr_bpt_scr4);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr4);
@@ -71,6 +73,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_chart_set_div_line_count(chart_bpt_ppg, 0, 0);
     lv_chart_set_update_mode(chart_bpt_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_bpt_ppg, LV_ALIGN_CENTER, 0, -35);
+    
     ser_bpt_ppg = lv_chart_add_series(chart_bpt_ppg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_bpt_ppg, 6, LV_PART_ITEMS);
 

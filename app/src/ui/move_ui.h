@@ -179,15 +179,15 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir);
 // Spo2 Screen functions
 void draw_scr_spo2(enum scroll_dir m_scroll_dir);
 void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir);
-void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir);
+void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void hpi_disp_update_spo2(uint8_t spo2, int64_t ts_last_update);
 
 void hpi_disp_spo2_load_trend(void);
 void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int spo2, int hr);
 void hpi_disp_spo2_update_hr(int hr);
-void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir);
-void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir);
+void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -195,7 +195,7 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 void hpi_ecg_disp_update_hr(int hr);
 void hpi_ecg_disp_update_timer(int timer);
 void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
-void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir);
+void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
 // PPG screen functions
@@ -213,11 +213,11 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir);
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
 void draw_scr_bpt_scr3(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
-void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir);
+void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_scr4(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // HRV screen functions
-void draw_scr_hrv(enum scroll_dir m_scroll_dir);
+void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void hpi_disp_hrv_draw_plot_rtor(float rtor);
 void hpi_disp_hrv_update_rtor(int rtor);
 void hpi_disp_hrv_update_sdnn(int sdnn);

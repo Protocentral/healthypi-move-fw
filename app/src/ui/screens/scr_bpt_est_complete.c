@@ -10,12 +10,25 @@ LOG_MODULE_REGISTER(scr_bpt_est_complete, LOG_LEVEL_DBG);
 
 lv_obj_t *scr_bpt_est_complete;
 
+static lv_obj_t *btn_close;
+
 // Externs
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
+
+static void scr_btn_close_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        //k_sem_give(&sem_bpt_check_sensor); 
+        hpi_load_screen(SCR_BPT, SCROLL_UP);
+    }
+}
 
 void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
@@ -26,16 +39,14 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_est_complete);
-    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(90));
+    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
+    lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
-    lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
+   /* lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
     lv_label_set_text(lbl_info_scroll, LV_SYMBOL_DOWN);
     lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_darken(LV_PALETTE_RED, 2), LV_PART_MAIN);
 
@@ -50,8 +61,8 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_add_style(lbl_bpt_sys, &style_red_medium, 0);
 
     lv_obj_t *lbl_val_sys = lv_label_create(cont_sys);
-    lv_obj_add_style(lbl_val_sys, &style_white_large, 0);
-    lv_label_set_text_fmt(lbl_val_sys, "%03d", arg1);
+    //lv_obj_add_style(lbl_val_sys, &style_white_large, 0);
+   // lv_label_set_text_fmt(lbl_val_sys, "%03d", arg1);
 
     lv_obj_t *cont_dia = lv_obj_create(cont_col);
     lv_obj_set_size(cont_dia, lv_pct(100), LV_SIZE_CONTENT);
@@ -64,8 +75,8 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_add_style(lbl_bpt_dia, &style_red_medium, 0);
 
     lv_obj_t *lbl_val_dia = lv_label_create(cont_dia);
-    lv_obj_add_style(lbl_val_dia, &style_white_large, 0);
-    lv_label_set_text_fmt(lbl_val_dia, "%03d", arg2);
+    //lv_obj_add_style(lbl_val_dia, &style_white_large, 0);
+    //lv_label_set_text_fmt(lbl_val_dia, "%03d", arg2);
 
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
@@ -93,7 +104,15 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
     lv_obj_t *lbl_val_spo2 = lv_label_create(cont_spo2);
     lv_obj_add_style(lbl_val_spo2, &style_white_medium, 0);
-    lv_label_set_text_fmt(lbl_val_spo2, "%d", arg4);
+    lv_label_set_text_fmt(lbl_val_spo2, "%d", arg4);*/
+
+    btn_close = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_close, scr_btn_close_handler, LV_EVENT_ALL, NULL);
+    lv_obj_set_height(btn_close, 85);
+
+    lv_obj_t *label_btn = lv_label_create(btn_close);
+    lv_label_set_text(label_btn, LV_SYMBOL_CLOSE " Close");
+    lv_obj_center(label_btn);
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_EST_COMPLETE);
     hpi_show_screen(scr_bpt_est_complete, m_scroll_dir);
