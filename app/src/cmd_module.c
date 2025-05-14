@@ -26,8 +26,9 @@ uint8_t log_type=0;
 // Externs
 extern int global_dev_status;
 
-extern struct k_sem sem_bpt_set_mode_cal;
+extern struct k_sem sem_bpt_enter_mode_cal;
 extern struct k_sem sem_bpt_cal_start;
+extern struct k_sem sem_bpt_exit_mode_cal;
 
 void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
@@ -52,8 +53,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         break;
     case HPI_CMD_BPT_SEL_CAL_MODE:
         LOG_DBG("RX CMD Select BPT Cal Mode");
-        //TODO: Check is the device is busy
-        k_sem_give(&sem_bpt_set_mode_cal);
+        k_sem_give(&sem_bpt_enter_mode_cal);
         break;
     case HPI_CMD_START_BPT_CAL_START:
         uint8_t bpt_cal_index = in_pkt_buf[3];
@@ -62,9 +62,11 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         LOG_DBG("RX CMD Start Cal Index: %d Sys: %d Dia: %d", bpt_cal_index, bpt_cal_value_sys, bpt_cal_value_dia);
         hpi_bpt_set_cal_vals(bpt_cal_index, bpt_cal_value_sys, bpt_cal_value_dia);        
         k_sem_give(&sem_bpt_cal_start);
-        //hpi_bpt_start_cal(sys, dia);
         break;
-
+    case HPI_CMD_BPT_EXIT_CAL_MODE:
+        LOG_DBG("RX CMD Exit BPT Cal Mode");
+        k_sem_give(&sem_bpt_exit_mode_cal);
+        break;
     case HPI_CMD_PAIR_DEVICE:
         LOG_DBG("RX CMD Pair Device");
         //uint8_t pin_code = in_pkt_buf[1];

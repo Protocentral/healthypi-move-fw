@@ -25,7 +25,9 @@ K_SEM_DEFINE(sem_start_bpt_sampling, 0, 1);
 K_SEM_DEFINE(sem_stop_bpt_sampling, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_cal_complete, 0, 1);
-K_SEM_DEFINE(sem_bpt_set_mode_cal, 0, 1);
+
+K_SEM_DEFINE(sem_bpt_enter_mode_cal, 0, 1);
+K_SEM_DEFINE(sem_bpt_exit_mode_cal, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_est_complete, 0, 1);
 
@@ -111,7 +113,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    // printk("FNS: %d ", edata->num_samples);
+    printk("FNS: %d ", edata->num_samples);
     if (_n_samples > 16)
     {
         _n_samples = 16;
@@ -332,7 +334,7 @@ static void st_ppg_fing_idle_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 
-    if (k_sem_take(&sem_bpt_set_mode_cal, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_bpt_enter_mode_cal, K_NO_WAIT) == 0)
     {
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
@@ -378,6 +380,12 @@ static void st_ppg_fi_cal_wait_run(void *o)
 
         sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
+    }
+
+    if(k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
+    {
+        hpi_load_screen(SCR_BPT, SCROLL_UP);
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
     }
 }
 
@@ -456,6 +464,7 @@ static void st_ppg_fing_bpt_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Entry");
     hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2); 
+    //hpi_hw_ldsw2_off();
 }
 
 static void st_ppg_fing_bpt_est_done_run(void *o)

@@ -17,11 +17,19 @@ static int max32664_async_sample_fetch(const struct device *dev,
     static uint8_t buf[2048];
 
     static int sample_len = 29;
+    uint64_t start_time = k_uptime_get();
+    uint64_t timeout_ms = 1000;
 
     uint8_t hub_stat = max32664d_read_hub_status(dev);
     while (!(hub_stat & MAX32664D_HUB_STAT_DRDY_MASK))
     {
         hub_stat = max32664d_read_hub_status(dev);
+
+        if (k_uptime_get() - start_time > timeout_ms)
+        {
+            LOG_ERR("Timeout waiting for DRDY flag");
+            return -ETIMEDOUT; // Return a timeout error code
+        }
     }
 
     if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)

@@ -12,6 +12,9 @@ void hpi_bpt_abort(void);
 
 void hpi_hw_pmic_off(void);
 
+void hpi_hw_ldsw2_off(void);
+void hpi_hw_ldsw2_on(void);
+
 void hpi_pwr_display_sleep(void);
 void hpi_pwr_display_wake(void);
 

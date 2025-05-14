@@ -38,7 +38,7 @@ enum hpi_cmds
 
     HPI_CMD_BPT_SEL_CAL_MODE = 0x60,
     HPI_CMD_START_BPT_CAL_START = 0x61, //Needs Sys/Diastolic (as uint8/uint8) as argument
-    
+    HPI_CMD_BPT_EXIT_CAL_MODE = 0x62,    
 };
 
 enum cmdif_pkt_type

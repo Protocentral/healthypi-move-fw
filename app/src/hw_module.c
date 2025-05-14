@@ -537,6 +537,16 @@ static int hw_enable_pmic_callback(void)
     return 0;
 }
 
+void hpi_hw_ldsw2_on(void)
+{
+    regulator_enable(ldsw_sens_1_8);
+}
+
+void hpi_hw_ldsw2_off(void)
+{
+    regulator_disable(ldsw_sens_1_8);
+}
+
 void hw_module_init(void)
 {
     int ret = 0;
