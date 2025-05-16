@@ -15,7 +15,7 @@ manifest:
       revision: v2.9-branch
       import:
         path-prefix: external
-#      clone-depth: 1
+
 #    - name: max30001
 #      repo-path: protocentral_max30001_zephyr_driver
 #      remote: protocentral

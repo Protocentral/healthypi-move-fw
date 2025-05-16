@@ -98,6 +98,15 @@ struct s_disp_object
 
 } s_disp_obj;
 
+static int g_screen = SCR_HOME;
+static enum scroll_dir g_scroll_dir = SCROLL_NONE;
+static uint32_t g_arg1 = 0;
+static uint32_t g_arg2 = 0;
+static uint32_t g_arg3 = 0;
+static uint32_t g_arg4 = 0;
+
+static uint8_t g_scr_parent = SCR_HOME;
+
 typedef void (*screen_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
 // Array of function pointers for screen drawing functions
 static const screen_draw_func_t screen_draw_funcs[] = {
@@ -123,6 +132,9 @@ static const screen_draw_func_t screen_draw_funcs[] = {
 };
 
 typedef void (*screen_static_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
+
+static int max32664_update_progress = 0;
+static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
 
 // Externs
 extern const struct device *display_dev;
@@ -199,57 +211,6 @@ static void st_display_init_entry(void *o)
     smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SPLASH]);
 }
 
-static lv_obj_t *obj_msgbox;
-
-static void set_angle(void *obj, int32_t v)
-{
-    lv_arc_set_value(obj, v);
-}
-
-static void hpi_disp_show_loading(lv_obj_t *scr_parent, char *message)
-{
-    obj_msgbox = lv_msgbox_create(scr_parent, "Please wait...", NULL, NULL, false);
-    lv_obj_center(obj_msgbox);
-    lv_obj_set_size(obj_msgbox, 250, 250);
-
-    /* setting's content*/
-    lv_obj_t *content = lv_msgbox_get_content(obj_msgbox);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(content, -1, LV_PART_SCROLLBAR);
-
-    lv_obj_t *lbl_msg = lv_label_create(content);
-    lv_label_set_text(lbl_msg, message);
-
-    /*Create an Arc*/
-    lv_obj_t *arc = lv_arc_create(content);
-    lv_arc_set_rotation(arc, 270);
-    lv_arc_set_bg_angles(arc, 0, 360);
-    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);  /*Be sure the knob is not displayed*/
-    lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE); /*To not allow adjusting by click*/
-    lv_obj_set_size(arc, 100, 100);
-    lv_obj_center(arc);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, arc);
-    lv_anim_set_exec_cb(&a, set_angle);
-    lv_anim_set_time(&a, 1000);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE); /*Just for the demo*/
-    lv_anim_set_repeat_delay(&a, 500);
-    lv_anim_set_values(&a, 0, 100);
-    lv_anim_start(&a);
-}
-
-static void hpi_disp_hide_loading(void)
-{
-    if (obj_msgbox != NULL)
-    {
-        lv_msgbox_close(obj_msgbox);
-        obj_msgbox = NULL;
-    }
-}
-
 static void st_display_splash_entry(void *o)
 {
     LOG_DBG("Display SM Splash Entry");
@@ -273,8 +234,6 @@ static void st_display_boot_entry(void *o)
 
     // Signal that the display is ready
     k_sem_give(&sem_disp_ready);
-
-    // draw_scr_splash();
 }
 
 static void st_display_boot_run(void *o)
@@ -322,9 +281,6 @@ static void st_display_boot_exit(void *o)
     LOG_DBG("Display SM Boot Exit");
     lv_disp_trig_activity(NULL);
 }
-
-static int max32664_update_progress = 0;
-static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
 
 static void hpi_max32664_update_progress(int progress, int status)
 {
@@ -567,18 +523,9 @@ static void hpi_disp_update_screens(void)
     }
 }
 
-static int g_screen = SCR_HOME;
-static enum scroll_dir g_scroll_dir = SCROLL_NONE;
-static uint32_t g_arg1 = 0;
-static uint32_t g_arg2 = 0;
-static uint32_t g_arg3 = 0;
-static uint32_t g_arg4 = 0;
-
-static uint8_t g_scr_parent = SCR_HOME;
-
 void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
-    LOG_DBG("Loading screen", m_screen);
+    LOG_DBG("Loading screen %d", m_screen);
 
     if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_draw_funcs) && screen_draw_funcs[m_screen] != NULL)
     {
@@ -603,7 +550,6 @@ static void st_display_active_run(void *o)
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
-    // LOG_DBG("Display SM Active Run");
 
     if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
     {
@@ -627,7 +573,6 @@ static void st_display_active_run(void *o)
     {
         if ((hpi_disp_get_curr_screen() == SCR_HOME))
         {
-            // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
             hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SETTINGS)
@@ -647,16 +592,11 @@ static void st_display_active_run(void *o)
         {
             hpi_scr_home_update_time_date(m_disp_sys_time);
         }
-        else
-        {
-            // hdr_time_display_update(m_disp_sys_time);
-        }
     }
 
     // Add button handlers
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
-
         lv_disp_trig_activity(NULL);
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
@@ -682,22 +622,14 @@ static void st_display_active_run(void *o)
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time > DISP_SLEEP_TIME_MS)
     {
-        // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
-    }
-    else
-    {
-        // hpi_display_sleep_off();
     }
 
     if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
     {
         LOG_DBG("Change Screen: %d", scr_to_change);
         screen_draw_funcs[g_screen](g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
-        // hpi_load_screen(scr_to_change, SCROLL_NONE);
-        // k_sem_give(&sem_change_screen);
     }
-    //}
 }
 
 static void st_display_active_exit(void *o)
@@ -714,15 +646,11 @@ static void st_display_sleep_entry(void *o)
 static void st_display_sleep_run(void *o)
 {
     int inactivity_time = lv_disp_get_inactive_time(NULL);
-    //LOG_DBG("Inactivity Time: %d", inactivity_time);
+    // LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time < DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
-    }
-    else
-    {
-        // hpi_display_sleep_off();
     }
 }
 
@@ -795,7 +723,7 @@ static void disp_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
     m_disp_hr_last_update_tm = hpi_hr->time_tm;
-    LOG_INF("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
+    //LOG_DBG("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
@@ -804,7 +732,7 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
     m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
-    LOG_DBG("ZB Spo2: %d | Time: %d", hpi_spo2->spo2, hpi_spo2->timestamp);
+    //LOG_DBG("ZB Spo2: %d | Time: %lld", hpi_spo2->spo2, hpi_spo2->timestamp);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
 
@@ -813,10 +741,7 @@ static void disp_steps_listener(const struct zbus_channel *chan)
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     m_disp_steps = hpi_steps->steps;
     m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
-
     // LOG_DBG("ZB Steps Walk : %d | Run: %d", hpi_steps->steps_walk, hpi_steps->steps_run);
-
-    // ui_steps_button_update(hpi_steps->steps_walk);
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 
@@ -824,7 +749,7 @@ static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
     m_disp_temp = hpi_temp->temp_f;
-    // printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
+    LOG_DBG("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 
@@ -835,9 +760,8 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
     m_disp_bp_dia = hpi_bpt->dia;
     m_disp_bpt_status = hpi_bpt->status;
     m_disp_bpt_progress = hpi_bpt->progress;
-    // printk("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
-    // printk("ZB BPT: %d / %d\n", hpi_bpt->sys, hpi_bpt->dia);
-    //  hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
+
+    LOG_DBG("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 
@@ -852,7 +776,7 @@ static void disp_ecg_hr_listener(const struct zbus_channel *chan)
 {
     const uint16_t *ecg_hr = zbus_chan_const_msg(chan);
     m_disp_ecg_hr = *ecg_hr;
-    // LOG_INF("ZB ECG HR: %d", *ecg_hr);
+    LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_hr_lis, disp_ecg_hr_listener);
 

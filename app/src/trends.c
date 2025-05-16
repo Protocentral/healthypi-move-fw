@@ -412,4 +412,4 @@ ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
 #define TREND_RECORD_THREAD_STACK_SIZE 2048
 #define TREND_RECORD_THREAD_PRIORITY 5
 
-//K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, hpi_trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 2000);
+K_THREAD_DEFINE(trend_record_thread_id, TREND_RECORD_THREAD_STACK_SIZE, hpi_trend_record_thread, NULL, NULL, NULL, TREND_RECORD_THREAD_PRIORITY, 0, 2000);

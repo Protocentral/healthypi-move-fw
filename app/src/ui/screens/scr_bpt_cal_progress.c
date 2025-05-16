@@ -10,7 +10,8 @@ LOG_MODULE_REGISTER(scr_bpt_cal_progress, LOG_LEVEL_DBG);
 
 lv_obj_t *scr_bpt_cal_progress;
 
-lv_obj_t *label_info2;
+static lv_obj_t *label_info2;
+
 // Externs
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large;
@@ -22,9 +23,8 @@ void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 {
     scr_bpt_cal_progress = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_cal_progress, &style_scr_black, 0);
-    // lv_obj_set_scrollbar_mode(scr_bpt_cal_complete, LV_SCROLLBAR_MODE_ON);
-
-    /*Create a container with COLUMN flex direction*/
+    lv_obj_clear_flag(scr_bpt_cal_progress, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+ 
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_cal_progress);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);

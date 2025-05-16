@@ -21,9 +21,8 @@ void draw_scr_bpt_scr3(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32
 {
     scr_bpt_scr3 = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_scr3, &style_scr_black, 0);
-    // lv_obj_set_scrollbar_mode(scr_bpt_scr3, LV_SCROLLBAR_MODE_ON);
+    lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
-    /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr3);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);

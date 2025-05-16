@@ -31,10 +31,8 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 {
     scr_bpt_scr4 = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_scr4, &style_scr_black, 0);
-    lv_obj_clear_flag(scr_bpt_scr4, LV_OBJ_FLAG_SCROLLABLE); /// Flagsx
-    //draw_scr_common(scr_bpt_scr4);
+    lv_obj_clear_flag(scr_bpt_scr4, LV_OBJ_FLAG_SCROLLABLE);
 
-    /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr4);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
@@ -93,6 +91,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     // Draw BPM
     lv_obj_t *img1 = lv_img_create(cont_hr);
     lv_img_set_src(img1, &img_heart_35);
+
     label_hr_bpm = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_bpm, "00");
     lv_obj_add_style(label_hr_bpm, &style_white_medium, 0);
@@ -168,6 +167,14 @@ void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
         }
 
         lv_chart_set_next_value(chart_bpt_ppg, ser_bpt_ppg, data_ppg_i);
+
+        if(ppg_sensor_sample.hr > 0)
+        {
+            lv_label_set_text_fmt(label_hr_bpm, "%d", ppg_sensor_sample.hr);
+        } else
+        {
+            lv_label_set_text_fmt(label_hr_bpm, "--");
+        }
 
         hpi_bpt_disp_add_samples(1);
         hpi_bpt_disp_do_set_scale(BPT_DISP_WINDOW_SIZE);
