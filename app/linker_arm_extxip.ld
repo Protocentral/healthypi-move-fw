@@ -23,23 +23,9 @@
 /* Let SystemInit() be called in place of z_arm_platform_init() by default. */
 PROVIDE(z_arm_platform_init = SystemInit);
 
-/*
- * nRF5340dk and thingy53 are shipping QSPI external flashes.
- * These memories are mapped beginning from 0x1000_0000 internal SoC memory
- * address. This addressing space can be used for XIP and direct data access.
- */
 MEMORY
 {
-     /* This maps in mcuboot_primary_2 partition defined in pm_static.yml
-      * components for ORIGIN calculation:
-      *  - 0x10000000: offset of QSPI external memory in SoC memory mapping.
-      *  - 0x120000: mcuboot_primary_2 offset in QSPI external memory
-      *  - 0x200: image header size.
-      * The size of this region is size of mcuboot_primary_2 reduced by the
-      * image header size.
-      */
      EXTFLASH (wx) : ORIGIN = 0x10120200, LENGTH = 0xFFE00
-
 }
 
 #include <zephyr/arch/arm/cortex_m/scripts/linker.ld>

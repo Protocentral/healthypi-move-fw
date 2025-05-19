@@ -26,3 +26,6 @@ int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
 int hw_max32664c_stop_algo(void);
 
 int hpi_smf_ppg_get_last_spo2(uint16_t *spo2_value, int64_t *timestamp);
+
+bool get_on_skin(void);
+void set_on_skin(bool on_skin);

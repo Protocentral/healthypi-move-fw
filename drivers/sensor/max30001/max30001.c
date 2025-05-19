@@ -434,6 +434,7 @@ static int max30001_attr_set(const struct device *dev,
         if (val->val1 == 1)
         {
             max30001_enable_ecg(dev, true);
+            max30001_synch(dev);
         }
         else if (val->val1 == 0)
         {
