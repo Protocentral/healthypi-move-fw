@@ -80,11 +80,11 @@ static void scr_hr_btn_live_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_RAW_PPG, SCROLL_UP, (uint8_t)SCR_HR);
+        hpi_load_scr_spl(SCR_SPL_RAW_PPG, SCROLL_UP, (uint8_t)SCR_HR, 0, 0, 0);
     }
 }
 
-void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir)
+void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_hr_scr2 = lv_obj_create(NULL);
     // lv_obj_set_flag(scr_hr, LV_OBJ_FLAG_SCROLLABLE); /// Flags

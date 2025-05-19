@@ -62,7 +62,7 @@ K_MUTEX_DEFINE(mutex_hr_change);
 
 ZBUS_CHAN_DECLARE(hr_chan);
 
-ZBUS_CHAN_DECLARE(bpt_chan);
+
 ZBUS_CHAN_DECLARE(ecg_hr_chan);
 
 extern struct k_msgq q_ecg_bioz_sample;
@@ -293,16 +293,6 @@ void data_thread(void)
             {
                 k_msgq_put(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT);
             }
-
-            struct hpi_bpt_t bpt_data = {
-                .sys = ppg_fi_sensor_sample.bp_sys,
-                .dia = ppg_fi_sensor_sample.bp_dia,
-                .hr = ppg_fi_sensor_sample.hr,
-                .status = ppg_fi_sensor_sample.bpt_status,
-                .progress = ppg_fi_sensor_sample.bpt_progress,
-                //.timestamp =
-            };
-            zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
         }
 
         // Check if PPG data is available

@@ -17,13 +17,12 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
-void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir)
+void draw_scr_bpt_scr3(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_scr3 = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_scr3, &style_scr_black, 0);
-    //lv_obj_set_scrollbar_mode(scr_bpt_scr3, LV_SCROLLBAR_MODE_ON);
+    lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
-    /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr3);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
@@ -41,13 +40,13 @@ void draw_scr_bpt_scr3(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Checking sensor status...");
+    lv_label_set_text(label_info, "Waiting for sensor to connect...");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
-     lv_obj_t * spinner = lv_spinner_create(cont_col, 1000, 60);
-     lv_obj_set_size(spinner, 100, 100);
-     lv_obj_center(spinner);
+    lv_obj_t *spinner = lv_spinner_create(cont_col, 1000, 60);
+    lv_obj_set_size(spinner, 100, 100);
+    lv_obj_center(spinner);
 
-    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR2);
-    hpi_show_screen(scr_bpt_scr3, m_scroll_dir);
+    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR3);
+    hpi_show_screen(scr_bpt_scr3, dir);
 }

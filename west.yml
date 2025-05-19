@@ -15,9 +15,15 @@ manifest:
       revision: v2.9-branch
       import:
         path-prefix: external
-#      clone-depth: 1
+
 #    - name: max30001
 #      repo-path: protocentral_max30001_zephyr_driver
 #      remote: protocentral
 #      revision: main
 #      path: drivers/sensor/max30001
+
+    - name: max32664_updater_zephyr
+      remote: protocentral
+      repo-path: pc_max32664_updater_zephyr
+      revision: main
+      path: app/lib/max32664_updater

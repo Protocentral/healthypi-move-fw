@@ -1,5 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-
-menu "HealthyPi Modules"
-rsource "max32664_updater/Kconfig"
-endmenu

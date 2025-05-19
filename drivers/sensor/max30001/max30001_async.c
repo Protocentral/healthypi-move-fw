@@ -165,7 +165,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
         }
 
-        max30001_rtor = max30001_read_reg(dev, RTOR);
+        /*max30001_rtor = max30001_read_reg(dev, RTOR);
         if (max30001_rtor > 0)
         {
             data->lastRRI = (uint16_t)((double)((max30001_rtor >> 10) * 7.8125)*1000);
@@ -181,7 +181,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
         else
         {
             *rrint = 0;
-        }
+        }*/
     }
 
     /*if ((max30001_status & MAX30001_STATUS_MASK_BINT) == MAX30001_STATUS_MASK_BINT)
@@ -191,7 +191,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
     }*/
 
-    /*if ((max30001_status & MAX30001_STATUS_MASK_RRINT) == MAX30001_STATUS_MASK_RRINT)
+    if ((max30001_status & MAX30001_STATUS_MASK_RRINT) == MAX30001_STATUS_MASK_RRINT)
     {
         max30001_rtor = max30001_read_reg(dev, RTOR);
         if (max30001_rtor > 0)
@@ -202,7 +202,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
             *hr = data->lastHR;
             *rri = data->lastRRI;
         }
-    }*/
+    }
 
     return 0;
 }

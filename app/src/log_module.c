@@ -223,7 +223,7 @@ struct hpi_log_header_t log_get_file_index(char *file_path_name)
         // return ret;
     }
 
-    LOG_DBG("Read from file %s | Size: %d", file_path_name, trend_file_ent.size);
+    //LOG_DBG("Read from file %s | Size: %d", file_path_name, trend_file_ent.size);
 
     int64_t filename_int = atoi(trend_file_ent.name);
 
@@ -347,7 +347,7 @@ int log_get_index(uint8_t m_log_type)
                 // return ret;
             }
 
-            LOG_DBG("Read from file %s | Size: %d", file_name, trend_file_ent.size);
+            //LOG_DBG("Read from file %s | Size: %d", file_name, trend_file_ent.size);
 
             int64_t filename_int = atoi(trend_file_ent.name);
 
@@ -356,7 +356,7 @@ int log_get_index(uint8_t m_log_type)
             m_header.log_file_length = trend_file_ent.size;
             m_header.log_type = m_log_type;
 
-            LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
+            //LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
 
             cmdif_send_ble_data_idx((uint8_t *)&m_header, HPI_LOG_HEADER_SIZE);
         }

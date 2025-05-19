@@ -18,7 +18,7 @@
 #include <zephyr/device.h>
 #endif
 
-LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_DBG);
 
 K_SEM_DEFINE(sem_fs_module, 0, 1);
 #define PARTITION_NODE DT_NODELABEL(lfs1)
@@ -255,7 +255,7 @@ void hpi_init_fs_struct(void)
     }
 }
 
-void fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
+int fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
 {
     LOG_DBG("Loading file %s to buffer", m_file_name);
 
@@ -268,22 +268,24 @@ void fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_
     if (rc != 0)
     {
         LOG_ERR("Error opening file %d", rc);
-        return;
+        return rc;
     }
 
     rc = fs_read(&m_file, buffer, buffer_len);
     if (rc < 0)
     {
         LOG_ERR("Error reading file %d", rc);
-        return;
+        return rc;
     }
 
     rc = fs_close(&m_file);
     if (rc != 0)
     {
         LOG_ERR("Error closing file %d", rc);
-        return;
+        return rc;
     }
+
+    return 0;
 }
 
 void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
@@ -291,28 +293,34 @@ void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer
     LOG_DBG("Writing buffer to file %s", m_file_name);
 
     struct fs_file_t m_file;
-    int rc = 0;
+    int ret = 0;
+
+    ret= fs_unlink(m_file_name);
+    if(ret !=0)
+    {
+        LOG_ERR("Error unlinking file %d", ret);
+    }
 
     fs_file_t_init(&m_file);
 
-    rc = fs_open(&m_file, m_file_name, FS_O_CREATE | FS_O_RDWR);
-    if (rc != 0)
+    ret = fs_open(&m_file, m_file_name, FS_O_CREATE | FS_O_WRITE);
+    if (ret != 0)
     {
-        LOG_ERR("Error opening file %d", rc);
+        LOG_ERR("Error opening file %d", ret);
         return;
     }
 
-    rc = fs_write(&m_file, buffer, buffer_len);
-    if (rc < 0)
+    ret = fs_write(&m_file, buffer, buffer_len);
+    if (ret < 0)
     {
-        LOG_ERR("Error writing file %d", rc);
+        LOG_ERR("Error writing file %d", ret);
         return;
     }
 
-    rc = fs_close(&m_file);
-    if (rc != 0)
+    ret = fs_close(&m_file);
+    if (ret != 0)
     {
-        LOG_ERR("Error closing file %d", rc);
+        LOG_ERR("Error closing file %d", ret);
         return;
     }
 }
@@ -349,12 +357,18 @@ void fs_module_init(void)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
-
-    rc = lsdir("/lfs/trhr");
+    
+    rc= lsdir("/lfs/trtemp");
     if (rc < 0)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
-        LOG_INF("Creating trend directory structure");
+    }
+    
+    rc = lsdir("/lfs/sys");
+    if (rc < 0)
+    {
+        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+        LOG_INF("Creating FS directory structure");
         hpi_init_fs_struct();
         lsdir("/lfs/trhr");
     }

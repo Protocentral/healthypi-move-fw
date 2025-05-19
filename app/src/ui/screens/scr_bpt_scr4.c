@@ -27,12 +27,12 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
-void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
+void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_scr4 = lv_obj_create(NULL);
-    draw_scr_common(scr_bpt_scr4);
+    lv_obj_add_style(scr_bpt_scr4, &style_scr_black, 0);
+    lv_obj_clear_flag(scr_bpt_scr4, LV_OBJ_FLAG_SCROLLABLE);
 
-    /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr4);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
@@ -52,11 +52,11 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
     // Draw Progress bar
     bar_bpt_progress = lv_bar_create(cont_col);
     lv_obj_set_size(bar_bpt_progress, 200, 5);
-    lv_bar_set_value(bar_bpt_progress, 50, LV_ANIM_OFF);
+    lv_bar_set_value(bar_bpt_progress, 0, LV_ANIM_OFF);
 
     // Draw Progress bar label
     label_progress = lv_label_create(cont_col);
-    lv_label_set_text(label_progress, "50%");
+    lv_label_set_text(label_progress, "--");
     lv_obj_align_to(label_progress, bar_bpt_progress, LV_ALIGN_OUT_BOTTOM_MID, 0, 3);
 
     // Create Chart 1 - ECG
@@ -71,6 +71,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
     lv_chart_set_div_line_count(chart_bpt_ppg, 0, 0);
     lv_chart_set_update_mode(chart_bpt_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_bpt_ppg, LV_ALIGN_CENTER, 0, -35);
+    
     ser_bpt_ppg = lv_chart_add_series(chart_bpt_ppg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_bpt_ppg, 6, LV_PART_ITEMS);
 
@@ -90,6 +91,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
     // Draw BPM
     lv_obj_t *img1 = lv_img_create(cont_hr);
     lv_img_set_src(img1, &img_heart_35);
+
     label_hr_bpm = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_bpm, "00");
     lv_obj_add_style(label_hr_bpm, &style_white_medium, 0);
@@ -97,7 +99,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_sub, " bpm");
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR4);
-    hpi_show_screen_spl(scr_bpt_scr4, m_scroll_dir, SCR_BPT);
+    hpi_show_screen(scr_bpt_scr4, m_scroll_dir);
 }
 
 void hpi_disp_bpt_update_progress(int progress)
@@ -165,6 +167,14 @@ void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
         }
 
         lv_chart_set_next_value(chart_bpt_ppg, ser_bpt_ppg, data_ppg_i);
+
+        if(ppg_sensor_sample.hr > 0)
+        {
+            lv_label_set_text_fmt(label_hr_bpm, "%d", ppg_sensor_sample.hr);
+        } else
+        {
+            lv_label_set_text_fmt(label_hr_bpm, "--");
+        }
 
         hpi_bpt_disp_add_samples(1);
         hpi_bpt_disp_do_set_scale(BPT_DISP_WINDOW_SIZE);

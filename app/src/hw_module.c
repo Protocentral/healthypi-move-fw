@@ -44,6 +44,7 @@
 #include "fs_module.h"
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
+#include "ble_module.h"
 
 #include <max32664_updater.h>
 
@@ -90,15 +91,16 @@ static bool rx_throttled;
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
 
-// Signals to start the SMF threads
+// Signals to start dependent threads
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
+K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
+K_SEM_DEFINE(sem_ble_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
-K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
 
 K_SEM_DEFINE(sem_boot_update_req, 0, 1);
@@ -130,6 +132,9 @@ static struct hpi_version_desc_t hpi_max32664d_req_ver = {
     .minor = 0,
 };
 
+static bool is_on_skin = false;
+K_MUTEX_DEFINE(mutex_on_skin);
+
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
 extern struct k_sem sem_disp_ready;
@@ -154,6 +159,23 @@ static uint16_t today_get_steps(void)
     k_mutex_unlock(&mutex_today_steps);
 
     return steps;
+}
+
+bool get_device_on_skin(void)
+{
+    bool on_skin = false;
+    k_mutex_lock(&mutex_on_skin, K_FOREVER);
+    on_skin = is_on_skin;
+    k_mutex_unlock(&mutex_on_skin);
+
+    return on_skin;
+}
+
+void set_device_on_skin(bool on_skin)
+{
+    k_mutex_lock(&mutex_on_skin, K_FOREVER);
+    is_on_skin = on_skin;
+    k_mutex_unlock(&mutex_on_skin);
 }
 
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
@@ -535,12 +557,24 @@ static int hw_enable_pmic_callback(void)
     return 0;
 }
 
+void hpi_hw_ldsw2_on(void)
+{
+    regulator_enable(ldsw_sens_1_8);
+}
+
+void hpi_hw_ldsw2_off(void)
+{
+    regulator_disable(ldsw_sens_1_8);
+}
+
 void hw_module_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
 
-    ble_module_init();
+    // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
+    NRF_TWIM2->FREQUENCY = 0x06200000;
+    NRF_TWIM1->FREQUENCY = 0x06200000;
 
     if (!device_is_ready(pmic))
     {
@@ -774,11 +808,19 @@ void hw_module_init(void)
 
     fs_module_init();
 
+    ret = settings_subsys_init();
+    if (ret)
+    {
+        printk("settings subsys initialization: fail (err %d)\n", ret);
+        return;
+    }
+
     pm_device_runtime_get(gpio_keys_dev);
 
     INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler, NULL);
 
-    // pm_device_runtime_put(w25_flash_dev);
+    ble_module_init();
+    k_sem_give(&sem_ble_thread_start);
 
     k_sem_give(&sem_hw_inited);
 
@@ -836,7 +878,6 @@ void hw_thread(void)
             .batt_level = (uint8_t)sys_batt_level,
             .batt_charging = sys_batt_charging,
         };
-
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
         // Read and publish time
@@ -886,12 +927,14 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        _temp_f = read_temp_f();
-
-        struct hpi_temp_t temp = {
-            .temp_f = _temp_f,
-        };
-        zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
+        if(get_device_on_skin()==true)
+        {
+            _temp_f = read_temp_f();
+            struct hpi_temp_t temp = {
+                .temp_f = _temp_f,
+            };
+            zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
+        }
 
         k_sleep(K_MSEC(5000));
     }

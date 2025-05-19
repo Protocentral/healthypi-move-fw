@@ -14,7 +14,7 @@
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
-#define HPI_DEFAULT_START_SCREEN SCR_HOME
+#define HPI_DEFAULT_START_SCREEN SCR_BPT
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -39,6 +39,9 @@ static int last_temp_trend_refresh = 0;
 
 static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
 
+static int scr_to_change = SCR_HOME;
+K_SEM_DEFINE(sem_change_screen, 0, 1);
+
 static const struct smf_state display_states[];
 
 enum display_state
@@ -62,9 +65,6 @@ static uint32_t splash_scr_start_time = 0;
 
 // HR Screen variables
 static uint16_t m_disp_hr = 0;
-// static uint16_t m_disp_hr_max = 0;
-// static uint16_t m_disp_hr_min = 0;
-// static uint16_t m_disp_hr_mean = 0;
 static struct tm m_disp_hr_last_update_tm;
 
 // @brief Spo2 Screen variables
@@ -98,6 +98,44 @@ struct s_disp_object
 
 } s_disp_obj;
 
+static int g_screen = SCR_HOME;
+static enum scroll_dir g_scroll_dir = SCROLL_NONE;
+static uint32_t g_arg1 = 0;
+static uint32_t g_arg2 = 0;
+static uint32_t g_arg3 = 0;
+static uint32_t g_arg4 = 0;
+
+static uint8_t g_scr_parent = SCR_HOME;
+
+typedef void (*screen_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
+// Array of function pointers for screen drawing functions
+static const screen_draw_func_t screen_draw_funcs[] = {
+    [SCR_SPL_RAW_PPG] = draw_scr_spl_raw_ppg,
+    [SCR_SPL_ECG_SCR2] = draw_scr_ecg_scr2,
+    [SCR_SPL_BPT_SCR2] = draw_scr_bpt_scr2,
+    [SCR_SPL_BPT_SCR3] = draw_scr_bpt_scr3,
+    [SCR_SPL_BPT_SCR4] = draw_scr_bpt_scr4,
+    [SCR_SPL_BPT_CAL_COMPLETE] = draw_scr_bpt_cal_complete,
+    [SCR_SPL_ECG_COMPLETE] = draw_scr_ecg_complete,
+    [SCR_SPL_PLOT_HRV] = draw_scr_hrv,
+    [SCR_SPL_PLOT_HRV_SCATTER] = draw_scr_hrv_scatter,
+    [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
+    [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
+    [SCR_SPL_SPO2_SCR3] = draw_scr_spo2_scr3,
+    [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
+    [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
+
+    [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
+    [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,
+    [SCR_SPL_BPT_EST_COMPLETE] = draw_scr_bpt_est_complete,
+    [SCR_SPL_BLE] = draw_scr_ble,
+};
+
+typedef void (*screen_static_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
+
+static int max32664_update_progress = 0;
+static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
+
 // Externs
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
@@ -116,15 +154,14 @@ extern struct k_msgq q_plot_hrv;
 
 extern struct k_sem sem_crown_key_pressed;
 
-extern struct k_sem sem_ppg_fi_show_loading;
-extern struct k_sem sem_ppg_fi_hide_loading;
-
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
 
 extern struct k_sem sem_ecg_cancel;
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
+
+extern struct k_sem sem_bpt_sensor_found;
 
 // User Profile settings
 
@@ -174,57 +211,6 @@ static void st_display_init_entry(void *o)
     smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SPLASH]);
 }
 
-static lv_obj_t *obj_msgbox;
-
-static void set_angle(void *obj, int32_t v)
-{
-    lv_arc_set_value(obj, v);
-}
-
-static void hpi_disp_show_loading(lv_obj_t *scr_parent, char *message)
-{
-    obj_msgbox = lv_msgbox_create(scr_parent, "Please wait...", NULL, NULL, false);
-    lv_obj_center(obj_msgbox);
-    lv_obj_set_size(obj_msgbox, 250, 250);
-
-    /* setting's content*/
-    lv_obj_t *content = lv_msgbox_get_content(obj_msgbox);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(content, -1, LV_PART_SCROLLBAR);
-
-    lv_obj_t *lbl_msg = lv_label_create(content);
-    lv_label_set_text(lbl_msg, message);
-
-    /*Create an Arc*/
-    lv_obj_t *arc = lv_arc_create(content);
-    lv_arc_set_rotation(arc, 270);
-    lv_arc_set_bg_angles(arc, 0, 360);
-    lv_obj_remove_style(arc, NULL, LV_PART_KNOB);  /*Be sure the knob is not displayed*/
-    lv_obj_clear_flag(arc, LV_OBJ_FLAG_CLICKABLE); /*To not allow adjusting by click*/
-    lv_obj_set_size(arc, 100, 100);
-    lv_obj_center(arc);
-
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, arc);
-    lv_anim_set_exec_cb(&a, set_angle);
-    lv_anim_set_time(&a, 1000);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE); /*Just for the demo*/
-    lv_anim_set_repeat_delay(&a, 500);
-    lv_anim_set_values(&a, 0, 100);
-    lv_anim_start(&a);
-}
-
-static void hpi_disp_hide_loading(void)
-{
-    if (obj_msgbox != NULL)
-    {
-        lv_msgbox_close(obj_msgbox);
-        obj_msgbox = NULL;
-    }
-}
-
 static void st_display_splash_entry(void *o)
 {
     LOG_DBG("Display SM Splash Entry");
@@ -248,8 +234,6 @@ static void st_display_boot_entry(void *o)
 
     // Signal that the display is ready
     k_sem_give(&sem_disp_ready);
-
-    // draw_scr_splash();
 }
 
 static void st_display_boot_run(void *o)
@@ -287,7 +271,6 @@ static void st_display_boot_run(void *o)
         const char msg[] = "MAX32664D \n FW Update Required";
         memcpy(s->title, msg, sizeof(msg));
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SCR_PROGRESS]);
-        
     }
 
     // LOG_DBG("Display SM Boot Run");
@@ -299,9 +282,6 @@ static void st_display_boot_exit(void *o)
     lv_disp_trig_activity(NULL);
 }
 
-static int max32664_update_progress=0;
-static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
-
 static void hpi_max32664_update_progress(int progress, int status)
 {
     LOG_DBG("MAX32664 Update Progress: %d", progress);
@@ -312,7 +292,7 @@ static void hpi_max32664_update_progress(int progress, int status)
 static void st_display_progress_entry(void *o)
 {
     struct s_disp_object *s = (struct s_disp_object *)o;
-    
+
     LOG_DBG("Display SM Progress Entry");
     draw_scr_progress(s->title, "Please wait...");
     max32664_set_progress_callback(hpi_max32664_update_progress);
@@ -324,26 +304,25 @@ static void st_display_progress_run(void *o)
 {
     struct s_disp_object *s = (struct s_disp_object *)o;
 
-    if(max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
+    if (max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
     {
         hpi_disp_scr_update_progress(max32664_update_progress, "Updating...");
     }
-    else if(max32664_update_status == MAX32664_UPDATER_STATUS_SUCCESS)
+    else if (max32664_update_status == MAX32664_UPDATER_STATUS_SUCCESS)
     {
         hpi_disp_scr_update_progress(max32664_update_progress, "Update Success");
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
     }
-    else if(max32664_update_status == MAX32664_UPDATER_STATUS_FAILED)
+    else if (max32664_update_status == MAX32664_UPDATER_STATUS_FAILED)
     {
         hpi_disp_scr_update_progress(max32664_update_progress, "Update Failed");
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
-    //k_msleep(4000);
+    // k_msleep(4000);
 
-    //smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
-    
+    // smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
 }
 
 static void st_display_progress_exit(void *o)
@@ -354,7 +333,7 @@ static void st_display_progress_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR4)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
@@ -363,6 +342,8 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
             m_disp_bp_last_refresh = k_uptime_get_32();
             hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
         }
+
+        lv_disp_trig_activity(NULL);
     }
 }
 
@@ -409,59 +390,6 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
             // prev_rtor = ppg_sensor_sample.rtor;
         }
     }*/
-
-    /*
-    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
-    {
-    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
-    {
-        if (bpt_meas_started == true)
-        {
-            hpi_disp_draw_plotPPG((float)((ppg_sensor_sample.raw_red * 1.0000)));
-
-            if (bpt_meas_done_flag == false)
-            {
-                if (bpt_meas_last_status != ppg_sensor_sample.bpt_status)
-                {
-                    bpt_meas_last_status = ppg_sensor_sample.bpt_status;
-                    printk("BPT Status: %d", ppg_sensor_sample.bpt_status);
-                }
-                if (bpt_meas_last_progress != ppg_sensor_sample.bpt_progress)
-                {
-                    hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                    bpt_meas_last_progress = ppg_sensor_sample.bpt_progress;
-                }
-                if (bpt_meas_last_progress >= 100)
-                {
-                    printk("BPT Meas progress 100");
-
-                    global_bp_dia = ppg_sensor_sample.bp_dia;
-                    global_bp_sys = ppg_sensor_sample.bp_sys;
-
-                    hw_bpt_stop();
-                    ppg_data_stop();
-
-                    printk("BPT Done: %d / %d", global_bp_sys, global_bp_dia);
-                    bpt_meas_done_flag = true;
-                    bpt_meas_started = false;
-                    hpi_disp_update_bp(global_bp_sys, global_bp_dia);
-
-                    if (hpi_disp_get_curr_screen() == SUBSCR_BPT_MEASURE)
-                    {
-                        lv_obj_clear_flag(label_bp_val, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(label_bp_sys_sub, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(label_bp_sys_cap, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_add_flag(chart1, LV_OBJ_FLAG_HIDDEN);
-
-                        lv_obj_add_flag(btn_bpt_measure_start, LV_OBJ_FLAG_HIDDEN);
-                        lv_obj_clear_flag(btn_bpt_measure_exit, LV_OBJ_FLAG_HIDDEN);
-                    }
-                    hpi_disp_bpt_update_progress(ppg_sensor_sample.bpt_progress);
-                }
-            }
-            lv_disp_trig_activity(NULL);
-        }
-        */
 }
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
@@ -485,50 +413,16 @@ static void st_display_active_entry(void *o)
 
     if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
     {
-        hpi_move_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
+        hpi_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
     }
     /*else
     {
-        hpi_move_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
+        hpi_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
     }*/
 }
 
-static void st_disp_do_bpt_stuff(void)
+static void hpi_disp_update_screens(void)
 {
-    if (k_sem_take(&sem_ppg_fi_show_loading, K_NO_WAIT) == 0)
-    {
-        hpi_disp_show_loading(scr_bpt, "Starting estimation");
-    }
-
-    if (k_sem_take(&sem_ppg_fi_hide_loading, K_NO_WAIT) == 0)
-    {
-        hpi_disp_hide_loading();
-    }
-}
-
-static void st_display_active_run(void *o)
-{
-    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
-    struct hpi_ppg_wr_data_t ppg_sensor_sample;
-    struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
-    // LOG_DBG("Display SM Active Run");
-
-    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
-    {
-        hpi_disp_process_ppg_wr_data(ppg_sensor_sample);
-    }
-
-    if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
-    {
-        hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
-    }
-
-    if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
-    {
-        hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
-    }
-
-    // Do screen specific updates
     switch (hpi_disp_get_curr_screen())
     {
     case SCR_HOME:
@@ -565,14 +459,17 @@ static void st_display_active_run(void *o)
         }
         break;
     case SCR_BPT:
-        // st_disp_do_bpt_stuff();
+
+        break;
+    case SCR_SPL_BPT_CAL_PROGRESS:
+        lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
         if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
-            hpi_move_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG);
+            hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
         }
         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
@@ -591,7 +488,7 @@ static void st_display_active_run(void *o)
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
-            hpi_move_load_screen(SCR_ECG, SCROLL_UP);
+            hpi_load_screen(SCR_ECG, SCROLL_UP);
         }
         break;
     case SCR_SPL_SPO2_COMPLETE:
@@ -600,7 +497,13 @@ static void st_display_active_run(void *o)
             hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_ts);
         }
         break;
-
+    case SCR_SPL_BPT_SCR3:
+        if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("Loading BPT SCR4");
+            hpi_load_scr_spl(SCR_SPL_BPT_SCR4, SCROLL_NONE, SCR_SPL_BPT_SCR3, 0, 0, 0);
+        }
+        break;
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {
@@ -618,12 +521,58 @@ static void st_display_active_run(void *o)
     default:
         break;
     }
+}
+
+void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+{
+    LOG_DBG("Loading screen %d", m_screen);
+
+    if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_draw_funcs) && screen_draw_funcs[m_screen] != NULL)
+    {
+        g_screen = m_screen;
+        g_scroll_dir = m_scroll_dir;
+        g_scr_parent = arg1;
+        g_arg1 = arg1;
+        g_arg2 = arg2;
+        g_arg3 = arg3;
+        g_arg4 = arg4;
+
+        k_sem_give(&sem_change_screen);
+    }
+    else
+    {
+        LOG_ERR("Invalid screen: %d", m_screen);
+    }
+}
+
+static void st_display_active_run(void *o)
+{
+    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_ppg_wr_data_t ppg_sensor_sample;
+    struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+
+    if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_process_ppg_wr_data(ppg_sensor_sample);
+    }
+
+    if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
+    }
+
+    if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
+    }
+
+    // Do screen specific updates
+    hpi_disp_update_screens();
 
     if (k_uptime_get_32() - last_batt_refresh > HPI_DISP_BATT_REFR_INT)
     {
         if ((hpi_disp_get_curr_screen() == SCR_HOME))
         {
-            // hpi_disp_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
             hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SETTINGS)
@@ -643,16 +592,11 @@ static void st_display_active_run(void *o)
         {
             hpi_scr_home_update_time_date(m_disp_sys_time);
         }
-        else
-        {
-            // hdr_time_display_update(m_disp_sys_time);
-        }
     }
 
     // Add button handlers
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
-
         lv_disp_trig_activity(NULL);
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
@@ -661,16 +605,16 @@ static void st_display_active_run(void *o)
         else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
         {
             k_sem_give(&sem_ecg_cancel);
-            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+            hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
-            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+            hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
         else
         {
-            hpi_move_load_screen(SCR_HOME, SCROLL_NONE);
+            hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
     }
 
@@ -678,14 +622,14 @@ static void st_display_active_run(void *o)
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time > DISP_SLEEP_TIME_MS)
     {
-        // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
     }
-    else
+
+    if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
     {
-        // hpi_display_sleep_off();
+        LOG_DBG("Change Screen: %d", scr_to_change);
+        screen_draw_funcs[g_screen](g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
     }
-    //}
 }
 
 static void st_display_active_exit(void *o)
@@ -701,17 +645,12 @@ static void st_display_sleep_entry(void *o)
 
 static void st_display_sleep_run(void *o)
 {
-    // LOG_DBG("Display SM Sleep Run");
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time < DISP_SLEEP_TIME_MS)
     {
         // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
-    }
-    else
-    {
-        // hpi_display_sleep_off();
     }
 }
 
@@ -730,12 +669,11 @@ static const struct smf_state display_states[] = {
     [HPI_DISPLAY_STATE_INIT] = SMF_CREATE_STATE(st_display_init_entry, NULL, NULL, NULL, NULL),
     [HPI_DISPLAY_STATE_SPLASH] = SMF_CREATE_STATE(st_display_splash_entry, st_display_splash_run, NULL, NULL, NULL),
     [HPI_DISPLAY_STATE_BOOT] = SMF_CREATE_STATE(st_display_boot_entry, st_display_boot_run, st_display_boot_exit, NULL, NULL),
-    
+
     [HPI_DISPLAY_STATE_SCR_PROGRESS] = SMF_CREATE_STATE(st_display_progress_entry, st_display_progress_run, st_display_progress_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ACTIVE] = SMF_CREATE_STATE(st_display_active_entry, st_display_active_run, st_display_active_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_SLEEP] = SMF_CREATE_STATE(st_display_sleep_entry, st_display_sleep_run, st_display_sleep_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ON] = SMF_CREATE_STATE(st_display_on_entry, NULL, NULL, NULL, NULL),
-
 };
 
 void smf_display_thread(void)
@@ -785,7 +723,7 @@ static void disp_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
     m_disp_hr_last_update_tm = hpi_hr->time_tm;
-    LOG_INF("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
+    //LOG_DBG("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
@@ -794,7 +732,7 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
     m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
-    LOG_DBG("ZB Spo2: %d | Time: %d", hpi_spo2->spo2, hpi_spo2->timestamp);
+    //LOG_DBG("ZB Spo2: %d | Time: %lld", hpi_spo2->spo2, hpi_spo2->timestamp);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
 
@@ -803,10 +741,7 @@ static void disp_steps_listener(const struct zbus_channel *chan)
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     m_disp_steps = hpi_steps->steps;
     m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
-
     // LOG_DBG("ZB Steps Walk : %d | Run: %d", hpi_steps->steps_walk, hpi_steps->steps_run);
-
-    // ui_steps_button_update(hpi_steps->steps_walk);
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
 
@@ -814,7 +749,7 @@ static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
     m_disp_temp = hpi_temp->temp_f;
-    // printk("ZB Temp: %.2f\n", hpi_temp->temp_f);
+    LOG_DBG("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 
@@ -825,9 +760,8 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
     m_disp_bp_dia = hpi_bpt->dia;
     m_disp_bpt_status = hpi_bpt->status;
     m_disp_bpt_progress = hpi_bpt->progress;
-    printk("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
-    printk("ZB BPT: %d / %d\n", hpi_bpt->sys, hpi_bpt->dia);
-    // hpi_disp_update_bp(hpi_bpt->sys, hpi_bpt->dia);
+
+    LOG_DBG("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 
@@ -842,7 +776,7 @@ static void disp_ecg_hr_listener(const struct zbus_channel *chan)
 {
     const uint16_t *ecg_hr = zbus_chan_const_msg(chan);
     m_disp_ecg_hr = *ecg_hr;
-    // LOG_INF("ZB ECG HR: %d", *ecg_hr);
+    LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_hr_lis, disp_ecg_hr_listener);
 

@@ -56,11 +56,11 @@ static void scr_spo2_btn_proceed_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         k_sem_give(&sem_start_one_shot_spo2);
-        hpi_move_load_scr_spl(SCR_SPL_SPO2_SCR3, SCROLL_UP, (uint8_t)SCR_SPO2);
+        hpi_load_scr_spl(SCR_SPL_SPO2_SCR3, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
     }
 }
 
-void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir)
+void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_spo2_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr2, &style_scr_black, 0);
@@ -101,7 +101,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_spo2_scr2, m_scroll_dir);
 }
 
-void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir)
+void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_spo2_scr3 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr3, &style_scr_black, 0);
@@ -212,12 +212,12 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     else if (state == SPO2_MEAS_SUCCESS)
     {
         lv_label_set_text(label_spo2_status, "Complete");
-        hpi_move_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2);
+        hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
     }
     else if(state == SPO2_MEAS_TIMEOUT)
     {
         lv_label_set_text(label_spo2_status, "Timed Out");
-        hpi_move_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_UP, (uint8_t)SCR_SPO2);
+        hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
 
     }
     else if(state == SPO2_MEAS_UNK)

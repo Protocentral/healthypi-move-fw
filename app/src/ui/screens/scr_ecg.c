@@ -26,7 +26,7 @@ static void scr_ecg_start_btn_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_scr_spl(SCR_SPL_ECG_SCR2 , SCROLL_UP, (uint8_t)SCR_ECG);
+        hpi_load_scr_spl(SCR_SPL_ECG_SCR2 , SCROLL_UP, (uint8_t)SCR_ECG, 0, 0, 0);
         k_msleep(500);
         k_sem_give(&sem_ecg_start);
     }

@@ -1,0 +1,1 @@
+ ~/zephyrproject/modules/lib/gui/lvgl/scripts/LVGLImage.py --ofmt C --cf I8 -o app/src/ui/images app/src/ui/images/img_bpt_finger_90.png

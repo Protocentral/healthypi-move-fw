@@ -42,7 +42,7 @@ static void anim_size_cb(void * var, int32_t v)
     lv_obj_set_size(var, v, v);
 }
 
-void draw_scr_hrv(enum scroll_dir m_scroll_dir)
+void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_hrv = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_hrv, LV_OBJ_FLAG_SCROLLABLE); /// Flags

@@ -46,11 +46,11 @@ static void btn_ecg_cancel_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_screen(SCR_ECG, SCROLL_DOWN);
+        hpi_load_screen(SCR_ECG, SCROLL_DOWN);
     }
 }
 
-void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir)
+void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_ecg_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_ecg_scr2, &style_scr_black, 0);

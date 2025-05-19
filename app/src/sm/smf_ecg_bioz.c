@@ -227,6 +227,7 @@ static void st_ecg_bioz_idle_entry(void *o)
     LOG_DBG("ECG/BioZ SM Idle Entry");
 
     hw_max30001_ecg_disable();
+    k_timer_stop(&tmr_ecg_bioz_sampling);
     hw_max30001_bioz_disable();
 
     for (int i = 0; i < ECG_RECORD_BUFFER_SAMPLES; i++)

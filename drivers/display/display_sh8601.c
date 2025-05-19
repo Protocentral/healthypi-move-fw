@@ -110,44 +110,6 @@ int sh8601_transmit_data(const struct device *dev, const void *tx_data,
 	return 0;
 }
 
-/*
-#define ROW 70
-#define COL 70
-
-uint8_t test_buf[ROW * COL * 3];
-
-static void send_test(const struct device *dev)
-{
-
-	int r;
-	uint8_t spi_data[4];
-
-	const uint16_t x_start = 50;
-	const uint16_t y_start = 250;
-
-	const uint16_t w = x_start + ROW;
-	const uint16_t h = y_start + COL;
-
-	r= sh8601_set_mem_area(dev, x_start,y_start, w, h);
-
-	uint32_t buf_count = 0;
-
-	for (int i = 0; i < ROW; i++)
-	{
-		for (int j = 0; j < COL; j++)
-		{
-			test_buf[buf_count++] = 0x00;
-			test_buf[buf_count++] = 0xFF;
-			test_buf[buf_count++] = 0xAF;
-		}
-	}
-
-	printk("Test data: %d", buf_count);
-
-	sh8601_transmit_data(dev, test_buf, sizeof(test_buf));
-}
-*/
-
 static int sh8601_send_cmd(const struct device *dev, uint8_t cmd)
 {
 	int r = 0;

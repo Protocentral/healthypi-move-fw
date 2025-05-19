@@ -15,7 +15,7 @@ static void scr_home_steps_btn_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_move_load_screen(SCR_TODAY, SCROLL_LEFT);
+        hpi_load_screen(SCR_TODAY, SCROLL_LEFT);
     }
 }
 

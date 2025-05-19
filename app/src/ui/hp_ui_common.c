@@ -46,6 +46,7 @@ lv_style_t style_bg_purple;
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
 static int curr_screen = SCR_HOME;
+K_MUTEX_DEFINE(mutex_curr_screen);
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
@@ -55,10 +56,7 @@ static lv_obj_t *lbl_hdr_min;
 static lv_obj_t *ui_label_date;
 
 lv_obj_t *cui_battery_percent;
-
 int tmp_scr_parent = 0;
-
-K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Externs
 extern const struct device *display_dev;
@@ -214,7 +212,7 @@ void hpi_display_sleep_on(void)
     // display_blanking_on(display_dev);
     display_set_brightness(display_dev, 0);
 
-    hpi_pwr_display_sleep();
+    // hpi_pwr_display_sleep();
 }
 
 void hpi_display_sleep_off(void)
@@ -223,9 +221,9 @@ void hpi_display_sleep_off(void)
     hpi_disp_set_brightness(hpi_disp_get_brightness());
 
     // display_blanking_on(display_dev);
-    hpi_move_load_screen(curr_screen, SCROLL_NONE);
-    // display_blanking_off(display_dev);
-    hpi_pwr_display_wake();
+    hpi_load_screen(curr_screen, SCROLL_NONE);
+    display_blanking_off(display_dev);
+    // hpi_pwr_display_wake();
 }
 
 void hpi_disp_set_brightness(uint8_t brightness_percent)
@@ -321,116 +319,13 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
     }
 }
 
-void disp_spl_scr_event(lv_event_t *e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-
-    // lv_obj_t *target = lv_event_get_target(e);
-    int *scr_parent = lv_event_get_user_data(e);
-
-    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printk("Spl down at %d\n", curr_screen);
-
-        /*if (curr_screen == SCR_SPL_PLOT_BPT_PPG)
-        {
-            hpi_bpt_abort();
-        }*/
-
-        hpi_move_load_screen(*scr_parent, SCROLL_UP);
-    }
-}
-
-void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
-{
-    LOG_DBG("Adding event to screen %d", scr_parent);
-
-    tmp_scr_parent = scr_parent;
-
-    lv_obj_add_event_cb(m_screen, disp_spl_scr_event, LV_EVENT_GESTURE, &tmp_scr_parent);
-
-    if (m_scroll_dir == SCROLL_UP)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, true);
-    }
-    else if (m_scroll_dir == SCROLL_DOWN)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, true);
-    }
-    else
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
-    }
-}
-
-void hpi_move_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint8_t scr_parent)
-{
-    LOG_DBG("Loading screen %d Parent: %d", m_screen, scr_parent);
-    switch (m_screen)
-    {
-
-    case SCR_SPL_RAW_PPG:
-        draw_scr_spl_raw_ppg(m_scroll_dir, scr_parent);
-        break;
-    // case SCR_SPL_PLOT_ECG:
-    //     draw_scr_spl_plot_ecg(m_scroll_dir, scr_parent);
-    //     break;
-    case SCR_SPL_ECG_SCR2:
-        draw_scr_ecg_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_BPT_SCR2:
-        draw_scr_bpt_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_BPT_SCR3:
-        draw_scr_bpt_scr3(m_scroll_dir);
-        break;
-    case SCR_SPL_BPT_SCR4:
-        draw_scr_bpt_scr4(m_scroll_dir);
-        break;
-    case SCR_SPL_ECG_COMPLETE:
-        draw_scr_ecg_complete(m_scroll_dir);
-        break;
-    case SCR_SPL_PLOT_HRV:
-        draw_scr_hrv(m_scroll_dir);
-        break;
-    case SCR_SPL_PLOT_HRV_SCATTER:
-        draw_scr_hrv_scatter(m_scroll_dir);
-        break;
-    case SCR_SPL_HR_SCR2:
-        draw_scr_hr_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_SCR2:
-        draw_scr_spo2_scr2(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_SCR3:
-        draw_scr_spo2_scr3(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_COMPLETE:
-        draw_scr_spl_spo2_complete(m_scroll_dir);
-        break;
-    case SCR_SPL_SPO2_TIMEOUT:
-        draw_scr_spl_spo2_timeout(m_scroll_dir);
-        break;
-    default:
-        printk("Invalid screen: %d", m_screen);
-    }
-}
-
-void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
+void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
     switch (m_screen)
     {
-    /*case SCR_CLOCK_SMALL:
-        draw_scr_clock_small(m_scroll_dir);
-        break;
-        */
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
-    /*case SCR_PLOT_PRE:
-        draw_scr_pre(m_scroll_dir);
-        break;*/
     case SCR_TODAY:
         draw_scr_today(m_scroll_dir);
         break;
@@ -450,20 +345,10 @@ void hpi_move_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ECG:
         draw_scr_ecg(m_scroll_dir);
         break;
+
     /*case SCR_PLOT_EDA:
         draw_scr_pre(m_scroll_dir);
-        break;
-
-    /*
-    case SCR_CLOCK:
-        draw_scr_clockface(m_scroll_dir);
-        break;
-    case SCR_VITALS:
-        draw_scr_vitals_home(m_scroll_dir);
-        break;
-     case SCR_BPT_HOME:
-         draw_scr_bpt_home(m_scroll_dir);
-         break;*/
+        break;*/
     default:
         printk("Invalid screen: %d", m_screen);
     }
@@ -486,7 +371,7 @@ void disp_spl_screen_event(lv_event_t *e)
 
         if (curr_screen == SCR_SPL_SETTINGS)
         {
-            hpi_move_load_screen(SCR_HOME, SCROLL_DOWN);
+            hpi_load_screen(SCR_HOME, SCROLL_DOWN);
         }
     }
 }
@@ -509,7 +394,7 @@ void disp_screen_event(lv_event_t *e)
         else
         {
             printk("Loading screen %d\n", curr_screen + 1);
-            hpi_move_load_screen(curr_screen + 1, SCROLL_LEFT);
+            hpi_load_screen(curr_screen + 1, SCROLL_LEFT);
         }
     }
 
@@ -520,13 +405,13 @@ void disp_screen_event(lv_event_t *e)
 
         if (hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
         {
-            hpi_move_load_screen(SCR_HR, SCROLL_LEFT);
+            hpi_load_screen(SCR_HR, SCROLL_LEFT);
             return;
         }
 
         if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
-            hpi_move_load_screen(SCR_SPO2, SCROLL_LEFT);
+            hpi_load_screen(SCR_SPO2, SCROLL_LEFT);
             return;
         }
 
@@ -538,7 +423,7 @@ void disp_screen_event(lv_event_t *e)
         else
         {
             printk("Loading screen %d\n", curr_screen - 1);
-            hpi_move_load_screen(curr_screen - 1, SCROLL_RIGHT);
+            hpi_load_screen(curr_screen - 1, SCROLL_RIGHT);
         }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
@@ -554,20 +439,41 @@ void disp_screen_event(lv_event_t *e)
         {
             printk("Cancel ECG\n");
             k_sem_give(&sem_ecg_cancel);
-            hpi_move_load_screen(SCR_ECG, SCROLL_DOWN);
+            hpi_load_screen(SCR_ECG, SCROLL_DOWN);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
-            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_COMPLETE)
         {
-            hpi_move_load_screen(SCR_ECG, SCROLL_UP);
+            hpi_load_screen(SCR_ECG, SCROLL_UP);
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_COMPLETE)
         {
-            hpi_move_load_screen(SCR_SPO2, SCROLL_DOWN);
+            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+        }
+        else if ((hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR2) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR3) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR4))
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_COMPLETE || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS) ||
+                 (hpi_disp_get_curr_screen() == SCR_SPL_BPT_EST_COMPLETE))
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_BLE)
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_HRV)
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS)
+        {
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
         }
     }
     else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
@@ -577,11 +483,11 @@ void disp_screen_event(lv_event_t *e)
 
         if (curr_screen == SCR_SPL_SETTINGS)
         {
-            hpi_move_load_screen(SCR_HOME, SCROLL_UP);
+            hpi_load_screen(SCR_HOME, SCROLL_UP);
         }
         else if (hpi_disp_get_curr_screen() == SCR_HR)
         {
-            hpi_move_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR);
+            hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR, 0, 0, 0);
         }
     }
 }

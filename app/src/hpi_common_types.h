@@ -134,6 +134,7 @@ struct hpi_bpt_t
     uint16_t sys;
     uint16_t dia;
     uint16_t hr;
+    uint8_t spo2;
 
     uint8_t status;
     uint8_t progress;

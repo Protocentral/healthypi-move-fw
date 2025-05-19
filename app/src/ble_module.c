@@ -9,18 +9,20 @@
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/bluetooth/services/hrs.h>
 #include <zephyr/sys/ring_buffer.h>
+#include <zephyr/zbus/zbus.h>
 
 #include <zephyr/settings/settings.h>
 #include <app_version.h>
+
 #include "cmd_module.h"
+#include "hpi_common_types.h"
+#include "ble_module.h"
+#include "ui/move_ui.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-LOG_MODULE_REGISTER(ble_module);
+LOG_MODULE_REGISTER(ble_module, LOG_LEVEL_DBG);
 
 struct bt_conn *current_conn;
-
-static uint8_t spo2_att_ble[5];
-static uint8_t temp_att_ble[2];
 
 // BLE GATT Identifiers
 
@@ -61,7 +63,19 @@ static uint8_t temp_att_ble[2];
 #define UUID_HPI_CMD_SERVICE_CHAR_TX BT_UUID_DECLARE_128(CMD_TX_CHARACTERISTIC_UUID)
 #define UUID_HPI_CMD_SERVICE_CHAR_RX BT_UUID_DECLARE_128(CMD_RX_CHARACTERISTIC_UUID)
 
+static const struct bt_data ad[] = {
+	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+	BT_DATA_BYTES(BT_DATA_UUID16_ALL,
+				  BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
+				  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
+				  BT_UUID_16_ENCODE(BT_UUID_DIS_VAL))};
+
+static const struct bt_data sd[] = {
+	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
+
 extern struct k_msgq q_cmd_msg;
+extern struct k_sem sem_ble_thread_start;
 
 static void spo2_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
@@ -95,19 +109,11 @@ static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t v
 
 uint8_t in_data_buffer[50];
 
-static const struct bt_data ad[] = {
-	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-	BT_DATA_BYTES(BT_DATA_UUID16_ALL,
-				  BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
-				  // BT_UUID_16_ENCODE(BT_UUID_POS_VAL)
-				  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
-				  BT_UUID_16_ENCODE(BT_UUID_DIS_VAL))};
-
 BT_GATT_SERVICE_DEFINE(hpi_spo2_service,
 					   BT_GATT_PRIMARY_SERVICE(HPI_SPO2_SERVICE),
 					   BT_GATT_CHARACTERISTIC(HPI_SPO2_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
+											  BT_GATT_PERM_READ_ENCRYPT,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(spo2_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
@@ -116,25 +122,9 @@ BT_GATT_SERVICE_DEFINE(hpi_temp_service,
 					   BT_GATT_PRIMARY_SERVICE(HPI_TEMP_SERVICE),
 					   BT_GATT_CHARACTERISTIC(HPI_TEMP_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
+											  BT_GATT_PERM_READ_ENCRYPT,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(temp_on_cccd_changed,
-								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
-
-BT_GATT_SERVICE_DEFINE(hpi_ecg_resp_service,
-					   // BT_GATT_PRIMARY_SERVICE(&hpi_ecg_resp_serv_uuid.uuid),
-					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_ECG_RESP_SERV),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_ECG_CHAR,
-											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
-											  NULL, NULL, NULL),
-					   BT_GATT_CCC(ecg_resp_on_cccd_changed,
-								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_RESP_CHAR,
-											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
-											  BT_GATT_PERM_READ,
-											  NULL, NULL, NULL),
-					   BT_GATT_CCC(ecg_resp_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 BT_GATT_SERVICE_DEFINE(hpi_ppg_resp_service,
@@ -162,7 +152,7 @@ static ssize_t on_receive_cmd(struct bt_conn *conn,
 {
 	const uint8_t *buffer = buf;
 
-	//LOG_DBG("Received CMD len %d \n", len);
+	// LOG_DBG("Received CMD len %d \n", len);
 
 	/*for (uint8_t i = 0; i < len; i++)
 	{
@@ -188,7 +178,7 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-	LOG_DBG("CMD RX/TX CCCD subscribed");
+		LOG_DBG("CMD RX/TX CCCD subscribed");
 		break;
 
 	case BT_GATT_CCC_INDICATE:
@@ -196,11 +186,11 @@ static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 		break;
 
 	case 0:
-	LOG_DBG("CMD RX/TX CCCD unsubscribed");
+		LOG_DBG("CMD RX/TX CCCD unsubscribed");
 		break;
 
 	default:
-	LOG_DBG("Error, CCCD has been set to an invalid value");
+		LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
 }
 
@@ -208,11 +198,11 @@ BT_GATT_SERVICE_DEFINE(hpi_cmd_service,
 					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_CMD_SERVICE),
 					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_TX,
 											  BT_GATT_CHRC_WRITE | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
+											  BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN,
 											  NULL, on_receive_cmd, NULL),
 					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_RX,
 											  BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ,
+											  BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(cmd_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
@@ -225,51 +215,6 @@ void hpi_ble_send_data(const uint8_t *data, uint16_t len)
 	// printk("Sending data len %d \n", len);
 
 	bt_gatt_notify(NULL, attr, data, len);
-}
-void ble_spo2_notify(uint16_t spo2_val)
-{
-	spo2_att_ble[0] = 0x00;
-	spo2_att_ble[1] = (uint8_t)spo2_val;
-	spo2_att_ble[2] = (uint8_t)(spo2_val >> 8);
-	spo2_att_ble[3] = 0;
-	spo2_att_ble[4] = 0;
-
-	bt_gatt_notify(NULL, &hpi_spo2_service.attrs[1], &spo2_att_ble, sizeof(spo2_att_ble));
-}
-
-void ble_resp_rate_notify(uint16_t resp_rate)
-{
-	bt_gatt_notify(NULL, &hpi_ppg_resp_service.attrs[4], &resp_rate, sizeof(resp_rate));
-}
-
-void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
-{
-	uint8_t out_data[128];
-
-	for (int i = 0; i < len; i++)
-	{
-		out_data[i * 4] = (uint8_t)ecg_data[i];
-		out_data[i * 4 + 1] = (uint8_t)(ecg_data[i] >> 8);
-		out_data[i * 4 + 2] = (uint8_t)(ecg_data[i] >> 16);
-		out_data[i * 4 + 3] = (uint8_t)(ecg_data[i] >> 24);
-	}
-
-	bt_gatt_notify(NULL, &hpi_ecg_resp_service.attrs[1], &out_data, len * 4);
-}
-
-void ble_bioz_notify(int32_t *resp_data, uint8_t len)
-{
-	uint8_t out_data[128];
-
-	for (int i = 0; i < len; i++)
-	{
-		out_data[i * 4] = (uint8_t)resp_data[i];
-		out_data[i * 4 + 1] = (uint8_t)(resp_data[i] >> 8);
-		out_data[i * 4 + 2] = (uint8_t)(resp_data[i] >> 16);
-		out_data[i * 4 + 3] = (uint8_t)(resp_data[i] >> 24);
-	}
-
-	bt_gatt_notify(NULL, &hpi_ecg_resp_service.attrs[4], &out_data, len * 4);
 }
 
 void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
@@ -285,13 +230,15 @@ void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
 	bt_gatt_notify(NULL, &hpi_ppg_resp_service.attrs[1], &out_data, len * 2);
 }
 
-void ble_temp_notify(uint16_t temp_val)
+void ble_bpt_cal_progress_notify(uint8_t bpt_status, uint8_t bpt_progress)
 {
-	temp_val = temp_val / 10;
-	temp_att_ble[0] = (uint8_t)temp_val;
-	temp_att_ble[1] = (uint8_t)(temp_val >> 8);
+	uint8_t out_data[3];
 
-	bt_gatt_notify(NULL, &hpi_temp_service.attrs[2], &temp_att_ble, sizeof(temp_att_ble));
+	out_data[0] = bpt_status;
+	out_data[1] = bpt_progress;
+	out_data[2] = 0x00;
+
+	bt_gatt_notify(NULL, &hpi_cmd_service.attrs[4], &out_data, sizeof(out_data));
 }
 
 void ble_hrs_notify(uint16_t hr_val)
@@ -306,30 +253,36 @@ void ble_bas_notify(uint8_t batt_level)
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
 	if (err)
 	{
-		LOG_ERR("Connection failed (err 0x%02x)", err);
+		LOG_ERR("Failed to connect to %s, err 0x%02x %s\n", addr,
+				err, bt_hci_err_to_str(err));
+		return;
 	}
-	else
+
+	LOG_INF("Connected to %s\n", addr);
+
+	if (bt_conn_set_security(conn, BT_SECURITY_L2))
 	{
-		LOG_INF("BLE Connected");
-		// send_status_serial(BLE_STATUS_CONNECTED);
-		current_conn = bt_conn_ref(conn);
+		LOG_ERR("Failed to set security\n");
 	}
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	LOG_INF("BLE Disconnected (reason 0x%02x)", reason);
-	// send_status_serial(BLE_STATUS_DISCONNECTED);
-	if (current_conn)
-	{
-		bt_conn_unref(current_conn);
-		current_conn = NULL;
-	}
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	LOG_INF("Disconnected from %s, reason 0x%02x %s\n", addr,
+			reason, bt_hci_err_to_str(reason));
 }
 
-/*static void security_changed(struct bt_conn *conn, bt_security_t level,
+static void security_changed(struct bt_conn *conn, bt_security_t level,
 							 enum bt_security_err err)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
@@ -342,27 +295,25 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	}
 	else
 	{
-		printk("Security failed: %s level %u err %d\n", addr, level,
-			   err);
+		printk("Security failed: %s level %u err %s(%d)\n", addr, level,
+			   bt_security_err_to_str(err), err);
 	}
-}*/
+}
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected = connected,
 	.disconnected = disconnected,
-	//.security_changed = security_changed,
+	.security_changed = security_changed,
 };
 
 static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 {
-	char passkey_str[7];
 	char addr[BT_ADDR_LE_STR_LEN];
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	snprintk(passkey_str, ARRAY_SIZE(passkey_str), "%06u", passkey);
-
-	LOG_DBG("Passkey for %s: %s", addr, passkey_str);
+	LOG_INF("Passkey for %s: %06u\n", addr, passkey);
+	hpi_load_scr_spl(SCR_SPL_BLE, SCROLL_NONE, passkey, 0, 0, 0);
 }
 
 static void auth_cancel(struct bt_conn *conn)
@@ -371,37 +322,37 @@ static void auth_cancel(struct bt_conn *conn)
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	LOG_DBG("Pairing cancelled: %s\n", addr);
+	LOG_INF("Pairing cancelled: %s\n", addr);
 }
 
-static struct bt_conn_auth_cb auth_cb_display = {
+static void pairing_complete(struct bt_conn *conn, bool bonded)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	LOG_INF("Pairing completed: %s, bonded: %d\n", addr, bonded);
+}
+
+static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	LOG_ERR("Pairing failed conn: %s, reason %d %s\n", addr, reason,
+			bt_security_err_to_str(reason));
+}
+
+static struct bt_conn_auth_cb conn_auth_callbacks = {
 	.passkey_display = auth_passkey_display,
-	.passkey_entry = NULL,
 	.cancel = auth_cancel,
 };
 
-void remove_separators(char *str)
-{
-	char *pr = str, *pw = str;
-	char c = ':';
-	while (*pr)
-	{
-		*pw = *pr++;
-		pw += (*pw != c);
-	}
-	*pw = '\0';
-}
-
-/*
-/* Runtime settings override.
-static int settings_runtime_load(void)
-{
-#if defined(CONFIG_BT_DIS_FW_REV)
-	settings_runtime_set("bt/dis/fw", APP_VERSION_STRING , sizeof(APP_VERSION_STRING));
-#endif
-	return 0;
-}*/
-
+static struct bt_conn_auth_info_cb conn_auth_info_callbacks = {
+	.pairing_complete = pairing_complete,
+	.pairing_failed = pairing_failed,
+};
 
 void ble_module_init()
 {
@@ -413,20 +364,58 @@ void ble_module_init()
 		LOG_ERR("Bluetooth init failed (err %d)", err);
 		return;
 	}
-	LOG_DBG("Bluetooth init !");
 
-	if (IS_ENABLED(CONFIG_SETTINGS))
-	{
-		// settings_load();
-	}
+	settings_load();
 
-	//bt_conn_auth_cb_register(&auth_cb_display);
-
-	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
+	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 	if (err)
 	{
 		LOG_ERR("Advertising failed to start (err %d)\n", err);
 		return;
 	}
-	LOG_INF("Advertising successfully started");
+	else
+	{
+		LOG_INF("Advertising successfully started");
+	}
+
+	bt_conn_auth_cb_register(&conn_auth_callbacks);
+	bt_conn_auth_info_cb_register(&conn_auth_info_callbacks);
+
+	LOG_DBG("Bluetooth init !");
 }
+
+static uint8_t m_ble_prev_progress = 0;
+static uint8_t m_ble_prev_status = 0;
+
+static void ble_bpt_listener(const struct zbus_channel *chan)
+{
+	const struct hpi_bpt_t *hpi_bpt = zbus_chan_const_msg(chan);
+	if (hpi_bpt->progress == m_ble_prev_progress &&
+		hpi_bpt->status == m_ble_prev_status)
+	{
+		return;
+	}
+	m_ble_prev_progress = hpi_bpt->progress;
+	m_ble_prev_status = hpi_bpt->status;
+
+	ble_bpt_cal_progress_notify(hpi_bpt->status, hpi_bpt->progress);
+	LOG_DBG("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
+}
+ZBUS_LISTENER_DEFINE(ble_bpt_lis, ble_bpt_listener);
+
+void ble_thread(void)
+{
+	k_sem_take(&sem_ble_thread_start, K_FOREVER);
+
+	LOG_INF("BLE Thread started");
+
+	for (;;)
+	{
+		k_sleep(K_MSEC(1000));
+	}
+}
+
+#define BLE_THREAD_STACKSIZE 1024
+#define BLE_THREAD_PRIORITY 7
+
+K_THREAD_DEFINE(ble_thread_id, BLE_THREAD_STACKSIZE, ble_thread, NULL, NULL, NULL, BLE_THREAD_PRIORITY, 0, 1000);
