@@ -20,6 +20,8 @@
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/zbus/zbus.h>
+#include <zephyr/settings/settings.h>
+#include <zephyr/fs/fs.h>
 
 #include <zephyr/sys/reboot.h>
 #include <zephyr/pm/device.h>
@@ -99,6 +101,7 @@ K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ble_thread_start, 0, 1);
+K_SEM_DEFINE(sem_hpi_sys_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
@@ -868,6 +871,8 @@ void hw_thread(void)
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
 
+    k_sem_give(&sem_hpi_sys_thread_start);
+
     int sc_reset_counter = 0;
     for (;;)
     {
@@ -927,7 +932,7 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        if(get_device_on_skin()==true)
+        if (get_device_on_skin() == true)
         {
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {

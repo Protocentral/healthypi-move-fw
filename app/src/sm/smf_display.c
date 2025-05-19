@@ -776,7 +776,7 @@ static void disp_ecg_hr_listener(const struct zbus_channel *chan)
 {
     const uint16_t *ecg_hr = zbus_chan_const_msg(chan);
     m_disp_ecg_hr = *ecg_hr;
-    LOG_DBG("ZB ECG HR: %d", *ecg_hr);
+    //LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_hr_lis, disp_ecg_hr_listener);
 

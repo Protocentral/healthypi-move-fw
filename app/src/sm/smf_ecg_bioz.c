@@ -167,31 +167,6 @@ static void ecg_bioz_sampling_handler(struct k_timer *dummy)
 
 K_TIMER_DEFINE(tmr_ecg_bioz_sampling, ecg_bioz_sampling_handler, NULL);
 
-/*void ecg_bioz_sampling_thread_runner(void *, void *, void *)
-{
-
-    uint8_t ecg_bioz_buf[512];
-    int ret;
-
-    LOG_INF("ECG/ BioZ Sampling starting");
-
-    for (;;)
-    {
-        ret = sensor_read(&max30001_iodev, &max30001_read_rtio_poll_ctx, ecg_bioz_buf, sizeof(ecg_bioz_buf));
-        if (ret < 0)
-        {
-            LOG_ERR("Error reading sensor data");
-            continue;
-        }
-        sensor_ecg_bioz_process_decode(ecg_bioz_buf, sizeof(ecg_bioz_buf));
-
-        // sensor_read_async_mempool(&max30001_iodev, &max30001_read_rtio_poll_ctx, NULL);
-        // sensor_processing_with_callback(&max30001_read_rtio_poll_ctx, sensor_ecg_bioz_process_cb);
-
-        k_sleep(K_MSEC(ECG_SAMPLING_INTERVAL_MS));
-    }
-}*/
-
 static int hw_max30001_bioz_enable(void)
 {
     struct sensor_value bioz_mode_set;

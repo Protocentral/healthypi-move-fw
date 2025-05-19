@@ -40,7 +40,8 @@
         "ctime": "c",
         "conn.h": "c",
         "byteorder.h": "c",
-        "max32664c_30_13_31.h": "c"
+        "max32664c_30_13_31.h": "c",
+        "settings.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

@@ -10,6 +10,7 @@
 #include "ui/move_ui.h"
 #include "trends.h"
 #include "hw_module.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2, LOG_LEVEL_DBG);
 
@@ -72,10 +73,16 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_t *img_spo2 = lv_img_create(cont_spo2);
     lv_img_set_src(img_spo2, &icon_spo2_100);
 
-    uint16_t m_spo2_val = 0;
+    uint8_t m_spo2_val = 0;
     int64_t m_spo2_time = 0;
 
-    hpi_smf_ppg_get_last_spo2(&m_spo2_val, &m_spo2_time);
+    // Get the last SpO2 value and time
+    if (hpi_sys_get_last_spo2_update(&m_spo2_val, &m_spo2_time) != 0)
+    {
+        LOG_ERR("Failed to get last SpO2 value");
+        m_spo2_val = 0;
+        m_spo2_time = 0;
+    }
 
     label_spo2_percent = lv_label_create(cont_spo2);
     if (m_spo2_val == 0)

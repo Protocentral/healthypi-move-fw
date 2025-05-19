@@ -8,6 +8,7 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "hw_module.h"
 #include "max32664c.h"
 #include "hpi_common_types.h"
+#include "hpi_sys.h"
 
 #define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 #define HPI_OFFSKIN_THRESHOLD_S 5
@@ -54,14 +55,6 @@ static enum max32664c_scd_states m_curr_scd_state;
 
 // Externs
 extern struct k_sem sem_ppg_wrist_sm_start;
-
-int hpi_smf_ppg_get_last_spo2(uint16_t *spo2_value, int64_t *timestamp)
-{
-    *spo2_value = smf_ppg_spo2_last_measured_value;
-    *timestamp = smf_ppg_spo2_last_measured_time;
-    
-    return 0;
-}
 
 void work_off_skin_wait_handler(struct k_work *work)
 {
@@ -184,6 +177,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
                     smf_ppg_spo2_last_measured_value = ppg_sensor_sample.spo2;
                     smf_ppg_spo2_last_measured_time = hw_get_sys_time_ts();
+                    hpi_sys_set_last_spo2_update(ppg_sensor_sample.spo2, smf_ppg_spo2_last_measured_time);
                 }
                 spo2_measurement_in_progress = false;
             }
