@@ -13,6 +13,10 @@
 LOG_MODULE_REGISTER(hpi_sys_module, LOG_LEVEL_DBG);
 
 static const char hpi_sys_update_time_file[] = "/lfs/sys/hpi_sys_update_time";
+
+static bool is_on_skin = false;
+K_MUTEX_DEFINE(mutex_on_skin);
+
 // Externs
 extern struct k_sem sem_hpi_sys_thread_start;
 
@@ -63,6 +67,24 @@ static int hpi_sys_store_update_time(void)
 
     return ret;
 }
+
+bool hpi_sys_get_device_on_skin(void)
+{
+    bool on_skin = false;
+    k_mutex_lock(&mutex_on_skin, K_FOREVER);
+    on_skin = is_on_skin;
+    k_mutex_unlock(&mutex_on_skin);
+
+    return on_skin;
+}
+
+void hpi_sys_set_device_on_skin(bool on_skin)
+{
+    k_mutex_lock(&mutex_on_skin, K_FOREVER);
+    is_on_skin = on_skin;
+    k_mutex_unlock(&mutex_on_skin);
+}
+
 
 static int hpi_sys_load_update_time(void)
 {
@@ -170,7 +192,7 @@ int hpi_sys_get_last_spo2_update(uint8_t *spo2_last_value, int64_t *spo2_last_up
 
     return 0;
 }
-int hpi_sys_get_last_bp_update(uint16_t *bp_sys_last_value, uint16_t *bp_dia_last_value, int64_t *bp_last_update_ts)
+int hpi_sys_get_last_bp_update(uint8_t *bp_sys_last_value, uint8_t *bp_dia_last_value, int64_t *bp_last_update_ts)
 {
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     *bp_sys_last_value = g_hpi_last_update.bp_sys_last_value;

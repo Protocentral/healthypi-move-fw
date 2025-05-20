@@ -61,6 +61,7 @@ void work_off_skin_wait_handler(struct k_work *work)
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
         LOG_DBG("Still OFF SKIN");
+        hpi_sys_set_device_on_skin(false);
         // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
     }
 }
@@ -71,6 +72,7 @@ void work_on_skin_wait_handler(struct k_work *work)
     if (m_curr_scd_state == MAX32664C_SCD_STATE_ON_SKIN)
     {
         LOG_DBG("Still ON SKIN");
+        hpi_sys_set_device_on_skin(true);
         // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
     }
 }

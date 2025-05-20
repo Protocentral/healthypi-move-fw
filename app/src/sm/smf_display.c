@@ -14,7 +14,7 @@
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
-#define HPI_DEFAULT_START_SCREEN SCR_BPT
+#define HPI_DEFAULT_START_SCREEN SCR_SPO2
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -124,6 +124,7 @@ static const screen_draw_func_t screen_draw_funcs[] = {
     [SCR_SPL_SPO2_SCR3] = draw_scr_spo2_scr3,
     [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
     [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
+    [SCR_SPL_SPO2_SELECT] = draw_scr_spo2_select,
 
     [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
     [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,

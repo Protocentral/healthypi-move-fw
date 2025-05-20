@@ -287,7 +287,7 @@ void data_thread(void)
         {
             if (settings_send_ble_enabled)
             {
-                ble_ppg_notify(ppg_fi_sensor_sample.raw_ir, ppg_fi_sensor_sample.ppg_num_samples);
+                //ble_ppg_notify(ppg_fi_sensor_sample.raw_ir, ppg_fi_sensor_sample.ppg_num_samples);
             }
             if (settings_plot_enabled)
             {
@@ -300,7 +300,7 @@ void data_thread(void)
         {
             if (settings_send_ble_enabled)
             {
-                // ble_ppg_notify(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples);
+                ble_ppg_notify(ppg_wr_sensor_sample.raw_ir, ppg_wr_sensor_sample.ppg_num_samples);
             }
             if (settings_plot_enabled)
             {

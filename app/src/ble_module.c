@@ -127,7 +127,7 @@ BT_GATT_SERVICE_DEFINE(hpi_temp_service,
 					   BT_GATT_CCC(temp_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
-BT_GATT_SERVICE_DEFINE(hpi_ppg_resp_service,
+BT_GATT_SERVICE_DEFINE(hpi_ppg_hrv_service,
 					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_PPG_SERV),
 					   BT_GATT_CHARACTERISTIC(UUID_HPI_PPG_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
@@ -227,7 +227,7 @@ void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
 		out_data[i * 2 + 1] = (uint8_t)(ppg_data[i] >> 8);
 	}
 
-	bt_gatt_notify(NULL, &hpi_ppg_resp_service.attrs[1], &out_data, len * 2);
+	bt_gatt_notify(NULL, &hpi_ppg_hrv_service.attrs[1], &out_data, len * 2);
 }
 
 void ble_bpt_cal_progress_notify(uint8_t bpt_status, uint8_t bpt_progress)

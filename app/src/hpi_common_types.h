@@ -186,9 +186,15 @@ struct hpi_last_update_time_t
     uint8_t spo2_last_value;
     int64_t spo2_last_update_ts;
     
-    uint16_t bp_sys_last_value;
-    uint16_t bp_dia_last_value;
+    uint8_t bp_sys_last_value;
+    uint8_t bp_dia_last_value;
     int64_t bp_last_update_ts;
 
     int64_t ecg_last_update_ts;
+
+    uint16_t steps_last_value;
+    int64_t steps_last_update_ts;
+
+    uint16_t temp_last_value;
+    int64_t temp_last_update_ts;
 };

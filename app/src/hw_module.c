@@ -135,8 +135,7 @@ static struct hpi_version_desc_t hpi_max32664d_req_ver = {
     .minor = 0,
 };
 
-static bool is_on_skin = false;
-K_MUTEX_DEFINE(mutex_on_skin);
+
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
@@ -164,22 +163,6 @@ static uint16_t today_get_steps(void)
     return steps;
 }
 
-bool get_device_on_skin(void)
-{
-    bool on_skin = false;
-    k_mutex_lock(&mutex_on_skin, K_FOREVER);
-    on_skin = is_on_skin;
-    k_mutex_unlock(&mutex_on_skin);
-
-    return on_skin;
-}
-
-void set_device_on_skin(bool on_skin)
-{
-    k_mutex_lock(&mutex_on_skin, K_FOREVER);
-    is_on_skin = on_skin;
-    k_mutex_unlock(&mutex_on_skin);
-}
 
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
@@ -932,7 +915,7 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        if (get_device_on_skin() == true)
+        if (hpi_sys_get_device_on_skin() == true)
         {
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {

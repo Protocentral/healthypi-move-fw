@@ -88,6 +88,7 @@ enum hpi_disp_spl_screens
    
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
+    SCR_SPL_SPO2_SELECT,
     SCR_SPL_SPO2_SCR2,
     SCR_SPL_SPO2_SCR3,
     SCR_SPL_SPO2_COMPLETE,
@@ -181,6 +182,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir);
 void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void hpi_disp_update_spo2(uint8_t spo2, int64_t ts_last_update);
+void draw_scr_spo2_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 void hpi_disp_spo2_load_trend(void);
 void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);

@@ -39,7 +39,8 @@ static void scr_spo2_btn_measure_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+        //hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
     }
 }
 
