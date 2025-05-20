@@ -4,8 +4,6 @@
 #include <lvgl.h>
 #include <stdio.h>
 
-#include <zephyr/logging/log.h>
-
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "trends.h"
@@ -32,6 +30,7 @@ extern lv_style_t style_tiny;
 
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
+extern lv_style_t style_bg_green;
 
 static void scr_spo2_btn_measure_handler(lv_event_t *e)
 {
@@ -57,7 +56,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style_bg_red, 0);
+    lv_obj_add_style(cont_col, &style_bg_green, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "SpO2");

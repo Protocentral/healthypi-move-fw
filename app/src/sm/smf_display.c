@@ -121,7 +121,7 @@ static const screen_draw_func_t screen_draw_funcs[] = {
     [SCR_SPL_PLOT_HRV_SCATTER] = draw_scr_hrv_scatter,
     [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
     [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
-    [SCR_SPL_SPO2_SCR3] = draw_scr_spo2_scr3,
+    [SCR_SPL_SPO2_MEASURE] = draw_scr_spo2_measure,
     [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
     [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
     [SCR_SPL_SPO2_SELECT] = draw_scr_spo2_select,
@@ -362,7 +362,7 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
         lv_disp_trig_activity(NULL);
     }
-    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
     {
         hpi_disp_spo2_plotPPG(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
@@ -608,7 +608,7 @@ static void st_display_active_run(void *o)
             k_sem_give(&sem_ecg_cancel);
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
             hpi_load_screen(SCR_HOME, SCROLL_NONE);

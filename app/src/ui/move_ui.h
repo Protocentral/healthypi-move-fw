@@ -19,7 +19,7 @@
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 256 // SAMPLE_RATE * 4
 #define BPT_DISP_WINDOW_SIZE 256
-#define SPO2_DISP_WINDOW_SIZE 64
+#define SPO2_DISP_WINDOW_SIZE 128
 
 #define HPI_DISP_TIME_REFR_INT 1000
 #define HPI_DISP_BATT_REFR_INT 1000
@@ -90,7 +90,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_PLOT_HRV_SCATTER,
     SCR_SPL_SPO2_SELECT,
     SCR_SPL_SPO2_SCR2,
-    SCR_SPL_SPO2_SCR3,
+    SCR_SPL_SPO2_MEASURE,
     SCR_SPL_SPO2_COMPLETE,
     SCR_SPL_SPO2_TIMEOUT,
     SCR_SPL_HR_SCR2,
@@ -190,6 +190,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 void hpi_disp_spo2_update_hr(int hr);
 void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);

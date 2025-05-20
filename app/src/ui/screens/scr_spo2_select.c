@@ -28,6 +28,7 @@ static void scr_spo2_sel_fi_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
+        hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
     }
 }
 
@@ -37,7 +38,7 @@ static void scr_spo2_sel_wr_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, SPO2_SOURCE_PPG_WR, 0, 0);
     }
 }
 
@@ -54,6 +55,10 @@ void draw_scr_spo2_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
     //lv_obj_add_style(cont_col, &style_bg_red, 0);
+
+    lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
+    lv_label_set_text(lbl_info_scroll, LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_darken(LV_PALETTE_RED, 2), LV_PART_MAIN);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Select PPG\n Sensor");

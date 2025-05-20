@@ -171,6 +171,12 @@ enum spo2_meas_state
     SPO2_MEAS_UNK,
 };
 
+enum spo2_source
+{
+    SPO2_SOURCE_PPG_WR = 0x00,
+    SPO2_SOURCE_PPG_FI,
+};
+
 struct hpi_version_desc_t
 {
     uint8_t major;
