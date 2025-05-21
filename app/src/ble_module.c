@@ -297,13 +297,13 @@ void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
 		out_data[i * 2 + 1] = (uint8_t)(ppg_data_i16 >> 8);
 	}
 
-	LOG_DBG("PPG Not len %d", len);
+	//LOG_DBG("PPG Not len %d", len);
 
 	bt_gatt_notify(NULL, &hpi_ppg_service.attrs[1], &out_data, len * 2);
 }
 
 void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
-{
+{ 
 	uint8_t out_data[128];
 	int32_t ecg_data_i32 = 0;
 
@@ -333,7 +333,7 @@ void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
 		out_data[i * 4 + 3] = (uint8_t)(gsr_data_i32 >> 24);
 	}
 
-	LOG_DBG("GSR Not len %d", len);
+	//LOG_DBG("GSR Not len %d", len);
 
 	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[4], &out_data, len * 4);
 }

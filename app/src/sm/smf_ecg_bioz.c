@@ -14,6 +14,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 #include "log_module.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
@@ -275,7 +276,7 @@ static void st_ecg_bioz_stream_exit(void *o)
 
 static void work_ecg_write_file_handler(struct k_work *work)
 {
-    struct tm tm_sys_time = hw_get_sys_time();
+    struct tm tm_sys_time = hpi_sys_get_sys_time();
     int64_t log_time = timeutil_timegm64(&tm_sys_time);
 
     LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);

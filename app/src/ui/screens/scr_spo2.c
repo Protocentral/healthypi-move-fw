@@ -98,8 +98,9 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_spo2_percent_sign = lv_label_create(cont_spo2);
     lv_label_set_text(label_spo2_percent_sign, " %");
 
-    char last_meas_str[74];
-    hpi_helper_get_date_time_str(m_spo2_time, last_meas_str);
+    char last_meas_str[25];
+    //hpi_helper_get_date_time_str(m_spo2_time, last_meas_str);
+    hpi_helper_get_relative_time_str(m_spo2_time, last_meas_str, sizeof(last_meas_str));
     label_spo2_last_update_time = lv_label_create(cont_col);
     lv_label_set_text(label_spo2_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_spo2_last_update_time, LV_TEXT_ALIGN_CENTER, 0);

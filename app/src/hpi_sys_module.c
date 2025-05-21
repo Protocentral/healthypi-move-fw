@@ -19,6 +19,10 @@ static const char hpi_sys_update_time_file[] = "/lfs/sys/hpi_sys_update_time";
 static bool is_on_skin = false;
 K_MUTEX_DEFINE(mutex_on_skin);
 
+
+struct tm sys_tm_time;
+K_MUTEX_DEFINE(mutex_sys_time);
+
 // Externs
 extern struct k_sem sem_hpi_sys_thread_start;
 
@@ -77,6 +81,29 @@ static int hpi_sys_store_update_time(void)
     return ret;
 }
 
+int hpi_sys_set_sys_time(struct tm *tm)
+{
+    int ret = 0;
+    k_mutex_lock(&mutex_sys_time, K_FOREVER);
+    sys_tm_time = *tm;
+    k_mutex_unlock(&mutex_sys_time);
+    return ret;
+}
+
+struct tm hpi_sys_get_sys_time(void)
+{
+    k_mutex_lock(&mutex_sys_time, K_FOREVER);
+    struct tm sys_tm_time_copy = sys_tm_time;
+    k_mutex_unlock(&mutex_sys_time);
+    return sys_tm_time_copy;
+}
+
+int64_t hw_get_sys_time_ts(void)
+{
+    int64_t sys_time_ts = timeutil_timegm64(&sys_tm_time);
+    return sys_time_ts;
+}
+
 bool hpi_sys_get_device_on_skin(void)
 {
     bool on_skin = false;
@@ -101,7 +128,7 @@ int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_st
         return 0;
     }
 
-    time_t now = time(NULL);
+    int64_t now = hw_get_sys_time_ts();
     int64_t diff = now - in_ts;
 
     if (diff < 60) {

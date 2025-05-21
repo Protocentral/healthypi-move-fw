@@ -47,6 +47,7 @@
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
 #include "ble_module.h"
+#include "hpi_sys.h"
 
 #include <max32664_updater.h>
 
@@ -83,6 +84,7 @@ volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 
 static volatile bool vbus_connected;
+static int64_t ref_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
@@ -112,8 +114,7 @@ ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
 
-static int64_t ref_time;
-struct tm sys_tm_time;
+
 
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
@@ -820,17 +821,6 @@ void hw_module_init(void)
     // usb_init();
 }
 
-struct tm hw_get_sys_time(void)
-{
-    return sys_tm_time;
-}
-
-int64_t hw_get_sys_time_ts(void)
-{
-    int64_t sys_time_ts = timeutil_timegm64(&sys_tm_time);
-    return sys_time_ts;
-}
-
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;
@@ -874,8 +864,9 @@ void hw_thread(void)
         {
             LOG_ERR("Failed to get RTC time");
         }
-        sys_tm_time = *rtc_time_to_tm(&rtc_sys_time);
-        zbus_chan_pub(&sys_time_chan, &sys_tm_time, K_SECONDS(1));
+        struct tm m_tm_time = *rtc_time_to_tm(&rtc_sys_time);
+        hpi_sys_set_sys_time(&m_tm_time);
+        zbus_chan_pub(&sys_time_chan, &m_tm_time, K_SECONDS(1));
 
         // Read and publish steps
         _steps = acc_get_steps();
