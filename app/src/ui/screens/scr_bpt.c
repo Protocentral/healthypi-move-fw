@@ -85,7 +85,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_t *cont_col_sys = lv_obj_create(cont_row_bpt);
     lv_obj_set_size(cont_col_sys, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_col_sys, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col_sys, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(cont_col_sys, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_bg_opa(cont_col_sys, 0, 0);
     lv_obj_add_style(cont_col_sys, &style_scr_black, 0);
 
@@ -104,6 +104,11 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     }
     lv_obj_add_style(label_bpt_sys, &style_white_large, 0);
 
+    lv_obj_t *label_bpt_sys_unit = lv_label_create(cont_col_sys);
+    lv_label_set_text(label_bpt_sys_unit, "mmHg");
+    lv_obj_add_style(label_bpt_sys_unit, &style_white_small, 0);
+    lv_obj_set_style_text_align(label_bpt_sys_unit, LV_TEXT_ALIGN_CENTER, 0);
+
     // Separator
     // lv_obj_t *label_bpt_sep = lv_label_create(cont_row_bpt);
     // lv_label_set_text(label_bpt_sep, "/");
@@ -112,7 +117,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_t *cont_col_dia = lv_obj_create(cont_row_bpt);
     lv_obj_set_size(cont_col_dia, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_col_dia, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col_dia, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(cont_col_dia, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_bg_opa(cont_col_dia, 0, 0);
     lv_obj_add_style(cont_col_dia, &style_scr_black, 0);
 
@@ -130,6 +135,11 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
         lv_label_set_text_fmt(label_bpt_dia, "%d", bpt_dia);
     }
     lv_obj_add_style(label_bpt_dia, &style_white_large, 0);
+
+    lv_obj_t *label_bpt_dia_unit = lv_label_create(cont_col_dia);
+    lv_label_set_text(label_bpt_dia_unit, "mmHg");
+    lv_obj_add_style(label_bpt_dia_unit, &style_white_small, 0);
+    lv_obj_set_style_text_align(label_bpt_dia_unit, LV_TEXT_ALIGN_CENTER, 0);
 
     char last_meas_str[74];
     hpi_helper_get_relative_time_str(bpt_time, last_meas_str, sizeof(last_meas_str));

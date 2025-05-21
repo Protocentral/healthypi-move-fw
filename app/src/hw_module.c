@@ -911,6 +911,7 @@ void hw_thread(void)
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {
                 .temp_f = _temp_f,
+                .timestamp = hw_get_sys_time_ts(),                
             };
             zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
         }

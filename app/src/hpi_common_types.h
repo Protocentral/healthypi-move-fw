@@ -122,14 +122,14 @@ struct hpi_steps_t
 
 struct hpi_temp_t
 {
-    struct tm time_tm;
+    int64_t timestamp;
     double temp_f;
     double temp_c;
 };
 
 struct hpi_bpt_t
 {
-    uint32_t timestamp;
+    int64_t timestamp;
 
     uint16_t sys;
     uint16_t dia;

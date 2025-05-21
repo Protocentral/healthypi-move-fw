@@ -11,6 +11,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 #include "max32664_updater.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
@@ -78,6 +79,7 @@ static uint16_t m_disp_active_time_s = 0;
 
 // @brief Temperature Screen variables
 static float m_disp_temp = 0;
+static int64_t m_disp_temp_updated_ts = 0;
 
 static uint16_t m_disp_bp_sys = 0;
 static uint16_t m_disp_bp_dia = 0;
@@ -437,7 +439,7 @@ static void hpi_disp_update_screens(void)
     case SCR_TEMP:
         if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
         {
-            hpi_temp_disp_update_temp_f((double)m_disp_temp);
+            hpi_temp_disp_update_temp_f((double)m_disp_temp, m_disp_temp_updated_ts);
             last_temp_trend_refresh = k_uptime_get_32();
         }
         break;
@@ -724,7 +726,7 @@ static void disp_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
     m_disp_hr_last_update_tm = hpi_hr->time_tm;
-    //LOG_DBG("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
+    // LOG_DBG("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
@@ -733,7 +735,7 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
     m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
-    //LOG_DBG("ZB Spo2: %d | Time: %lld", hpi_spo2->spo2, hpi_spo2->timestamp);
+    // LOG_DBG("ZB Spo2: %d | Time: %lld", hpi_spo2->spo2, hpi_spo2->timestamp);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
 
@@ -750,6 +752,7 @@ static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
     m_disp_temp = hpi_temp->temp_f;
+    m_disp_temp_updated_ts = hpi_temp->timestamp;
     LOG_DBG("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
@@ -777,7 +780,7 @@ static void disp_ecg_hr_listener(const struct zbus_channel *chan)
 {
     const uint16_t *ecg_hr = zbus_chan_const_msg(chan);
     m_disp_ecg_hr = *ecg_hr;
-    //LOG_DBG("ZB ECG HR: %d", *ecg_hr);
+    // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_hr_lis, disp_ecg_hr_listener);
 

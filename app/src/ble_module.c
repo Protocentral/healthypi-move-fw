@@ -32,13 +32,13 @@ struct bt_conn *current_conn;
 #define HPI_TEMP_SERVICE BT_UUID_DECLARE_16(BT_UUID_HTS_VAL)
 #define HPI_TEMP_CHAR BT_UUID_DECLARE_16(BT_UUID_TEMPERATURE_VAL)
 
-// ECG/Resp Service 00001122-0000-1000-8000-00805f9b34fb
+// ECG/GSR Service 00001122-0000-1000-8000-00805f9b34fb
 #define UUID_HPI_ECG_GSR_SERV BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0x00001122, 0x0000, 0x1000, 0x8000, 0x00805f9b34fb))
 
 // ECG Characteristic 00001424-0000-1000-8000-00805f9b34fb
 #define UUID_HPI_ECG_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0x00001424, 0x0000, 0x1000, 0x8000, 0x00805f9b34fb))
 
-// RESP Characteristic babe4a4c-7789-11ed-a1eb-0242ac120002
+// GSR Characteristic babe4a4c-7789-11ed-a1eb-0242ac120002
 #define UUID_HPI_GSR_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xbabe4a4c, 0x7789, 0x11ed, 0xa1eb, 0x0242ac120002))
 
 // PPG Service cd5c7491-4448-7db8-ae4c-d1da8cba36d0
@@ -129,10 +129,11 @@ static void gsr_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		LOG_DBG("GSR CCCD subscribed");
+		
 		break;
 	case BT_GATT_CCC_INDICATE:
 		// Start sending stuff via indications
+		LOG_DBG("GSR CCCD subscribed");
 		break;
 	case 0:
 		LOG_DBG("GSR CCCD unsubscribed");
@@ -286,38 +287,55 @@ void hpi_ble_send_data(const uint8_t *data, uint16_t len)
 	bt_gatt_notify(NULL, attr, data, len);
 }
 
-void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
+void ble_ppg_notify_wr(uint32_t *ppg_data, uint8_t len)
 {
 	uint8_t out_data[128];
-	int16_t ppg_data_i16 = 0;
 
 	for (int i = 0; i < len; i++)
 	{
-		out_data[i * 2] = (uint8_t)ppg_data_i16;
-		out_data[i * 2 + 1] = (uint8_t)(ppg_data_i16 >> 8);
+		out_data[i * 4] = (uint8_t)ppg_data[i];
+		out_data[i * 4 + 1] = (uint8_t)(ppg_data[i] >> 8);
+		out_data[i * 4 + 2] = (uint8_t)(ppg_data[i] >> 16);
+		out_data[i * 4 + 3] = (uint8_t)(ppg_data[i] >> 24);
 	}
 
-	//LOG_DBG("PPG Not len %d", len);
+	// LOG_DBG("PPG Not len %d", len);
 
-	bt_gatt_notify(NULL, &hpi_ppg_service.attrs[1], &out_data, len * 2);
+	bt_gatt_notify(NULL, &hpi_ppg_service.attrs[2], &out_data, len * 4);
+}
+
+void ble_ppg_notify_fi(uint32_t *ppg_data, uint8_t len)
+{
+	uint8_t out_data[128];
+
+	for (int i = 0; i < len; i++)
+	{
+		out_data[i * 4] = (uint8_t)ppg_data[i];
+		out_data[i * 4 + 1] = (uint8_t)(ppg_data[i] >> 8);
+		out_data[i * 4 + 2] = (uint8_t)(ppg_data[i] >> 16);
+		out_data[i * 4 + 3] = (uint8_t)(ppg_data[i] >> 24);
+	}
+
+	// LOG_DBG("PPG Not len %d", len);
+
+	bt_gatt_notify(NULL, &hpi_ppg_service.attrs[4], &out_data, len * 4);
 }
 
 void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 { 
 	uint8_t out_data[128];
-	int32_t ecg_data_i32 = 0;
-
+	
 	for (int i = 0; i < len; i++)
 	{
-		out_data[i * 4] = (uint8_t)ecg_data_i32;
-		out_data[i * 4 + 1] = (uint8_t)(ecg_data_i32 >> 8);
-		out_data[i * 4 + 2] = (uint8_t)(ecg_data_i32 >> 16);
-		out_data[i * 4 + 3] = (uint8_t)(ecg_data_i32 >> 24);
+		out_data[i * 4] = (uint8_t)ecg_data[i];
+		out_data[i * 4 + 1] = (uint8_t)(ecg_data[i] >> 8);
+		out_data[i * 4 + 2] = (uint8_t)(ecg_data[i] >> 16);
+		out_data[i * 4 + 3] = (uint8_t)(ecg_data[i] >> 24);
 	}
 
 	// LOG_DBG("ECG Not len %d", len);
 
-	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[1], &out_data, len * 4);
+	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[2], &out_data, len * 4);
 }
 
 void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
