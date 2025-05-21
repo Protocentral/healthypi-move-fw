@@ -6,9 +6,11 @@
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/littlefs.h>
 #include <time.h>
+#include <zephyr/zbus/zbus.h>
 
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
+#include "hw_module.h"
 
 LOG_MODULE_REGISTER(hpi_sys_module, LOG_LEVEL_DBG);
 
@@ -26,10 +28,17 @@ static struct hpi_last_update_time_t g_hpi_last_update = {
     .spo2_last_update_ts = 0,
     .ecg_last_update_ts = 0,
 
+
     .hr_last_value = 0,
     .spo2_last_value = 0,
     .bp_sys_last_value = 0,
     .bp_dia_last_value = 0,
+
+    .temp_last_update_ts = 0,
+    .temp_last_value = 0,
+
+    .steps_last_update_ts = 0,
+    .steps_last_value = 0,
 };
     
 
@@ -83,6 +92,34 @@ void hpi_sys_set_device_on_skin(bool on_skin)
     k_mutex_lock(&mutex_on_skin, K_FOREVER);
     is_on_skin = on_skin;
     k_mutex_unlock(&mutex_on_skin);
+}
+
+int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_str_size)
+{
+    if (in_ts == 0) {
+        snprintf(out_str, out_str_size, "Never");
+        return 0;
+    }
+
+    time_t now = time(NULL);
+    int64_t diff = now - in_ts;
+
+    if (diff < 60) {
+        snprintf(out_str, out_str_size, "Just now");
+    } else if (diff < 3600) {
+        int mins = diff / 60;
+        snprintf(out_str, out_str_size, "%d minute%s ago", mins, mins == 1 ? "" : "s");
+    } else if (diff < 86400) {
+        int hours = diff / 3600;
+        snprintf(out_str, out_str_size, "%d hour%s ago", hours, hours == 1 ? "" : "s");
+    } else if (diff < 172800) {
+        snprintf(out_str, out_str_size, "Yesterday");
+    } else {
+        struct tm *tm_info = localtime(&in_ts);
+        snprintf(out_str, out_str_size, "%02d-%02d-%04d", 
+            tm_info->tm_mday, tm_info->tm_mon + 1, tm_info->tm_year + 1900);
+    }
+    return 0;
 }
 
 
@@ -239,6 +276,38 @@ void hpi_sys_thread(void)
         hpi_sys_store_update_time();
     }
 }
+
+static void sys_bpt_list(const struct zbus_channel *chan)
+{
+    const struct hpi_bpt_t *hpi_bp = zbus_chan_const_msg(chan);
+    hpi_sys_set_last_bp_update(hpi_bp->sys, hpi_bp->dia, hw_get_sys_time_ts());
+}
+ZBUS_LISTENER_DEFINE(sys_bpt_lis, sys_bpt_list);
+
+static void sys_hr_list(const struct zbus_channel *chan)
+{
+    const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
+    hpi_sys_set_last_hr_update(hpi_hr->hr, hw_get_sys_time_ts());
+}
+ZBUS_LISTENER_DEFINE(sys_hr_lis, sys_hr_list);
+
+static void sys_temp_list(const struct zbus_channel *chan)
+{
+    const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
+    g_hpi_last_update.temp_last_value = (hpi_temp->temp_f*100);
+    g_hpi_last_update.temp_last_update_ts = hw_get_sys_time_ts();
+}
+ZBUS_LISTENER_DEFINE(sys_temp_lis, sys_temp_list);
+
+static void sys_steps_list(const struct zbus_channel *chan)
+{
+    const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
+    g_hpi_last_update.steps_last_value = hpi_steps->steps;
+    g_hpi_last_update.steps_last_update_ts = hw_get_sys_time_ts();
+}
+ZBUS_LISTENER_DEFINE(sys_steps_lis, sys_steps_list);
+
+
 
 #define HPI_SYS_THREAD_STACKSIZE 2048
 #define HPI_SYS_THREAD_PRIORITY 5

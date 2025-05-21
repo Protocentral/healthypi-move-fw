@@ -85,45 +85,77 @@ static void temp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value
 {
 }
 
-static void ppg_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+static void ppg_fi_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 	ARG_UNUSED(attr);
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		LOG_DBG("PPG CCCD subscribed");
+		LOG_DBG("PPG Finger CCCD subscribed");
 		break;
-
 	case BT_GATT_CCC_INDICATE:
 		// Start sending stuff via indications
 		break;
-
 	case 0:
-		LOG_DBG("PPG CCCD unsubscribed");
+		LOG_DBG("PPG Finger CCCD unsubscribed");
 		break;
-
 	default:
 		LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
 }
 
-static void ecg_gsr_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+static void ecg_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 	ARG_UNUSED(attr);
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		LOG_DBG("ECG/GSR CCCD subscribed");
+		LOG_DBG("ECG CCCD subscribed");
 		break;
-
 	case BT_GATT_CCC_INDICATE:
 		// Start sending stuff via indications
 		break;
-
 	case 0:
-		LOG_DBG("ECG/GSR CCCD unsubscribed");
+		LOG_DBG("ECG CCCD unsubscribed");
 		break;
+	default:
+		LOG_DBG("Error, CCCD has been set to an invalid value");
+	}
+}
 
+static void gsr_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+	ARG_UNUSED(attr);
+	switch (value)
+	{
+	case BT_GATT_CCC_NOTIFY:
+		LOG_DBG("GSR CCCD subscribed");
+		break;
+	case BT_GATT_CCC_INDICATE:
+		// Start sending stuff via indications
+		break;
+	case 0:
+		LOG_DBG("GSR CCCD unsubscribed");
+		break;
+	default:
+		LOG_DBG("Error, CCCD has been set to an invalid value");
+	}
+}
+
+static void ppg_wr_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+	ARG_UNUSED(attr);
+	switch (value)
+	{
+	case BT_GATT_CCC_NOTIFY:
+		LOG_DBG("PPG Wrist CCCD subscribed");
+		break;
+	case BT_GATT_CCC_INDICATE:
+		// Start sending stuff via indications
+		break;
+	case 0:
+		LOG_DBG("PPG Wrist CCCD unsubscribed");
+		break;
 	default:
 		LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
@@ -155,13 +187,13 @@ BT_GATT_SERVICE_DEFINE(hpi_ppg_service,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 											  BT_GATT_PERM_READ,
 											  NULL, NULL, NULL),
-					   BT_GATT_CCC(spo2_on_cccd_changed,
+					   BT_GATT_CCC(ppg_wr_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 					   BT_GATT_CHARACTERISTIC(UUID_HPI_PPG_FI_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 											  BT_GATT_PERM_READ,
 											  NULL, NULL, NULL),
-					   BT_GATT_CCC(ppg_on_cccd_changed,
+					   BT_GATT_CCC(ppg_fi_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 BT_GATT_SERVICE_DEFINE(hpi_ecg_gsr_service,
@@ -170,13 +202,13 @@ BT_GATT_SERVICE_DEFINE(hpi_ecg_gsr_service,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 											  BT_GATT_PERM_READ,
 											  NULL, NULL, NULL),
-					   BT_GATT_CCC(spo2_on_cccd_changed,
+					   BT_GATT_CCC(ecg_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 					   BT_GATT_CHARACTERISTIC(UUID_HPI_GSR_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 											  BT_GATT_PERM_READ,
 											  NULL, NULL, NULL),
-					   BT_GATT_CCC(ecg_gsr_on_cccd_changed,
+					   BT_GATT_CCC(gsr_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 /* This function is called whenever the RX Characteristic has been written to by a Client */
@@ -257,7 +289,7 @@ void hpi_ble_send_data(const uint8_t *data, uint16_t len)
 void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
 {
 	uint8_t out_data[128];
-	int16_t ppg_data_i16=0;
+	int16_t ppg_data_i16 = 0;
 
 	for (int i = 0; i < len; i++)
 	{
@@ -273,7 +305,7 @@ void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
 void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 {
 	uint8_t out_data[128];
-	int32_t ecg_data_i32=0;
+	int32_t ecg_data_i32 = 0;
 
 	for (int i = 0; i < len; i++)
 	{
@@ -283,7 +315,7 @@ void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 		out_data[i * 4 + 3] = (uint8_t)(ecg_data_i32 >> 24);
 	}
 
-	//LOG_DBG("ECG Not len %d", len);
+	// LOG_DBG("ECG Not len %d", len);
 
 	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[1], &out_data, len * 4);
 }
@@ -291,7 +323,7 @@ void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
 {
 	uint8_t out_data[128];
-	int32_t gsr_data_i32=0;
+	int32_t gsr_data_i32 = 0;
 
 	for (int i = 0; i < len; i++)
 	{
@@ -367,11 +399,11 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
 
 	if (!err)
 	{
-		printk("Security changed: %s level %u\n", addr, level);
+		LOG_INF("Security changed: %s level %u\n", addr, level);
 	}
 	else
 	{
-		printk("Security failed: %s level %u err %s(%d)\n", addr, level,
+		LOG_ERR("Security failed: %s level %u err %s(%d)\n", addr, level,
 			   bt_security_err_to_str(err), err);
 	}
 }
