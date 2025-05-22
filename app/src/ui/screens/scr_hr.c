@@ -122,7 +122,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_hr, m_scroll_dir);
 }
 
-void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
+void hpi_disp_hr_update_hr(uint16_t hr, int64_t last_update_ts)
 {
     if (label_hr_bpm == NULL)
         return;
@@ -135,5 +135,8 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
     {
         lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
-    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %02d:%02d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
+
+    char last_meas_str[25];
+    hpi_helper_get_relative_time_str(last_update_ts, last_meas_str, sizeof(last_meas_str));
+    lv_label_set_text(label_hr_last_update_time, last_meas_str);
 }

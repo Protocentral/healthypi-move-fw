@@ -47,7 +47,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 {
     scr_spo2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2, &style_scr_black, 0);
-    lv_obj_clear_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    lv_obj_clear_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); 
 
     lv_obj_t *cont_col = lv_obj_create(scr_spo2);
     lv_obj_set_size(cont_col, 390, 390);
@@ -96,7 +96,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_spo2_percent, &style_white_large, 0);
 
     lv_obj_t *label_spo2_percent_sign = lv_label_create(cont_spo2);
-    lv_label_set_text(label_spo2_percent_sign, " %");
+    lv_label_set_text(label_spo2_percent_sign, " %%");
 
     char last_meas_str[25];
     //hpi_helper_get_date_time_str(m_spo2_time, last_meas_str);

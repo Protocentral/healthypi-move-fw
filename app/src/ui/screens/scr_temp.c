@@ -78,7 +78,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     }
     else
     {
-        lv_label_set_text_fmt(label_temp_f, "%.2f", (temp_f / 100.0));
+        lv_label_set_text_fmt(label_temp_f, "%.1f", (temp_f / 100.0));
     }
     lv_obj_add_style(label_temp_f, &style_white_large, 0);
 
@@ -106,7 +106,7 @@ void hpi_temp_disp_update_temp_f(double temp_f, int64_t temp_f_last_update)
     }
     else
     {
-        lv_label_set_text_fmt(label_temp_f, "%.2f", temp_f);
+        lv_label_set_text_fmt(label_temp_f, "%.1f", temp_f);
     }
 
     char last_meas_str[25];

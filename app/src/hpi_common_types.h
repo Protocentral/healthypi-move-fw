@@ -109,7 +109,7 @@ struct hpi_computed_hrv_t
 
 struct hpi_hr_t
 {
-    struct tm time_tm;    
+    int64_t timestamp;
     uint16_t hr;
     bool hr_ready_flag;
 };
@@ -152,9 +152,20 @@ struct hpi_batt_status_t
     bool batt_charging;
 };
 
-struct hpi_ecg_timer_t
+enum hpi_ecg_status
 {
-    uint16_t timer_val;
+    HPI_ECG_STATUS_IDLE = 0x00,
+    HPI_ECG_STATUS_STREAMING,
+    HPI_ECG_STATUS_COMPLETE,
+    HPI_ECG_STATUS_ERROR,
+};
+
+struct hpi_ecg_status_t
+{
+    int64_t ts_complete;
+    uint8_t status;
+    uint16_t progress_timer;
+    uint8_t hr;
 };
 
 struct hpi_ecg_lead_on_off_t
@@ -196,6 +207,7 @@ struct hpi_last_update_time_t
     uint8_t bp_dia_last_value;
     int64_t bp_last_update_ts;
 
+    uint8_t ecg_last_hr;
     int64_t ecg_last_update_ts;
 
     uint16_t steps_last_value;

@@ -18,6 +18,7 @@ LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 #include "ble_module.h"
 #include "algos.h"
 #include "ui/move_ui.h"
+#include "hpi_sys.h"
 
 // ProtoCentral data formats
 #define CES_CMDIF_PKT_START_1 0x0A
@@ -40,8 +41,6 @@ static bool settings_send_usb_enabled = false;
 static bool settings_send_ble_enabled = true;
 static bool settings_plot_enabled = true;
 
-static struct tm data_mod_sys_time;
-
 enum hpi5_data_format
 {
     DATA_FMT_OPENVIEW,
@@ -63,7 +62,7 @@ K_MUTEX_DEFINE(mutex_hr_change);
 ZBUS_CHAN_DECLARE(hr_chan);
 
 
-ZBUS_CHAN_DECLARE(ecg_hr_chan);
+ZBUS_CHAN_DECLARE(ecg_stat_chan);
 
 extern struct k_msgq q_ecg_bioz_sample;
 extern struct k_msgq q_ppg_wrist_sample;
@@ -275,13 +274,13 @@ void data_thread(void)
                 k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
             }
 
-            uint16_t ecg_hr = ecg_bioz_sensor_sample.hr;
-            zbus_chan_pub(&ecg_hr_chan, &ecg_hr, K_SECONDS(1));
+            /*uint16_t ecg_hr = ecg_bioz_sensor_sample.hr;
+            zbus_chan_pub(&ecg_stat_chan, &ecg_hr, K_SECONDS(1));
 
             if (ecg_bioz_sensor_sample.rrint == 1)
             {
                 LOG_DBG("RRINT !");
-            }
+            }*/
         }
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
@@ -323,7 +322,7 @@ void data_thread(void)
                     if ((k_uptime_seconds() - hr_zbus_last_pub_time) > 2)
                     {
                         struct hpi_hr_t hr_chan_value = {
-                            .time_tm = data_mod_sys_time,
+                            .timestamp = hw_get_sys_time_ts(),
                             .hr = ppg_wr_sensor_sample.hr,
                             .hr_ready_flag = true,
                         };
@@ -339,15 +338,6 @@ void data_thread(void)
         k_sleep(K_MSEC(40));
     }
 }
-
-static void data_mod_sys_time_listener(const struct zbus_channel *chan)
-{
-    const struct tm *sys_time = zbus_chan_const_msg(chan);
-    data_mod_sys_time = *sys_time;
-
-    // rtc_time_to_tm
-}
-ZBUS_LISTENER_DEFINE(data_mod_sys_time_lis, data_mod_sys_time_listener);
 
 #define DATA_THREAD_STACKSIZE 4096
 #define DATA_THREAD_PRIORITY 7

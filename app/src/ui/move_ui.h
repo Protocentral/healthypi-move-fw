@@ -114,7 +114,7 @@ LV_IMG_DECLARE(img_heart_35);
 LV_IMG_DECLARE(img_steps_48);
 LV_IMG_DECLARE(img_calories_48);
 LV_IMG_DECLARE(img_timer_48);
-LV_IMG_DECLARE(ecg_120);
+LV_IMG_DECLARE(ecg_70);
 LV_IMG_DECLARE(bp_70);
 //LV_IMG_DECLARE(icon_spo2_30x35);
 LV_IMG_DECLARE(img_heart_120);
@@ -172,9 +172,8 @@ void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_ti
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
-void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_last_update_ts);
+void hpi_disp_hr_update_hr(uint16_t hr, int64_t last_update_ts);
 void hpi_disp_hr_load_trend(void);
-struct tm disp_get_hr_last_update_ts(void);
 void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // Spo2 Screen functions
