@@ -33,6 +33,7 @@ extern struct k_sem sem_bpt_exit_mode_cal;
 void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
     uint8_t cmd_cmd_id = in_pkt_buf[0];
+    uint8_t recording_type =0;
 
     LOG_DBG("RX Command: %X Len: %d", cmd_cmd_id, pkt_len);
 
@@ -87,8 +88,6 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         LOG_DBG("PIN: %02X %02X %02X %02X %02X %02X", hpi_pin[0], hpi_pin[1], hpi_pin[2], hpi_pin[3], hpi_pin[4], hpi_pin[5]);
         //hpi_check_pin(hpi_pin);
         break;
-    
-
     // File System Commands
     case HPI_CMD_LOG_GET_COUNT:
         LOG_DBG("RX CMD Get Log Count");
@@ -118,6 +117,32 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
     case HPI_CMD_LOG_WIPE_ALL:
         LOG_DBG("RX CMD Log Wipe");
         log_wipe_all();
+        break;
+    case HPI_CMD_RECORDING_COUNT:
+        LOG_DBG("RX CMD Recording Count");
+        recording_type = in_pkt_buf[1];
+        uint16_t recording_count = log_get_count(recording_type);
+        hpi_cmdif_send_count_rsp(HPI_CMD_RECORDING_COUNT, recording_type, recording_count);
+        break;
+    case HPI_CMD_RECORDING_INDEX:
+        LOG_DBG("RX CMD Recording Index");
+        recording_type = in_pkt_buf[1];
+        log_get_index(recording_type);
+        break;
+    case HPI_CMD_RECORDING_FETCH_FILE:
+        LOG_DBG("RX CMD Recording Fetch File");
+        recording_type = in_pkt_buf[1];
+        int64_t recording_id_int64 = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            recording_id_int64 |= ((int64_t)in_pkt_buf[2 + i] << (8 * i));
+        }
+        log_get(recording_type, recording_id_int64);
+        break;
+    case HPI_CMD_RECORDING_DELETE:
+        LOG_DBG("RX CMD Recording Delete");
+        recording_type = in_pkt_buf[1];
+        log_delete(recording_type);
         break;
 
     

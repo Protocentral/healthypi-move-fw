@@ -14,6 +14,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 #include "log_module.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
@@ -32,7 +33,7 @@ K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 
-ZBUS_CHAN_DECLARE(ecg_timer_chan);
+ZBUS_CHAN_DECLARE(ecg_stat_chan);
 ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
 #define ECG_SAMPLING_INTERVAL_MS 125
@@ -65,6 +66,7 @@ RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
 static bool ecg_active = false;
 static bool m_ecg_lead_on_off = true;
 
+static uint16_t m_ecg_hr = 0;
 
 // EXTERNS
 extern const struct device *const max30001_dev;
@@ -72,7 +74,6 @@ extern struct k_sem sem_ecg_bioz_smf_start;
 extern struct k_sem sem_ecg_bioz_sm_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
-
 
 static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 {
@@ -102,6 +103,8 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 
         ecg_bioz_sensor_sample.hr = edata->hr;
         ecg_bioz_sensor_sample.rtor = edata->rri;
+
+        m_ecg_hr = edata->hr;
         // ecg_bioz_sensor_sample.rrint = edata->rri;
 
         LOG_DBG("RRI: %d", edata->rri);
@@ -166,31 +169,6 @@ static void ecg_bioz_sampling_handler(struct k_timer *dummy)
 }
 
 K_TIMER_DEFINE(tmr_ecg_bioz_sampling, ecg_bioz_sampling_handler, NULL);
-
-/*void ecg_bioz_sampling_thread_runner(void *, void *, void *)
-{
-
-    uint8_t ecg_bioz_buf[512];
-    int ret;
-
-    LOG_INF("ECG/ BioZ Sampling starting");
-
-    for (;;)
-    {
-        ret = sensor_read(&max30001_iodev, &max30001_read_rtio_poll_ctx, ecg_bioz_buf, sizeof(ecg_bioz_buf));
-        if (ret < 0)
-        {
-            LOG_ERR("Error reading sensor data");
-            continue;
-        }
-        sensor_ecg_bioz_process_decode(ecg_bioz_buf, sizeof(ecg_bioz_buf));
-
-        // sensor_read_async_mempool(&max30001_iodev, &max30001_read_rtio_poll_ctx, NULL);
-        // sensor_processing_with_callback(&max30001_read_rtio_poll_ctx, sensor_ecg_bioz_process_cb);
-
-        k_sleep(K_MSEC(ECG_SAMPLING_INTERVAL_MS));
-    }
-}*/
 
 static int hw_max30001_bioz_enable(void)
 {
@@ -270,10 +248,12 @@ static void st_ecg_bioz_stream_run(void *o)
             LOG_DBG("ECG timer: %d", ecg_countdown_val);
             ecg_last_timer_val = k_uptime_get_32();
 
-            struct hpi_ecg_timer_t ecg_timer = {
-                .timer_val = ecg_countdown_val,
-            };
-            zbus_chan_pub(&ecg_timer_chan, &ecg_timer, K_NO_WAIT);
+            struct hpi_ecg_status_t ecg_stat = {
+                .ts_complete = 0,
+                .status = HPI_ECG_STATUS_STREAMING,
+                .hr = m_ecg_hr,
+                .progress_timer = ecg_countdown_val};
+            zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 
             if (ecg_countdown_val <= 0)
             {
@@ -300,7 +280,7 @@ static void st_ecg_bioz_stream_exit(void *o)
 
 static void work_ecg_write_file_handler(struct k_work *work)
 {
-    struct tm tm_sys_time = hw_get_sys_time();
+    struct tm tm_sys_time = hpi_sys_get_sys_time();
     int64_t log_time = timeutil_timegm64(&tm_sys_time);
 
     LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);

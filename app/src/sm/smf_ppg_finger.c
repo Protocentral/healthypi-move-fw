@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 #include "fs_module.h"
 #include "ui/move_ui.h"
 #include "cmd_module.h"
+#include "hpi_sys.h"
 
 #define PPG_FI_SAMPLING_INTERVAL_MS 20
 #define MAX30101_SENSOR_ID 0x15
@@ -223,7 +224,7 @@ static void hw_bpt_start_est(void)
     // ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
     bpt_process_done = false;
 
-    struct tm curr_time = hw_get_sys_time();
+    struct tm curr_time = hpi_sys_get_sys_time();
 
     uint32_t date, time;
     hw_bpt_encode_date_time(&curr_time, &date, &time);
@@ -264,7 +265,7 @@ static void hw_bpt_start_cal(int cal_index, int cal_sys, int cal_dia)
     // ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
     bpt_process_done = false;
     // Set the date and time for the BPT calibration
-    struct tm curr_time = hw_get_sys_time();
+    struct tm curr_time = hpi_sys_get_sys_time();
 
     uint32_t date, time;
     hw_bpt_encode_date_time(&curr_time, &date, &time);

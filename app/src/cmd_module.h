@@ -30,15 +30,20 @@ enum hpi_cmds
     HPI_CMD_UNPAIR_DEVICE = 0x44,
     HPI_CMD_PAIR_CHECK_PIN = 0x45,
 
-    HPI_CMD_LOG_GET_INDEX = 0x50, //No arguments
-    HPI_CMD_LOG_GET_FILE = 0x51,       //Needs session ID (uint16) as argument
-    HPI_CMD_LOG_DELETE = 0x52,    //Needs session ID (uint16) as argument
-    HPI_CMD_LOG_WIPE_ALL = 0x53,  //No arguments
-    HPI_CMD_LOG_GET_COUNT = 0x54, //No arguments
+    HPI_CMD_LOG_GET_INDEX = 0x50, // No arguments
+    HPI_CMD_LOG_GET_FILE = 0x51,  // Needs session ID (uint16) as argument
+    HPI_CMD_LOG_DELETE = 0x52,    // Needs session ID (uint16) as argument
+    HPI_CMD_LOG_WIPE_ALL = 0x53,  // No arguments
+    HPI_CMD_LOG_GET_COUNT = 0x54, // No arguments
 
     HPI_CMD_BPT_SEL_CAL_MODE = 0x60,
-    HPI_CMD_START_BPT_CAL_START = 0x61, //Needs Sys/Diastolic (as uint8/uint8) as argument
-    HPI_CMD_BPT_EXIT_CAL_MODE = 0x62,    
+    HPI_CMD_START_BPT_CAL_START = 0x61, // Needs Sys/Diastolic (as uint8/uint8) as argument
+    HPI_CMD_BPT_EXIT_CAL_MODE = 0x62,
+
+    HPI_CMD_RECORDING_COUNT = 0x30,      // Needs recording type (uint8) as argument
+    HPI_CMD_RECORDING_INDEX = 0x31,      // Needs recording type (uint8) as argument
+    HPI_CMD_RECORDING_FETCH_FILE = 0x32, // Needs recording type (uint8) as argument
+    HPI_CMD_RECORDING_DELETE = 0x33,     // Needs recording type (uint8) as argument
 };
 
 enum cmdif_pkt_type

@@ -26,9 +26,7 @@ void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uin
     scr_spo2_complete = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_complete, &style_scr_black, 0);
     lv_obj_clear_flag(scr_spo2_complete, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    // draw_scr_common(scr_spo2_complete);
 
-    /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_spo2_complete);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
@@ -40,9 +38,6 @@ void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uin
     lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
     lv_label_set_text(lbl_info_scroll, LV_SYMBOL_DOWN);
     lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_lighten(LV_PALETTE_RED, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_t *label_signal = lv_label_create(cont_col);
-    lv_label_set_text(label_signal, "Success");
 
     lv_obj_t *img1 = lv_img_create(cont_col);
     lv_img_set_src(img1, &img_complete_85);

@@ -4,12 +4,11 @@
 #include <lvgl.h>
 #include <stdio.h>
 
-#include <zephyr/logging/log.h>
-
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "trends.h"
 #include "hw_module.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2, LOG_LEVEL_DBG);
 
@@ -31,6 +30,7 @@ extern lv_style_t style_tiny;
 
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
+extern lv_style_t style_bg_green;
 
 static void scr_spo2_btn_measure_handler(lv_event_t *e)
 {
@@ -38,7 +38,8 @@ static void scr_spo2_btn_measure_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+        //hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
     }
 }
 
@@ -46,7 +47,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 {
     scr_spo2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2, &style_scr_black, 0);
-    lv_obj_clear_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    lv_obj_clear_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); 
 
     lv_obj_t *cont_col = lv_obj_create(scr_spo2);
     lv_obj_set_size(cont_col, 390, 390);
@@ -55,7 +56,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
-    lv_obj_add_style(cont_col, &style_bg_red, 0);
+    lv_obj_add_style(cont_col, &style_bg_green, 0);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "SpO2");
@@ -72,10 +73,16 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_t *img_spo2 = lv_img_create(cont_spo2);
     lv_img_set_src(img_spo2, &icon_spo2_100);
 
-    uint16_t m_spo2_val = 0;
+    uint8_t m_spo2_val = 0;
     int64_t m_spo2_time = 0;
 
-    hpi_smf_ppg_get_last_spo2(&m_spo2_val, &m_spo2_time);
+    // Get the last SpO2 value and time
+    if (hpi_sys_get_last_spo2_update(&m_spo2_val, &m_spo2_time) != 0)
+    {
+        LOG_ERR("Failed to get last SpO2 value");
+        m_spo2_val = 0;
+        m_spo2_time = 0;
+    }
 
     label_spo2_percent = lv_label_create(cont_spo2);
     if (m_spo2_val == 0)
@@ -89,10 +96,11 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_spo2_percent, &style_white_large, 0);
 
     lv_obj_t *label_spo2_percent_sign = lv_label_create(cont_spo2);
-    lv_label_set_text(label_spo2_percent_sign, " %");
+    lv_label_set_text(label_spo2_percent_sign, " %%");
 
-    char last_meas_str[74];
-    hpi_helper_get_date_time_str(m_spo2_time, last_meas_str);
+    char last_meas_str[25];
+    //hpi_helper_get_date_time_str(m_spo2_time, last_meas_str);
+    hpi_helper_get_relative_time_str(m_spo2_time, last_meas_str, sizeof(last_meas_str));
     label_spo2_last_update_time = lv_label_create(cont_col);
     lv_label_set_text(label_spo2_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_spo2_last_update_time, LV_TEXT_ALIGN_CENTER, 0);

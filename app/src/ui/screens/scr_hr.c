@@ -11,6 +11,7 @@
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "trends.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hr, LOG_LEVEL_DBG);
 
@@ -80,17 +81,36 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     // lv_img_set_src(img1, &img_heart_35);
     //  lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 
+    uint16_t hr = 0;
+    int64_t last_update_ts = 0;
+
+    if(hpi_sys_get_last_hr_update(&hr, &last_update_ts) != 0)
+    {
+        hr = 0;
+        last_update_ts = 0;
+    }
+
     label_hr_bpm = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_bpm, "--");
     lv_obj_add_style(label_hr_bpm, &style_white_large, 0);
+
+    if (hr == 0)
+    {
+        lv_label_set_text(label_hr_bpm, "--");
+    }
+    else
+    {
+        lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
+    }
 
     // HR Sub bpm label
     lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_sub, " bpm");
 
+    char last_meas_str[74];
+    hpi_helper_get_date_time_str(last_update_ts, last_meas_str);
     label_hr_last_update_time = lv_label_create(cont_col);
-    struct tm last_update_ts = disp_get_hr_last_update_ts();
-    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %02d:%02d", last_update_ts.tm_hour, last_update_ts.tm_min);
+    lv_label_set_text(label_hr_last_update_time, last_meas_str);
+    lv_obj_set_style_text_align(label_hr_last_update_time, LV_TEXT_ALIGN_CENTER, 0);  
 
     lv_obj_t *lbl_gap = lv_label_create(cont_col);
     lv_label_set_text(lbl_gap, " ");
@@ -102,7 +122,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_hr, m_scroll_dir);
 }
 
-void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
+void hpi_disp_hr_update_hr(uint16_t hr, int64_t last_update_ts)
 {
     if (label_hr_bpm == NULL)
         return;
@@ -115,5 +135,8 @@ void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_tm_last_update)
     {
         lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
-    lv_label_set_text_fmt(label_hr_last_update_time, "Last updated: %02d:%02d", hr_tm_last_update.tm_hour, hr_tm_last_update.tm_min);
+
+    char last_meas_str[25];
+    hpi_helper_get_relative_time_str(last_update_ts, last_meas_str, sizeof(last_meas_str));
+    lv_label_set_text(label_hr_last_update_time, last_meas_str);
 }

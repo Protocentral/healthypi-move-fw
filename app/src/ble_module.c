@@ -32,23 +32,23 @@ struct bt_conn *current_conn;
 #define HPI_TEMP_SERVICE BT_UUID_DECLARE_16(BT_UUID_HTS_VAL)
 #define HPI_TEMP_CHAR BT_UUID_DECLARE_16(BT_UUID_TEMPERATURE_VAL)
 
-// ECG/Resp Service 00001122-0000-1000-8000-00805f9b34fb
-#define UUID_HPI_ECG_RESP_SERV BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0x00001122, 0x0000, 0x1000, 0x8000, 0x00805f9b34fb))
+// ECG/GSR Service 00001122-0000-1000-8000-00805f9b34fb
+#define UUID_HPI_ECG_GSR_SERV BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0x00001122, 0x0000, 0x1000, 0x8000, 0x00805f9b34fb))
 
 // ECG Characteristic 00001424-0000-1000-8000-00805f9b34fb
 #define UUID_HPI_ECG_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0x00001424, 0x0000, 0x1000, 0x8000, 0x00805f9b34fb))
 
-// RESP Characteristic babe4a4c-7789-11ed-a1eb-0242ac120002
-#define UUID_HPI_RESP_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xbabe4a4c, 0x7789, 0x11ed, 0xa1eb, 0x0242ac120002))
+// GSR Characteristic babe4a4c-7789-11ed-a1eb-0242ac120002
+#define UUID_HPI_GSR_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xbabe4a4c, 0x7789, 0x11ed, 0xa1eb, 0x0242ac120002))
 
 // PPG Service cd5c7491-4448-7db8-ae4c-d1da8cba36d0
 #define UUID_HPI_PPG_SERV BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xcd5c7491, 0x4448, 0x7db8, 0xae4c, 0xd1da8cba36d0))
 
-// PPG Characteristic cd5c1525-4448-7db8-ae4c-d1da8cba36d0
-#define UUID_HPI_PPG_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xcd5c1525, 0x4448, 0x7db8, 0xae4c, 0xd1da8cba36d0))
+// PPG Wrist Characteristic cd5c1525-4448-7db8-ae4c-d1da8cba36d0
+#define UUID_HPI_PPG_WR_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xcd5c1525, 0x4448, 0x7db8, 0xae4c, 0xd1da8cba36d0))
 
-// Resp rate Characteristic cd5ca86f-4448-7db8-ae4c-d1da8cba36d0
-#define UUID_HPI_RESP_RATE_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xcd5ca86f, 0x4448, 0x7db8, 0xae4c, 0xd1da8cba36d0))
+// PPG Finger Characteristic cd5ca86f-4448-7db8-ae4c-d1da8cba36d0
+#define UUID_HPI_PPG_FI_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xcd5ca86f, 0x4448, 0x7db8, 0xae4c, 0xd1da8cba36d0))
 
 #define CMD_SERVICE_UUID 0xdc, 0xad, 0x7f, 0xc4, 0x23, 0x90, 0x4d, 0xd4, \
 						 0x96, 0x8d, 0x0f, 0x97, 0x92, 0x74, 0xbf, 0x01
@@ -85,23 +85,78 @@ static void temp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value
 {
 }
 
-static void ecg_resp_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+static void ppg_fi_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 	ARG_UNUSED(attr);
 	switch (value)
 	{
 	case BT_GATT_CCC_NOTIFY:
-		LOG_DBG("ECG/RESP CCCD subscribed");
+		LOG_DBG("PPG Finger CCCD subscribed");
 		break;
-
 	case BT_GATT_CCC_INDICATE:
 		// Start sending stuff via indications
 		break;
-
 	case 0:
-		LOG_DBG("ECG/RESP CCCD unsubscribed");
+		LOG_DBG("PPG Finger CCCD unsubscribed");
 		break;
+	default:
+		LOG_DBG("Error, CCCD has been set to an invalid value");
+	}
+}
 
+static void ecg_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+	ARG_UNUSED(attr);
+	switch (value)
+	{
+	case BT_GATT_CCC_NOTIFY:
+		LOG_DBG("ECG CCCD subscribed");
+		break;
+	case BT_GATT_CCC_INDICATE:
+		// Start sending stuff via indications
+		break;
+	case 0:
+		LOG_DBG("ECG CCCD unsubscribed");
+		break;
+	default:
+		LOG_DBG("Error, CCCD has been set to an invalid value");
+	}
+}
+
+static void gsr_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+	ARG_UNUSED(attr);
+	switch (value)
+	{
+	case BT_GATT_CCC_NOTIFY:
+		
+		break;
+	case BT_GATT_CCC_INDICATE:
+		// Start sending stuff via indications
+		LOG_DBG("GSR CCCD subscribed");
+		break;
+	case 0:
+		LOG_DBG("GSR CCCD unsubscribed");
+		break;
+	default:
+		LOG_DBG("Error, CCCD has been set to an invalid value");
+	}
+}
+
+static void ppg_wr_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+	ARG_UNUSED(attr);
+	switch (value)
+	{
+	case BT_GATT_CCC_NOTIFY:
+		LOG_DBG("PPG Wrist CCCD subscribed");
+		break;
+	case BT_GATT_CCC_INDICATE:
+		// Start sending stuff via indications
+		break;
+	case 0:
+		LOG_DBG("PPG Wrist CCCD unsubscribed");
+		break;
 	default:
 		LOG_DBG("Error, CCCD has been set to an invalid value");
 	}
@@ -127,19 +182,34 @@ BT_GATT_SERVICE_DEFINE(hpi_temp_service,
 					   BT_GATT_CCC(temp_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
-BT_GATT_SERVICE_DEFINE(hpi_ppg_resp_service,
+BT_GATT_SERVICE_DEFINE(hpi_ppg_service,
 					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_PPG_SERV),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_PPG_CHAR,
+					   BT_GATT_CHARACTERISTIC(UUID_HPI_PPG_WR_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 											  BT_GATT_PERM_READ,
 											  NULL, NULL, NULL),
-					   BT_GATT_CCC(spo2_on_cccd_changed,
+					   BT_GATT_CCC(ppg_wr_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_RESP_RATE_CHAR,
+					   BT_GATT_CHARACTERISTIC(UUID_HPI_PPG_FI_CHAR,
 											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 											  BT_GATT_PERM_READ,
 											  NULL, NULL, NULL),
-					   BT_GATT_CCC(ecg_resp_on_cccd_changed,
+					   BT_GATT_CCC(ppg_fi_on_cccd_changed,
+								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
+
+BT_GATT_SERVICE_DEFINE(hpi_ecg_gsr_service,
+					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_ECG_GSR_SERV),
+					   BT_GATT_CHARACTERISTIC(UUID_HPI_ECG_CHAR,
+											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+											  BT_GATT_PERM_READ,
+											  NULL, NULL, NULL),
+					   BT_GATT_CCC(ecg_on_cccd_changed,
+								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+					   BT_GATT_CHARACTERISTIC(UUID_HPI_GSR_CHAR,
+											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+											  BT_GATT_PERM_READ,
+											  NULL, NULL, NULL),
+					   BT_GATT_CCC(gsr_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 /* This function is called whenever the RX Characteristic has been written to by a Client */
@@ -217,17 +287,73 @@ void hpi_ble_send_data(const uint8_t *data, uint16_t len)
 	bt_gatt_notify(NULL, attr, data, len);
 }
 
-void ble_ppg_notify(int16_t *ppg_data, uint8_t len)
+void ble_ppg_notify_wr(uint32_t *ppg_data, uint8_t len)
 {
 	uint8_t out_data[128];
 
 	for (int i = 0; i < len; i++)
 	{
-		out_data[i * 2] = (uint8_t)ppg_data[i];
-		out_data[i * 2 + 1] = (uint8_t)(ppg_data[i] >> 8);
+		out_data[i * 4] = (uint8_t)ppg_data[i];
+		out_data[i * 4 + 1] = (uint8_t)(ppg_data[i] >> 8);
+		out_data[i * 4 + 2] = (uint8_t)(ppg_data[i] >> 16);
+		out_data[i * 4 + 3] = (uint8_t)(ppg_data[i] >> 24);
 	}
 
-	bt_gatt_notify(NULL, &hpi_ppg_resp_service.attrs[1], &out_data, len * 2);
+	// LOG_DBG("PPG Not len %d", len);
+
+	bt_gatt_notify(NULL, &hpi_ppg_service.attrs[2], &out_data, len * 4);
+}
+
+void ble_ppg_notify_fi(uint32_t *ppg_data, uint8_t len)
+{
+	uint8_t out_data[128];
+
+	for (int i = 0; i < len; i++)
+	{
+		out_data[i * 4] = (uint8_t)ppg_data[i];
+		out_data[i * 4 + 1] = (uint8_t)(ppg_data[i] >> 8);
+		out_data[i * 4 + 2] = (uint8_t)(ppg_data[i] >> 16);
+		out_data[i * 4 + 3] = (uint8_t)(ppg_data[i] >> 24);
+	}
+
+	// LOG_DBG("PPG Not len %d", len);
+
+	bt_gatt_notify(NULL, &hpi_ppg_service.attrs[4], &out_data, len * 4);
+}
+
+void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
+{ 
+	uint8_t out_data[128];
+	
+	for (int i = 0; i < len; i++)
+	{
+		out_data[i * 4] = (uint8_t)ecg_data[i];
+		out_data[i * 4 + 1] = (uint8_t)(ecg_data[i] >> 8);
+		out_data[i * 4 + 2] = (uint8_t)(ecg_data[i] >> 16);
+		out_data[i * 4 + 3] = (uint8_t)(ecg_data[i] >> 24);
+	}
+
+	// LOG_DBG("ECG Not len %d", len);
+
+	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[2], &out_data, len * 4);
+}
+
+void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
+{
+	uint8_t out_data[128];
+	int32_t gsr_data_i32 = 0;
+
+	for (int i = 0; i < len; i++)
+	{
+		out_data[i * 4] = (uint8_t)gsr_data_i32;
+		out_data[i * 4 + 1] = (uint8_t)(gsr_data_i32 >> 8);
+		out_data[i * 4 + 2] = (uint8_t)(gsr_data_i32 >> 16);
+		out_data[i * 4 + 3] = (uint8_t)(gsr_data_i32 >> 24);
+	}
+
+	//LOG_DBG("GSR Not len %d", len);
+
+	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[4], &out_data, len * 4);
 }
 
 void ble_bpt_cal_progress_notify(uint8_t bpt_status, uint8_t bpt_progress)
@@ -291,11 +417,11 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
 
 	if (!err)
 	{
-		printk("Security changed: %s level %u\n", addr, level);
+		LOG_INF("Security changed: %s level %u\n", addr, level);
 	}
 	else
 	{
-		printk("Security failed: %s level %u err %s(%d)\n", addr, level,
+		LOG_ERR("Security failed: %s level %u err %s(%d)\n", addr, level,
 			   bt_security_err_to_str(err), err);
 	}
 }

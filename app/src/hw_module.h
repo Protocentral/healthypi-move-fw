@@ -18,14 +18,11 @@ void hpi_hw_ldsw2_on(void);
 void hpi_pwr_display_sleep(void);
 void hpi_pwr_display_wake(void);
 
-struct tm hw_get_sys_time(void);
-int64_t hw_get_sys_time_ts(void);
+
 
 bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
 int hw_max32664c_stop_algo(void);
-
-int hpi_smf_ppg_get_last_spo2(uint16_t *spo2_value, int64_t *timestamp);
 
 bool get_on_skin(void);
 void set_on_skin(bool on_skin);

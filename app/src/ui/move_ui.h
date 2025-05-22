@@ -19,7 +19,7 @@
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 256 // SAMPLE_RATE * 4
 #define BPT_DISP_WINDOW_SIZE 256
-#define SPO2_DISP_WINDOW_SIZE 64
+#define SPO2_DISP_WINDOW_SIZE 128
 
 #define HPI_DISP_TIME_REFR_INT 1000
 #define HPI_DISP_BATT_REFR_INT 1000
@@ -88,8 +88,9 @@ enum hpi_disp_spl_screens
    
     SCR_SPL_PLOT_HRV,
     SCR_SPL_PLOT_HRV_SCATTER,
+    SCR_SPL_SPO2_SELECT,
     SCR_SPL_SPO2_SCR2,
-    SCR_SPL_SPO2_SCR3,
+    SCR_SPL_SPO2_MEASURE,
     SCR_SPL_SPO2_COMPLETE,
     SCR_SPL_SPO2_TIMEOUT,
     SCR_SPL_HR_SCR2,
@@ -113,7 +114,7 @@ LV_IMG_DECLARE(img_heart_35);
 LV_IMG_DECLARE(img_steps_48);
 LV_IMG_DECLARE(img_calories_48);
 LV_IMG_DECLARE(img_timer_48);
-LV_IMG_DECLARE(ecg_120);
+LV_IMG_DECLARE(ecg_70);
 LV_IMG_DECLARE(bp_70);
 //LV_IMG_DECLARE(icon_spo2_30x35);
 LV_IMG_DECLARE(img_heart_120);
@@ -171,9 +172,8 @@ void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_ti
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
-void hpi_disp_hr_update_hr(uint16_t hr, struct tm hr_last_update_ts);
+void hpi_disp_hr_update_hr(uint16_t hr, int64_t last_update_ts);
 void hpi_disp_hr_load_trend(void);
-struct tm disp_get_hr_last_update_ts(void);
 void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // Spo2 Screen functions
@@ -181,6 +181,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir);
 void draw_scr_spo2_scr3(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void hpi_disp_update_spo2(uint8_t spo2, int64_t ts_last_update);
+void draw_scr_spo2_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 void hpi_disp_spo2_load_trend(void);
 void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
@@ -188,6 +189,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 void hpi_disp_spo2_update_hr(int hr);
 void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -266,7 +268,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir);
 void hpi_disp_home_update_batt_level(int batt_level, bool charging);
 void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
 
-void hpi_temp_disp_update_temp_f(double temp_f);
+void hpi_temp_disp_update_temp_f(double temp_f, int64_t temp_f_last_update);
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir);

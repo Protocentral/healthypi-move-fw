@@ -20,6 +20,8 @@
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/zbus/zbus.h>
+#include <zephyr/settings/settings.h>
+#include <zephyr/fs/fs.h>
 
 #include <zephyr/sys/reboot.h>
 #include <zephyr/pm/device.h>
@@ -45,6 +47,7 @@
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
 #include "ble_module.h"
+#include "hpi_sys.h"
 
 #include <max32664_updater.h>
 
@@ -81,6 +84,7 @@ volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 
 static volatile bool vbus_connected;
+static int64_t ref_time;
 
 // USB CDC UART
 #define RING_BUF_SIZE 1024
@@ -99,6 +103,7 @@ K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ble_thread_start, 0, 1);
+K_SEM_DEFINE(sem_hpi_sys_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
@@ -109,8 +114,7 @@ ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
 
-static int64_t ref_time;
-struct tm sys_tm_time;
+
 
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
@@ -132,8 +136,7 @@ static struct hpi_version_desc_t hpi_max32664d_req_ver = {
     .minor = 0,
 };
 
-static bool is_on_skin = false;
-K_MUTEX_DEFINE(mutex_on_skin);
+
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
@@ -161,22 +164,6 @@ static uint16_t today_get_steps(void)
     return steps;
 }
 
-bool get_device_on_skin(void)
-{
-    bool on_skin = false;
-    k_mutex_lock(&mutex_on_skin, K_FOREVER);
-    on_skin = is_on_skin;
-    k_mutex_unlock(&mutex_on_skin);
-
-    return on_skin;
-}
-
-void set_device_on_skin(bool on_skin)
-{
-    k_mutex_lock(&mutex_on_skin, K_FOREVER);
-    is_on_skin = on_skin;
-    k_mutex_unlock(&mutex_on_skin);
-}
 
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
@@ -834,17 +821,6 @@ void hw_module_init(void)
     // usb_init();
 }
 
-struct tm hw_get_sys_time(void)
-{
-    return sys_tm_time;
-}
-
-int64_t hw_get_sys_time_ts(void)
-{
-    int64_t sys_time_ts = timeutil_timegm64(&sys_tm_time);
-    return sys_time_ts;
-}
-
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;
@@ -868,6 +844,8 @@ void hw_thread(void)
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
 
+    k_sem_give(&sem_hpi_sys_thread_start);
+
     int sc_reset_counter = 0;
     for (;;)
     {
@@ -886,8 +864,9 @@ void hw_thread(void)
         {
             LOG_ERR("Failed to get RTC time");
         }
-        sys_tm_time = *rtc_time_to_tm(&rtc_sys_time);
-        zbus_chan_pub(&sys_time_chan, &sys_tm_time, K_SECONDS(1));
+        struct tm m_tm_time = *rtc_time_to_tm(&rtc_sys_time);
+        hpi_sys_set_sys_time(&m_tm_time);
+        zbus_chan_pub(&sys_time_chan, &m_tm_time, K_SECONDS(1));
 
         // Read and publish steps
         _steps = acc_get_steps();
@@ -927,11 +906,12 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        if(get_device_on_skin()==true)
+        if (hpi_sys_get_device_on_skin() == true)
         {
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {
                 .temp_f = _temp_f,
+                .timestamp = hw_get_sys_time_ts(),                
             };
             zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
         }

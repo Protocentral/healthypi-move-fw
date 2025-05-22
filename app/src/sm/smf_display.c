@@ -11,10 +11,11 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 #include "max32664_updater.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
-#define HPI_DEFAULT_START_SCREEN SCR_BPT
+#define HPI_DEFAULT_START_SCREEN SCR_SPO2
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -65,7 +66,7 @@ static uint32_t splash_scr_start_time = 0;
 
 // HR Screen variables
 static uint16_t m_disp_hr = 0;
-static struct tm m_disp_hr_last_update_tm;
+static int64_t m_disp_hr_updated_ts = 0;
 
 // @brief Spo2 Screen variables
 static uint8_t m_disp_spo2 = 0;
@@ -78,6 +79,7 @@ static uint16_t m_disp_active_time_s = 0;
 
 // @brief Temperature Screen variables
 static float m_disp_temp = 0;
+static int64_t m_disp_temp_updated_ts = 0;
 
 static uint16_t m_disp_bp_sys = 0;
 static uint16_t m_disp_bp_dia = 0;
@@ -121,9 +123,10 @@ static const screen_draw_func_t screen_draw_funcs[] = {
     [SCR_SPL_PLOT_HRV_SCATTER] = draw_scr_hrv_scatter,
     [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
     [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
-    [SCR_SPL_SPO2_SCR3] = draw_scr_spo2_scr3,
+    [SCR_SPL_SPO2_MEASURE] = draw_scr_spo2_measure,
     [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
     [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
+    [SCR_SPL_SPO2_SELECT] = draw_scr_spo2_select,
 
     [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
     [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,
@@ -177,11 +180,6 @@ static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
     double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
     /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
     return (uint16_t)_m_kcals;
-}
-
-struct tm disp_get_hr_last_update_ts(void)
-{
-    return m_disp_hr_last_update_tm;
 }
 
 static void st_display_init_entry(void *o)
@@ -361,7 +359,7 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
 
         lv_disp_trig_activity(NULL);
     }
-    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
     {
         hpi_disp_spo2_plotPPG(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
@@ -436,12 +434,18 @@ static void hpi_disp_update_screens(void)
     case SCR_TEMP:
         if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
         {
-            hpi_temp_disp_update_temp_f((double)m_disp_temp);
+            if (m_disp_temp > 0)
+            {
+                hpi_temp_disp_update_temp_f((double)m_disp_temp, m_disp_temp_updated_ts);
+            }
             last_temp_trend_refresh = k_uptime_get_32();
         }
         break;
     case SCR_HR:
-        hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_last_update_tm);
+        if (m_disp_hr > 0)
+        {
+            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_updated_ts);
+        }
         break;
     case SCR_SPL_HR_SCR2:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
@@ -607,7 +611,7 @@ static void st_display_active_run(void *o)
             k_sem_give(&sem_ecg_cancel);
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR3)
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
@@ -722,8 +726,8 @@ static void disp_hr_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_disp_hr = hpi_hr->hr;
-    m_disp_hr_last_update_tm = hpi_hr->time_tm;
-    //LOG_DBG("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
+    m_disp_hr_updated_ts = hpi_hr->timestamp;
+    // LOG_DBG("ZB HR: %d at %02d:%02d", hpi_hr->hr, hpi_hr->time_tm.tm_hour, hpi_hr->time_tm.tm_min);
 }
 ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 
@@ -732,7 +736,7 @@ static void disp_spo2_listener(const struct zbus_channel *chan)
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
     m_disp_spo2 = hpi_spo2->spo2;
     m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
-    //LOG_DBG("ZB Spo2: %d | Time: %lld", hpi_spo2->spo2, hpi_spo2->timestamp);
+    // LOG_DBG("ZB Spo2: %d | Time: %lld", hpi_spo2->spo2, hpi_spo2->timestamp);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
 
@@ -749,6 +753,7 @@ static void disp_temp_listener(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
     m_disp_temp = hpi_temp->temp_f;
+    m_disp_temp_updated_ts = hpi_temp->timestamp;
     LOG_DBG("ZB Temp: %.2f\n", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
@@ -767,18 +772,19 @@ ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 
 static void disp_ecg_timer_listener(const struct zbus_channel *chan)
 {
-    const struct hpi_ecg_timer_t *ecg_timer = zbus_chan_const_msg(chan);
-    m_disp_ecg_timer = ecg_timer->timer_val;
+    const struct hpi_ecg_status_t *ecg_status = zbus_chan_const_msg(chan);
+    m_disp_ecg_timer = ecg_status->progress_timer;
 }
-ZBUS_LISTENER_DEFINE(disp_ecg_timer_lis, disp_ecg_timer_listener);
+ZBUS_LISTENER_DEFINE(disp_ec, disp_ecg_timer_listener);
 
-static void disp_ecg_hr_listener(const struct zbus_channel *chan)
+static void disp_ecg_stat_listener(const struct zbus_channel *chan)
 {
-    const uint16_t *ecg_hr = zbus_chan_const_msg(chan);
-    m_disp_ecg_hr = *ecg_hr;
-    LOG_DBG("ZB ECG HR: %d", *ecg_hr);
+    const struct hpi_ecg_status_t *ecg_status = zbus_chan_const_msg(chan);
+    m_disp_ecg_hr = ecg_status->hr;
+    m_disp_ecg_timer = ecg_status->progress_timer;
+    // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
-ZBUS_LISTENER_DEFINE(disp_ecg_hr_lis, disp_ecg_hr_listener);
+ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 32768
 #define SMF_DISPLAY_THREAD_PRIORITY 5
