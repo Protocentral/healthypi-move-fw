@@ -68,12 +68,33 @@ static bool m_ecg_lead_on_off = true;
 
 static uint16_t m_ecg_hr = 0;
 
+
+static int hw_max30001_ecg_enable(void);
+static int hw_max30001_ecg_disable(void);
+
 // EXTERNS
 extern const struct device *const max30001_dev;
 extern struct k_sem sem_ecg_bioz_smf_start;
 extern struct k_sem sem_ecg_bioz_sm_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
+
+
+static void work_ecg_lon_handler(struct k_work *work)
+{
+    LOG_DBG("ECG LON Work");
+    hw_max30001_ecg_disable();
+    hw_max30001_ecg_enable();
+}
+K_WORK_DEFINE(work_ecg_lon, work_ecg_lon_handler);
+
+static void work_ecg_loff_handler(struct k_work *work)
+{
+    LOG_DBG("ECG LOFF Work");
+
+
+}
+K_WORK_DEFINE(work_ecg_loff, work_ecg_loff_handler);
 
 static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 {
@@ -107,7 +128,7 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
         m_ecg_hr = edata->hr;
         // ecg_bioz_sensor_sample.rrint = edata->rri;
 
-        LOG_DBG("RRI: %d", edata->rri);
+        //LOG_DBG("RRI: %d", edata->rri);
 
         ecg_bioz_sensor_sample.ecg_lead_off = edata->ecg_lead_off;
 
@@ -115,7 +136,8 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
         {
             m_ecg_lead_on_off = true;
             LOG_DBG("ECG LOFF");
-
+            k_work_submit(&work_ecg_loff);
+ 
             // k_sem_give(&sem_ecg_lead_off);
             //  smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_LEADOFF]);
         }
@@ -123,6 +145,7 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
         {
             m_ecg_lead_on_off = false;
             LOG_DBG("ECG LON");
+            k_work_submit(&work_ecg_lon);
             // k_sem_give(&sem_ecg_lead_on);
             // k_sem_give(&sem_ecg_lead_on_local);
             //  smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);

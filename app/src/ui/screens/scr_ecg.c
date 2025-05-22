@@ -67,6 +67,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_set_flex_align(cont_ecg, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_bg_opa(cont_ecg, 0, LV_PART_MAIN);
     lv_obj_add_style(cont_ecg, &style_scr_black, 0);
+    lv_obj_clear_flag(cont_ecg, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *img1 = lv_img_create(cont_ecg);
     lv_img_set_src(img1, &ecg_70);
