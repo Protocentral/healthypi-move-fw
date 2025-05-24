@@ -64,22 +64,20 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_signal, "Heart Rate");
     lv_obj_add_style(label_signal, &style_white_small, 0);
 
-    lv_obj_t *img_hr = lv_img_create(cont_col);
-    lv_img_set_src(img_hr, &img_heart_120);
-
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_bottom(cont_hr, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(cont_hr, 0, LV_PART_MAIN);
-
+    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_bg_opa(cont_hr, 0, 0);
-
+    lv_obj_add_style(cont_hr, &style_scr_black, 0);
+    lv_obj_clear_flag(cont_hr, LV_OBJ_FLAG_SCROLLABLE);
     // lv_obj_t *img1 = lv_img_create(cont_hr);
     // lv_img_set_src(img1, &img_heart_35);
     //  lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
+
+    lv_obj_t *img_hr = lv_img_create(cont_hr);
+    lv_img_set_src(img_hr, &img_heart_70);
 
     uint16_t hr = 0;
     int64_t last_update_ts = 0;
@@ -105,15 +103,14 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     // HR Sub bpm label
     lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_sub, " bpm");
+    lv_obj_add_style(label_hr_sub, &style_white_medium, 0);
 
-    char last_meas_str[74];
-    hpi_helper_get_date_time_str(last_update_ts, last_meas_str);
     label_hr_last_update_time = lv_label_create(cont_col);
+   
+    char last_meas_str[25];
+    hpi_helper_get_relative_time_str(last_update_ts, last_meas_str, sizeof(last_meas_str));
     lv_label_set_text(label_hr_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_hr_last_update_time, LV_TEXT_ALIGN_CENTER, 0);  
-
-    lv_obj_t *lbl_gap = lv_label_create(cont_col);
-    lv_label_set_text(lbl_gap, " ");
 
     lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
     lv_label_set_text(lbl_info_scroll, LV_SYMBOL_UP);

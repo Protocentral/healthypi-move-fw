@@ -117,7 +117,7 @@ LV_IMG_DECLARE(img_timer_48);
 LV_IMG_DECLARE(ecg_70);
 LV_IMG_DECLARE(bp_70);
 //LV_IMG_DECLARE(icon_spo2_30x35);
-LV_IMG_DECLARE(img_heart_120);
+LV_IMG_DECLARE(img_heart_70);
 LV_IMG_DECLARE(img_temp_100);
 LV_IMG_DECLARE(icon_spo2_100);
 LV_IMG_DECLARE(img_spo2_hand);
@@ -126,6 +126,9 @@ LV_IMG_DECLARE(img_complete_85);
 LV_IMG_DECLARE(img_failed_100);
 
 LV_IMG_DECLARE(img_bpt_finger_90);
+
+LV_IMG_DECLARE(img_bpt_finger_45);
+LV_IMG_DECLARE(img_wrist_45);
 
 //LV_IMG_DECLARE(pc_move_bg_200);
 LV_IMG_DECLARE(bck_heart_200);

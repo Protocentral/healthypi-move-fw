@@ -446,6 +446,7 @@ static void hpi_disp_update_screens(void)
         {
             hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_updated_ts);
         }
+        last_hr_trend_refresh = k_uptime_get_32();
         break;
     case SCR_SPL_HR_SCR2:
         if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
@@ -754,7 +755,7 @@ static void disp_temp_listener(const struct zbus_channel *chan)
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
     m_disp_temp = hpi_temp->temp_f;
     m_disp_temp_updated_ts = hpi_temp->timestamp;
-    LOG_DBG("ZB Temp: %.2f\n", hpi_temp->temp_f);
+    LOG_DBG("ZB Temp: %.2f", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 

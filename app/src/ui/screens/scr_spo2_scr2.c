@@ -41,21 +41,19 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
 {
     scr_spo2_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr2, &style_scr_black, 0);
-    // lv_obj_set_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    // draw_scr_common(scr_spo2_scr2);
-
-    lv_obj_set_scrollbar_mode(scr_spo2_scr2, LV_SCROLLBAR_MODE_ON);
+    lv_obj_clear_flag(scr_spo2_scr2, LV_OBJ_FLAG_SCROLLABLE);
 
     /*Create a container with COLUMN flex direction*/
     lv_obj_t *cont_col = lv_obj_create(scr_spo2_scr2);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
+    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
+
+    lv_obj_t *lbl_scroll_cancel = lv_label_create(cont_col);
+    lv_label_set_text(lbl_scroll_cancel, LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_color(lbl_scroll_cancel, lv_palette_darken(LV_PALETTE_RED, 2), LV_PART_MAIN);
 
     if (arg2 == SPO2_SOURCE_PPG_WR)
     {
@@ -65,7 +63,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
         lv_obj_t *label_info = lv_label_create(cont_col);
         lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(label_info, 300);
-        lv_label_set_text(label_info, "Ensure that your Move is worn on the wrist as shown, not too tight nor too loose, away from the wrist bone.");
+        lv_label_set_text(label_info, "Ensure that your Move is worn on the wrist snugly as shown.");
         lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     }
     else if (arg2 == SPO2_SOURCE_PPG_FI)
@@ -76,7 +74,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
         lv_obj_t *label_info = lv_label_create(cont_col);
         lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(label_info, 300);
-        lv_label_set_text(label_info, "Wear finger sensor now");
+        lv_label_set_text(label_info, "Wear finger sensor as per the instructions now");
         lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     }
 
@@ -91,4 +89,3 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_SCR2);
     hpi_show_screen(scr_spo2_scr2, m_scroll_dir);
 }
-

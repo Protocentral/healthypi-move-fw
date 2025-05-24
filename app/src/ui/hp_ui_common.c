@@ -441,7 +441,8 @@ void disp_screen_event(lv_event_t *e)
             k_sem_give(&sem_ecg_cancel);
             hpi_load_screen(SCR_ECG, SCROLL_DOWN);
         }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE || hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SELECT ||
+                 hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR2)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
             hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
