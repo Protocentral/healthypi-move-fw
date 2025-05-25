@@ -84,6 +84,6 @@ void ui_steps_button_update(uint16_t steps)
         return;
 
     char steps_str[6];
-    snprintf(steps_str, 5, "%d", steps);
+    snprintf(steps_str, 6, "%d", steps);
     lv_label_set_text(cui_step_label, steps_str);
 }

@@ -104,7 +104,6 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
-
     label_batt_level_val = lv_label_create(cont_col);
     lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " --");
     lv_obj_add_style(label_batt_level_val, &style_lbl_white_14, LV_STATE_DEFAULT);

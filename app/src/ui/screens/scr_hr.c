@@ -4,10 +4,6 @@
 #include <lvgl.h>
 #include <stdio.h>
 
-#include <time.h>
-
-#include <zephyr/logging/log.h>
-
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "trends.h"
@@ -21,11 +17,7 @@ static lv_obj_t *scr_hr;
 
 // GUI Labels
 static lv_obj_t *label_hr_bpm;
-static lv_obj_t *label_hr_min_max;
-static lv_obj_t *btn_hr_settings;
-
 static lv_obj_t *label_hr_last_update_time;
-static lv_obj_t *label_hr_previous_hr;
 
 // Externs
 extern lv_style_t style_scr_container;
@@ -44,19 +36,13 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 {
     scr_hr = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_hr, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    // draw_scr_common(scr_hr);
-
-    // lv_obj_set_scrollbar_mode(scr_hr, LV_SCROLLBAR_MODE_ON);
 
     lv_obj_t *cont_col = lv_obj_create(scr_hr);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    // lv_obj_set_width(cont_col, lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    // lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    // lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
     lv_obj_add_style(cont_col, &style_bg_green, 0);
 
@@ -72,9 +58,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_opa(cont_hr, 0, 0);
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_clear_flag(cont_hr, LV_OBJ_FLAG_SCROLLABLE);
-    // lv_obj_t *img1 = lv_img_create(cont_hr);
-    // lv_img_set_src(img1, &img_heart_35);
-    //  lv_obj_align_to(img1, label_hr_bpm, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 
     lv_obj_t *img_hr = lv_img_create(cont_hr);
     lv_img_set_src(img_hr, &img_heart_70);

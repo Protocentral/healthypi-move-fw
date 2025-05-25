@@ -120,7 +120,6 @@ static const screen_draw_func_t screen_draw_funcs[] = {
     [SCR_SPL_BPT_CAL_COMPLETE] = draw_scr_bpt_cal_complete,
     [SCR_SPL_ECG_COMPLETE] = draw_scr_ecg_complete,
     [SCR_SPL_PLOT_HRV] = draw_scr_hrv,
-    [SCR_SPL_PLOT_HRV_SCATTER] = draw_scr_hrv_scatter,
     [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
     [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
     [SCR_SPL_SPO2_MEASURE] = draw_scr_spo2_measure,
@@ -300,8 +299,6 @@ static void st_display_progress_entry(void *o)
 
 static void st_display_progress_run(void *o)
 {
-    struct s_disp_object *s = (struct s_disp_object *)o;
-
     if (max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
     {
         hpi_disp_scr_update_progress(max32664_update_progress, "Updating...");
@@ -318,9 +315,6 @@ static void st_display_progress_run(void *o)
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
-    // k_msleep(4000);
-
-    // smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
 }
 
 static void st_display_progress_exit(void *o)
@@ -699,7 +693,9 @@ void smf_display_thread(void)
             LOG_ERR("SMF Run error: %d", ret);
             break;
         }
-        k_msleep(lv_task_handler());
+        
+        lv_task_handler();
+        k_msleep(30);
     }
 }
 

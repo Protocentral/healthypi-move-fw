@@ -46,6 +46,7 @@ enum ppg_fi_op_modes
     PPG_FI_OP_MODE_IDLE,
     PPG_FI_OP_MODE_BPT_EST,
     PPG_FI_OP_MODE_BPT_CAL,
+    PPG_FI_OP_MODE_SPO2_EST,
 };
 
 enum ppg_fi_sm_state
@@ -62,6 +63,9 @@ enum ppg_fi_sm_state
     PPG_FI_STATE_BPT_CAL_WAIT,
     PPG_FI_STATE_BPT_CAL_DONE,
     PPG_FI_STATE_BPT_CAL_FAIL,
+
+    PPG_FI_STATE_SPO2_EST,
+    PPG_FI_STATE_SPO2_EST_DONE,
 };
 
 struct s_ppg_fi_object
@@ -114,7 +118,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    //printk("FNS: %d ", edata->num_samples);
+    // printk("FNS: %d ", edata->num_samples);
     if (_n_samples > 16)
     {
         _n_samples = 16;
@@ -141,38 +145,49 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
         k_msgq_put(&q_ppg_fi_sample, &ppg_sensor_sample, K_MSEC(1));
         // k_sem_give(&sem_ppg_finger_sample_trigger);
 
-        //LOG_DBG("Status: %d Progress: %d Sys: %d Dia: %d SpO2: %d", edata->bpt_status, edata->bpt_progress, edata->bpt_sys, edata->bpt_dia, edata->spo2);
+        // LOG_DBG("Status: %d Progress: %d Sys: %d Dia: %d SpO2: %d", edata->bpt_status, edata->bpt_progress, edata->bpt_sys, edata->bpt_dia, edata->spo2);
 
-        struct hpi_bpt_t bpt_data = {
-            .timestamp = hw_get_sys_time_ts(),
-            .sys = edata->bpt_sys,
-            .dia = edata->bpt_dia,
-            .hr = edata->hr,
-            .status = edata->bpt_status,
-            .progress = edata->bpt_progress,
-        };
-        zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
-
-        if (edata->bpt_progress == 100 && bpt_process_done == false)
+        if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST || m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
         {
-            hpi_bpt_stop();
-            if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+            struct hpi_bpt_t bpt_data = {
+                .timestamp = hw_get_sys_time_ts(),
+                .sys = edata->bpt_sys,
+                .dia = edata->bpt_dia,
+                .hr = edata->hr,
+                .status = edata->bpt_status,
+                .progress = edata->bpt_progress,
+            };
+            zbus_chan_pub(&bpt_chan, &bpt_data, K_SECONDS(1));
+
+            if (edata->bpt_progress == 100 && bpt_process_done == false)
             {
-                // BPT Calibration done
-                LOG_INF("BPT Calibration Done");
-                k_sem_give(&sem_bpt_cal_complete);
+                hpi_bpt_stop();
+                if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+                {
+                    // BPT Calibration done
+                    LOG_INF("BPT Calibration Done");
+                    k_sem_give(&sem_bpt_cal_complete);
+                }
+                else if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST)
+                {
+                    // BPT Estimation done
+                    LOG_INF("BPT Estimation Done");
+                    k_sem_give(&sem_bpt_est_complete);
+                    m_est_dia = edata->bpt_dia;
+                    m_est_sys = edata->bpt_sys;
+                    m_est_hr = edata->hr;
+                    m_est_spo2 = edata->spo2;
+                }
+                bpt_process_done = true;
             }
-            else if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST)
-            {
-                // BPT Estimation done
-                LOG_INF("BPT Estimation Done");
-                k_sem_give(&sem_bpt_est_complete);
-                m_est_dia = edata->bpt_dia;
-                m_est_sys = edata->bpt_sys;
-                m_est_hr = edata->hr;
-                m_est_spo2 = edata->spo2;
-            }
-            bpt_process_done = true;
+        }
+        else if (m_ppg_op_mode == PPG_FI_OP_MODE_SPO2_EST)
+        {
+            // SpO2 Estimation done
+            m_est_spo2 = edata->spo2;
+
+            LOG_DBG("SpO2: %d", m_est_spo2);
+            // k_sem_give(&sem_bpt_est_complete);
         }
     }
 }
@@ -371,7 +386,7 @@ static void st_ppg_fi_cal_wait_entry(void *o)
 
 static void st_ppg_fi_cal_wait_run(void *o)
 {
-    //LOG_DBG("PPG Finger SM BPT Calibration Wait Running");
+    // LOG_DBG("PPG Finger SM BPT Calibration Wait Running");
 
     // LOG_DBG("PPG Finger SM BPT Calibration Running");
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
@@ -383,7 +398,7 @@ static void st_ppg_fi_cal_wait_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
     }
 
-    if(k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
     {
         hpi_load_screen(SCR_BPT, SCROLL_UP);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
@@ -464,16 +479,16 @@ static void st_ppg_fing_bpt_est_run(void *o)
 static void st_ppg_fing_bpt_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2); 
-    //hpi_hw_ldsw2_off();
+    hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2);
+    // hpi_hw_ldsw2_off();
 }
 
 static void st_ppg_fing_bpt_est_done_run(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Running");
-    //k_msleep(2000);
-    //hpi_load_screen(SCR_BPT, SCROLL_NONE);
-    //smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+    // k_msleep(2000);
+    // hpi_load_screen(SCR_BPT, SCROLL_NONE);
+    // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
 static void st_ppg_fing_bpt_est_fail_entry(void *o)
@@ -483,7 +498,7 @@ static void st_ppg_fing_bpt_est_fail_entry(void *o)
 
 static void st_ppg_fing_bpt_est_fail_run(void *o)
 {
-    //LOG_DBG("PPG Finger SM BPT Estimation Fail Running");
+    // LOG_DBG("PPG Finger SM BPT Estimation Fail Running");
 }
 
 static void st_ppg_fing_bpt_cal_fail_entry(void *o)

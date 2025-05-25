@@ -20,13 +20,12 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/images/*.c
                         src/ui/fonts/*.c
                         src/ui/screens/*.c
+                        src/ui/screens/*.c
+                        src/ui/hp_ui_common.c
                         src/sm/*.c)  
 
 FILE(GLOB image_sources src/ui/images/*.c
-                        src/ui/images/img_spo2_hand.c
-                        src/ui/fonts/*.c
-                        src/ui/screens/*.c
-                        src/ui/hp_ui_common.c)
+                        src/ui/fonts/*.c)
                         
 target_sources(app PRIVATE ${app_sources})
 
