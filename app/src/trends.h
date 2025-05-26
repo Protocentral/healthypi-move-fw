@@ -24,7 +24,7 @@ struct hpi_temp_trend_point_t
 struct hpi_log_header_t
 {
     int64_t start_time;
-    uint16_t log_file_length;
+    uint32_t log_file_length;
     uint8_t log_type;
 };
 

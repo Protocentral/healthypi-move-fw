@@ -44,6 +44,7 @@ enum hpi_cmds
     HPI_CMD_RECORDING_INDEX = 0x31,      // Needs recording type (uint8) as argument
     HPI_CMD_RECORDING_FETCH_FILE = 0x32, // Needs recording type (uint8) as argument
     HPI_CMD_RECORDING_DELETE = 0x33,     // Needs recording type (uint8) as argument
+    HPI_CMD_RECORDING_WIPE_ALL = 0x34, // No arguments
 };
 
 enum cmdif_pkt_type

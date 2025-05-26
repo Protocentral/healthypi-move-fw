@@ -51,7 +51,7 @@ struct s_ecg_bioz_object
 } s_ecg_bioz_obj;
 
 static int16_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128*30 = 3840
-static uint16_t ecg_record_counter = 0;
+volatile uint16_t ecg_record_counter = 0;
 
 enum ecg_bioz_state
 {
@@ -308,7 +308,7 @@ static void work_ecg_write_file_handler(struct k_work *work)
 
     LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);
     // Write ECG data to file
-    hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, log_time);
+    hpi_write_ecg_record_file(ecg_record_buffer, ECG_RECORD_BUFFER_SAMPLES, log_time);
 }
 K_WORK_DEFINE(work_ecg_write_file, work_ecg_write_file_handler);
 

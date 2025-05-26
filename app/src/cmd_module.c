@@ -116,8 +116,9 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         break;
     case HPI_CMD_LOG_WIPE_ALL:
         LOG_DBG("RX CMD Log Wipe");
-        log_wipe_all();
+        log_wipe_trends();
         break;
+    // Recording Commands
     case HPI_CMD_RECORDING_COUNT:
         LOG_DBG("RX CMD Recording Count");
         recording_type = in_pkt_buf[1];
@@ -144,8 +145,10 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         recording_type = in_pkt_buf[1];
         log_delete(recording_type);
         break;
-
-    
+    case HPI_CMD_RECORDING_WIPE_ALL:
+        LOG_DBG("RX CMD Recording Wipe Records");
+        log_wipe_records();
+        break;    
     default:
         LOG_DBG("RX CMD Unknown");
         break;

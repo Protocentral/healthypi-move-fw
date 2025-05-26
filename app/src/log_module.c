@@ -80,7 +80,7 @@ void hpi_write_ecg_record_file(int16_t *ecg_record_buffer, uint16_t ecg_record_l
         LOG_ERR("FAIL: open %s: %d", fname, ret);
     }
 
-    ret = fs_write(&file, ecg_record_buffer, sizeof(ecg_record_buffer));
+    ret = fs_write(&file, ecg_record_buffer, (ecg_record_length*2));
     if (ret < 0)
     {
         LOG_ERR("FAIL: open %s: %d", fname, ret);
@@ -356,7 +356,7 @@ int log_get_index(uint8_t m_log_type)
             m_header.log_file_length = trend_file_ent.size;
             m_header.log_type = m_log_type;
 
-            //LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
+            LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
 
             cmdif_send_ble_data_idx((uint8_t *)&m_header, HPI_LOG_HEADER_SIZE);
         }
@@ -429,7 +429,7 @@ void log_wipe_folder(char *folder_path)
     fs_closedir(&dir);
 }
 
-void log_wipe_all(void)
+void log_wipe_trends(void)
 {
     char log_file_name[40] = "";
 
@@ -445,5 +445,27 @@ void log_wipe_all(void)
     log_wipe_folder(log_file_name);
 
     hpi_log_get_path(log_file_name, HPI_LOG_TYPE_TREND_STEPS);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_ECG_RECORD);
+    log_wipe_folder(log_file_name);
+}
+
+void log_wipe_records(void)
+{
+    char log_file_name[40] = "";
+
+    LOG_DBG("Wiping all records");
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_ECG_RECORD);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_BIOZ_RECORD);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_PPG_WRIST_RECORD);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_PPG_FINGER_RECORD);
     log_wipe_folder(log_file_name);
 }
