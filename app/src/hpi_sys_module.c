@@ -27,8 +27,8 @@ enum mgmt_cb_return dfu_callback_func(uint32_t event, enum mgmt_cb_return prev_s
                                       void *data, size_t data_size)
 {
     
-    //LOG_DBG("DFU callback event: %d, prev_status: %d, rc: %d, group: %d, abort_more: %d",
-            //event, prev_status, *rc, *group, *abort_more);
+    LOG_DBG("DFU callback event: %d, prev_status: %d, rc: %d, group: %d, abort_more: %d",
+            event, prev_status, *rc, *group, *abort_more);
     
     /* Return OK status code to continue with acceptance to underlying handler */
     return MGMT_CB_OK;
