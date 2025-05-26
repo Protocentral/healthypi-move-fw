@@ -27,8 +27,8 @@ enum mgmt_cb_return dfu_callback_func(uint32_t event, enum mgmt_cb_return prev_s
                                       void *data, size_t data_size)
 {
     
-    LOG_DBG("DFU callback event: %d, prev_status: %d, rc: %d, group: %d, abort_more: %d",
-            event, prev_status, *rc, *group, *abort_more);
+    //LOG_DBG("DFU callback event: %d, prev_status: %d, rc: %d, group: %d, abort_more: %d",
+            //event, prev_status, *rc, *group, *abort_more);
     
     /* Return OK status code to continue with acceptance to underlying handler */
     return MGMT_CB_OK;
@@ -360,10 +360,6 @@ void hpi_sys_thread(void)
     else
     {
         LOG_DBG("Last update time loaded");
-        LOG_DBG("BP last update time: %lld", g_hpi_last_update.bp_last_update_ts);
-        LOG_DBG("HR last update time: %lld", g_hpi_last_update.hr_last_update_ts);
-        LOG_DBG("SPO2 last update time: %lld", g_hpi_last_update.spo2_last_update_ts);
-        LOG_DBG("ECG last update time: %lld", g_hpi_last_update.ecg_last_update_ts);
     }
 
     while (1)

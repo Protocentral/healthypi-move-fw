@@ -242,7 +242,7 @@ uint16_t log_get_count(uint8_t m_log_type)
     static struct fs_dirent entry;
 
     uint16_t log_count = 0;
-    char m_path[40] = "/lfs/log";
+    char m_path[40] = "";
 
     fs_dir_t_init(&dirp);
 
