@@ -62,7 +62,7 @@ static int hpi_log_get_path(char *m_path, uint8_t m_log_type)
     return 0;
 }
 
-void hpi_write_ecg_record_file(int16_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts)
+void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts)
 {
     struct fs_file_t file;
     int ret = 0;
@@ -72,7 +72,7 @@ void hpi_write_ecg_record_file(int16_t *ecg_record_buffer, uint16_t ecg_record_l
 
     sprintf(fname, "/lfs/ecg/%" PRId64, start_ts);
 
-    LOG_DBG("Write to file... %s | Size: %d", fname, ECG_RECORD_BUFFER_SAMPLES);
+    LOG_DBG("Write to file... %s | Size: %d", fname, ecg_record_length);
 
     ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR);
     if (ret < 0)
@@ -80,7 +80,7 @@ void hpi_write_ecg_record_file(int16_t *ecg_record_buffer, uint16_t ecg_record_l
         LOG_ERR("FAIL: open %s: %d", fname, ret);
     }
 
-    ret = fs_write(&file, ecg_record_buffer, (ecg_record_length*2));
+    ret = fs_write(&file, ecg_record_buffer, (ecg_record_length*4));
     if (ret < 0)
     {
         LOG_ERR("FAIL: open %s: %d", fname, ret);

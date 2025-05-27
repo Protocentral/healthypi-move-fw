@@ -50,7 +50,7 @@ struct s_ecg_bioz_object
     struct smf_ctx ctx;
 } s_ecg_bioz_obj;
 
-static int16_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128*30 = 3840
+static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128*30 = 3840
 volatile uint16_t ecg_record_counter = 0;
 
 enum ecg_bioz_state
