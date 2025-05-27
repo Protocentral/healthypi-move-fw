@@ -198,43 +198,6 @@ void hpi_steps_trend_wr_point_to_file(struct hpi_steps_t m_steps_point, int64_t 
     ret = fs_sync(&file);
 }
 
-struct hpi_log_header_t log_get_file_index(char *file_path_name)
-{
-    LOG_DBG("Getting header for file %s\n", file_path_name);
-    LOG_DBG("Header size: %d\n", HPI_LOG_HEADER_SIZE);
-
-    // char m_file_name[30];
-    // snprintf(m_file_name, sizeof(m_file_name), "/lfs/log/%u", file_id);
-
-    struct fs_file_t m_file;
-    struct fs_dirent trend_file_ent;
-    int ret = 0;
-
-    fs_file_t_init(&m_file);
-
-    ret = fs_stat(file_path_name, &trend_file_ent);
-    if (ret < 0)
-    {
-        LOG_ERR("FAIL: stat %s: %d", file_path_name, ret);
-        if (ret == -ENOENT)
-        {
-            LOG_ERR("File not found: %s", file_path_name);
-        }
-        // return ret;
-    }
-
-    //LOG_DBG("Read from file %s | Size: %d", file_path_name, trend_file_ent.size);
-
-    int64_t filename_int = atoi(trend_file_ent.name);
-
-    struct hpi_log_header_t m_header;
-    m_header.start_time = filename_int; // file_sessionID;
-    m_header.log_file_length = trend_file_ent.size;
-    m_header.log_type = HPI_LOG_TYPE_TREND_HR;
-
-    return m_header;
-}
-
 uint16_t log_get_count(uint8_t m_log_type)
 {
     int res;
@@ -328,8 +291,6 @@ int log_get_index(uint8_t m_log_type)
             strcpy(file_name, m_path);
             strcat(file_name, entry.name);
 
-            // struct hpi_log_header_t m_header = log_get_file_index(file_name);
-
             struct fs_file_t m_file;
             struct fs_dirent trend_file_ent;
             int ret = 0;
@@ -351,14 +312,14 @@ int log_get_index(uint8_t m_log_type)
 
             int64_t filename_int = atoi(trend_file_ent.name);
 
-            struct hpi_log_header_t m_header;
-            m_header.start_time = filename_int; // file_sessionID;
-            m_header.log_file_length = trend_file_ent.size;
-            m_header.log_type = m_log_type;
+            struct hpi_log_index_t m_index;
+            m_index.start_time = filename_int; // file_sessionID;
+            m_index.log_file_length = trend_file_ent.size;
+            m_index.log_type = m_log_type;
 
-            LOG_DBG("Log File Start: %" PRId64 " | Size: %d", m_header.start_time, m_header.log_file_length);
+            LOG_DBG("Log File Start: %" PRId64 " | Size: %d | Type: %d", m_index.start_time, m_index.log_file_length, m_index.log_type);
 
-            cmdif_send_ble_data_idx((uint8_t *)&m_header, HPI_LOG_HEADER_SIZE);
+            cmdif_send_ble_data_idx((uint8_t *)&m_index, HPI_FILE_IDX_SIZE);
         }
     }
 

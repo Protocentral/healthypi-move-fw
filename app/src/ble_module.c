@@ -439,7 +439,7 @@ static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	LOG_INF("Passkey for %s: %06u\n", addr, passkey);
-	hpi_load_scr_spl(SCR_SPL_BLE, SCROLL_NONE, passkey, 0, 0, 0);
+	hpi_load_scr_spl(SCR_SPL_BLE, SCROLL_NONE, HPI_BLE_EVENT_PAIR_REQUEST, passkey, 0, 0);
 }
 
 static void auth_cancel(struct bt_conn *conn)
@@ -449,6 +449,7 @@ static void auth_cancel(struct bt_conn *conn)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	LOG_INF("Pairing cancelled: %s\n", addr);
+	hpi_load_scr_spl(SCR_SPL_BLE, SCROLL_NONE, HPI_BLE_EVENT_PAIR_CANCELLED, 0, 0, 0);
 }
 
 static void pairing_complete(struct bt_conn *conn, bool bonded)
@@ -458,6 +459,7 @@ static void pairing_complete(struct bt_conn *conn, bool bonded)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	LOG_INF("Pairing completed: %s, bonded: %d\n", addr, bonded);
+	hpi_load_scr_spl(SCR_SPL_BLE, SCROLL_NONE, HPI_BLE_EVENT_PAIR_SUCCESS, bonded ? 1 : 0, 0, 0);
 }
 
 static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
@@ -468,6 +470,7 @@ static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 
 	LOG_ERR("Pairing failed conn: %s, reason %d %s\n", addr, reason,
 			bt_security_err_to_str(reason));
+	hpi_load_scr_spl(SCR_SPL_BLE, SCROLL_NONE, HPI_BLE_EVENT_PAIR_FAILED, reason, 0, 0);
 }
 
 static struct bt_conn_auth_cb conn_auth_callbacks = {

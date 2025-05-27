@@ -96,7 +96,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         hpi_cmdif_send_count_rsp(HPI_CMD_LOG_GET_COUNT, log_type, log_count);
         break;
     case HPI_CMD_LOG_GET_INDEX:
-        LOG_DBG("RX CMD Get Index");
+        LOG_DBG("RX CMD Get Index: %d", in_pkt_buf[1]);
         log_type = in_pkt_buf[1];
         log_get_index(log_type);
         break;

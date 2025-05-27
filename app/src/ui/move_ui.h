@@ -121,7 +121,7 @@ LV_IMG_DECLARE(icon_spo2_100);
 LV_IMG_DECLARE(img_spo2_hand);
 
 LV_IMG_DECLARE(img_complete_85);
-LV_IMG_DECLARE(img_failed_100);
+LV_IMG_DECLARE(img_failed_80);
 
 LV_IMG_DECLARE(img_bpt_finger_90);
 

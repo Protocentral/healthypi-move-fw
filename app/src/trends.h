@@ -21,14 +21,14 @@ struct hpi_temp_trend_point_t
 
 #define HPI_TREND_POINT_SIZE 16
 
-struct hpi_log_header_t
+struct hpi_log_index_t
 {
     int64_t start_time;
     uint32_t log_file_length;
     uint8_t log_type;
 };
 
-#define HPI_LOG_HEADER_SIZE 11
+#define HPI_FILE_IDX_SIZE 13
 
 struct hpi_hourly_trend_point_t
 {
