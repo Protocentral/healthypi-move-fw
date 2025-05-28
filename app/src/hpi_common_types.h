@@ -163,6 +163,14 @@ enum hpi_ecg_status
     HPI_ECG_STATUS_ERROR,
 };
 
+enum hpi_ble_event
+{
+    HPI_BLE_EVENT_PAIR_REQUEST =0x01,
+    HPI_BLE_EVENT_PAIR_SUCCESS,
+    HPI_BLE_EVENT_PAIR_FAILED,
+    HPI_BLE_EVENT_PAIR_CANCELLED,
+};
+
 struct hpi_ecg_status_t
 {
     int64_t ts_complete;

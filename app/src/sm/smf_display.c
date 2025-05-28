@@ -617,17 +617,18 @@ static void st_display_active_run(void *o)
         }
     }
 
+    if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("Change Screen: %d", scr_to_change);
+        screen_draw_funcs[g_screen](g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
+        lv_disp_trig_activity(NULL);
+    }
+
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
     if (inactivity_time > DISP_SLEEP_TIME_MS)
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
-    }
-
-    if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
-    {
-        LOG_DBG("Change Screen: %d", scr_to_change);
-        screen_draw_funcs[g_screen](g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
     }
 }
 
