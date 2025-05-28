@@ -486,10 +486,10 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_load_screen(SCR_HOME, SCROLL_UP);
         }
-        else if (hpi_disp_get_curr_screen() == SCR_HR)
+        /*else if (hpi_disp_get_curr_screen() == SCR_HR)
         {
             hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR, 0, 0, 0);
-        }
+        }*/
     }
 }
 

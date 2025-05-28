@@ -18,11 +18,11 @@ void hpi_hw_ldsw2_on(void);
 void hpi_pwr_display_sleep(void);
 void hpi_pwr_display_wake(void);
 
-
-
 bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
 int hw_max32664c_stop_algo(void);
 
 bool get_on_skin(void);
 void set_on_skin(bool on_skin);
+
+void today_init_steps(uint16_t steps);

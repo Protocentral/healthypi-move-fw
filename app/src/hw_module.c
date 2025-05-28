@@ -114,8 +114,6 @@ ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
 
-
-
 static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
 };
@@ -135,8 +133,6 @@ static struct hpi_version_desc_t hpi_max32664d_req_ver = {
     .major = 6,
     .minor = 0,
 };
-
-
 
 /*******EXTERNS******/
 extern struct k_msgq q_session_cmd_msg;
@@ -164,6 +160,12 @@ static uint16_t today_get_steps(void)
     return steps;
 }
 
+void today_init_steps(uint16_t steps)
+{
+    k_mutex_lock(&mutex_today_steps, K_FOREVER);
+    today_total_steps = steps;
+    k_mutex_unlock(&mutex_today_steps);
+}
 
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
@@ -790,6 +792,15 @@ void hw_module_init(void)
 
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
+    // Read and publish time
+    struct rtc_time rtc_sys_time;
+    ret = rtc_get_time(rtc_dev, &rtc_sys_time);
+    if (ret < 0)
+    {
+        LOG_ERR("Failed to get RTC time");
+    }
+    struct tm m_tm_time = *rtc_time_to_tm(&rtc_sys_time);
+    hpi_sys_set_sys_time(&m_tm_time);
 
     // npm_fuel_gauge_update(charger, vbus_connected);
 
@@ -911,7 +922,7 @@ void hw_thread(void)
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {
                 .temp_f = _temp_f,
-                .timestamp = hw_get_sys_time_ts(),                
+                .timestamp = hw_get_sys_time_ts(),
             };
             zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));
         }

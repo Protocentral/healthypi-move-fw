@@ -54,3 +54,4 @@ dkms.conf
 *build_
 /app/build*
 /lib
+CMakeFiles/

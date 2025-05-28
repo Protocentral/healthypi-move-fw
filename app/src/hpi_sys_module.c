@@ -335,6 +335,31 @@ int hpi_sys_get_last_temp_update(uint16_t *temp_last_value_x100, int64_t *temp_l
     return 0;
 }
 
+static bool is_timestamp_today(int64_t ts)
+{
+    if (ts == 0) {
+        return false;
+    }
+
+    // Get current system time as int64_t
+    int64_t now_ts = hw_get_sys_time_ts();
+
+    struct tm today_time_tm = *gmtime(&now_ts);
+    today_time_tm.tm_hour = 0;
+    today_time_tm.tm_min = 0;
+    today_time_tm.tm_sec = 0;
+    int64_t today_ts = timeutil_timegm64(&today_time_tm);
+
+    LOG_DBG("Checking if timestamp %lld is today. Today's start: %lld", ts, today_ts);
+
+     // Check if ts is within today's range
+    if (ts >= today_ts && ts < (today_ts + 86400)) {
+        return true;
+    }
+    return false;
+  
+}
+
 void hpi_sys_thread(void)
 {
     int ret = 0;
@@ -360,6 +385,17 @@ void hpi_sys_thread(void)
     else
     {
         LOG_DBG("Last update time loaded");
+
+        if (is_timestamp_today(g_hpi_last_update.steps_last_update_ts))
+        {
+            today_init_steps(g_hpi_last_update.steps_last_value);
+            //LOG_DBG("Today's steps initialized: %d", g_hpi_last_update.steps_last_value);
+        }
+        else
+        {
+            today_init_steps(0);
+            //LOG_DBG("Today's steps initialized to 0");
+        }
     }
 
     while (1)
