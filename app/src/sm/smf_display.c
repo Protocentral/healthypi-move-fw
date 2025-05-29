@@ -114,9 +114,9 @@ typedef void (*screen_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t
 static const screen_draw_func_t screen_draw_funcs[] = {
     [SCR_SPL_RAW_PPG] = draw_scr_spl_raw_ppg,
     [SCR_SPL_ECG_SCR2] = draw_scr_ecg_scr2,
-    [SCR_SPL_BPT_SCR2] = draw_scr_bpt_scr2,
-    [SCR_SPL_BPT_SCR3] = draw_scr_bpt_scr3,
-    [SCR_SPL_BPT_SCR4] = draw_scr_bpt_scr4,
+    [SCR_SPL_FI_SENS_WEAR] = draw_scr_fi_sens_wear,
+    [SCR_SPL_FI_SENS_CHECK] = draw_scr_fi_sens_check,
+    [SCR_SPL_BPT_MEASURE] = draw_scr_bpt_scr4,
     [SCR_SPL_BPT_CAL_COMPLETE] = draw_scr_bpt_cal_complete,
     [SCR_SPL_ECG_COMPLETE] = draw_scr_ecg_complete,
     [SCR_SPL_PLOT_HRV] = draw_scr_hrv,
@@ -325,7 +325,7 @@ static void st_display_progress_exit(void *o)
 
 static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_SCR4)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_MEASURE)
     {
         hpi_disp_bpt_draw_plotPPG(ppg_sensor_sample);
 
@@ -337,51 +337,20 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
 
         lv_disp_trig_activity(NULL);
     }
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
+    {
+        hpi_disp_spo2_plot_fi_ppg(ppg_sensor_sample);
+        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
+    }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
     {
-        hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
-
-        if (k_uptime_get_32() - hpi_scr_ppg_hr_spo2_last_refresh > 1000)
-        {
-            hpi_scr_ppg_hr_spo2_last_refresh = k_uptime_get_32();
-            hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
-        }
-
-        lv_disp_trig_activity(NULL);
-    }
-    else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
-    {
-        hpi_disp_spo2_plotPPG(ppg_sensor_sample);
+        hpi_disp_spo2_plot_wrist_ppg(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
     }
-
-    else if ((hpi_disp_get_curr_screen() == SCR_HOME)) // || (hpi_disp_get_curr_screen() == SCR_CLOCK_SMALL))
-    {
-    }
-    /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV)
-    {
-        if (ppg_sensor_sample.rtor != 0) // && ppg_sensor_sample.rtor != prev_rtor)
-        {
-            // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
-            hpi_disp_hrv_draw_plot_rtor((float)((ppg_sensor_sample.rtor)));
-            hpi_disp_hrv_update_rtor(ppg_sensor_sample.rtor);
-            // prev_rtor = ppg_sensor_sample.rtor;
-        }
-    }
-    else if (hpi_disp_get_curr_screen() == SCR_PLOT_HRV_SCATTER)
-    {
-        if (ppg_sensor_sample.rtor != 0) //&& ppg_sensor_sample.rtor != prev_rtor)
-        {
-            // printk("RTOR: %d | SCD: %d", ppg_sensor_sample.rtor, ppg_sensor_sample.scd_state);
-            // hpi_disp_hrv_scatter_draw_plot_rtor((float)((ppg_sensor_sample.rtor)), (float)prev_rtor);
-            // hpi_disp_hrv_scatter_update_rtor(ppg_sensor_sample.rtor);
-            // prev_rtor = ppg_sensor_sample.rtor;
-        }
-    }*/
 }
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
@@ -491,18 +460,19 @@ static void hpi_disp_update_screens(void)
         }
         break;
     case SCR_SPL_SPO2_COMPLETE:
-        if (k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
+        /*if (k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
         {
             hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_ts);
-        }
+        }*/
         break;
-    case SCR_SPL_BPT_SCR3:
+    /*case SCR_SPL_FI_SENS_CHECK:
         if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
         {
             LOG_DBG("Loading BPT SCR4");
-            hpi_load_scr_spl(SCR_SPL_BPT_SCR4, SCROLL_NONE, SCR_SPL_BPT_SCR3, 0, 0, 0);
+            
         }
-        break;
+        if
+        break;*/
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {
@@ -694,7 +664,7 @@ void smf_display_thread(void)
             LOG_ERR("SMF Run error: %d", ret);
             break;
         }
-        
+
         lv_task_handler();
         k_msleep(30);
     }

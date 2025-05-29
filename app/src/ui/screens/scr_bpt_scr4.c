@@ -98,7 +98,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_sub, " bpm");
 
-    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR4);
+    hpi_disp_set_curr_screen(SCR_SPL_BPT_MEASURE);
     hpi_show_screen(scr_bpt_scr4, m_scroll_dir);
 }
 

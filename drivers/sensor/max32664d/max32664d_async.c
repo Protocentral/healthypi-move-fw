@@ -7,7 +7,7 @@ LOG_MODULE_REGISTER(max32664d_async, CONFIG_SENSOR_LOG_LEVEL);
 #define MAX32664D_SENSOR_DATA_OFFSET 1
 
 static int max32664_async_sample_fetch(const struct device *dev,
-                                       uint32_t ir_samples[32], uint32_t red_samples[32], uint8_t *num_samples, uint16_t *spo2,
+                                       uint32_t ir_samples[32], uint32_t red_samples[32], uint8_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf,
                                        uint16_t *hr, uint8_t *bpt_status, uint8_t *bpt_progress, uint8_t *bpt_sys, uint8_t *bpt_dia)
 {
     struct max32664d_data *data = dev->data;
@@ -90,9 +90,12 @@ static int max32664_async_sample_fetch(const struct device *dev,
                 bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 19 + MAX32664D_SENSOR_DATA_OFFSET];
 
                 *spo2 = (bpt_spo2 / 10);
+                *spo2_conf = buf[(sample_len * i) + 25 + MAX32664D_SENSOR_DATA_OFFSET]; 
 
                 uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 20 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
                 spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 + MAX32664D_SENSOR_DATA_OFFSET];
+
+                
             }
         }
     }
@@ -124,7 +127,7 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         edata = (struct max32664d_encoded_data *)buf;
         edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664_async_sample_fetch(dev, edata->ir_samples, edata->red_samples, &edata->num_samples, &edata->spo2,
+        rc = max32664_async_sample_fetch(dev, edata->ir_samples, edata->red_samples, &edata->num_samples, &edata->spo2, &edata->spo2_conf,
                                          &edata->hr, &edata->bpt_status, &edata->bpt_progress, &edata->bpt_sys, &edata->bpt_dia);
     }
     else

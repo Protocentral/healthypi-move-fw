@@ -19,18 +19,20 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
 K_SEM_DEFINE(sem_bpt_cal_start, 0, 1);
+K_SEM_DEFINE(sem_fi_spo2_est_start, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_sensor_found, 0, 1);
+K_SEM_DEFINE(sem_spo2_sensor_found, 0, 1);
 
-K_SEM_DEFINE(sem_start_bpt_sampling, 0, 1);
-K_SEM_DEFINE(sem_stop_bpt_sampling, 0, 1);
+K_SEM_DEFINE(sem_start_fi_sampling, 0, 1);
+K_SEM_DEFINE(sem_stop_fi_sampling, 0, 1);
 
+K_SEM_DEFINE(sem_bpt_est_complete, 0, 1);
 K_SEM_DEFINE(sem_bpt_cal_complete, 0, 1);
+K_SEM_DEFINE(sem_spo2_est_complete, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_enter_mode_cal, 0, 1);
 K_SEM_DEFINE(sem_bpt_exit_mode_cal, 0, 1);
-
-K_SEM_DEFINE(sem_bpt_est_complete, 0, 1);
 
 ZBUS_CHAN_DECLARE(bpt_chan);
 
@@ -96,6 +98,7 @@ static uint8_t m_est_sys;
 static uint8_t m_est_dia;
 static uint8_t m_est_hr;
 static uint8_t m_est_spo2;
+static uint8_t m_est_spo2_conf;
 
 K_MUTEX_DEFINE(mutex_bpt_cal_set);
 
@@ -137,10 +140,29 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
         ppg_sensor_sample.hr = edata->hr;
         ppg_sensor_sample.spo2 = edata->spo2;
 
-        ppg_sensor_sample.bp_sys = edata->bpt_sys;
-        ppg_sensor_sample.bp_dia = edata->bpt_dia;
-        ppg_sensor_sample.bpt_status = edata->bpt_status;
-        ppg_sensor_sample.bpt_progress = edata->bpt_progress;
+        if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST || m_ppg_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+        {
+            ppg_sensor_sample.bp_sys = edata->bpt_sys;
+            ppg_sensor_sample.bp_dia = edata->bpt_dia;
+            ppg_sensor_sample.bpt_status = edata->bpt_status;
+            ppg_sensor_sample.bpt_progress = edata->bpt_progress;
+        }
+        else if (m_ppg_op_mode == PPG_FI_OP_MODE_SPO2_EST)
+        {
+
+            ppg_sensor_sample.spo2_valid_percent_complete = edata->spo2_conf;
+            if (edata->spo2_conf < 70)
+            {
+
+                ppg_sensor_sample.spo2_state = SPO2_MEAS_COMPUTATION;
+            }
+            else
+            {
+                ppg_sensor_sample.spo2_state = SPO2_MEAS_SUCCESS;
+                LOG_DBG("SpO2 Measurement Done");
+                k_sem_give(&sem_spo2_est_complete);
+            }
+        }
 
         k_msgq_put(&q_ppg_fi_sample, &ppg_sensor_sample, K_MSEC(1));
         // k_sem_give(&sem_ppg_finger_sample_trigger);
@@ -185,8 +207,10 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
         {
             // SpO2 Estimation done
             m_est_spo2 = edata->spo2;
+            m_est_spo2_conf = edata->spo2_conf;
 
-            LOG_DBG("SpO2: %d", m_est_spo2);
+            LOG_DBG("SpO2: %d | Confidence: %d", edata->spo2, edata->spo2_conf);
+
             // k_sem_give(&sem_bpt_est_complete);
         }
     }
@@ -355,6 +379,13 @@ static void st_ppg_fing_idle_run(void *o)
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
     }
+
+    if (k_sem_take(&sem_fi_spo2_est_start, K_NO_WAIT) == 0)
+    {
+        s->ppg_fi_op_mode = PPG_FI_OP_MODE_SPO2_EST;
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
+    }
+
     // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
 
     /*if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
@@ -368,7 +399,7 @@ static void st_ppg_fing_idle_run(void *o)
 static void bpt_cal_timeout_handler(struct k_timer *timer_id)
 {
     LOG_ERR("BPT Calibration Timeout");
-    k_sem_give(&sem_stop_bpt_sampling);                                         // Stop sampling if needed
+    k_sem_give(&sem_stop_fi_sampling);                                          // Stop sampling if needed
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_FAIL]); // Transition to failure state
 }
 
@@ -409,14 +440,14 @@ static void st_ppg_fing_bpt_cal_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Entry");
     hw_bpt_start_cal(m_cal_index, m_cal_sys, m_cal_dia);
-    k_sem_give(&sem_start_bpt_sampling);
+    k_sem_give(&sem_start_fi_sampling);
 }
 
 static void st_ppg_fing_bpt_cal_run(void *o)
 {
     if (k_sem_take(&sem_bpt_cal_complete, K_NO_WAIT) == 0)
     {
-        k_sem_give(&sem_stop_bpt_sampling);
+        k_sem_give(&sem_stop_fi_sampling);
         k_sleep(K_MSEC(1000)); // Wait for the sampling to stop
         hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf, m_cal_index);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
@@ -439,41 +470,19 @@ static void st_ppg_fing_bpt_est_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
+    hpi_load_scr_spl(SCR_SPL_BPT_MEASURE, SCROLL_NONE, SCR_SPL_FI_SENS_CHECK, 0, 0, 0);
     hw_bpt_start_est();
-    k_sem_give(&sem_start_bpt_sampling);
+    k_sem_give(&sem_start_fi_sampling);
 }
 
 static void st_ppg_fing_bpt_est_run(void *o)
 {
     if (k_sem_take(&sem_bpt_est_complete, K_NO_WAIT) == 0)
     {
-        k_sem_give(&sem_stop_bpt_sampling);
+        k_sem_give(&sem_stop_fi_sampling);
         k_sleep(K_MSEC(1000)); // Wait for the sampling to stop
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST_DONE]);
     }
-
-    // LOG_DBG("PPG Finger SM BPT Estimation Running");
-
-    // hw_bpt_start_est();
-    //   k_thread_resume(ppg_finger_sampling_thread_id);
-    //   }
-
-    // struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
-
-    // k_msleep(1000);
-    // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-
-    /*if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
-    {
-        if (ppg_fi_sensor_sample.bpt_status == 1)
-        {
-            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FING_STATE_BPT_EST_DONE]);
-        }
-        else if (ppg_fi_sensor_sample.bpt_status == 2)
-        {
-            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FING_STATE_BPT_EST_FAIL]);
-        }
-    }*/
 }
 
 static void st_ppg_fing_bpt_est_done_entry(void *o)
@@ -514,8 +523,9 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
 
 static void st_ppg_fi_check_sensor_entry(void *o)
 {
+    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
     LOG_DBG("PPG Finger SM Check Sensor Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    hpi_load_scr_spl(SCR_SPL_FI_SENS_CHECK, SCROLL_NONE, SCR_BPT, s->ppg_fi_op_mode, 0, 0);
 }
 
 static void st_ppg_fi_check_sensor_run(void *o)
@@ -538,14 +548,26 @@ static void st_ppg_fi_check_sensor_run(void *o)
     else
     {
         LOG_DBG("MAX30101 sensor found !");
-        k_sem_give(&sem_bpt_sensor_found);
+
         if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
         {
+            k_sem_give(&sem_bpt_sensor_found);
             smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
         }
         else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
         {
+            k_sem_give(&sem_bpt_sensor_found);
             smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
+        }
+        else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
+        {
+            k_sem_give(&sem_spo2_sensor_found);
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST]);
+        }
+        else
+        {
+            LOG_ERR("Unknown PPG Finger operation mode");
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SENSOR_FAIL]);
         }
     }
 }
@@ -558,6 +580,39 @@ static void st_ppg_fi_sensor_fail_entry(void *o)
 static void st_ppg_fi_sensor_fail_run(void *o)
 {
     LOG_DBG("PPG Finger SM Sensor Fail Running");
+}
+
+static void st_ppg_fi_spo2_est_entry(void *o)
+{
+    LOG_DBG("PPG Finger SM SpO2 Estimation Entry");
+    sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_SPO2_EST;
+    hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, 0, 0, 0, 0);
+    hw_bpt_start_est();                 // Start the BPT estimation for SpO2
+    k_sem_give(&sem_start_fi_sampling); // Give the semaphore to start sampling
+}
+
+static void st_ppg_fi_spo2_est_run(void *o)
+{
+    LOG_DBG("PPG Finger SM SpO2 Estimation Running");
+    if (k_sem_take(&sem_spo2_est_complete, K_NO_WAIT) == 0)
+    {
+        k_sem_give(&sem_stop_fi_sampling); // Stop the sampling
+        k_sleep(K_MSEC(1000));             // Wait for the sampling to stop
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST_DONE]);
+    }
+}
+
+static void st_ppg_fi_spo2_est_done_entry(void *o)
+{
+    LOG_DBG("PPG Finger SM SpO2 Estimation Done Entry");
+    hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2 , m_est_spo2, 0, 0);
+}
+static void st_ppg_fi_spo2_est_done_run(void *o)
+{
+    LOG_DBG("PPG Finger SM SpO2 Estimation Done Running");
+    // k_msleep(2000);
+    // hpi_load_screen(SCR_BPT, SCROLL_NONE);
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
 static const struct smf_state ppg_fi_states[] = {
@@ -573,6 +628,9 @@ static const struct smf_state ppg_fi_states[] = {
     [PPG_FI_STATE_BPT_CAL] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_entry, st_ppg_fing_bpt_cal_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_CAL_DONE] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_done_entry, st_ppg_fing_bpt_cal_done_run, NULL, NULL, NULL),
     [PPG_FI_STATE_BPT_CAL_FAIL] = SMF_CREATE_STATE(st_ppg_fing_bpt_cal_fail_entry, st_ppg_fing_bpt_cal_fail_run, NULL, NULL, NULL),
+
+    [PPG_FI_STATE_SPO2_EST] = SMF_CREATE_STATE(st_ppg_fi_spo2_est_entry, st_ppg_fi_spo2_est_run, NULL, NULL, NULL),
+    [PPG_FI_STATE_SPO2_EST_DONE] = SMF_CREATE_STATE(st_ppg_fi_spo2_est_done_entry, st_ppg_fi_spo2_est_done_run, NULL, NULL, NULL),
 };
 
 static void smf_ppg_finger_thread(void)
@@ -603,14 +661,14 @@ static void ppg_fi_ctrl_thread(void)
 
     for (;;)
     {
-        if (k_sem_take(&sem_start_bpt_sampling, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_start_fi_sampling, K_NO_WAIT) == 0)
         {
             LOG_INF("Start sampling");
             k_msleep(1000);
             k_timer_start(&tmr_ppg_fi_sampling, K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS), K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS));
         }
 
-        if (k_sem_take(&sem_stop_bpt_sampling, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_stop_fi_sampling, K_NO_WAIT) == 0)
         {
             LOG_INF("Stop sampling");
             k_timer_stop(&tmr_ppg_fi_sampling);

@@ -17,8 +17,9 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
-void draw_scr_bpt_scr3(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    
     scr_bpt_scr3 = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_scr3, &style_scr_black, 0);
     lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE); /// Flags
@@ -47,6 +48,6 @@ void draw_scr_bpt_scr3(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32
     lv_obj_set_size(spinner, 100, 100);
     lv_obj_center(spinner);
 
-    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR3);
+    hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_CHECK);
     hpi_show_screen(scr_bpt_scr3, dir);
 }

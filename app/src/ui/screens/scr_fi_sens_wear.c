@@ -11,6 +11,9 @@ LOG_MODULE_REGISTER(scr_bpt_scr2, LOG_LEVEL_DBG);
 lv_obj_t *scr_bpt_scr2;
 static lv_obj_t *btn_spo2_proceed;
 
+static int next_screen =0;
+static int parent_screen = 0;
+
 // Externs
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large;
@@ -27,12 +30,15 @@ static void scr_bpt_btn_proceed_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         k_sem_give(&sem_bpt_est_start);
-        hpi_load_scr_spl(SCR_SPL_BPT_SCR3, SCROLL_UP, (uint8_t)SCR_BPT, 0, 0, 0);
+        hpi_load_scr_spl(next_screen, SCROLL_UP, parent_screen, 0, 0, 0);
     }
 }
 
-void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+void draw_scr_fi_sens_wear(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    next_screen = arg1;
+    parent_screen = arg2;
+
     scr_bpt_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_bpt_scr2, &style_scr_black, 0);
     lv_obj_clear_flag(scr_bpt_scr2, LV_OBJ_FLAG_SCROLLABLE);
@@ -74,6 +80,6 @@ void draw_scr_bpt_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_label_set_text(label_btn, LV_SYMBOL_PLAY " Proceed");
     lv_obj_center(label_btn);
 
-    hpi_disp_set_curr_screen(SCR_SPL_BPT_SCR2);
+    hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_WEAR);
     hpi_show_screen(scr_bpt_scr2, m_scroll_dir);
 }

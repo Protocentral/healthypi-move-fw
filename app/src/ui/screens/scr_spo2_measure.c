@@ -37,11 +37,13 @@ extern lv_style_t style_bg_red;
 
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    int parent_screen = arg1; // Parent screen passed from the previous screen
+    int spo2_source = arg2; // SpO2 source passed from the previous screen
+
     scr_spo2_scr_measure = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr_measure, &style_scr_black, 0);
     lv_obj_clear_flag(scr_spo2_scr_measure, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    // draw_scr_common(scr_spo2);
-
+  
     lv_obj_set_scrollbar_mode(scr_spo2_scr_measure, LV_SCROLLBAR_MODE_OFF);
 
     /*Create a container with COLUMN flex direction*/
@@ -81,7 +83,15 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 
     lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart_ppg, SPO2_DISP_WINDOW_SIZE);
+    if(spo2_source == SPO2_SOURCE_PPG_FI)
+    {
+        lv_chart_set_point_count(chart_ppg, BPT_DISP_WINDOW_SIZE*2);
+    }
+    else if (spo2_source == SPO2_SOURCE_PPG_WR)
+    {
+        lv_chart_set_point_count(chart_ppg, SPO2_DISP_WINDOW_SIZE);
+    }
+    
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
@@ -165,7 +175,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     }*/
 }
 
-void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample)
+void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
     uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
@@ -187,3 +197,36 @@ void hpi_disp_spo2_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample)
         hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE);
     }
 }
+
+void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
+{
+    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
+
+    for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
+    {
+       float data_ppg_i = (float)(data_ppg[i] * 1.000); // * 0.100);
+
+        if (data_ppg_i == 0)
+        {
+            return;
+        }
+
+        if (data_ppg_i < y_min_ppg)
+        {
+            y_min_ppg = data_ppg_i;
+        }
+
+        if (data_ppg_i > y_max_ppg)
+        {
+            y_max_ppg = data_ppg_i;
+        }
+
+        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg_i);
+
+        hpi_ppg_disp_add_samples(1);
+        hpi_ppg_disp_do_set_scale(BPT_DISP_WINDOW_SIZE*2);
+    }
+}
+
+
+

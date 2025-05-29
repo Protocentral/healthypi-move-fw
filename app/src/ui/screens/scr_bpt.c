@@ -29,7 +29,7 @@ static void scr_bpt_measure_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         LOG_DBG("Measure click");
-        hpi_load_scr_spl(SCR_SPL_BPT_SCR2, SCROLL_UP, (uint8_t)SCR_BPT, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_FI_SENS_WEAR, SCROLL_UP, SCR_SPL_FI_SENS_CHECK , (uint8_t)SCR_BPT, 0, 0);
     }
 }
 

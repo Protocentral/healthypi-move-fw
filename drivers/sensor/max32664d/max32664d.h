@@ -153,6 +153,7 @@ struct max32664d_encoded_data
 
 	uint16_t hr;
 	uint16_t spo2;
+	uint8_t spo2_conf;
 
 	// BPT Measurements
 	uint8_t bpt_progress;

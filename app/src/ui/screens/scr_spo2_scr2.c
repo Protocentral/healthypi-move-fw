@@ -11,8 +11,9 @@
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2_scr2, LOG_LEVEL_DBG);
 
 static lv_obj_t *scr_spo2_scr2;
-
 static lv_obj_t *btn_spo2_proceed;
+
+static int spo2_source = 0;
 
 // Externs
 extern lv_style_t style_red_medium;
@@ -25,6 +26,7 @@ extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
 extern struct k_sem sem_start_one_shot_spo2;
+extern struct k_sem sem_fi_spo2_est_start;
 
 static void scr_spo2_btn_proceed_handler(lv_event_t *e)
 {
@@ -32,13 +34,29 @@ static void scr_spo2_btn_proceed_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        k_sem_give(&sem_start_one_shot_spo2);
-        hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+        if (spo2_source == SPO2_SOURCE_PPG_WR)
+        {
+            LOG_DBG("Proceeding with wrist PPG sensor");
+            k_sem_give(&sem_start_one_shot_spo2);
+            hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2_source, 0, 0);
+        }
+        else if (spo2_source == SPO2_SOURCE_PPG_FI)
+        {
+            LOG_DBG("Proceeding with finger PPG sensor");
+            k_sem_give(&sem_fi_spo2_est_start);
+        }
+        else
+        {
+            LOG_ERR("Invalid SpO2 source selected: %d", spo2_source);
+            return;
+        }
     }
 }
 
 void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    spo2_source = arg2;
+
     scr_spo2_scr2 = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr2, &style_scr_black, 0);
     lv_obj_clear_flag(scr_spo2_scr2, LV_OBJ_FLAG_SCROLLABLE);
@@ -55,7 +73,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
     lv_label_set_text(lbl_scroll_cancel, LV_SYMBOL_DOWN);
     lv_obj_set_style_text_color(lbl_scroll_cancel, lv_palette_darken(LV_PALETTE_RED, 2), LV_PART_MAIN);
 
-    if (arg2 == SPO2_SOURCE_PPG_WR)
+    if (spo2_source == SPO2_SOURCE_PPG_WR)
     {
         lv_obj_t *img_spo2_wr = lv_img_create(cont_col);
         lv_img_set_src(img_spo2_wr, &img_spo2_hand);
@@ -66,7 +84,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
         lv_label_set_text(label_info, "Ensure that your Move is worn on the wrist snugly as shown.");
         lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     }
-    else if (arg2 == SPO2_SOURCE_PPG_FI)
+    else if (spo2_source == SPO2_SOURCE_PPG_FI)
     {
         lv_obj_t *img_spo2_fi = lv_img_create(cont_col);
         lv_img_set_src(img_spo2_fi, &img_bpt_finger_90);

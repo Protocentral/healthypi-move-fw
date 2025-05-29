@@ -79,6 +79,8 @@ struct hpi_ppg_fi_data_t
 
     uint8_t spo2;
     uint8_t spo2_confidence;
+    uint8_t spo2_valid_percent_complete;
+    uint8_t spo2_state;
 
     uint8_t bp_sys;
     uint8_t bp_dia;
