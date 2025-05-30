@@ -95,9 +95,6 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_hr_last_update_time, LV_TEXT_ALIGN_CENTER, 0);  
 
-    lv_obj_t *lbl_info_scroll = lv_label_create(cont_col);
-    lv_label_set_text(lbl_info_scroll, LV_SYMBOL_UP);
-
     hpi_disp_set_curr_screen(SCR_HR);
     hpi_show_screen(scr_hr, m_scroll_dir);
 }

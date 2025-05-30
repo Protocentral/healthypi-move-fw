@@ -7,7 +7,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
-lv_obj_t *scr_bpt_scr4;
+lv_obj_t *scr_bpt_measure;
 
 static lv_obj_t *chart_bpt_ppg;
 static lv_chart_series_t *ser_bpt_ppg;
@@ -27,13 +27,13 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
-void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
-    scr_bpt_scr4 = lv_obj_create(NULL);
-    lv_obj_add_style(scr_bpt_scr4, &style_scr_black, 0);
-    lv_obj_clear_flag(scr_bpt_scr4, LV_OBJ_FLAG_SCROLLABLE);
+    scr_bpt_measure = lv_obj_create(NULL);
+    lv_obj_add_style(scr_bpt_measure, &style_scr_black, 0);
+    lv_obj_clear_flag(scr_bpt_measure, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr4);
+    lv_obj_t *cont_col = lv_obj_create(scr_bpt_measure);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     // lv_obj_set_width(cont_col, lv_pct(100));
@@ -99,7 +99,7 @@ void draw_scr_bpt_scr4(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_label_set_text(label_hr_sub, " bpm");
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_MEASURE);
-    hpi_show_screen(scr_bpt_scr4, m_scroll_dir);
+    hpi_show_screen(scr_bpt_measure, m_scroll_dir);
 }
 
 void hpi_disp_bpt_update_progress(int progress)
