@@ -45,8 +45,7 @@ lv_style_t style_bg_purple;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
-static int curr_screen = SCR_HOME;
-K_MUTEX_DEFINE(mutex_curr_screen);
+
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
@@ -215,16 +214,7 @@ void hpi_display_sleep_on(void)
     // hpi_pwr_display_sleep();
 }
 
-void hpi_display_sleep_off(void)
-{
-    LOG_DBG("Display on");
-    hpi_disp_set_brightness(hpi_disp_get_brightness());
 
-    // display_blanking_on(display_dev);
-    hpi_load_screen(curr_screen, SCROLL_NONE);
-    display_blanking_off(display_dev);
-    // hpi_pwr_display_wake();
-}
 
 void hpi_disp_set_brightness(uint8_t brightness_percent)
 {
@@ -359,6 +349,7 @@ void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir)
     draw_scr_settings(m_scroll_dir);
 }
 
+/*
 void disp_spl_screen_event(lv_event_t *e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -374,124 +365,9 @@ void disp_spl_screen_event(lv_event_t *e)
             hpi_load_screen(SCR_HOME, SCROLL_DOWN);
         }
     }
-}
+}*/
 
-void disp_screen_event(lv_event_t *e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-    // lv_obj_t *target = lv_event_get_target(e);
 
-    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_LEFT)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printf("Left at %d\n", curr_screen);
-
-        if ((curr_screen + 1) == SCR_LIST_END)
-        {
-            printk("End of list\n");
-            return;
-        }
-        else
-        {
-            printk("Loading screen %d\n", curr_screen + 1);
-            hpi_load_screen(curr_screen + 1, SCROLL_LEFT);
-        }
-    }
-
-    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_RIGHT)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printf("Right at %d\n", curr_screen);
-
-        if (hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
-        {
-            hpi_load_screen(SCR_HR, SCROLL_LEFT);
-            return;
-        }
-
-        if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
-        {
-            hpi_load_screen(SCR_SPO2, SCROLL_LEFT);
-            return;
-        }
-
-        if ((curr_screen - 1) == SCR_LIST_START)
-        {
-            printk("Start of list\n");
-            return;
-        }
-        else
-        {
-            printk("Loading screen %d\n", curr_screen - 1);
-            hpi_load_screen(curr_screen - 1, SCROLL_RIGHT);
-        }
-    }
-    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printk("Down at %d\n", curr_screen);
-
-        if (hpi_disp_get_curr_screen() == SCR_HOME)
-        {
-            hpi_move_load_scr_settings(SCROLL_DOWN);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
-        {
-            printk("Cancel ECG\n");
-            k_sem_give(&sem_ecg_cancel);
-            hpi_load_screen(SCR_ECG, SCROLL_DOWN);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE || hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SELECT ||
-                 hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SCR2)
-        {
-            k_sem_give(&sem_stop_one_shot_spo2);
-            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_COMPLETE)
-        {
-            hpi_load_screen(SCR_ECG, SCROLL_UP);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_COMPLETE || (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_SELECT))
-        {
-            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
-        }
-        else if ((hpi_disp_get_curr_screen() == SCR_SPL_FI_SENS_WEAR) || (hpi_disp_get_curr_screen() == SCR_SPL_FI_SENS_CHECK) || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_MEASURE))
-        {
-            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_COMPLETE || (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS) ||
-                 (hpi_disp_get_curr_screen() == SCR_SPL_BPT_EST_COMPLETE))
-        {
-            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_BLE)
-        {
-            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_HRV)
-        {
-            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS)
-        {
-            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
-        }
-    }
-    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printk("Up at %d\n", curr_screen);
-
-        if (curr_screen == SCR_SPL_SETTINGS)
-        {
-            hpi_load_screen(SCR_HOME, SCROLL_UP);
-        }
-        /*else if (hpi_disp_get_curr_screen() == SCR_HR)
-        {
-            hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR, 0, 0, 0);
-        }*/
-    }
-}
 
 int hpi_helper_get_date_time_str(int64_t in_ts, char *date_time_str)
 {
@@ -537,19 +413,4 @@ void draw_bg(lv_obj_t *parent)
     lv_obj_add_flag(logo_bg, LV_OBJ_FLAG_ADV_HITTEST);  /// Flags
     lv_obj_clear_flag(logo_bg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     lv_obj_add_style(parent, &style_scr_black, 0);
-}
-
-void hpi_disp_set_curr_screen(int screen)
-{
-    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
-    curr_screen = screen;
-    k_mutex_unlock(&mutex_curr_screen);
-}
-
-int hpi_disp_get_curr_screen(void)
-{
-    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
-    int screen = curr_screen;
-    k_mutex_unlock(&mutex_curr_screen);
-    return screen;
 }

@@ -180,3 +180,9 @@ void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
         hpi_bpt_disp_do_set_scale(BPT_DISP_WINDOW_SIZE);
     }
 }
+
+void gesture_down_scr_bpt_measure(void)
+{
+    // Handle gesture down event
+    hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+}

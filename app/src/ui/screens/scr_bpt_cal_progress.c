@@ -69,3 +69,9 @@ void scr_bpt_cal_progress_update_text(char *text)
 
     lv_label_set_text(label_info2, text);
 }
+
+void gesture_down_scr_bpt_cal_progress(void)
+{
+    // Handle gesture down event
+    hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+}

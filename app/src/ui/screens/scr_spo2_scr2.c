@@ -38,7 +38,7 @@ static void scr_spo2_btn_proceed_handler(lv_event_t *e)
         {
             LOG_DBG("Proceeding with wrist PPG sensor");
             k_sem_give(&sem_start_one_shot_spo2);
-            hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2_source, 0, 0);
+            hpi_load_screen(SCR_SPL_SPO2_MEASURE, SCROLL_UP);
         }
         else if (spo2_source == SPO2_SOURCE_PPG_FI)
         {
@@ -106,4 +106,9 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
 
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_SCR2);
     hpi_show_screen(scr_spo2_scr2, m_scroll_dir);
+}
+
+void gesture_down_scr_spo2_scr2(void)
+{
+    hpi_load_screen(SCR_HR, SCROLL_DOWN);
 }

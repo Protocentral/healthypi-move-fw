@@ -123,3 +123,8 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     hpi_disp_set_curr_screen(SCR_SPL_BPT_EST_COMPLETE);
     hpi_show_screen(scr_bpt_est_complete, m_scroll_dir);
 }
+
+void gesture_down_scr_bpt_est_complete(void)
+{
+    hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+}

@@ -521,11 +521,23 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
     // LOG_DBG("PPG Finger SM BPT Calibration Fail Running");
 }
 
+#define SENSOR_CHECK_TIMEOUT_MS 15000
+
+static void sensor_check_timeout_handler(struct k_timer *timer_id)
+{
+    LOG_ERR("Sensor check timeout: Sensor not found");
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+}
+
+K_TIMER_DEFINE(tmr_sensor_check_timeout, sensor_check_timeout_handler, NULL);
+
 static void st_ppg_fi_check_sensor_entry(void *o)
 {
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
     LOG_DBG("PPG Finger SM Check Sensor Entry");
     hpi_load_scr_spl(SCR_SPL_FI_SENS_CHECK, SCROLL_NONE, SCR_BPT, s->ppg_fi_op_mode, 0, 0);
+
+    k_timer_start(&tmr_sensor_check_timeout, K_MSEC(SENSOR_CHECK_TIMEOUT_MS), K_NO_WAIT);
 }
 
 static void st_ppg_fi_check_sensor_run(void *o)
@@ -548,6 +560,9 @@ static void st_ppg_fi_check_sensor_run(void *o)
     else
     {
         LOG_DBG("MAX30101 sensor found !");
+
+        // Stop the timeout timer since sensor is found
+        k_timer_stop(&tmr_sensor_check_timeout);
 
         if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
         {
@@ -605,7 +620,7 @@ static void st_ppg_fi_spo2_est_run(void *o)
 static void st_ppg_fi_spo2_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Done Entry");
-    hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2 , m_est_spo2, 0, 0);
+    hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
 }
 static void st_ppg_fi_spo2_est_done_run(void *o)
 {

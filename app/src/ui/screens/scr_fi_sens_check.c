@@ -51,3 +51,9 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
     hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_CHECK);
     hpi_show_screen(scr_bpt_scr3, dir);
 }
+
+void gesture_down_scr_fi_sens_check(void)
+{
+    // Handle gesture down event
+    hpi_load_screen(SCR_SPL_FI_SENS_WEAR, SCROLL_DOWN);
+}

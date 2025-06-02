@@ -261,3 +261,9 @@ void scr_ecg_lead_on_off_handler(bool lead_on_off)
         lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
     }
 }
+
+void gesture_down_scr_ecg_2(void) {
+    printk("Cancel ECG\n");
+    //k_sem_give(&sem_ecg_cancel);
+    //hpi_load_screen(SCR_ECG, SCROLL_DOWN);
+}

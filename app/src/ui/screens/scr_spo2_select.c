@@ -90,3 +90,8 @@ void draw_scr_spo2_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_SELECT);
     hpi_show_screen(scr_spo2_select, m_scroll_dir);
 }
+
+void gesture_down_scr_spo2_select(void)
+{
+    hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+}

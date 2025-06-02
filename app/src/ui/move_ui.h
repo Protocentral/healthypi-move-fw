@@ -206,6 +206,25 @@ void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
+void gesture_down_scr_spl_raw_ppg(void);
+void gesture_down_scr_ecg_2(void);
+void gesture_down_scr_fi_sens_wear(void);
+void gesture_down_scr_fi_sens_check(void);
+void gesture_down_scr_bpt_measure(void);
+void gesture_down_scr_bpt_cal_complete(void);
+void gesture_down_scr_ecg_complete(void);
+void gesture_down_scr_hrv(void);
+void gesture_down_scr_hr_scr2(void);
+void gesture_down_scr_spo2_scr2(void);
+void gesture_down_scr_spo2_measure(void);
+void gesture_down_scr_spl_spo2_complete(void);
+void gesture_down_scr_spl_spo2_timeout(void);
+void gesture_down_scr_spo2_select(void);
+void gesture_down_scr_bpt_cal_progress(void);
+void gesture_down_scr_bpt_cal_failed(void);
+void gesture_down_scr_bpt_est_complete(void);
+void gesture_down_scr_ble(void);
+
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);

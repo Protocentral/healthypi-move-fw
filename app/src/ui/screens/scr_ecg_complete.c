@@ -68,3 +68,9 @@ void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     hpi_disp_set_curr_screen(SCR_SPL_ECG_COMPLETE);
     hpi_show_screen(scr_ecg_complete, m_scroll_dir);
 }
+
+void gesture_down_scr_ecg_complete(void)
+{
+    // Handle gesture down event
+    hpi_load_screen(SCR_ECG, SCROLL_DOWN);
+}

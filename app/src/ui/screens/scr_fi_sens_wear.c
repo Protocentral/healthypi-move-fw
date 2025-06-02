@@ -83,3 +83,8 @@ void draw_scr_fi_sens_wear(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_WEAR);
     hpi_show_screen(scr_bpt_scr2, m_scroll_dir);
 }
+
+void gesture_down_scr_fi_sens_wear(void)
+{
+    hpi_load_screen(parent_screen, SCROLL_DOWN);
+}

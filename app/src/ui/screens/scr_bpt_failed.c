@@ -72,3 +72,9 @@ void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32
     hpi_disp_set_curr_screen(SCR_SPL_BPT_CAL_COMPLETE);
     hpi_show_screen(scr_bpt_cal_failed, m_scroll_dir);
 }
+
+void gesture_down_scr_bpt_cal_failed(void)
+{
+    // Handle gesture down event
+    hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+}

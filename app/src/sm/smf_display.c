@@ -38,8 +38,6 @@ static int last_spo2_trend_refresh = 0;
 static int last_today_trend_refresh = 0;
 static int last_temp_trend_refresh = 0;
 
-static int32_t hpi_scr_ppg_hr_spo2_last_refresh = 0;
-
 static int scr_to_change = SCR_HOME;
 K_SEM_DEFINE(sem_change_screen, 0, 1);
 
@@ -110,28 +108,131 @@ static uint32_t g_arg4 = 0;
 static uint8_t g_scr_parent = SCR_HOME;
 
 typedef void (*screen_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
-// Array of function pointers for screen drawing functions
-static const screen_draw_func_t screen_draw_funcs[] = {
-    [SCR_SPL_RAW_PPG] = draw_scr_spl_raw_ppg,
-    [SCR_SPL_ECG_SCR2] = draw_scr_ecg_scr2,
-    [SCR_SPL_FI_SENS_WEAR] = draw_scr_fi_sens_wear,
-    [SCR_SPL_FI_SENS_CHECK] = draw_scr_fi_sens_check,
-    [SCR_SPL_BPT_MEASURE] = draw_scr_bpt_measure,
-    [SCR_SPL_BPT_CAL_COMPLETE] = draw_scr_bpt_cal_complete,
-    [SCR_SPL_ECG_COMPLETE] = draw_scr_ecg_complete,
-    [SCR_SPL_PLOT_HRV] = draw_scr_hrv,
-    [SCR_SPL_HR_SCR2] = draw_scr_hr_scr2,
-    [SCR_SPL_SPO2_SCR2] = draw_scr_spo2_scr2,
-    [SCR_SPL_SPO2_MEASURE] = draw_scr_spo2_measure,
-    [SCR_SPL_SPO2_COMPLETE] = draw_scr_spl_spo2_complete,
-    [SCR_SPL_SPO2_TIMEOUT] = draw_scr_spl_spo2_timeout,
-    [SCR_SPL_SPO2_SELECT] = draw_scr_spo2_select,
+typedef void (*screen_gesture_down_func_t)(void);
 
-    [SCR_SPL_BPT_CAL_PROGRESS] = draw_scr_bpt_cal_progress,
-    [SCR_SPL_BPT_FAILED] = draw_scr_bpt_cal_failed,
-    [SCR_SPL_BPT_EST_COMPLETE] = draw_scr_bpt_est_complete,
-    [SCR_SPL_BLE] = draw_scr_ble,
+typedef struct {
+    screen_draw_func_t draw;
+    screen_gesture_down_func_t gesture_down;
+} screen_func_table_entry_t;
+
+static int curr_screen = SCR_HOME;
+K_MUTEX_DEFINE(mutex_curr_screen);
+
+void hpi_disp_set_curr_screen(int screen)
+{
+    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
+    curr_screen = screen;
+    k_mutex_unlock(&mutex_curr_screen);
+}
+
+int hpi_disp_get_curr_screen(void)
+{
+    k_mutex_lock(&mutex_curr_screen, K_FOREVER);
+    int screen = curr_screen;
+    k_mutex_unlock(&mutex_curr_screen);
+    return screen;
+}
+
+// Array of function pointers for screen drawing functions
+static const screen_func_table_entry_t screen_func_table[] = {
+    [SCR_SPL_RAW_PPG] = { draw_scr_spl_raw_ppg, NULL },
+    [SCR_SPL_ECG_SCR2] = { draw_scr_ecg_scr2, gesture_down_scr_ecg_2 },
+    [SCR_SPL_FI_SENS_WEAR] = { draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear },
+    [SCR_SPL_FI_SENS_CHECK] = { draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check },
+    [SCR_SPL_BPT_MEASURE] = { draw_scr_bpt_measure, gesture_down_scr_bpt_measure },
+    [SCR_SPL_BPT_CAL_COMPLETE] = { draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete },
+    [SCR_SPL_ECG_COMPLETE] = { draw_scr_ecg_complete, gesture_down_scr_ecg_complete },
+    [SCR_SPL_PLOT_HRV] = { draw_scr_hrv, NULL },
+    //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
+    [SCR_SPL_SPO2_SCR2] = { draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2 },
+    [SCR_SPL_SPO2_MEASURE] = { draw_scr_spo2_measure, gesture_down_scr_spo2_measure },
+    [SCR_SPL_SPO2_COMPLETE] = { draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete },
+    [SCR_SPL_SPO2_TIMEOUT] = { draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout },
+    [SCR_SPL_SPO2_SELECT] = { draw_scr_spo2_select, gesture_down_scr_spo2_select },
+    [SCR_SPL_BPT_CAL_PROGRESS] = { draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress },
+    [SCR_SPL_BPT_FAILED] = { draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed },
+    [SCR_SPL_BPT_EST_COMPLETE] = { draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete },
+    [SCR_SPL_BLE] = { draw_scr_ble, NULL },
 };
+
+void disp_screen_event(lv_event_t *e)
+{
+    lv_event_code_t event_code = lv_event_get_code(e);
+    // lv_obj_t *target = lv_event_get_target(e);
+
+    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_LEFT)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printf("Left at %d\n", curr_screen);
+
+        if ((curr_screen + 1) == SCR_LIST_END)
+        {
+            printk("End of list\n");
+            return;
+        }
+        else
+        {
+            printk("Loading screen %d\n", curr_screen + 1);
+            hpi_load_screen(curr_screen + 1, SCROLL_LEFT);
+        }
+    }
+
+    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_RIGHT)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printf("Right at %d\n", curr_screen);
+
+        if (hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
+        {
+            hpi_load_screen(SCR_HR, SCROLL_LEFT);
+            return;
+        }
+
+        if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
+        {
+            hpi_load_screen(SCR_SPO2, SCROLL_LEFT);
+            return;
+        }
+
+        if ((curr_screen - 1) == SCR_LIST_START)
+        {
+            printk("Start of list\n");
+            return;
+        }
+        else
+        {
+            printk("Loading screen %d\n", curr_screen - 1);
+            hpi_load_screen(curr_screen - 1, SCROLL_RIGHT);
+        }
+    }
+    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printk("Down at %d\n", curr_screen);
+
+        int screen = hpi_disp_get_curr_screen();
+        if (screen >= 0 && screen < ARRAY_SIZE(screen_func_table) && screen_func_table[screen].gesture_down) {
+            screen_func_table[screen].gesture_down();
+        } else {
+            // Default handler or nothing
+        }
+    }
+    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_TOP)
+    {
+        lv_indev_wait_release(lv_indev_get_act());
+        printk("Up at %d\n", curr_screen);
+
+        if (curr_screen == SCR_SPL_SETTINGS)
+        {
+            hpi_load_screen(SCR_HOME, SCROLL_UP);
+        }
+        /*else if (hpi_disp_get_curr_screen() == SCR_HR)
+        {
+            hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR, 0, 0, 0);
+        }*/
+    }
+}
+
 
 typedef void (*screen_static_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
 
@@ -496,7 +597,7 @@ void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1,
 {
     LOG_DBG("Loading screen %d", m_screen);
 
-    if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_draw_funcs) && screen_draw_funcs[m_screen] != NULL)
+    if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_func_table) && screen_func_table[m_screen].draw != NULL)
     {
         g_screen = m_screen;
         g_scroll_dir = m_scroll_dir;
@@ -590,7 +691,9 @@ static void st_display_active_run(void *o)
     if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
     {
         LOG_DBG("Change Screen: %d", scr_to_change);
-        screen_draw_funcs[g_screen](g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
+        if (screen_func_table[g_screen].draw) {
+            screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
+        }
         lv_disp_trig_activity(NULL);
     }
 
@@ -622,6 +725,17 @@ static void st_display_sleep_run(void *o)
         // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
+}
+
+void hpi_display_sleep_off(void)
+{
+    LOG_DBG("Display on");
+    hpi_disp_set_brightness(hpi_disp_get_brightness());
+
+    // display_blanking_on(display_dev);
+    hpi_load_screen(curr_screen, SCROLL_NONE);
+    display_blanking_off(display_dev);
+    // hpi_pwr_display_wake();
 }
 
 static void st_display_sleep_exit(void *o)
@@ -758,3 +872,4 @@ ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
 #define SMF_DISPLAY_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(smf_display_thread_id, SMF_DISPLAY_THREAD_STACK_SIZE, smf_display_thread, NULL, NULL, NULL, SMF_DISPLAY_THREAD_PRIORITY, 0, 0);
+
