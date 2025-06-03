@@ -13,7 +13,6 @@
 #include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
-#include "log_module.h"
 #include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
@@ -42,16 +41,11 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 static int ecg_last_timer_val = 0;
 static int ecg_countdown_val = 0;
 
-static bool ecg_record_active = false;
-
 static const struct smf_state ecg_bioz_states[];
 struct s_ecg_bioz_object
 {
     struct smf_ctx ctx;
 } s_ecg_bioz_obj;
-
-static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128*30 = 3840
-volatile uint16_t ecg_record_counter = 0;
 
 enum ecg_bioz_state
 {
@@ -68,7 +62,6 @@ static bool m_ecg_lead_on_off = true;
 
 static uint16_t m_ecg_hr = 0;
 
-
 static int hw_max30001_ecg_enable(void);
 static int hw_max30001_ecg_disable(void);
 
@@ -78,7 +71,6 @@ extern struct k_sem sem_ecg_bioz_smf_start;
 extern struct k_sem sem_ecg_bioz_sm_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
-
 
 static void work_ecg_lon_handler(struct k_work *work)
 {
@@ -91,7 +83,6 @@ K_WORK_DEFINE(work_ecg_lon, work_ecg_lon_handler);
 static void work_ecg_loff_handler(struct k_work *work)
 {
     LOG_DBG("ECG LOFF Work");
-
 
 }
 K_WORK_DEFINE(work_ecg_loff, work_ecg_loff_handler);
@@ -154,19 +145,6 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
         if (ecg_active)
         {
             k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_MSEC(1));
-        }
-
-        if (ecg_record_active == true)
-        {
-            for (int i = 0; i < ecg_num_samples; i++)
-            {
-                ecg_record_buffer[ecg_record_counter] = edata->ecg_samples[i];
-                ecg_record_counter++;
-                if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES)
-                {
-                    ecg_record_counter = 0;
-                }
-            }
         }
     }
 }
@@ -231,10 +209,7 @@ static void st_ecg_bioz_idle_entry(void *o)
     k_timer_stop(&tmr_ecg_bioz_sampling);
     hw_max30001_bioz_disable();
 
-    for (int i = 0; i < ECG_RECORD_BUFFER_SAMPLES; i++)
-    {
-        ecg_record_buffer[i] = 0;
-    }
+   
 }
 
 static void st_ecg_bioz_idle_run(void *o)
@@ -252,8 +227,7 @@ static void st_ecg_bioz_stream_entry(void *o)
 
     hw_max30001_ecg_enable();
     k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
-    ecg_record_active = true;
-
+    hpi_data_set_ecg_record_active(true);
     // hpi_max30001_lon_detect_enable();
 
     ecg_countdown_val = ECG_RECORD_DURATION_S;
@@ -263,7 +237,7 @@ static void st_ecg_bioz_stream_run(void *o)
 {
     // LOG_DBG("ECG/BioZ SM Stream Run");
     // Stream for ECG duration (30s)
-    if (ecg_record_active == true)
+    if (hpi_data_is_ecg_record_active() == true)
     {
         if ((k_uptime_get_32() - ecg_last_timer_val) >= 1000)
         {
@@ -295,34 +269,19 @@ static void st_ecg_bioz_stream_run(void *o)
 static void st_ecg_bioz_stream_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stream Exit");
-    ecg_record_active = false;
+    
+    hpi_data_set_ecg_record_active(false);
 
     ecg_last_timer_val = 0;
     ecg_countdown_val = 0;
 }
-
-static void work_ecg_write_file_handler(struct k_work *work)
-{
-    struct tm tm_sys_time = hpi_sys_get_sys_time();
-    int64_t log_time = timeutil_timegm64(&tm_sys_time);
-
-    LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);
-    // Write ECG data to file
-    hpi_write_ecg_record_file(ecg_record_buffer, ECG_RECORD_BUFFER_SAMPLES, log_time);
-}
-K_WORK_DEFINE(work_ecg_write_file, work_ecg_write_file_handler);
 
 static void st_ecg_bioz_complete_entry(void *o)
 {
     LOG_DBG("ECG/BioZ SM Complete Entry");
     k_timer_stop(&tmr_ecg_bioz_sampling);
     hw_max30001_ecg_disable();
-    // k_thread_suspend(ecg_bioz_sampling_thread_id);
 
-    k_work_submit(&work_ecg_write_file);
-    // k_sem_give(&sem_ecg_complete_reset);
-    //  Write ECG data to file
-    // hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, k_uptime_get_32());
     k_sem_give(&sem_ecg_complete);
 }
 

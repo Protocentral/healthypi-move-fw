@@ -60,7 +60,6 @@ int tmp_scr_parent = 0;
 // Externs
 extern const struct device *display_dev;
 
-extern struct k_sem sem_ecg_cancel;
 extern struct k_sem sem_stop_one_shot_spo2;
 
 /*Will be called when the styles of the base theme are already added to add new styles*/

@@ -20,3 +20,6 @@ int hpi_sys_set_sys_time(struct tm *tm);
 
 struct tm hpi_sys_get_sys_time(void);
 int64_t hw_get_sys_time_ts(void);
+
+void hpi_data_set_ecg_record_active(bool active);
+bool hpi_data_is_ecg_record_active(void);

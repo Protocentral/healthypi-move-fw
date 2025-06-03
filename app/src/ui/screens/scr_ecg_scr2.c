@@ -40,6 +40,8 @@ extern lv_style_t style_tiny;
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
+extern struct k_sem sem_ecg_cancel;
+
 static void btn_ecg_cancel_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -236,7 +238,7 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
             lv_obj_add_style(label_ecg_lead_off, &style_red_medium, 0);
             prev_lead_off_status = true;
         }
-        else if((ecg_lead_off == false) && (prev_lead_off_status == true))
+        else if ((ecg_lead_off == false) && (prev_lead_off_status == true))
         {
             lv_label_set_text(label_ecg_lead_off, "Lead On");
             lv_obj_add_style(label_ecg_lead_off, &style_white_medium, 0);
@@ -262,8 +264,9 @@ void scr_ecg_lead_on_off_handler(bool lead_on_off)
     }
 }
 
-void gesture_down_scr_ecg_2(void) {
+void gesture_down_scr_ecg_2(void)
+{
     printk("Cancel ECG\n");
-    //k_sem_give(&sem_ecg_cancel);
-    //hpi_load_screen(SCR_ECG, SCROLL_DOWN);
+    k_sem_give(&sem_ecg_cancel);
+    hpi_load_screen(SCR_ECG, SCROLL_DOWN);
 }

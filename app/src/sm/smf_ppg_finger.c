@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
 K_SEM_DEFINE(sem_bpt_cal_start, 0, 1);
 K_SEM_DEFINE(sem_fi_spo2_est_start, 0, 1);
+K_SEM_DEFINE(sem_fi_spo2_est_cancel, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_sensor_found, 0, 1);
 K_SEM_DEFINE(sem_spo2_sensor_found, 0, 1);
@@ -359,7 +360,7 @@ void hpi_bpt_abort(void)
 static void st_ppg_fing_idle_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Idle Entry");
-
+    k_sem_give(&sem_stop_fi_sampling);
     // k_thread_suspend(ppg_finger_sampling_thread_id);
 }
 
@@ -551,6 +552,14 @@ static void st_ppg_fi_check_sensor_run(void *o)
     LOG_DBG("AFE Sensor ID: %d", sensor_id_get.val1);
 
     // k_sem_give(&sem_ppg_fi_hide_loading);
+
+    if (k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("SpO2 Estimation Cancelled");
+
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
 
     if (sensor_id_get.val1 != MAX30101_SENSOR_ID)
     {

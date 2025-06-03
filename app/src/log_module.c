@@ -74,7 +74,7 @@ void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_l
 
     LOG_DBG("Write to file... %s | Size: %d", fname, ecg_record_length);
 
-    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR);
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_WR);
     if (ret < 0)
     {
         LOG_ERR("FAIL: open %s: %d", fname, ret);

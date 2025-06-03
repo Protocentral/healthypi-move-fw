@@ -17,6 +17,8 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
+extern struct k_sem sem_fi_spo2_est_cancel;
+
 void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     
@@ -54,6 +56,8 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
 
 void gesture_down_scr_fi_sens_check(void)
 {
+    // Cancel SpO2 estimation if in progress
+    k_sem_give(&sem_fi_spo2_est_cancel);
     // Handle gesture down event
-    hpi_load_screen(SCR_SPL_FI_SENS_WEAR, SCROLL_DOWN);
+    hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
 }

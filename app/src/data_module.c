@@ -20,6 +20,8 @@ LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
 
+#include "log_module.h"
+
 // ProtoCentral data formats
 #define CES_CMDIF_PKT_START_1 0x0A
 #define CES_CMDIF_PKT_START_2 0xFA
@@ -56,11 +58,18 @@ uint16_t current_session_log_counter = 0;
 uint16_t current_session_log_id = 0;
 char session_id_str[5];
 
+static bool is_ecg_record_active = false;
+static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128*30 = 3840
+static volatile uint16_t ecg_record_counter = 0;
+K_MUTEX_DEFINE(mutex_is_ecg_record_active);
+
+static uint32_t last_hr_update_time = 0;
+
 K_MUTEX_DEFINE(mutex_hr_change);
+
 // Externs
 
 ZBUS_CHAN_DECLARE(hr_chan);
-
 
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 
@@ -164,11 +173,6 @@ void send_data_text(int32_t ecg_sample, int32_t bioz_sample, int32_t raw_red)
     {
         send_usb_cdc(data, strlen(data));
     }
-
-    /*if (settings_send_ble_enabled)
-    {
-        cmdif_send_ble_data(data, strlen(data));
-    }*/
 }
 
 void send_data_text_1(int32_t in_sample)
@@ -180,48 +184,46 @@ void send_data_text_1(int32_t in_sample)
     send_usb_cdc(data, strlen(data));
 }
 
-#define IIR_FILT_TAPS 5
-
-// static const float32_t filt_low_b[IIR_FILT_TAPS] = {0.418163345761899, 0.836326691523798, 0.418163345761899, 0.0, 0.0}; //{ 1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
-// static const float32_t filt_low_a[IIR_FILT_TAPS] = {1.0, 0.462938025291041, 0.209715357756555, 0.0, 0.0};
-
-// static const float32_t filt_notch_b[IIR_FILT_TAPS] = {0.811831745907865, 2.537684304617564, 3.606784274651312, 2.537684304617564, 0.811831745907865};
-// static const float32_t filt_notch_a[IIR_FILT_TAPS] = {1.0, 2.803860444771638, 3.571057889147946, 2.271508164463490, 0.659389877319096};
-
-/*
-struct iir_filter_t
+static void work_ecg_write_file_handler(struct k_work *work)
 {
-    float32_t input_history[IIR_FILT_TAPS];
-    float32_t output_history[IIR_FILT_TAPS];
+    struct tm tm_sys_time = hpi_sys_get_sys_time();
+    int64_t log_time = timeutil_timegm64(&tm_sys_time);
 
-    float32_t coeff_b[IIR_FILT_TAPS];
-    float32_t coeff_a[IIR_FILT_TAPS];
+    LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);
+    // Write ECG data to file
+    hpi_write_ecg_record_file(ecg_record_buffer, ECG_RECORD_BUFFER_SAMPLES, log_time);
+}
 
-    int filter_cycle;
-};
+K_WORK_DEFINE(work_ecg_write_file, work_ecg_write_file_handler);
 
-float32_t iir_filt(float32_t x, struct iir_filter_t *filter_instance)
+void hpi_data_set_ecg_record_active(bool active)
 {
-    float32_t y = 0;
-    int N = IIR_FILT_TAPS;
-    int c = filter_instance->filter_cycle;
-    filter_instance->input_history[c] = x;
-
-    for (int i = 0; i < N; i++)
+    k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
+    is_ecg_record_active = active;
+    if (active)
     {
-        y = y + filter_instance->coeff_b[i] * filter_instance->input_history[(c - i + N) % N];
-    }
-    for (int i = 1; i < N; i++)
+        ecg_record_counter = 0;
+        memset(ecg_record_buffer, 0, sizeof(ecg_record_buffer));
+    } 
+    else
     {
-        y = y - filter_instance->coeff_a[i] * filter_instance->output_history[(c - i + N) % N];
+        // If recording is stopped, write the file
+        if (ecg_record_counter > 0)
+        {
+            k_work_submit(&work_ecg_write_file);
+        }
     }
-    y = y / filter_instance->coeff_a[0];
-    filter_instance->output_history[(c % N)] = y;
-    filter_instance->filter_cycle = (c + 1) % N;
-    return y;
-}*/
+    k_mutex_unlock(&mutex_is_ecg_record_active);
+}
 
-static uint32_t last_hr_update_time = 0;
+bool hpi_data_is_ecg_record_active(void)
+{
+    bool active;
+    k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
+    active = is_ecg_record_active;
+    k_mutex_unlock(&mutex_is_ecg_record_active);
+    return active;
+}
 
 void data_thread(void)
 {
@@ -237,50 +239,39 @@ void data_thread(void)
     {
         if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
-            /*
-            // Stage 1 50 Hz Notch filter
-            for(int i = 0; i < BLOCK_SIZE; i++)
-            {
-                input[i] = (ecg_bioz_sensor_sample.ecg_samples[i])/1000.00;
-            }
-
-            arm_fir_f32(&sFIR, input, output, BLOCK_SIZE);
-
-            for(int i = 0; i < BLOCK_SIZE; i++)
-            {
-                ecg_bioz_sensor_sample.ecg_samples[i] = output[i]*1000.00;
-            }
-            // End of Stage 1
-            */
-
             if (settings_send_ble_enabled)
             {
 
                 ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
                 ble_gsr_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
-                // ble_bioz_notify(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples);
-                //  b_notify(ecg_bioz_sensor_sample.bioz_sample);
-
-                /*resp_sample_buffer[resp_sample_buffer_count++] = ecg_bioz_sensor_sample.bioz_sample;
-                if (resp_sample_buffer_count >= SAMPLE_BUFF_WATERMARK)
-                {
-                    ble_bioz_notify(resp_sample_buffer, resp_sample_buffer_count);
-                    resp_sample_buffer_count = 0;
-
-                }*/
             }
             if (settings_plot_enabled)
             {
                 k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
             }
 
-            /*uint16_t ecg_hr = ecg_bioz_sensor_sample.hr;
-            zbus_chan_pub(&ecg_stat_chan, &ecg_hr, K_SECONDS(1));
-
-            if (ecg_bioz_sensor_sample.rrint == 1)
+            if (is_ecg_record_active == true)
             {
-                LOG_DBG("RRINT !");
-            }*/
+                int samples_to_copy = ecg_bioz_sensor_sample.ecg_num_samples;
+                int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
+
+                if (samples_to_copy <= space_left)
+                {
+                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_bioz_sensor_sample.ecg_samples, samples_to_copy * sizeof(int32_t));
+                    ecg_record_counter += samples_to_copy;
+                    if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES)
+                    {
+                        ecg_record_counter = 0;
+                    }
+                }
+                else
+                {
+                    // Copy in two parts: to end of buffer, then wrap around
+                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_bioz_sensor_sample.ecg_samples, space_left * sizeof(int32_t));
+                    memcpy(ecg_record_buffer, &ecg_bioz_sensor_sample.ecg_samples[space_left], (samples_to_copy - space_left) * sizeof(int32_t));
+                    ecg_record_counter = samples_to_copy - space_left;
+                }
+            }
         }
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
@@ -331,8 +322,6 @@ void data_thread(void)
                     }
                 }
             }
-
-            // LOG_DBG("SpO2: %d | Confidence: %d", ppg_wr_sensor_sample.spo2, ppg_wr_sensor_sample.spo2_confidence);
         }
 
         k_sleep(K_MSEC(40));

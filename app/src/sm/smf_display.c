@@ -674,8 +674,7 @@ static void st_display_active_run(void *o)
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
         {
-            k_sem_give(&sem_ecg_cancel);
-            hpi_load_screen(SCR_HOME, SCROLL_NONE);
+            gesture_down_scr_ecg_2();
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
