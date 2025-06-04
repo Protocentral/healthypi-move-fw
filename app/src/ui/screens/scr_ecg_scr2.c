@@ -10,13 +10,9 @@
 #include "hw_module.h"
 
 static lv_obj_t *scr_ecg_scr2;
-
 static lv_obj_t *btn_ecg_cancel;
-
-// GUI Charts
 static lv_obj_t *chart_ecg;
 static lv_chart_series_t *ser_ecg;
-
 static lv_obj_t *label_ecg_hr;
 static lv_obj_t *label_timer;
 static lv_obj_t *label_ecg_lead_off;
