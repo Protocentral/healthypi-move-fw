@@ -41,7 +41,6 @@ static uint16_t m_hr_curr_minute[60] = {0};   // Assumed max 60 points per minut
 static uint16_t m_temp_curr_minute[13] = {0}; // Assumed max 10 points per minute
 
 static uint16_t m_spo2 = 0;
-static int64_t m_spo2_last_ts = 0;
 K_SEM_DEFINE(sem_spo2_updated, 0, 1);
 
 static uint8_t m_trends_curr_minute_counter = 0;
@@ -356,7 +355,6 @@ static void trend_spo2_listener(const struct zbus_channel *chan)
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
     LOG_DBG("ZB SpO2: %d | Time: %" PRId64, hpi_spo2->spo2, hpi_spo2->timestamp);
     m_spo2 = hpi_spo2->spo2;
-    m_spo2_last_ts = hpi_spo2->timestamp;
     k_sem_give(&sem_spo2_updated);
     // k_msgq_put(&q_spo2_trend, &hpi_spo2, K_NO_WAIT);
 }

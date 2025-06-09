@@ -10,11 +10,13 @@
 #include "log_module.h"
 #include "cmd_module.h"
 #include "fs_module.h"
+#include "ui/move_ui.h"
 
 LOG_MODULE_REGISTER(log_module, LOG_LEVEL_DBG);
 
 // Externs
 extern struct fs_mount_t *mp;
+extern const char *hpi_sys_update_time_file;
 
 static int hpi_log_get_path(char *m_path, uint8_t m_log_type)
 {
@@ -80,7 +82,7 @@ void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_l
         LOG_ERR("FAIL: open %s: %d", fname, ret);
     }
 
-    ret = fs_write(&file, ecg_record_buffer, (ecg_record_length*4));
+    ret = fs_write(&file, ecg_record_buffer, (ecg_record_length * 4));
     if (ret < 0)
     {
         LOG_ERR("FAIL: open %s: %d", fname, ret);
@@ -308,7 +310,7 @@ int log_get_index(uint8_t m_log_type)
                 // return ret;
             }
 
-            //LOG_DBG("Read from file %s | Size: %d", file_name, trend_file_ent.size);
+            // LOG_DBG("Read from file %s | Size: %d", file_name, trend_file_ent.size);
 
             int64_t filename_int = atoi(trend_file_ent.name);
 
@@ -394,8 +396,6 @@ void log_wipe_trends(void)
 {
     char log_file_name[40] = "";
 
-    LOG_DBG("Wiping all trend logs");
-
     hpi_log_get_path(log_file_name, HPI_LOG_TYPE_TREND_HR);
     log_wipe_folder(log_file_name);
 
@@ -410,6 +410,12 @@ void log_wipe_trends(void)
 
     hpi_log_get_path(log_file_name, HPI_LOG_TYPE_ECG_RECORD);
     log_wipe_folder(log_file_name);
+
+    fs_unlink(hpi_sys_update_time_file);
+
+    hpi_disp_reset_all_last_updated();
+    
+    LOG_DBG("All trend logs wiped");
 }
 
 void log_wipe_records(void)
@@ -429,6 +435,4 @@ void log_wipe_records(void)
 
     hpi_log_get_path(log_file_name, HPI_LOG_TYPE_PPG_FINGER_RECORD);
     log_wipe_folder(log_file_name);
-
-    
 }

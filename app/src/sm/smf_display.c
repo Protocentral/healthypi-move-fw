@@ -133,6 +133,29 @@ int hpi_disp_get_curr_screen(void)
     return screen;
 }
 
+int hpi_disp_reset_all_last_updated(void)
+{
+    m_disp_hr = 0;
+    m_disp_spo2 = 0;
+    m_disp_steps = 0;
+    m_disp_kcals = 0;
+    m_disp_active_time_s = 0;
+    m_disp_temp = 0;
+    m_disp_bp_sys = 0;
+    m_disp_bp_dia = 0;
+    m_disp_ecg_hr = 0;
+    m_disp_ecg_timer = 0;
+
+    m_disp_hr_updated_ts = 0;
+    m_disp_spo2_last_refresh_ts = 0;
+    m_disp_temp_updated_ts = 0;
+    m_disp_bp_last_refresh = 0;
+    m_disp_bpt_status = 0;
+    m_disp_bpt_progress = 0;
+
+
+}
+
 // Array of function pointers for screen drawing functions
 static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_RAW_PPG] = { draw_scr_spl_raw_ppg, NULL },

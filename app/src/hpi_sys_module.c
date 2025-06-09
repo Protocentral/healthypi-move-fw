@@ -48,7 +48,7 @@ enum mgmt_cb_return img_callback_func(uint32_t event, enum mgmt_cb_return prev_s
 }
 
 
-static const char hpi_sys_update_time_file[] = "/lfs/sys/hpi_sys_update_time";
+const char hpi_sys_update_time_file[] = "/lfs/sys/hpi_sys_update_time";
 
 static bool is_on_skin = false;
 K_MUTEX_DEFINE(mutex_on_skin);
