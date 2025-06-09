@@ -153,6 +153,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_BPT_FAILED] = { draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed },
     [SCR_SPL_BPT_EST_COMPLETE] = { draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete },
     [SCR_SPL_BLE] = { draw_scr_ble, NULL },
+    [SCR_SPL_SETTINGS] = { draw_scr_settings, gesture_down_scr_settings }, 
 };
 
 void disp_screen_event(lv_event_t *e)
@@ -211,6 +212,15 @@ void disp_screen_event(lv_event_t *e)
         printk("Down at %d\n", curr_screen);
 
         int screen = hpi_disp_get_curr_screen();
+
+        if(screen == SCR_HOME)
+        {
+            // If we are on the home screen, load the settings screen
+            //hpi_load_screen(SCR_SPL_SETTINGS, SCROLL_DOWN);
+            hpi_load_scr_spl(SCR_SPL_SETTINGS, SCROLL_DOWN, SCR_HOME, 0, 0, 0);
+            return;
+        }
+
         if (screen >= 0 && screen < ARRAY_SIZE(screen_func_table) && screen_func_table[screen].gesture_down) {
             screen_func_table[screen].gesture_down();
         } else {

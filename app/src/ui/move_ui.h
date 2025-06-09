@@ -142,9 +142,6 @@ LV_FONT_DECLARE(ui_font_Number_extra);
 //LV_FONT_DECLARE(orbitron_90px);
 
 /******** UI Function Prototypes ********/
-
-int hpi_helper_get_date_time_str(int64_t timestamp, char* date_time_str);
-
 void display_init_styles(void);
 void hpi_display_sleep_off(void);
 void hpi_display_sleep_on(void);
@@ -167,8 +164,6 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void draw_scr_home(enum scroll_dir m_scroll_dir);
 void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
-
-void hdr_time_display_update(struct rtc_time in_time);
 
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
@@ -224,6 +219,7 @@ void gesture_down_scr_bpt_cal_progress(void);
 void gesture_down_scr_bpt_cal_failed(void);
 void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
+void gesture_down_scr_settings(void);
 
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);

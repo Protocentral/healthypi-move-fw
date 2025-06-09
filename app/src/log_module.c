@@ -429,4 +429,6 @@ void log_wipe_records(void)
 
     hpi_log_get_path(log_file_name, HPI_LOG_TYPE_PPG_FINGER_RECORD);
     log_wipe_folder(log_file_name);
+
+    
 }

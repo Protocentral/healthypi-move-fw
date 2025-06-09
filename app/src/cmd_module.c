@@ -68,26 +68,6 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         LOG_DBG("RX CMD Exit BPT Cal Mode");
         k_sem_give(&sem_bpt_exit_mode_cal);
         break;
-    case HPI_CMD_PAIR_DEVICE:
-        LOG_DBG("RX CMD Pair Device");
-        //uint8_t pin_code = in_pkt_buf[1];
-        //LOG_DBG("PIN: %d", pin_code);
-        //hpi_pair_device(pin_code);
-        break;
-    case HPI_CMD_UNPAIR_DEVICE:
-        LOG_DBG("RX CMD Unpair Device");
-        //hpi_unpair_device();
-        break;
-    case HPI_CMD_PAIR_CHECK_PIN:
-        LOG_DBG("RX CMD Check PIN");
-        uint8_t hpi_pin[6]; 
-        for (int i = 0; i < 6; i++)
-        {
-            hpi_pin[i] = in_pkt_buf[1 + i];
-        }
-        LOG_DBG("PIN: %02X %02X %02X %02X %02X %02X", hpi_pin[0], hpi_pin[1], hpi_pin[2], hpi_pin[3], hpi_pin[4], hpi_pin[5]);
-        //hpi_check_pin(hpi_pin);
-        break;
     // File System Commands
     case HPI_CMD_LOG_GET_COUNT:
         LOG_DBG("RX CMD Get Log Count");

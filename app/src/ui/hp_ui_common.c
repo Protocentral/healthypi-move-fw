@@ -366,42 +366,6 @@ void disp_spl_screen_event(lv_event_t *e)
     }
 }*/
 
-
-
-int hpi_helper_get_date_time_str(int64_t in_ts, char *date_time_str)
-{
-    struct tm today_time_tm = *gmtime(&in_ts);
-    if (in_ts == 0)
-    {
-        snprintf(date_time_str, 30, "Last Updated: --");
-    }
-    else
-    {
-        snprintf(date_time_str, 74, "Last Updated: %02d:%02d\n%02d-%02d-%04d", today_time_tm.tm_hour,
-                 today_time_tm.tm_min, today_time_tm.tm_mday, today_time_tm.tm_mon, today_time_tm.tm_year + 1900);
-    }
-    return 0;
-}
-
-void hdr_time_display_update(struct rtc_time in_time)
-{
-    if (lbl_hdr_min == NULL || lbl_hdr_hour == NULL)
-        return;
-
-    char buf[6];
-    // char date_buf[20];
-
-    /*char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-                            */
-
-    sprintf(buf, "%02d:", in_time.tm_hour);
-    lv_label_set_text(lbl_hdr_hour, buf);
-
-    sprintf(buf, "%02d", in_time.tm_min);
-    lv_label_set_text(lbl_hdr_min, buf);
-}
-
 void draw_bg(lv_obj_t *parent)
 {
     lv_obj_t *logo_bg = lv_img_create(parent);

@@ -12,6 +12,7 @@ lv_obj_t *scr_settings;
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
+static lv_obj_t *msgbox_shutdown;
 
 extern lv_style_t style_scr_black;
 extern lv_style_t style_lbl_white_14;
@@ -21,8 +22,6 @@ static void brightness_slider_event_cb(lv_event_t *e)
     lv_obj_t *slider = lv_event_get_target(e);
     hpi_disp_set_brightness(lv_slider_get_value(slider));
 }
-
-static lv_obj_t *msgbox_shutdown;
 
 static void btn_shutdown_yes_cb(lv_event_t *e)
 {
@@ -186,4 +185,9 @@ void hpi_disp_settings_update_batt_level(int batt_level, bool charging)
         else
             lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_EMPTY " %d %%", batt_level);
     }
+}
+
+void gesture_down_scr_settings(void)
+{
+    hpi_load_screen(SCR_HOME, SCROLL_DOWN);
 }
