@@ -72,13 +72,13 @@ enum hpi_disp_spl_screens
     SCR_SPL_LIST_START = 50,
 
     SCR_SPL_BOOT,
-    SCR_SPL_SETTINGS,
+    SCR_SPL_PULLDOWN,
     SCR_SPL_RAW_PPG,
     SCR_SPL_ECG_SCR2,
     SCR_SPL_ECG_COMPLETE,
     SCR_SPL_PLOT_ECG,
+    SCR_SPL_SETTINGS,
 
-   
     SCR_SPL_FI_SENS_CHECK,
     SCR_SPL_BPT_MEASURE,
     SCR_SPL_BPT_CAL_COMPLETE,
@@ -222,6 +222,7 @@ void gesture_down_scr_bpt_cal_failed(void);
 void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
 void gesture_down_scr_settings(void);
+void gesture_down_scr_pulldown(void);
 
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
@@ -234,7 +235,7 @@ void hpi_eda_disp_draw_plotEDA(int32_t *data_eda, int num_samples, bool eda_lead
 // BPT screen functions
 // void draw_scr_bpt_calibrate(void);
 void draw_scr_bpt(enum scroll_dir m_scroll_dir);
-// void draw_scr_bpt_measure(void);
+// void draw_scr_bpt_measure(void;
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 void hpi_disp_bpt_update_progress(int progress);
 void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
@@ -255,6 +256,7 @@ void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
 
 // Settings screen functions
 void draw_scr_settings(enum scroll_dir m_scroll_dir);
+void draw_scr_pulldown(enum scroll_dir m_scroll_dir);
 
 // Helper objects
 void draw_scr_common(lv_obj_t *parent);
