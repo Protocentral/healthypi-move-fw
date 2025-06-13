@@ -498,7 +498,7 @@ static void st_ppg_fing_bpt_est_done_run(void *o)
     LOG_DBG("PPG Finger SM BPT Estimation Done Running");
     // k_msleep(2000);
     // hpi_load_screen(SCR_BPT, SCROLL_NONE);
-    // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
 static void st_ppg_fing_bpt_est_fail_entry(void *o)
