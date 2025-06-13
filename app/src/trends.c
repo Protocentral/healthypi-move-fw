@@ -56,6 +56,7 @@ K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_point_t), 8, 4);
 K_MSGQ_DEFINE(q_temp_trend, sizeof(struct hpi_temp_trend_point_t), 8, 1);
 K_MSGQ_DEFINE(q_steps_trend, sizeof(struct hpi_steps_t), 8, 1);
+K_MSGQ_DEFINE(q_bpt_trend, sizeof(struct hpi_bpt_point_t), 4, 1);
 
 static int hpi_trend_process_points()
 {
@@ -171,6 +172,7 @@ void hpi_trend_record_thread(void)
     struct hpi_spo2_point_t trend_spo2;
     struct hpi_temp_trend_point_t trend_temp;
     struct hpi_steps_t trend_steps;
+    struct hpi_bpt_point_t trend_bpt;
 
     /* start a periodic timer that expires once every second */
     k_timer_start(&tmr_trend_process, K_SECONDS(1), K_SECONDS(1));
@@ -203,6 +205,13 @@ void hpi_trend_record_thread(void)
             int64_t today_ts = hpi_trend_get_day_start_ts(&trend_steps.timestamp);
             LOG_DBG("Recd Steps point: %" PRId64 "| %d ", trend_steps.timestamp, trend_steps.steps);
             hpi_steps_trend_wr_point_to_file(trend_steps, today_ts);
+        }
+        
+        if (k_msgq_get(&q_bpt_trend, &trend_bpt, K_NO_WAIT) == 0)
+        {
+            int64_t today_ts = hpi_trend_get_day_start_ts(&trend_bpt.timestamp);
+            LOG_DBG("Recd BPT point: %" PRId64 "| %d | %d | %d", trend_bpt.timestamp, trend_bpt.sys, trend_bpt.dia, trend_bpt.hr);
+            hpi_bpt_trend_wr_point_to_file(trend_bpt, today_ts);
         }
 
         k_sleep(K_SECONDS(2));
@@ -391,6 +400,17 @@ ZBUS_LISTENER_DEFINE(trend_steps_lis, trend_steps_listener);
 static void trend_bpt_listener(const struct zbus_channel *chan)
 {
     const struct hpi_bpt_t *hpi_bpt = zbus_chan_const_msg(chan);
+
+    if (hpi_bpt->status == 2 && hpi_bpt->progress == 100)
+    {
+        struct hpi_bpt_point_t bpt_point = {
+            .timestamp = hpi_bpt->timestamp,
+            .sys = hpi_bpt->sys,
+            .dia = hpi_bpt->dia,
+            .hr = hpi_bpt->hr,
+        };
+        k_msgq_put(&q_bpt_trend, &bpt_point, K_NO_WAIT);
+    }
     // m_disp_bp_sys = hpi_bpt->sys;
 }
 ZBUS_LISTENER_DEFINE(trend_bpt_lis, trend_bpt_listener);

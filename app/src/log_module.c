@@ -146,6 +146,33 @@ void hpi_spo2_trend_wr_point_to_file(struct hpi_spo2_point_t m_spo2_point, int64
     ret = fs_sync(&file);
 }
 
+void hpi_bpt_trend_wr_point_to_file(struct hpi_bpt_point_t m_bpt_point, int64_t day_ts)
+{
+    struct fs_file_t file;
+    int ret = 0;
+    char fname[30];
+
+    fs_file_t_init(&file);
+
+    sprintf(fname, "/lfs/trbpt/%" PRId64, day_ts);
+
+    LOG_DBG("Write to file... %s | Size: %d", fname, sizeof(m_bpt_point));
+
+    ret = fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND);
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+    ret = fs_write(&file, &m_bpt_point, sizeof(m_bpt_point));
+    if (ret < 0)
+    {
+        LOG_ERR("FAIL: open %s: %d", fname, ret);
+    }
+
+    ret = fs_close(&file);
+    ret = fs_sync(&file);
+}
+
 void hpi_temp_trend_wr_point_to_file(struct hpi_temp_trend_point_t m_temp_point, int64_t day_ts)
 {
     struct fs_file_t file;
@@ -362,8 +389,20 @@ void log_wipe_folder(char *folder_path)
 
     err = fs_opendir(&dir, folder_path);
     if (err)
-    {
-        LOG_ERR("Unable to open (err %d)", err);
+    {  
+        LOG_DBG("Directory %s not found, creating it", folder_path);
+        err = fs_mkdir(folder_path);
+        if (err) {
+            LOG_ERR("Failed to create directory %s: %d", folder_path, err);
+            return;
+        }
+        
+        // Try to open the directory again after creating it
+        err = fs_opendir(&dir, folder_path);
+        if (err) {
+            LOG_ERR("Failed to open directory %s after creation: %d", folder_path, err);
+            return;
+        }
     }
 
     while (1)
@@ -409,6 +448,9 @@ void log_wipe_trends(void)
     log_wipe_folder(log_file_name);
 
     hpi_log_get_path(log_file_name, HPI_LOG_TYPE_ECG_RECORD);
+    log_wipe_folder(log_file_name);
+
+    hpi_log_get_path(log_file_name, HPI_LOG_TYPE_TREND_BPT);
     log_wipe_folder(log_file_name);
 
     fs_unlink(hpi_sys_update_time_file);

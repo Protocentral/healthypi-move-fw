@@ -201,7 +201,7 @@ void cmd_thread(void)
     }
 }
 
-#define CMD_THREAD_STACKSIZE 2048
+#define CMD_THREAD_STACKSIZE 3072
 #define CMD_THREAD_PRIORITY 7
 
 K_THREAD_DEFINE(cmd_thread_id, CMD_THREAD_STACKSIZE, cmd_thread, NULL, NULL, NULL, CMD_THREAD_PRIORITY, 0, 0);

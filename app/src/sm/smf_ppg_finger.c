@@ -364,6 +364,26 @@ static void st_ppg_fing_idle_entry(void *o)
     // k_thread_suspend(ppg_finger_sampling_thread_id);
 }
 
+// Add a new function to check if calibration data exists
+static bool hpi_bpt_cal_data_available(void)
+{
+    char m_file_name[32];
+    
+    // Check if at least one calibration file exists
+    for (int i = 0; i < 5; i++)
+    {
+        snprintf(m_file_name, sizeof(m_file_name), "/lfs/sys/bpt_cal_%d", i);
+        if (fs_check_file_exists(m_file_name) == 0) // Assuming fs_check_file_exists returns 0 if file exists
+        {
+            LOG_DBG("Calibration data found for index %d", i);
+            return true;
+        }
+    }
+    
+    LOG_WRN("No calibration data found");
+    return false;
+}
+
 static void st_ppg_fing_idle_run(void *o)
 {
     // LOG_DBG("PPG Finger SM Idle Running");
@@ -371,8 +391,20 @@ static void st_ppg_fing_idle_run(void *o)
 
     if (k_sem_take(&sem_bpt_est_start, K_NO_WAIT) == 0)
     {
-        s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
+        // Check if calibration data is available before proceeding
+        if (hpi_bpt_cal_data_available())
+        {
+            s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
+        }
+        else
+        {
+            LOG_WRN("BPT Calibration required before estimation");
+            // Display message that calibration is required
+            
+            hpi_load_scr_spl(SCR_SPL_BPT_CAL_REQUIRED, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+            // Stay in idle state
+        }
     }
 
     if (k_sem_take(&sem_bpt_enter_mode_cal, K_NO_WAIT) == 0)

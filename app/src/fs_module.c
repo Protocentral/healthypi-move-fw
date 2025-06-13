@@ -57,6 +57,36 @@ static int littlefs_mount(struct fs_mount_t *mp)
     return 0;
 }
 
+/**
+ * @brief Check if a file exists
+ * @param file_path Path to the file to check
+ * @return 0 if file exists, negative error code if file doesn't exist or on error
+ */
+int fs_check_file_exists(const char *file_path)
+{
+    struct fs_file_t file;
+    int ret;
+
+    if (file_path == NULL)
+    {
+        LOG_ERR("Invalid file path");
+        return -EINVAL;
+    }
+
+    fs_file_t_init(&file);
+
+    ret = fs_open(&file, file_path, FS_O_READ);
+    if (ret < 0)
+    {
+        LOG_DBG("File %s does not exist or cannot be opened: %d", file_path, ret);
+        return ret;
+    }
+
+    fs_close(&file);
+    LOG_DBG("File %s exists", file_path);
+    return 0;
+}
+
 static int lsdir(const char *path)
 {
     int res;
@@ -224,6 +254,16 @@ void hpi_init_fs_struct(void)
         LOG_DBG("Created dir");
     }
 
+    ret = fs_mkdir("/lfs/trbpt");
+    if (ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
+
     ret = fs_mkdir("/lfs/ecg");
     if (ret)
     {
@@ -295,8 +335,8 @@ void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer
     struct fs_file_t m_file;
     int ret = 0;
 
-    ret= fs_unlink(m_file_name);
-    if(ret !=0)
+    ret = fs_unlink(m_file_name);
+    if (ret != 0)
     {
         LOG_ERR("Error unlinking file %d", ret);
     }
@@ -357,13 +397,13 @@ void fs_module_init(void)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
-    
-    rc= lsdir("/lfs/trtemp");
+
+    rc = lsdir("/lfs/trtemp");
     if (rc < 0)
     {
         LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
     }
-    
+
     rc = lsdir("/lfs/sys");
     if (rc < 0)
     {

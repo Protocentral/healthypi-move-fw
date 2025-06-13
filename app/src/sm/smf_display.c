@@ -172,9 +172,12 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_COMPLETE] = { draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete },
     [SCR_SPL_SPO2_TIMEOUT] = { draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout },
     [SCR_SPL_SPO2_SELECT] = { draw_scr_spo2_select, gesture_down_scr_spo2_select },
+
     [SCR_SPL_BPT_CAL_PROGRESS] = { draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress },
     [SCR_SPL_BPT_FAILED] = { draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed },
     [SCR_SPL_BPT_EST_COMPLETE] = { draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete },
+    [SCR_SPL_BPT_CAL_REQUIRED] = { draw_scr_bpt_cal_required, gesture_down_scr_bpt_cal_required },
+
     [SCR_SPL_BLE] = { draw_scr_ble, NULL },
     [SCR_SPL_SETTINGS] = { draw_scr_settings, gesture_down_scr_settings }, 
 };

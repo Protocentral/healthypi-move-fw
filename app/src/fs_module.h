@@ -9,5 +9,6 @@ void transfer_send_file(char* in_file_name);
 
 int fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len);
 void fs_write_buffer_to_file(char *m_file_name, uint8_t *buffer, uint32_t buffer_len);
+int fs_check_file_exists(const char *file_path);
 
 #endif

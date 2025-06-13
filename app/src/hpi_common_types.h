@@ -145,6 +145,15 @@ struct hpi_bpt_t
     uint8_t progress;
 };
 
+struct hpi_bpt_point_t
+{ 
+    int64_t timestamp;
+
+    uint16_t sys;
+    uint16_t dia;
+    uint16_t hr;
+};
+
 struct hpi_spo2_point_t
 {
     int64_t timestamp;
@@ -171,6 +180,16 @@ enum hpi_ble_event
     HPI_BLE_EVENT_PAIR_SUCCESS,
     HPI_BLE_EVENT_PAIR_FAILED,
     HPI_BLE_EVENT_PAIR_CANCELLED,
+};
+
+enum hpi_bpt_status
+{
+    HPI_BPT_STATUS_IDLE = 0x00,
+    HPI_BPT_STATUS_MEASURING,
+    HPI_BPT_STATUS_COMPLETE,
+    HPI_BPT_STATUS_ERROR,
+    HPI_BPT_STATUS_CANCELLED,
+    HPI_BPT_STATUS_TIMEOUT,
 };
 
 struct hpi_ecg_status_t

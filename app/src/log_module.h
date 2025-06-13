@@ -34,5 +34,6 @@ void hpi_hr_trend_wr_point_to_file(struct hpi_hr_trend_point_t m_hr_trend_point,
 void hpi_spo2_trend_wr_point_to_file(struct hpi_spo2_point_t m_spo2_point, int64_t day_ts);
 void hpi_temp_trend_wr_point_to_file(struct hpi_temp_trend_point_t m_temp_point, int64_t day_ts);
 void hpi_steps_trend_wr_point_to_file(struct hpi_steps_t m_steps_point, int64_t day_ts);
+void hpi_bpt_trend_wr_point_to_file(struct hpi_bpt_point_t m_bpt_point, int64_t day_ts);
 
 void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts);

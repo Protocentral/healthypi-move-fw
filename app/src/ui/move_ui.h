@@ -78,13 +78,13 @@ enum hpi_disp_spl_screens
     SCR_SPL_ECG_COMPLETE,
     SCR_SPL_PLOT_ECG,
 
-   
     SCR_SPL_FI_SENS_CHECK,
     SCR_SPL_BPT_MEASURE,
     SCR_SPL_BPT_CAL_COMPLETE,
     SCR_SPL_BPT_CAL_PROGRESS,
     SCR_SPL_BPT_EST_COMPLETE,
     SCR_SPL_BPT_FAILED,
+    SCR_SPL_BPT_CAL_REQUIRED,
 
     SCR_SPL_FI_SENS_WEAR,
 
@@ -222,6 +222,7 @@ void gesture_down_scr_bpt_cal_failed(void);
 void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
 void gesture_down_scr_settings(void);
+void gesture_down_scr_bpt_cal_required(void);
 
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
@@ -240,6 +241,7 @@ void hpi_disp_bpt_update_progress(int progress);
 void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_fi_sens_wear(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_measure(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
