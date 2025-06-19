@@ -9,6 +9,7 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "max32664c.h"
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
+#include "ui/move_ui.h"
 
 #define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 #define HPI_OFFSKIN_THRESHOLD_S 5
@@ -184,7 +185,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 spo2_measurement_in_progress = false;
             }
 
-            if(ppg_sensor_sample.spo2_state == SPO2_MEAS_TIMEOUT)
+            if (ppg_sensor_sample.spo2_state == SPO2_MEAS_TIMEOUT)
             {
                 LOG_DBG("SPO2 MEAS TIMEOUT");
                 k_sem_give(&sem_stop_one_shot_spo2);
@@ -230,7 +231,7 @@ static void st_ppg_samp_active_entry(void *o)
     m_curr_state = PPG_SAMP_STATE_ACTIVE;
 
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-    
+
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
@@ -334,6 +335,8 @@ static void ppg_wrist_ctrl_thread(void)
             k_timer_stop(&tmr_ppg_wrist_sampling);
 
             LOG_DBG("Starting One Shot SpO2");
+
+            hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
 
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             k_msleep(600);

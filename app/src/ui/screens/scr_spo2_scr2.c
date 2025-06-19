@@ -38,8 +38,7 @@ static void scr_spo2_btn_proceed_handler(lv_event_t *e)
         {
             LOG_DBG("Proceeding with wrist PPG sensor");
             k_sem_give(&sem_start_one_shot_spo2);
-            hpi_load_screen(SCR_SPL_SPO2_MEASURE, SCROLL_UP);
-        }
+        }    
         else if (spo2_source == SPO2_SOURCE_PPG_FI)
         {
             LOG_DBG("Proceeding with finger PPG sensor");
