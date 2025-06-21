@@ -49,7 +49,7 @@
 #include "ble_module.h"
 #include "hpi_sys.h"
 
-#include <max32664_updater.h>
+//#include <max32664_updater.h>
 
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 char curr_string[40];
@@ -586,7 +586,7 @@ void hw_module_init(void)
     regulator_enable(ldsw_disp_unit);
     k_msleep(500);
 
-    regulator_enable(ldsw_sens_1_8);
+    //regulator_enable(ldsw_sens_1_8);
 
     // Signal to start display state machine
     k_sem_give(&sem_disp_smf_start);
@@ -657,8 +657,8 @@ void hw_module_init(void)
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
 
-    gpio_pin_set_dt(&dcdc_5v_en, 1);
-    k_sleep(K_MSEC(100));
+    //gpio_pin_set_dt(&dcdc_5v_en, 1);
+    //k_sleep(K_MSEC(100));
 
     device_init(max32664c_dev);
     k_sleep(K_MSEC(10));
@@ -712,14 +712,14 @@ void hw_module_init(void)
             LOG_INF("MAX32664C App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
             k_sem_give(&sem_boot_update_req);
-            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+            //max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
         }
 
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
-    device_init(max32664d_dev);
-    k_sleep(K_MSEC(100));
+    //device_init(max32664d_dev);
+    //k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
     {
@@ -746,7 +746,7 @@ void hw_module_init(void)
             LOG_INF("MAX32664D App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
             k_sem_give(&sem_boot_update_req);
-            max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+            //max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
         }
 
         k_sem_give(&sem_ppg_finger_sm_start);
