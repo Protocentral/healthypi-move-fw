@@ -40,7 +40,7 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 # This places images in the external flash memory
-zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
 #zephyr_code_relocate(FILES src/ui/fonts/*.c LOCATION EXTFLASH_TEXT NOCOPY)
 
 #zephyr_code_relocate(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/components/*.c LOCATION EXTFLASH_TEXT NOCOPY)

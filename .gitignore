@@ -53,3 +53,5 @@ dkms.conf
 
 *build_
 /app/build*
+CmakeFiles/*
+CMakeCache.txt
