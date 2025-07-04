@@ -461,9 +461,20 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
     printk("RTC Set Time: %d\n", ret);
 }
 
-void hw_pwr_display_enable(void)
+void hw_pwr_display_enable(bool enable)
 {
-    regulator_enable(ldsw_disp_unit);
+    if (enable)
+    {
+        regulator_enable(ldsw_disp_unit);
+        k_msleep(100);
+        LOG_DBG("Display LDO enabled");
+    }
+    else
+    {
+        regulator_disable(ldsw_disp_unit);
+        k_msleep(100);
+        LOG_DBG("Display LDO disabled");
+    }
 }
 
 K_MUTEX_DEFINE(mutex_batt_level);
@@ -607,7 +618,7 @@ void hw_module_init(void)
     }
 
     // Init IMU device
-    ret = device_init(imu_dev);
+    //ret = device_init(imu_dev);
     k_msleep(10);
 
     if (!device_is_ready(imu_dev))
@@ -625,13 +636,7 @@ void hw_module_init(void)
         // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
     }
 
-    // Turn 1.8v power to sensors ON
-    // regulator_disable(ldsw_sens_1_8);
-    // k_msleep(100);
-    // regulator_enable(ldsw_sens_1_8);
-    // k_msleep(100);
-
-    device_init(max30001_dev);
+    //device_init(max30001_dev);
     k_sleep(K_MSEC(10));
 
     if (!device_is_ready(max30001_dev))
@@ -651,7 +656,7 @@ void hw_module_init(void)
 
     k_sleep(K_MSEC(100));
 
-    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
+    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT);
     if (ret < 0)
     {
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
@@ -718,7 +723,7 @@ void hw_module_init(void)
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
-    device_init(max32664d_dev);
+   // device_init(max32664d_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
@@ -776,7 +781,7 @@ void hw_module_init(void)
 
     // setup_pmic_callbacks();
 
-    device_init(max30208_dev);
+    //device_init(max30208_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max30208_dev))

@@ -143,8 +143,6 @@ LV_FONT_DECLARE(ui_font_Number_extra);
 
 /******** UI Function Prototypes ********/
 void display_init_styles(void);
-void hpi_display_sleep_off(void);
-void hpi_display_sleep_on(void);
 
 // Boot Screen functions
 void draw_scr_splash(void);

@@ -204,14 +204,7 @@ void draw_scr_common(lv_obj_t *parent)
     // lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
 }
 
-void hpi_display_sleep_on(void)
-{
-    LOG_DBG("Display off");
-    // display_blanking_on(display_dev);
-    display_set_brightness(display_dev, 0);
 
-    // hpi_pwr_display_sleep();
-}
 
 
 
