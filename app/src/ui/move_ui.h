@@ -11,7 +11,7 @@
 #define SCREEN_TRANS_TIME 00
 #define HPI_DEFAULT_DISP_THREAD_REFRESH_INT_MS 2
 
-#define DISP_SLEEP_TIME_MS 60000
+#define DISP_SLEEP_TIME_MS 10000
 #define DISPLAY_DEFAULT_BRIGHTNESS 50
 
 #define DISP_WINDOW_SIZE_EDA 250
@@ -143,8 +143,6 @@ LV_FONT_DECLARE(ui_font_Number_extra);
 
 /******** UI Function Prototypes ********/
 void display_init_styles(void);
-void hpi_display_sleep_off(void);
-void hpi_display_sleep_on(void);
 
 // Boot Screen functions
 void draw_scr_splash(void);

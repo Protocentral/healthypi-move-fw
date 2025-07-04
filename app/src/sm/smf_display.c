@@ -110,13 +110,66 @@ static uint8_t g_scr_parent = SCR_HOME;
 typedef void (*screen_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
 typedef void (*screen_gesture_down_func_t)(void);
 
-typedef struct {
+typedef struct
+{
     screen_draw_func_t draw;
     screen_gesture_down_func_t gesture_down;
 } screen_func_table_entry_t;
 
 static int curr_screen = SCR_HOME;
 K_MUTEX_DEFINE(mutex_curr_screen);
+
+// Array of function pointers for screen drawing functions
+static const screen_func_table_entry_t screen_func_table[] = {
+    [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, NULL},
+    [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
+    [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
+    [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},
+    [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
+    [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
+    [SCR_SPL_ECG_COMPLETE] = {draw_scr_ecg_complete, gesture_down_scr_ecg_complete},
+    [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
+    //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
+    [SCR_SPL_SPO2_SCR2] = {draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2},
+    [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
+    [SCR_SPL_SPO2_COMPLETE] = {draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete},
+    [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
+    [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
+
+    [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
+    [SCR_SPL_BPT_FAILED] = {draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed},
+    [SCR_SPL_BPT_EST_COMPLETE] = {draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete},
+    [SCR_SPL_BPT_CAL_REQUIRED] = {draw_scr_bpt_cal_required, gesture_down_scr_bpt_cal_required},
+
+    [SCR_SPL_BLE] = {draw_scr_ble, NULL},
+    [SCR_SPL_SETTINGS] = {draw_scr_settings, gesture_down_scr_settings},
+};
+
+// Screen state persistence for sleep/wake cycles
+static struct
+{
+    int saved_screen;
+    enum scroll_dir saved_scroll_dir;
+    uint32_t saved_arg1;
+    uint32_t saved_arg2;
+    uint32_t saved_arg3;
+    uint32_t saved_arg4;
+    bool state_saved;
+} screen_sleep_state = {
+    .saved_screen = SCR_HOME,
+    .saved_scroll_dir = SCROLL_NONE,
+    .saved_arg1 = 0,
+    .saved_arg2 = 0,
+    .saved_arg3 = 0,
+    .saved_arg4 = 0,
+    .state_saved = false};
+
+K_MUTEX_DEFINE(mutex_screen_sleep_state);
+
+// Function declarations for screen state management
+static void hpi_disp_save_screen_state(void);
+static void hpi_disp_restore_screen_state(void);
+static void hpi_disp_clear_saved_state(void);
 
 void hpi_disp_set_curr_screen(int screen)
 {
@@ -152,35 +205,101 @@ int hpi_disp_reset_all_last_updated(void)
     m_disp_bp_last_refresh = 0;
     m_disp_bpt_status = 0;
     m_disp_bpt_progress = 0;
-
-
 }
 
-// Array of function pointers for screen drawing functions
-static const screen_func_table_entry_t screen_func_table[] = {
-    [SCR_SPL_RAW_PPG] = { draw_scr_spl_raw_ppg, NULL },
-    [SCR_SPL_ECG_SCR2] = { draw_scr_ecg_scr2, gesture_down_scr_ecg_2 },
-    [SCR_SPL_FI_SENS_WEAR] = { draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear },
-    [SCR_SPL_FI_SENS_CHECK] = { draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check },
-    [SCR_SPL_BPT_MEASURE] = { draw_scr_bpt_measure, gesture_down_scr_bpt_measure },
-    [SCR_SPL_BPT_CAL_COMPLETE] = { draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete },
-    [SCR_SPL_ECG_COMPLETE] = { draw_scr_ecg_complete, gesture_down_scr_ecg_complete },
-    [SCR_SPL_PLOT_HRV] = { draw_scr_hrv, NULL },
-    //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
-    [SCR_SPL_SPO2_SCR2] = { draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2 },
-    [SCR_SPL_SPO2_MEASURE] = { draw_scr_spo2_measure, gesture_down_scr_spo2_measure },
-    [SCR_SPL_SPO2_COMPLETE] = { draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete },
-    [SCR_SPL_SPO2_TIMEOUT] = { draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout },
-    [SCR_SPL_SPO2_SELECT] = { draw_scr_spo2_select, gesture_down_scr_spo2_select },
+/**
+ * @brief Save the current screen state before entering sleep mode
+ *
+ * This function captures the current screen, scroll direction, and arguments
+ * so they can be restored when waking from sleep.
+ */
+static void hpi_disp_save_screen_state(void)
+{
+    k_mutex_lock(&mutex_screen_sleep_state, K_FOREVER);
 
-    [SCR_SPL_BPT_CAL_PROGRESS] = { draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress },
-    [SCR_SPL_BPT_FAILED] = { draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed },
-    [SCR_SPL_BPT_EST_COMPLETE] = { draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete },
-    [SCR_SPL_BPT_CAL_REQUIRED] = { draw_scr_bpt_cal_required, gesture_down_scr_bpt_cal_required },
+    screen_sleep_state.saved_screen = hpi_disp_get_curr_screen();
+    screen_sleep_state.saved_scroll_dir = g_scroll_dir;
+    screen_sleep_state.saved_arg1 = g_arg1;
+    screen_sleep_state.saved_arg2 = g_arg2;
+    screen_sleep_state.saved_arg3 = g_arg3;
+    screen_sleep_state.saved_arg4 = g_arg4;
+    screen_sleep_state.state_saved = true;
 
-    [SCR_SPL_BLE] = { draw_scr_ble, NULL },
-    [SCR_SPL_SETTINGS] = { draw_scr_settings, gesture_down_scr_settings }, 
-};
+    k_mutex_unlock(&mutex_screen_sleep_state);
+
+    LOG_DBG("Screen state saved: screen=%d, scroll_dir=%d",
+            screen_sleep_state.saved_screen, screen_sleep_state.saved_scroll_dir);
+}
+
+/**
+ * @brief Restore the screen state after waking from sleep mode
+ *
+ * This function restores the previously saved screen state, including
+ * the screen ID, scroll direction, and arguments.
+ */
+static void hpi_disp_restore_screen_state(void)
+{
+    k_mutex_lock(&mutex_screen_sleep_state, K_FOREVER);
+
+    if (screen_sleep_state.state_saved)
+    {
+        // Use the saved state to restore the screen
+        int saved_screen = screen_sleep_state.saved_screen;
+        enum scroll_dir saved_scroll = screen_sleep_state.saved_scroll_dir;
+        uint32_t saved_arg1 = screen_sleep_state.saved_arg1;
+        uint32_t saved_arg2 = screen_sleep_state.saved_arg2;
+        uint32_t saved_arg3 = screen_sleep_state.saved_arg3;
+        uint32_t saved_arg4 = screen_sleep_state.saved_arg4;
+
+        k_mutex_unlock(&mutex_screen_sleep_state);
+
+        LOG_DBG("Restoring screen state: screen=%d, scroll_dir=%d",
+                saved_screen, saved_scroll);
+
+        // Check if the saved screen has a valid draw function
+        if (saved_screen >= 0 && saved_screen < ARRAY_SIZE(screen_func_table) &&
+            screen_func_table[saved_screen].draw != NULL)
+        {
+            // Use the special screen loading function for complex screens
+            hpi_load_scr_spl(saved_screen, saved_scroll, saved_arg1, saved_arg2, saved_arg3, saved_arg4);
+        }
+        else
+        {
+            // Fall back to regular screen loading for basic screens
+            hpi_load_screen(saved_screen, SCROLL_NONE);
+        }
+    }
+    else
+    {
+        k_mutex_unlock(&mutex_screen_sleep_state);
+        LOG_DBG("No saved screen state, loading current screen");
+        // No saved state, just reload the current screen
+        hpi_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
+    }
+}
+
+/**
+ * @brief Clear the saved screen state
+ *
+ * This function clears the saved screen state, typically called
+ * after successfully restoring the state or when resetting.
+ */
+static void hpi_disp_clear_saved_state(void)
+{
+    k_mutex_lock(&mutex_screen_sleep_state, K_FOREVER);
+
+    screen_sleep_state.state_saved = false;
+    screen_sleep_state.saved_screen = SCR_HOME;
+    screen_sleep_state.saved_scroll_dir = SCROLL_NONE;
+    screen_sleep_state.saved_arg1 = 0;
+    screen_sleep_state.saved_arg2 = 0;
+    screen_sleep_state.saved_arg3 = 0;
+    screen_sleep_state.saved_arg4 = 0;
+
+    k_mutex_unlock(&mutex_screen_sleep_state);
+
+    LOG_DBG("Saved screen state cleared");
+}
 
 void disp_screen_event(lv_event_t *e)
 {
@@ -239,17 +358,20 @@ void disp_screen_event(lv_event_t *e)
 
         int screen = hpi_disp_get_curr_screen();
 
-        if(screen == SCR_HOME)
+        if (screen == SCR_HOME)
         {
             // If we are on the home screen, load the settings screen
-            //hpi_load_screen(SCR_SPL_SETTINGS, SCROLL_DOWN);
+            // hpi_load_screen(SCR_SPL_SETTINGS, SCROLL_DOWN);
             hpi_load_scr_spl(SCR_SPL_SETTINGS, SCROLL_DOWN, SCR_HOME, 0, 0, 0);
             return;
         }
 
-        if (screen >= 0 && screen < ARRAY_SIZE(screen_func_table) && screen_func_table[screen].gesture_down) {
+        if (screen >= 0 && screen < ARRAY_SIZE(screen_func_table) && screen_func_table[screen].gesture_down)
+        {
             screen_func_table[screen].gesture_down();
-        } else {
+        }
+        else
+        {
             // Default handler or nothing
         }
     }
@@ -268,7 +390,6 @@ void disp_screen_event(lv_event_t *e)
         }*/
     }
 }
-
 
 typedef void (*screen_static_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
 
@@ -296,7 +417,6 @@ extern struct k_sem sem_crown_key_pressed;
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
 
-extern struct k_sem sem_ecg_cancel;
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
 
@@ -606,7 +726,7 @@ static void hpi_disp_update_screens(void)
         if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
         {
             LOG_DBG("Loading BPT SCR4");
-            
+
         }
         if
         break;*/
@@ -726,7 +846,8 @@ static void st_display_active_run(void *o)
     if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
     {
         LOG_DBG("Change Screen: %d", scr_to_change);
-        if (screen_func_table[g_screen].draw) {
+        if (screen_func_table[g_screen].draw)
+        {
             screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
         }
         lv_disp_trig_activity(NULL);
@@ -748,7 +869,12 @@ static void st_display_active_exit(void *o)
 static void st_display_sleep_entry(void *o)
 {
     LOG_DBG("Display SM Sleep Entry");
-    hpi_display_sleep_on();
+
+    // Save the current screen state before going to sleep
+    hpi_disp_save_screen_state();
+
+    display_set_brightness(display_dev, 0);
+    hw_pwr_display_enable(false);
 }
 
 static void st_display_sleep_run(void *o)
@@ -760,23 +886,36 @@ static void st_display_sleep_run(void *o)
         // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
-}
-
-void hpi_display_sleep_off(void)
-{
-    LOG_DBG("Display on");
-    hpi_disp_set_brightness(hpi_disp_get_brightness());
-
-    // display_blanking_on(display_dev);
-    hpi_load_screen(curr_screen, SCROLL_NONE);
-    display_blanking_off(display_dev);
-    // hpi_pwr_display_wake();
+    else
+    {
+        // If we are in sleep state, we can still process some events
+        // For example, if the user presses the crown button
+        if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("Crown key pressed in sleep state");
+            smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+        }
+    }
 }
 
 static void st_display_sleep_exit(void *o)
 {
     LOG_DBG("Display SM Sleep Exit");
-    hpi_display_sleep_off();
+    hw_pwr_display_enable(true);
+
+    // Restore the saved screen state
+    hpi_disp_restore_screen_state();
+
+    sh8601_reinit(display_dev);
+    k_msleep(50);
+
+    hpi_disp_set_brightness(hpi_disp_get_brightness());
+
+    device_init(touch_dev);
+    k_msleep(50);
+
+    // Clear the saved state after successful restoration
+    hpi_disp_clear_saved_state();
 }
 
 static void st_display_on_entry(void *o)
@@ -815,7 +954,7 @@ void smf_display_thread(void)
         }
 
         lv_task_handler();
-        k_msleep(30);
+        k_msleep(100);
     }
 }
 
@@ -907,4 +1046,3 @@ ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
 #define SMF_DISPLAY_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(smf_display_thread_id, SMF_DISPLAY_THREAD_STACK_SIZE, smf_display_thread, NULL, NULL, NULL, SMF_DISPLAY_THREAD_PRIORITY, 0, 0);
-

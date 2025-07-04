@@ -12,7 +12,6 @@
 #include <zephyr/zbus/zbus.h>
 
 #include "hw_module.h"
-#include "power_ctrl.h"
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 
@@ -44,8 +43,6 @@ lv_style_t style_bg_green;
 lv_style_t style_bg_purple;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
-
-
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
@@ -203,17 +200,6 @@ void draw_scr_common(lv_obj_t *parent)
     lv_obj_set_scroll_dir(parent, LV_DIR_VER);
     // lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
 }
-
-void hpi_display_sleep_on(void)
-{
-    LOG_DBG("Display off");
-    // display_blanking_on(display_dev);
-    display_set_brightness(display_dev, 0);
-
-    // hpi_pwr_display_sleep();
-}
-
-
 
 void hpi_disp_set_brightness(uint8_t brightness_percent)
 {

@@ -3,6 +3,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
+
 #include <zephyr/dfu/mcuboot.h>
 #include <stdio.h>
 #include <zephyr/drivers/sensor.h>
@@ -277,39 +278,6 @@ static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_
     }
 }
 
-uint8_t read_battery_level(void)
-{
-    uint8_t batt_level = 0;
-
-    /*int ret = 0;
-
-    fuel_gauge_prop_t props[] = {
-        FUEL_GAUGE_RUNTIME_TO_EMPTY,
-        FUEL_GAUGE_RUNTIME_TO_FULL,
-        FUEL_GAUGE_RELATIVE_STATE_OF_CHARGE,
-        FUEL_GAUGE_VOLTAGE,
-    };
-
-    union fuel_gauge_prop_val vals[ARRAY_SIZE(props)];
-
-    ret = fuel_gauge_get_props(fg_dev, props, vals, ARRAY_SIZE(props));
-    if (ret < 0)
-    {
-        printk("Error: cannot get properties\n");
-    }
-    else
-    {
-        // printk("Time to empty %d\n", vals[0].runtime_to_empty);
-        // printk("Time to full %d\n", vals[1].runtime_to_full);
-        // printk("Charge %d%%\n", vals[2].relative_state_of_charge);
-        // printk("Voltage %d\n", vals[3].voltage);
-
-        batt_level = vals[2].relative_state_of_charge;
-    }*/
-
-    return batt_level;
-}
-
 static int npm_read_sensors(const struct device *charger,
                             float *voltage, float *current, float *temp, int32_t *chg_status)
 {
@@ -461,9 +429,20 @@ void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_
     printk("RTC Set Time: %d\n", ret);
 }
 
-void hw_pwr_display_enable(void)
+void hw_pwr_display_enable(bool enable)
 {
-    regulator_enable(ldsw_disp_unit);
+    if (enable)
+    {
+        regulator_enable(ldsw_disp_unit);
+        k_msleep(100);
+        LOG_DBG("Display LDO enabled");
+    }
+    else
+    {
+        regulator_disable(ldsw_disp_unit);
+        k_msleep(100);
+        LOG_DBG("Display LDO disabled");
+    }
 }
 
 K_MUTEX_DEFINE(mutex_batt_level);
@@ -625,12 +604,6 @@ void hw_module_init(void)
         // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
     }
 
-    // Turn 1.8v power to sensors ON
-    // regulator_disable(ldsw_sens_1_8);
-    // k_msleep(100);
-    // regulator_enable(ldsw_sens_1_8);
-    // k_msleep(100);
-
     device_init(max30001_dev);
     k_sleep(K_MSEC(10));
 
@@ -651,7 +624,7 @@ void hw_module_init(void)
 
     k_sleep(K_MSEC(100));
 
-    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
+    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT);
     if (ret < 0)
     {
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
@@ -752,10 +725,6 @@ void hw_module_init(void)
         k_sem_give(&sem_ppg_finger_sm_start);
     }
 
-#ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    LOG_DBG("SPIM runs at 32MHz !");
-#endif
-
     // Confirm MCUBoot image if not already confirmed by app
     if (boot_is_img_confirmed())
     {
@@ -831,7 +800,7 @@ void hw_module_init(void)
 
     // usb_init();
 }
-
+ 
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;

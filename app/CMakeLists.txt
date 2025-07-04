@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20.0)
 
 macro(app_set_runner_args)
   if(CONFIG_BOARD_HEALTHYPI_MOVE_NRF5340_CPUAPP)
-    # Use alternative QSPI configuration file when flashing Thingy53
+    # Use alternative QSPI configuration file 
     board_runner_args(nrfjprog "--qspiini=${CMAKE_CURRENT_SOURCE_DIR}/qspi_w25.ini")
   endif()
 endmacro()
@@ -23,9 +23,6 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/screens/*.c
                         src/ui/hp_ui_common.c
                         src/sm/*.c)  
-
-FILE(GLOB image_sources src/ui/images/*.c
-                        src/ui/fonts/*.c)
                         
 target_sources(app PRIVATE ${app_sources})
 
@@ -40,8 +37,6 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 # This places images in the external flash memory
-
-zephyr_code_relocate(FILES ${image_sources} LOCATION EXTFLASH_TEXT NOCOPY)
 
 zephyr_code_relocate(FILES ../lib/max32664_updater/max32664_updater.c LOCATION EXTFLASH_TEXT NOCOPY)
 zephyr_code_relocate(FILES ../lib/max32664_updater/msbl/max32664c_30_13_31.c LOCATION EXTFLASH_RODATA NOCOPY)

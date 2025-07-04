@@ -1,7 +1,7 @@
 #pragma once
 
 void hw_module_init(void);
-void hw_pwr_display_enable(void);
+void hw_pwr_display_enable(bool enable);
 
 void send_usb_cdc(const char *buf, size_t len);
 
