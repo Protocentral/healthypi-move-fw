@@ -46,10 +46,9 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
     lv_label_set_text(label_info, "Waiting for sensor to connect...");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
-    /*lv_obj_t *spinner = lv_spinner_create(cont_col, 1000, 60);
+    lv_obj_t *spinner = lv_spinner_create(cont_col, 1000, 60);
     lv_obj_set_size(spinner, 100, 100);
     lv_obj_center(spinner);
-    */
 
     hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_CHECK);
     hpi_show_screen(scr_bpt_scr3, dir);

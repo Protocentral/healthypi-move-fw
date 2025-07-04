@@ -71,7 +71,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_opa(cont_spo2, 0, 0);
 
     lv_obj_t *img_spo2 = lv_img_create(cont_spo2);
-    //lv_img_set_src(img_spo2, &icon_spo2_100);
+    lv_img_set_src(img_spo2, &icon_spo2_100);
 
     uint8_t m_spo2_val = 0;
     int64_t m_spo2_time = 0;

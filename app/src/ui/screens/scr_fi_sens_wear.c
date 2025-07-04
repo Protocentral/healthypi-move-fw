@@ -64,7 +64,7 @@ void draw_scr_fi_sens_wear(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_darken(LV_PALETTE_RED, 2), LV_PART_MAIN);
 
     lv_obj_t *img_bpt = lv_img_create(cont_col);
-    //lv_img_set_src(img_bpt, &img_bpt_finger_90);
+    lv_img_set_src(img_bpt, &img_bpt_finger_90);
 
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);

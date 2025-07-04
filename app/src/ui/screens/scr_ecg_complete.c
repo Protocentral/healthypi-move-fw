@@ -38,7 +38,7 @@ void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_lighten(LV_PALETTE_RED, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_t *img1 = lv_img_create(cont_col);
-    //lv_img_set_src(img1, &img_complete_85);
+    lv_img_set_src(img1, &img_complete_85);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Record Complete");

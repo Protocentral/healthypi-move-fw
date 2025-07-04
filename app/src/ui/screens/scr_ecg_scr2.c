@@ -77,7 +77,7 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     // Draw Countdown Timer
     LV_IMG_DECLARE(timer_32);
     lv_obj_t *img_timer = lv_img_create(cont_timer);
-   // lv_img_set_src(img_timer, &timer_32);
+    lv_img_set_src(img_timer, &timer_32);
 
     label_timer = lv_label_create(cont_timer);
     lv_label_set_text(label_timer, "00");
@@ -107,7 +107,7 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ecg, 0, LV_PART_MAIN);
 
-    //lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_size(chart_ecg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
@@ -132,7 +132,7 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t *img_heart = lv_img_create(cont_hr);
-    //lv_img_set_src(img_heart, &img_heart_35);
+    lv_img_set_src(img_heart, &img_heart_35);
 
     label_ecg_hr = lv_label_create(cont_hr);
     lv_label_set_text(label_ecg_hr, "00");

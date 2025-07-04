@@ -55,7 +55,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_set_style_bg_color(chart_hrv, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_hrv, 50, LV_PART_MAIN);
 
-    //lv_obj_set_style_size(chart_hrv, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_size(chart_hrv, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_hrv, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_hrv, 60);
     // lv_chart_set_type(chart_hrv, LV_CHART_TYPE_LINE);

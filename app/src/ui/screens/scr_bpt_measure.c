@@ -65,7 +65,7 @@ void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_set_style_bg_color(chart_bpt_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_bpt_ppg, 0, LV_PART_MAIN);
 
-    //lv_obj_set_style_size(chart_bpt_ppg, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_size(chart_bpt_ppg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_bpt_ppg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_bpt_ppg, ECG_DISP_WINDOW_SIZE);
     lv_chart_set_div_line_count(chart_bpt_ppg, 0, 0);
@@ -90,7 +90,7 @@ void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
 
     // Draw BPM
     lv_obj_t *img1 = lv_img_create(cont_hr);
-    //lv_img_set_src(img1, &img_heart_35);
+    lv_img_set_src(img1, &img_heart_35);
 
     label_hr_bpm = lv_label_create(cont_hr);
     lv_label_set_text(label_hr_bpm, "00");

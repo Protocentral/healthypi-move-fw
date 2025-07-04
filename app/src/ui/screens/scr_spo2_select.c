@@ -68,7 +68,7 @@ void draw_scr_spo2_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     // Button for PPG WR
     btn_spo2_select_wr = lv_btn_create(cont_col);
     lv_obj_t *img_wrist = lv_img_create(btn_spo2_select_wr);
-    //lv_img_set_src(img_wrist, &img_wrist_45);
+    lv_img_set_src(img_wrist, &img_wrist_45);
     lv_obj_align(img_wrist, LV_ALIGN_CENTER, -30, 0);
     lv_obj_t *label_ppg_wr = lv_label_create(btn_spo2_select_wr);
     lv_label_set_text(label_ppg_wr, "Wrist");
@@ -79,7 +79,7 @@ void draw_scr_spo2_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     // Button for PPG FI
     btn_spo2_select_fi = lv_btn_create(cont_col);
     lv_obj_t *img_finger = lv_img_create(btn_spo2_select_fi);
-   // lv_img_set_src(img_finger, &img_bpt_finger_45);
+    lv_img_set_src(img_finger, &img_bpt_finger_45);
     lv_obj_align(img_finger, LV_ALIGN_CENTER, -30, 0);
     lv_obj_t *label_ppg_fi = lv_label_create(btn_spo2_select_fi);
     lv_label_set_text(label_ppg_fi, "Finger");

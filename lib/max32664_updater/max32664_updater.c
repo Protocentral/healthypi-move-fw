@@ -441,10 +441,10 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 
 	if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664C)
 	{
-		//max32664_load_fw(dev, max32664c_msbl, false);
+		max32664_load_fw(dev, max32664c_msbl, false);
 	}
 	else if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664D)
 	{
-		//max32664_load_fw(dev, max32664d_40_6_0, false);
+		max32664_load_fw(dev, max32664d_40_6_0, false);
 	}
 }

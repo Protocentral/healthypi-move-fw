@@ -48,7 +48,7 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 
     lv_obj_t *cui_step;
     cui_step = lv_img_create(cui_buttonround);
-    //lv_img_set_src(cui_step, &img_steps_48);
+    lv_img_set_src(cui_step, &img_steps_48);
     lv_obj_set_width(cui_step, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(cui_step, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(cui_step, LV_ALIGN_TOP_MID);

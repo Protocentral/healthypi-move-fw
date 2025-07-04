@@ -70,7 +70,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_clear_flag(cont_ecg, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *img1 = lv_img_create(cont_ecg);
-    //lv_img_set_src(img1, &ecg_70);
+    lv_img_set_src(img1, &ecg_70);
 
     uint8_t m_ecg_hr = 0;
     int64_t m_ecg_hr_last_update = 0;
