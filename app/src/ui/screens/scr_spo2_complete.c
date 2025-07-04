@@ -42,7 +42,7 @@ void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uin
     lv_obj_set_style_text_color(lbl_info_scroll, lv_palette_lighten(LV_PALETTE_RED, 1), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_t *img1 = lv_img_create(cont_col);
-    lv_img_set_src(img1, &img_complete_85);
+    //lv_img_set_src(img1, &img_complete_85);
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "SpO2");
@@ -54,7 +54,7 @@ void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uin
     lv_obj_set_flex_align(cont_spo2_val, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t *img_spo2 = lv_img_create(cont_spo2_val);
-    lv_img_set_src(img_spo2, &icon_spo2_100);
+    //lv_img_set_src(img_spo2, &icon_spo2_100);
 
     label_spo2_percent = lv_label_create(cont_spo2_val);
     lv_label_set_text_fmt(label_spo2_percent, "%d", meas_spo2);

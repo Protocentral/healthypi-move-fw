@@ -75,7 +75,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
     if (spo2_source == SPO2_SOURCE_PPG_WR)
     {
         lv_obj_t *img_spo2_wr = lv_img_create(cont_col);
-        lv_img_set_src(img_spo2_wr, &img_spo2_hand);
+        //lv_img_set_src(img_spo2_wr, &img_spo2_hand);
 
         lv_obj_t *label_info = lv_label_create(cont_col);
         lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
@@ -86,7 +86,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
     else if (spo2_source == SPO2_SOURCE_PPG_FI)
     {
         lv_obj_t *img_spo2_fi = lv_img_create(cont_col);
-        lv_img_set_src(img_spo2_fi, &img_bpt_finger_90);
+        //lv_img_set_src(img_spo2_fi, &img_bpt_finger_90);
 
         lv_obj_t *label_info = lv_label_create(cont_col);
         lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);

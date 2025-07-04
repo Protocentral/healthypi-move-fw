@@ -45,7 +45,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_signal, LV_TEXT_ALIGN_CENTER, 0);
 
     lv_obj_t *img_temp = lv_img_create(cont_col);
-    lv_img_set_src(img_temp, &img_temp_100);
+    //lv_img_set_src(img_temp, &img_temp_100);
 
     uint16_t temp_f = 0;
     int64_t temp_f_last_update = 0;

@@ -393,9 +393,10 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uin
 
     delta = (float)k_uptime_delta(&ref_time) / 1000.f;
 
-    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, vbus_connected, NULL);
+    /*soc = nrf_fuel_gauge_process(voltage, current, temp, delta, vbus_connected, NULL);
     tte = nrf_fuel_gauge_tte_get();
     ttf = nrf_fuel_gauge_ttf_get(cc_charging, term_charge_current);
+    */
 
     // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
     // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);

@@ -903,7 +903,7 @@ static void disp_ecg_stat_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
 
-#define SMF_DISPLAY_THREAD_STACK_SIZE 32768
+#define SMF_DISPLAY_THREAD_STACK_SIZE 24000
 #define SMF_DISPLAY_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(smf_display_thread_id, SMF_DISPLAY_THREAD_STACK_SIZE, smf_display_thread, NULL, NULL, NULL, SMF_DISPLAY_THREAD_PRIORITY, 0, 0);

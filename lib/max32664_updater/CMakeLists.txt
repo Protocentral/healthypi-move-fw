@@ -8,4 +8,5 @@
 
 zephyr_library()
 zephyr_include_directories(.)
-zephyr_library_sources(max32664_updater.c msbl/max32664c_30_13_31.c msbl/max32664d_40_6_0.c)
+zephyr_library_sources(max32664_updater.c)
+# msbl/max32664c_30_13_31.c msbl/max32664d_40_6_0.c)
