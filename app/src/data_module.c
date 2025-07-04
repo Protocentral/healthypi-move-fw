@@ -200,6 +200,7 @@ void hpi_data_set_ecg_record_active(bool active)
 {
     k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
     is_ecg_record_active = active;
+
     if (active)
     {
         ecg_record_counter = 0;
@@ -237,8 +238,12 @@ void data_thread(void)
 
     for (;;)
     {
-        if (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+        bool processed_data = false;
+        
+        // Process all available ECG samples
+        while (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
         {
+            processed_data = true;
             if (settings_send_ble_enabled)
             {
 
@@ -255,6 +260,10 @@ void data_thread(void)
                 int samples_to_copy = ecg_bioz_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
 
+                // Log sample count for debugging
+                static uint32_t total_samples_recorded = 0;
+                total_samples_recorded += samples_to_copy;
+                
                 if (samples_to_copy <= space_left)
                 {
                     memcpy(&ecg_record_buffer[ecg_record_counter], ecg_bioz_sensor_sample.ecg_samples, samples_to_copy * sizeof(int32_t));
@@ -271,11 +280,17 @@ void data_thread(void)
                     memcpy(ecg_record_buffer, &ecg_bioz_sensor_sample.ecg_samples[space_left], (samples_to_copy - space_left) * sizeof(int32_t));
                     ecg_record_counter = samples_to_copy - space_left;
                 }
+                
+                // Log every 1000 samples for debugging
+                if ((total_samples_recorded % 1000) == 0) {
+                    LOG_DBG("ECG samples recorded: %u, buffer pos: %u", total_samples_recorded, ecg_record_counter);
+                }
             }
         }
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
         {
+            processed_data = true;
             if (settings_send_ble_enabled)
             {
                 ble_ppg_notify_fi(ppg_fi_sensor_sample.raw_ir, ppg_fi_sensor_sample.ppg_num_samples);
@@ -289,6 +304,7 @@ void data_thread(void)
         // Check if PPG data is available
         if (k_msgq_get(&q_ppg_wrist_sample, &ppg_wr_sensor_sample, K_NO_WAIT) == 0)
         {
+            processed_data = true;
             if (settings_send_ble_enabled)
             {
                 ble_ppg_notify_wr(ppg_wr_sensor_sample.raw_green, ppg_wr_sensor_sample.ppg_num_samples);
@@ -324,11 +340,16 @@ void data_thread(void)
             }
         }
 
-        k_sleep(K_MSEC(40));
+        // Sleep longer if no data was processed to reduce CPU usage
+        if (processed_data) {
+            k_yield(); // Give other threads a chance to run
+        } else {
+            k_sleep(K_MSEC(1));  // Reduced sleep time to process samples faster
+        }
     }
 }
 
 #define DATA_THREAD_STACKSIZE 4096
-#define DATA_THREAD_PRIORITY 7
+#define DATA_THREAD_PRIORITY 5  // Higher priority to process samples faster
 
 K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);
