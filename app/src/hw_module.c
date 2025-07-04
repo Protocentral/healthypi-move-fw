@@ -586,7 +586,7 @@ void hw_module_init(void)
     }
 
     // Init IMU device
-    //ret = device_init(imu_dev);
+    ret = device_init(imu_dev);
     k_msleep(10);
 
     if (!device_is_ready(imu_dev))
@@ -604,7 +604,7 @@ void hw_module_init(void)
         // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
     }
 
-    //device_init(max30001_dev);
+    device_init(max30001_dev);
     k_sleep(K_MSEC(10));
 
     if (!device_is_ready(max30001_dev))
@@ -691,7 +691,7 @@ void hw_module_init(void)
         k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
-   // device_init(max32664d_dev);
+    device_init(max32664d_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664d_dev))
@@ -725,10 +725,6 @@ void hw_module_init(void)
         k_sem_give(&sem_ppg_finger_sm_start);
     }
 
-#ifdef NRF_SPIM_HAS_32_MHZ_FREQ
-    LOG_DBG("SPIM runs at 32MHz !");
-#endif
-
     // Confirm MCUBoot image if not already confirmed by app
     if (boot_is_img_confirmed())
     {
@@ -749,7 +745,7 @@ void hw_module_init(void)
 
     // setup_pmic_callbacks();
 
-    //device_init(max30208_dev);
+    device_init(max30208_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max30208_dev))

@@ -417,7 +417,6 @@ extern struct k_sem sem_crown_key_pressed;
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
 
-extern struct k_sem sem_ecg_cancel;
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
 
@@ -902,19 +901,15 @@ static void st_display_sleep_run(void *o)
 static void st_display_sleep_exit(void *o)
 {
     LOG_DBG("Display SM Sleep Exit");
-
     hw_pwr_display_enable(true);
-    hpi_disp_set_brightness(hpi_disp_get_brightness());
 
-    // display_blanking_on(display_dev);
-
-    // Restore the saved screen state instead of just reloading current screen
+    // Restore the saved screen state i
     hpi_disp_restore_screen_state();
-
-    display_blanking_off(display_dev);
 
     sh8601_reinit(display_dev);
     k_msleep(500);
+
+    hpi_disp_set_brightness(hpi_disp_get_brightness());
 
     device_init(touch_dev);
     k_msleep(50);
