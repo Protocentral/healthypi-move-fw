@@ -3,6 +3,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
+
 #include <zephyr/dfu/mcuboot.h>
 #include <stdio.h>
 #include <zephyr/drivers/sensor.h>
@@ -275,39 +276,6 @@ static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_
             LOG_DBG("ringbuf -> tty fifo %d bytes", send_len);
         }
     }
-}
-
-uint8_t read_battery_level(void)
-{
-    uint8_t batt_level = 0;
-
-    /*int ret = 0;
-
-    fuel_gauge_prop_t props[] = {
-        FUEL_GAUGE_RUNTIME_TO_EMPTY,
-        FUEL_GAUGE_RUNTIME_TO_FULL,
-        FUEL_GAUGE_RELATIVE_STATE_OF_CHARGE,
-        FUEL_GAUGE_VOLTAGE,
-    };
-
-    union fuel_gauge_prop_val vals[ARRAY_SIZE(props)];
-
-    ret = fuel_gauge_get_props(fg_dev, props, vals, ARRAY_SIZE(props));
-    if (ret < 0)
-    {
-        printk("Error: cannot get properties\n");
-    }
-    else
-    {
-        // printk("Time to empty %d\n", vals[0].runtime_to_empty);
-        // printk("Time to full %d\n", vals[1].runtime_to_full);
-        // printk("Charge %d%%\n", vals[2].relative_state_of_charge);
-        // printk("Voltage %d\n", vals[3].voltage);
-
-        batt_level = vals[2].relative_state_of_charge;
-    }*/
-
-    return batt_level;
 }
 
 static int npm_read_sensors(const struct device *charger,
@@ -836,7 +804,7 @@ void hw_module_init(void)
 
     // usb_init();
 }
-
+ 
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;

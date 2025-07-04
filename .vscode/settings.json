@@ -47,7 +47,8 @@
         "variant": "c",
         "istream": "c",
         "ostream": "c",
-        "system_error": "c"
+        "system_error": "c",
+        "max32664_updater.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

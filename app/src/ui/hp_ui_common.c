@@ -12,7 +12,6 @@
 #include <zephyr/zbus/zbus.h>
 
 #include "hw_module.h"
-#include "power_ctrl.h"
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 
