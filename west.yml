@@ -22,8 +22,8 @@ manifest:
 #      revision: main
 #      path: drivers/sensor/max30001
 
-#    - name: max32664_updater_zephyr
-#      remote: protocentral
-#      repo-path: pc_max32664_updater_zephyr
-#      revision: main
-#      path: app/lib/max32664_updater
+    - name: max32664_updater_zephyr
+      remote: protocentral
+      repo-path: pc_max32664_updater_zephyr
+      revision: main
+      path: app/lib/max32664_updater
