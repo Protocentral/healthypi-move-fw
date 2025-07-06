@@ -5,15 +5,20 @@ on:
     tags:
       - '*'
 
+permissions:
+  contents: write
+  packages: read
+
 jobs:
   build:
     runs-on: ubuntu-22.04
     container: ghcr.io/zephyrproject-rtos/ci:v0.26.2 
     env:
       CMAKE_PREFIX_PATH: /opt/toolchains
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: healthypi_move
 
@@ -28,11 +33,26 @@ jobs:
         working-directory: healthypi_move
         run: |
           west build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
-          mv build/merged.hex healthypi_move_${{ github.ref_name }}.hex
-          mv build/dfu_application.zip healthypi_move_update_${{ github.ref_name }}.zip
+          if [ "${{ env.IS_RELEASE }}" = "true" ]; then
+            mv build/merged.hex healthypi_move_${{ github.ref_name }}.hex
+            mv build/dfu_application.zip healthypi_move_update_${{ github.ref_name }}.zip
+          else
+            mv build/merged.hex healthypi_move_dev_${{ github.ref_name }}.hex
+            mv build/dfu_application.zip healthypi_move_dev_update_${{ github.ref_name }}.zip
+          fi
 
-      - name: Upload release assets
+      - name: Upload release assets (Release)
+        if: env.IS_RELEASE == 'true'
         uses: ncipollo/release-action@v1
         with:
           artifacts: "healthypi_move/*.hex, healthypi_move/*.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: false
+
+      - name: Upload release assets (Pre-release)
+        if: env.IS_RELEASE == 'false'
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "healthypi_move/*.hex, healthypi_move/*.zip"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: true
