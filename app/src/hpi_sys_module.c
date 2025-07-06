@@ -305,6 +305,7 @@ int hpi_sys_get_last_spo2_update(uint8_t *spo2_last_value, int64_t *spo2_last_up
 
     return 0;
 }
+
 int hpi_sys_get_last_bp_update(uint8_t *bp_sys_last_value, uint8_t *bp_dia_last_value, int64_t *bp_last_update_ts)
 {
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);

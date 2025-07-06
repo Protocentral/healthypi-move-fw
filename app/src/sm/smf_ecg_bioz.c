@@ -19,7 +19,7 @@ LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
 SENSOR_DT_READ_IODEV(max30001_iodev, DT_ALIAS(max30001), SENSOR_CHAN_VOLTAGE);
 
-K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
 
 K_SEM_DEFINE(sem_ecg_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_lon, 0, 1);
@@ -75,15 +75,15 @@ extern struct k_sem sem_ecg_complete_reset;
 static void work_ecg_lon_handler(struct k_work *work)
 {
     LOG_DBG("ECG LON Work");
-    hw_max30001_ecg_disable();
-    hw_max30001_ecg_enable();
+    // Don't disable/enable ECG during recording to avoid sample loss
+    // Just log the lead-on event
+    LOG_INF("ECG leads connected");
 }
 K_WORK_DEFINE(work_ecg_lon, work_ecg_lon_handler);
 
 static void work_ecg_loff_handler(struct k_work *work)
 {
     LOG_DBG("ECG LOFF Work");
-
 }
 K_WORK_DEFINE(work_ecg_loff, work_ecg_loff_handler);
 
@@ -100,6 +100,14 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 
     if ((ecg_num_samples < 32 && ecg_num_samples > 0) || (bioz_samples < 32 && bioz_samples > 0))
     {
+        // Log sample counts for debugging
+        static uint32_t total_ecg_samples_processed = 0;
+        total_ecg_samples_processed += ecg_num_samples;
+        
+        if ((total_ecg_samples_processed % 500) == 0) {
+            LOG_DBG("ECG samples processed: %u (current batch: %u)", total_ecg_samples_processed, ecg_num_samples);
+        }
+
         ecg_bioz_sensor_sample.ecg_num_samples = edata->num_samples_ecg;
         ecg_bioz_sensor_sample.bioz_num_samples = edata->num_samples_bioz;
 
@@ -119,7 +127,7 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
         m_ecg_hr = edata->hr;
         // ecg_bioz_sensor_sample.rrint = edata->rri;
 
-        //LOG_DBG("RRI: %d", edata->rri);
+        // LOG_DBG("RRI: %d", edata->rri);
 
         ecg_bioz_sensor_sample.ecg_lead_off = edata->ecg_lead_off;
 
@@ -128,7 +136,7 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
             m_ecg_lead_on_off = true;
             LOG_DBG("ECG LOFF");
             k_work_submit(&work_ecg_loff);
- 
+
             // k_sem_give(&sem_ecg_lead_off);
             //  smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_LEADOFF]);
         }
@@ -144,7 +152,24 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 
         if (ecg_active)
         {
-            k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_MSEC(1));
+            static uint32_t total_samples_queued = 0;
+            static uint32_t total_samples_dropped = 0;
+            
+            int ret = k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT);
+            if (ret != 0) {
+                total_samples_dropped += ecg_num_samples;
+                LOG_WRN("ECG sample dropped - queue full (ret=%d), dropped: %u, queued: %u", 
+                        ret, total_samples_dropped, total_samples_queued);
+            } else {
+                total_samples_queued += ecg_num_samples;
+            }
+            
+            // Log statistics every 2000 samples
+            if (((total_samples_queued + total_samples_dropped) % 2000) == 0) {
+                LOG_INF("ECG sample stats - Queued: %u, Dropped: %u, Drop rate: %u%%", 
+                        total_samples_queued, total_samples_dropped,
+                        (total_samples_dropped * 100) / (total_samples_queued + total_samples_dropped));
+            }
         }
     }
 }
@@ -208,8 +233,6 @@ static void st_ecg_bioz_idle_entry(void *o)
     hw_max30001_ecg_disable();
     k_timer_stop(&tmr_ecg_bioz_sampling);
     hw_max30001_bioz_disable();
-
-   
 }
 
 static void st_ecg_bioz_idle_run(void *o)
@@ -269,7 +292,7 @@ static void st_ecg_bioz_stream_run(void *o)
 static void st_ecg_bioz_stream_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stream Exit");
-    
+
     hpi_data_set_ecg_record_active(false);
 
     ecg_last_timer_val = 0;
