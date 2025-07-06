@@ -168,6 +168,14 @@ void today_init_steps(uint16_t steps)
     k_mutex_unlock(&mutex_today_steps);
 }
 
+static void today_reset_steps(void)
+{
+    k_mutex_lock(&mutex_today_steps, K_FOREVER);
+    today_total_steps = 0;
+    k_mutex_unlock(&mutex_today_steps);
+    LOG_INF("Daily step counter reset");
+}
+
 static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 {
     // printk("GPIO_KEY %s pressed, zephyr_code=%u, value=%d type=%d\n",
@@ -820,6 +828,10 @@ void hw_thread(void)
     bool sys_batt_charging = false;
 
     int ret;
+    
+    // Variables for tracking daily reset
+    static int last_day = -1;
+    bool day_changed = false;
 
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
@@ -847,6 +859,21 @@ void hw_thread(void)
         struct tm m_tm_time = *rtc_time_to_tm(&rtc_sys_time);
         hpi_sys_set_sys_time(&m_tm_time);
         zbus_chan_pub(&sys_time_chan, &m_tm_time, K_SECONDS(1));
+
+        // Check if day has changed and reset step counter if needed
+        if (last_day == -1)
+        {
+            // Initialize on first run
+            last_day = m_tm_time.tm_mday;
+        }
+        else if (last_day != m_tm_time.tm_mday)
+        {
+            // Day has changed - reset daily step counter
+            day_changed = true;
+            last_day = m_tm_time.tm_mday;
+            today_reset_steps();
+            LOG_INF("New day detected (%d), daily steps reset", m_tm_time.tm_mday);
+        }
 
         // Read and publish steps
         _steps = acc_get_steps();
