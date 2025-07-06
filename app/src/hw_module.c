@@ -800,7 +800,7 @@ void hw_module_init(void)
 
     // usb_init();
 }
- 
+
 static uint32_t acc_get_steps(void)
 {
     struct sensor_value steps;
