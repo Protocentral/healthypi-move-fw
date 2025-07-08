@@ -61,7 +61,7 @@ void draw_scr_spl_low_battery(enum scroll_dir m_scroll_dir, uint32_t arg1, uint3
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 330);
-    lv_label_set_text(label_info, "Battery voltage is critically low.\n\nPlease connect charger immediately to prevent shutdown.\n\nDevice will power off automatically if voltage drops further.");
+    lv_label_set_text(label_info, "Battery voltage is critically low.\n\nPlease connect charger immediately to prevent shutdown.");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_style(label_info, &style_white_medium, 0);
 

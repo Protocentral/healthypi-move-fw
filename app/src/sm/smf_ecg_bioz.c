@@ -37,9 +37,12 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
 #define ECG_SAMPLING_INTERVAL_MS 125
 #define ECG_RECORD_DURATION_S 30
+#define ECG_STABILIZATION_DURATION_S 5  // Wait 5 seconds for signal to stabilize
 
 static int ecg_last_timer_val = 0;
 static int ecg_countdown_val = 0;
+static int ecg_stabilization_countdown = 0;
+static bool ecg_stabilization_complete = false;
 
 static const struct smf_state ecg_bioz_states[];
 struct s_ecg_bioz_object
@@ -50,6 +53,7 @@ struct s_ecg_bioz_object
 enum ecg_bioz_state
 {
     HPI_ECG_BIOZ_STATE_IDLE,
+    HPI_ECG_BIOZ_STATE_STABILIZING,
     HPI_ECG_BIOZ_STATE_STREAM,
     HPI_ECG_BIOZ_STATE_LEADOFF,
     HPI_ECG_BIOZ_STATE_COMPLETE,
@@ -137,8 +141,11 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
             LOG_DBG("ECG LOFF");
             k_work_submit(&work_ecg_loff);
 
-            // k_sem_give(&sem_ecg_lead_off);
-            //  smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_LEADOFF]);
+            // Only transition to leadoff state if actively recording (not during stabilization)
+            if (hpi_data_is_ecg_record_active()) {
+                // k_sem_give(&sem_ecg_lead_off);
+                // smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_LEADOFF]);
+            }
         }
         else if (edata->ecg_lead_off == 0 && m_ecg_lead_on_off == true)
         {
@@ -240,7 +247,7 @@ static void st_ecg_bioz_idle_run(void *o)
     // LOG_DBG("ECG/BioZ SM Idle Run");
     if (k_sem_take(&sem_ecg_start, K_NO_WAIT) == 0)
     {
-        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
+        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STABILIZING]);
     }
 }
 
@@ -248,12 +255,19 @@ static void st_ecg_bioz_stream_entry(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stream Entry");
 
-    hw_max30001_ecg_enable();
-    k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+    // If coming from stabilization, ECG is already enabled
+    if (!ecg_stabilization_complete) {
+        hw_max30001_ecg_enable();
+        k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+    }
+    
+    // Now start actual recording
     hpi_data_set_ecg_record_active(true);
-    // hpi_max30001_lon_detect_enable();
-
+    
     ecg_countdown_val = ECG_RECORD_DURATION_S;
+    ecg_last_timer_val = k_uptime_get_32();
+    
+    LOG_INF("ECG recording started - %d seconds", ECG_RECORD_DURATION_S);
 }
 
 static void st_ecg_bioz_stream_run(void *o)
@@ -297,6 +311,7 @@ static void st_ecg_bioz_stream_exit(void *o)
 
     ecg_last_timer_val = 0;
     ecg_countdown_val = 0;
+    ecg_stabilization_complete = false;  // Reset for next recording
 }
 
 static void st_ecg_bioz_complete_entry(void *o)
@@ -337,8 +352,71 @@ static void st_ecg_bioz_leadoff_run(void *o)
     }
 }
 
+static void st_ecg_bioz_stabilizing_entry(void *o)
+{
+    LOG_DBG("ECG/BioZ SM Stabilizing Entry");
+
+    // Enable ECG but don't start recording yet
+    hw_max30001_ecg_enable();
+    k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+    
+    // Initialize stabilization countdown
+    ecg_stabilization_countdown = ECG_STABILIZATION_DURATION_S;
+    ecg_stabilization_complete = false;
+    ecg_last_timer_val = k_uptime_get_32();
+    
+    // Publish status indicating stabilization phase
+    struct hpi_ecg_status_t ecg_stat = {
+        .ts_complete = 0,
+        .status = HPI_ECG_STATUS_STREAMING, // You might want to add HPI_ECG_STATUS_STABILIZING
+        .hr = 0,
+        .progress_timer = ECG_RECORD_DURATION_S + ECG_STABILIZATION_DURATION_S};
+    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+    
+    LOG_INF("ECG stabilization started - waiting %d seconds", ECG_STABILIZATION_DURATION_S);
+}
+
+static void st_ecg_bioz_stabilizing_run(void *o)
+{
+    // Count down stabilization timer
+    if ((k_uptime_get_32() - ecg_last_timer_val) >= 1000)
+    {
+        ecg_stabilization_countdown--;
+        LOG_DBG("ECG stabilization timer: %d", ecg_stabilization_countdown);
+        ecg_last_timer_val = k_uptime_get_32();
+
+        // Update progress - total time includes stabilization + recording
+        struct hpi_ecg_status_t ecg_stat = {
+            .ts_complete = 0,
+            .status = HPI_ECG_STATUS_STREAMING,
+            .hr = m_ecg_hr,
+            .progress_timer = ECG_RECORD_DURATION_S + ecg_stabilization_countdown};
+        zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+
+        if (ecg_stabilization_countdown <= 0)
+        {
+            LOG_INF("ECG stabilization complete - starting recording");
+            smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
+        }
+    }
+
+    // Allow cancellation during stabilization
+    if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("ECG cancelled during stabilization");
+        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
+    }
+}
+
+static void st_ecg_bioz_stabilizing_exit(void *o)
+{
+    LOG_DBG("ECG/BioZ SM Stabilizing Exit");
+    ecg_stabilization_complete = true;
+}
+
 static const struct smf_state ecg_bioz_states[] = {
     [HPI_ECG_BIOZ_STATE_IDLE] = SMF_CREATE_STATE(st_ecg_bioz_idle_entry, st_ecg_bioz_idle_run, NULL, NULL, NULL),
+    [HPI_ECG_BIOZ_STATE_STABILIZING] = SMF_CREATE_STATE(st_ecg_bioz_stabilizing_entry, st_ecg_bioz_stabilizing_run, st_ecg_bioz_stabilizing_exit, NULL, NULL),
     [HPI_ECG_BIOZ_STATE_STREAM] = SMF_CREATE_STATE(st_ecg_bioz_stream_entry, st_ecg_bioz_stream_run, st_ecg_bioz_stream_exit, NULL, NULL),
     [HPI_ECG_BIOZ_STATE_LEADOFF] = SMF_CREATE_STATE(st_ecg_bioz_leadoff_entry, st_ecg_bioz_leadoff_run, NULL, NULL, NULL),
     [HPI_ECG_BIOZ_STATE_COMPLETE] = SMF_CREATE_STATE(st_ecg_bioz_complete_entry, st_ecg_bioz_complete_run, st_ecg_bioz_complete_exit, NULL, NULL),

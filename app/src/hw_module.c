@@ -636,7 +636,11 @@ void hw_module_init(void)
     regulator_enable(ldsw_disp_unit);
     k_msleep(500);
 
-    regulator_enable(ldsw_sens_1_8);
+    // Reset all sensors before starting
+    regulator_disable(ldsw_sens_1_8);
+    k_msleep(100);
+    regulator_enable(ldsw_sens_1_8);  
+    k_msleep(100);  
 
     // Signal to start display state machine
     k_sem_give(&sem_disp_smf_start);
@@ -747,7 +751,7 @@ void hw_module_init(void)
     k_sleep(K_MSEC(100));
 
     device_init(max32664c_dev);
-    k_sleep(K_MSEC(10));
+    k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664c_dev))
     {
