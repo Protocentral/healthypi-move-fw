@@ -468,7 +468,7 @@ double read_temp_f(void)
     return temp_f;
 }
 
-// Backward compatibility wrapper
+// Compatibility wrapper called by the app to set RTC time
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
 {
     struct tm time_to_set = {
@@ -477,9 +477,9 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
         .tm_hour = m_hour,
         .tm_mday = m_day,
         .tm_mon = m_month - 1,  // Convert 1-based month to 0-based (Jan=0, Dec=11)
-        .tm_year = m_year +2000 -1900,  // Convert full year to years since 1900
-        .tm_wday = 0,  // Will be calculated
-        .tm_yday = 0   // Will be calculated
+        .tm_year = m_year +2000 -1900,  // Convert full year to years since 1900, app send only YY
+        .tm_wday = 0,  
+        .tm_yday = 0   
     };
     
     hpi_sys_set_rtc_time(&time_to_set);
