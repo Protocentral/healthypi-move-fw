@@ -13,12 +13,26 @@
 #include <time.h>
 #include <zephyr/posix/time.h>
 #include <zephyr/sys/timeutil.h>
+#include <zephyr/drivers/rtc.h>
 
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
 #include "hw_module.h"
 
 LOG_MODULE_REGISTER(hpi_sys_module, LOG_LEVEL_DBG);
+
+// External device references (declared extern in hw_module.c)
+extern const struct device *rtc_dev;
+
+// Time synchronization variables
+static int64_t last_rtc_sync_uptime = 0;
+static int64_t rtc_to_uptime_offset = 0;
+K_MUTEX_DEFINE(mutex_time_sync);
+
+// Time sync configuration
+#define RTC_SYNC_INTERVAL_MS        (30 * 60 * 1000)  // Sync every 30 minutes
+#define RTC_SYNC_DRIFT_THRESHOLD_S  5                 // Sync if drift > 5 seconds
+#define RTC_FAST_SYNC_INTERVAL_MS   (60 * 1000)      // Fast sync every minute after boot
 
 struct mgmt_callback dfu_callback;
 
@@ -133,6 +147,128 @@ int64_t hw_get_sys_time_ts(void)
 {
     int64_t sys_time_ts = timeutil_timegm64(&sys_tm_time);
     return sys_time_ts;
+}
+
+int64_t hw_get_synced_system_time(void)
+{
+    int64_t current_uptime = k_uptime_get();
+    int64_t synced_time;
+    
+    k_mutex_lock(&mutex_time_sync, K_FOREVER);
+    synced_time = rtc_to_uptime_offset + (current_uptime / 1000); // Convert to seconds
+    k_mutex_unlock(&mutex_time_sync);
+    
+    return synced_time;
+}
+
+static int hpi_sys_sync_time_with_rtc(bool force_sync)
+{
+    struct rtc_time rtc_sys_time;
+    int64_t current_uptime = k_uptime_get();
+    int64_t time_since_last_sync = current_uptime - last_rtc_sync_uptime;
+    
+    // Check if sync is needed
+    if (!force_sync && time_since_last_sync < RTC_SYNC_INTERVAL_MS) {
+        return 0; // No sync needed
+    }
+    
+    int ret = rtc_get_time(rtc_dev, &rtc_sys_time);
+    if (ret < 0) {
+        LOG_ERR("Failed to get RTC time for sync: %d", ret);
+        return ret;
+    }
+    
+    // Convert RTC time to timestamp
+    struct tm rtc_tm = *rtc_time_to_tm(&rtc_sys_time);
+    int64_t rtc_timestamp = timeutil_timegm64(&rtc_tm);
+    
+    k_mutex_lock(&mutex_time_sync, K_FOREVER);
+    
+    // Calculate new offset
+    int64_t new_offset = rtc_timestamp - (current_uptime / 1000);
+    
+    // Check for significant drift
+    if (last_rtc_sync_uptime > 0) {
+        int64_t drift = new_offset - rtc_to_uptime_offset;
+        if (abs(drift) > RTC_SYNC_DRIFT_THRESHOLD_S && !force_sync) {
+            LOG_WRN("Time drift detected: %lld seconds", drift);
+        }
+    }
+    
+    rtc_to_uptime_offset = new_offset;
+    last_rtc_sync_uptime = current_uptime;
+    
+    k_mutex_unlock(&mutex_time_sync);
+    
+    // Update system time
+    hpi_sys_set_sys_time(&rtc_tm);
+    
+    LOG_DBG("Time synced with RTC. Offset: %lld", rtc_to_uptime_offset);
+    return 0;
+}
+
+static bool hpi_sys_should_sync_rtc(void)
+{
+    int64_t current_uptime = k_uptime_get();
+    int64_t time_since_last_sync = current_uptime - last_rtc_sync_uptime;
+    
+    // Force sync on first run
+    if (last_rtc_sync_uptime == 0) {
+        return true;
+    }
+    
+    // Fast sync during first hour after boot
+    if (current_uptime < (60 * 60 * 1000) && time_since_last_sync >= RTC_FAST_SYNC_INTERVAL_MS) {
+        return true;
+    }
+    
+    // Normal sync interval
+    return time_since_last_sync >= RTC_SYNC_INTERVAL_MS;
+}
+
+void hpi_sys_set_rtc_time(const struct tm *time_to_set)
+{
+    struct rtc_time rtc_time_set;
+    
+    rtc_time_set.tm_sec = time_to_set->tm_sec;
+    rtc_time_set.tm_min = time_to_set->tm_min;
+    rtc_time_set.tm_hour = time_to_set->tm_hour;
+    rtc_time_set.tm_mday = time_to_set->tm_mday;
+    rtc_time_set.tm_mon = time_to_set->tm_mon;
+    rtc_time_set.tm_year = time_to_set->tm_year;
+    rtc_time_set.tm_wday = time_to_set->tm_wday;
+    rtc_time_set.tm_yday = time_to_set->tm_yday;
+    
+    int ret = rtc_set_time(rtc_dev, &rtc_time_set);
+    if (ret < 0) {
+        LOG_ERR("Failed to set RTC time: %d", ret);
+        return;
+    }
+    
+    // Force immediate sync after setting RTC
+    hpi_sys_sync_time_with_rtc(true);
+    LOG_INF("RTC time updated and synced");
+}
+
+int hpi_sys_sync_time_if_needed(void)
+{
+    if (hpi_sys_should_sync_rtc()) {
+        return hpi_sys_sync_time_with_rtc(false);
+    }
+    return 0;
+}
+
+int hpi_sys_force_time_sync(void)
+{
+    return hpi_sys_sync_time_with_rtc(true);
+}
+
+struct tm hpi_sys_get_current_time(void)
+{
+    int64_t current_timestamp = hw_get_synced_system_time();
+    struct tm current_time;
+    gmtime_r(&current_timestamp, &current_time);
+    return current_time;
 }
 
 bool hpi_sys_get_device_on_skin(void)

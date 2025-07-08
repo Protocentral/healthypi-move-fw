@@ -26,3 +26,10 @@ bool get_on_skin(void);
 void set_on_skin(bool on_skin);
 
 void today_init_steps(uint16_t steps);
+
+// Low battery management functions
+bool hw_is_low_battery(void);
+bool hw_is_critical_battery(void);
+void hw_reset_low_battery_state(void);
+uint8_t hw_get_current_battery_level(void);
+float hw_get_current_battery_voltage(void);

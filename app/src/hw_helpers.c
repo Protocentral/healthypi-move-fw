@@ -52,18 +52,3 @@ void hpi_switch_cpu_128mhz(void)
     // nrf_spim_frequency_set(NRF_SPIM_INST_GET(4), NRF_SPIM_FREQ_32M);
     // nrf_spim_iftiming_set(NRF_SPIM_INST_GET(4), 0);
 }
-
-void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
-{
-    struct rtc_time time_set;
-
-    time_set.tm_sec = m_sec;
-    time_set.tm_min = m_min;
-    time_set.tm_hour = m_hour;
-    time_set.tm_mday = m_day;
-    time_set.tm_mon = (m_month - 1);
-    time_set.tm_year = (m_year + 100);
-
-    int ret = rtc_set_time(rtc_dev, &time_set);
-    printk("RTC Set Time: %d\n", ret);
-}
