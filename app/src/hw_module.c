@@ -468,21 +468,6 @@ double read_temp_f(void)
     return temp_f;
 }
 
-void hw_rtc_set_device_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
-{
-    struct rtc_time time_set;
-
-    time_set.tm_sec = m_sec;
-    time_set.tm_min = m_min;
-    time_set.tm_hour = m_hour;
-    time_set.tm_mday = m_day;
-    time_set.tm_mon = m_month;
-    time_set.tm_year = m_year;
-
-    int ret = rtc_set_time(rtc_dev, &time_set);
-    printk("RTC Set Time: %d\n", ret);
-}
-
 // Backward compatibility wrapper
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year)
 {
@@ -491,8 +476,8 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
         .tm_min = m_min,
         .tm_hour = m_hour,
         .tm_mday = m_day,
-        .tm_mon = m_month,
-        .tm_year = m_year,
+        .tm_mon = m_month - 1,  // Convert 1-based month to 0-based (Jan=0, Dec=11)
+        .tm_year = m_year +2000 -1900,  // Convert full year to years since 1900
         .tm_wday = 0,  // Will be calculated
         .tm_yday = 0   // Will be calculated
     };
@@ -505,13 +490,13 @@ void hw_pwr_display_enable(bool enable)
     if (enable)
     {
         regulator_enable(ldsw_disp_unit);
-        k_msleep(100);
+        k_msleep(10);
         LOG_DBG("Display LDO enabled");
     }
     else
     {
         regulator_disable(ldsw_disp_unit);
-        k_msleep(100);
+        k_msleep(10);
         LOG_DBG("Display LDO disabled");
     }
 }
