@@ -4,6 +4,7 @@
 #include <lvgl.h>
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/drivers/sensor.h>
+#include <string.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -38,6 +39,9 @@ K_MUTEX_DEFINE(ecg_state_mutex);
 // Mutex for protecting timer and countdown variables
 K_MUTEX_DEFINE(ecg_timer_mutex);
 
+// Mutex for ECG smoothing filter (always defined for simplicity)
+K_MUTEX_DEFINE(ecg_filter_mutex);
+
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
@@ -50,6 +54,86 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 #define MAX_BIOZ_SAMPLES 32
 #define ECG_STATS_LOG_INTERVAL_SAMPLES 2000
 #define ECG_DEBUG_LOG_INTERVAL_SAMPLES 500
+
+// ECG Signal Smoothing Configuration
+#define ECG_FILTER_WINDOW_SIZE 5  // Moving average window size
+#define ECG_FILTER_BUFFER_SIZE ECG_FILTER_WINDOW_SIZE
+
+// Allow runtime configuration of smoothing (optional)
+#ifndef CONFIG_ECG_SMOOTHING_ENABLED
+#define CONFIG_ECG_SMOOTHING_ENABLED 1  // Enable smoothing by default
+#endif
+
+#if CONFIG_ECG_SMOOTHING_ENABLED
+// ECG smoothing filter state
+static int32_t ecg_filter_buffer[ECG_FILTER_BUFFER_SIZE];
+static uint8_t ecg_filter_index = 0;
+static bool ecg_filter_initialized = false;
+
+/**
+ * @brief Apply moving average filter to smooth ECG sample
+ * @param raw_sample Raw ECG sample value
+ * @return Smoothed ECG sample value
+ */
+static int32_t ecg_smooth_sample(int32_t raw_sample)
+{
+    k_mutex_lock(&ecg_filter_mutex, K_FOREVER);
+    
+    // Add new sample to circular buffer
+    ecg_filter_buffer[ecg_filter_index] = raw_sample;
+    ecg_filter_index = (ecg_filter_index + 1) % ECG_FILTER_BUFFER_SIZE;
+    
+    // Calculate moving average
+    int64_t sum = 0;
+    uint8_t valid_samples = 0;
+    
+    if (!ecg_filter_initialized) {
+        // During initialization, use only available samples
+        for (int i = 0; i <= ecg_filter_index; i++) {
+            sum += ecg_filter_buffer[i];
+            valid_samples++;
+        }
+        
+        if (ecg_filter_index == ECG_FILTER_BUFFER_SIZE - 1) {
+            ecg_filter_initialized = true;
+        }
+    } else {
+        // Use full window
+        for (int i = 0; i < ECG_FILTER_BUFFER_SIZE; i++) {
+            sum += ecg_filter_buffer[i];
+        }
+        valid_samples = ECG_FILTER_BUFFER_SIZE;
+    }
+    
+    int32_t smoothed_sample = (int32_t)(sum / valid_samples);
+    
+    k_mutex_unlock(&ecg_filter_mutex);
+    return smoothed_sample;
+}
+
+/**
+ * @brief Reset ECG smoothing filter state
+ */
+static void ecg_smooth_reset(void)
+{
+    k_mutex_lock(&ecg_filter_mutex, K_FOREVER);
+    memset(ecg_filter_buffer, 0, sizeof(ecg_filter_buffer));
+    ecg_filter_index = 0;
+    ecg_filter_initialized = false;
+    k_mutex_unlock(&ecg_filter_mutex);
+}
+#else
+// ECG smoothing disabled - no-op functions
+static int32_t ecg_smooth_sample(int32_t raw_sample)
+{
+    return raw_sample;
+}
+
+static void ecg_smooth_reset(void)
+{
+    // No-op when smoothing is disabled
+}
+#endif
 
 static int ecg_last_timer_val = 0;
 static int ecg_countdown_val = 0;
@@ -220,9 +304,11 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
         ecg_bioz_sensor_sample.ecg_num_samples = edata->num_samples_ecg;
         ecg_bioz_sensor_sample.bioz_num_samples = edata->num_samples_bioz;
 
+        // Apply smoothing filter to ECG samples if enabled
         for (int i = 0; i < edata->num_samples_ecg; i++)
         {
-            ecg_bioz_sensor_sample.ecg_samples[i] = edata->ecg_samples[i];
+            int32_t raw_sample = edata->ecg_samples[i];
+            ecg_bioz_sensor_sample.ecg_samples[i] = ecg_smooth_sample(raw_sample);
         }
 
         for (int i = 0; i < edata->num_samples_bioz; i++)
@@ -512,6 +598,9 @@ static void st_ecg_bioz_stabilizing_entry(void *o)
     LOG_DBG("ECG/BioZ SM Stabilizing Entry");
     int ret;
 
+    // Reset ECG smoothing filter for clean start
+    ecg_smooth_reset();
+
     // Enable ECG but don't start recording yet
     ret = hw_max30001_ecg_enable();
     if (ret != 0) {
@@ -535,6 +624,11 @@ static void st_ecg_bioz_stabilizing_entry(void *o)
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
     
     LOG_INF("ECG stabilization started - waiting %d seconds", ECG_STABILIZATION_DURATION_S);
+#if CONFIG_ECG_SMOOTHING_ENABLED
+    LOG_INF("ECG smoothing enabled with window size %d", ECG_FILTER_WINDOW_SIZE);
+#else
+    LOG_INF("ECG smoothing disabled - using raw samples");
+#endif
 }
 
 static void st_ecg_bioz_stabilizing_run(void *o)
