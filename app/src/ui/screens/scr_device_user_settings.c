@@ -9,6 +9,7 @@ LOG_MODULE_REGISTER(scr_device_user_settings, LOG_LEVEL_INF);
 
 #include "ui/move_ui.h"
 #include "hw_module.h"
+#include "hpi_settings_persistence.h"
 
 lv_obj_t *scr_device_user_settings;
 
@@ -26,17 +27,8 @@ extern uint16_t m_user_height;
 extern uint16_t m_user_weight;
 extern double m_user_met;
 
-// Additional user settings
-static uint8_t m_hand_worn = 0;       // 0=Left hand, 1=Right hand
-static uint8_t m_time_format = 0; // 0=24h, 1=12h
-static uint8_t m_temp_unit = 0;   // 0=Celsius, 1=Fahrenheit
-static bool m_auto_sleep_enabled = true;
-static uint8_t m_sleep_timeout = 30; // seconds
-
-// Device settings
-static uint8_t m_backlight_timeout = 15; // seconds
-static bool m_raise_to_wake = true;
-static bool m_button_sounds = true;
+// Settings persistence - we'll sync with the persistence module
+static struct hpi_user_settings current_ui_settings;
 
 extern lv_style_t style_scr_black;
 extern lv_style_t style_lbl_white_14;
@@ -44,9 +36,19 @@ extern lv_style_t style_lbl_white_14;
 // Function to automatically save settings
 static void hpi_auto_save_settings(void)
 {
-    LOG_INF("Settings automatically saved");
-    // Here you would typically save settings to non-volatile storage
-    // For example: save to flash, EEPROM, or persistent storage
+    int rc;
+    
+    // Sync external height/weight with our settings structure
+    current_ui_settings.height = m_user_height;
+    current_ui_settings.weight = m_user_weight;
+    
+    // Save all settings to persistent storage
+    rc = hpi_settings_save_all(&current_ui_settings);
+    if (rc) {
+        LOG_ERR("Failed to save settings: %d", rc);
+    } else {
+        LOG_INF("Settings automatically saved");
+    }
 }
 
 // Event callbacks for user settings
@@ -105,7 +107,7 @@ static void sw_auto_sleep_event_cb(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_VALUE_CHANGED) {
         bool state = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
-        m_auto_sleep_enabled = state;
+        current_ui_settings.auto_sleep_enabled = state;
         LOG_DBG("Auto sleep: %s", state ? "Enabled" : "Disabled");
         
         // Auto-save settings
@@ -116,8 +118,8 @@ static void sw_auto_sleep_event_cb(lv_event_t *e)
 static void slider_sleep_timeout_event_cb(lv_event_t *e)
 {
     lv_obj_t *slider = lv_event_get_target(e);
-    m_sleep_timeout = lv_slider_get_value(slider);
-    LOG_DBG("Sleep timeout set to: %d seconds", m_sleep_timeout);
+    current_ui_settings.sleep_timeout = lv_slider_get_value(slider);
+    LOG_DBG("Sleep timeout set to: %d seconds", current_ui_settings.sleep_timeout);
     
     // Auto-save settings
     hpi_auto_save_settings();
@@ -148,23 +150,33 @@ static void btn_reset_settings_event_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_CLICKED) {
-        // Reset to default values
-        m_user_height = 170;
-        m_user_weight = 70;
-        m_hand_worn = 0;
-        m_time_format = 0;
-        m_temp_unit = 0;
-        m_auto_sleep_enabled = true;
-        m_sleep_timeout = 30;
+        // Perform factory reset using persistence module
+        int rc = hpi_settings_factory_reset();
+        if (rc) {
+            LOG_ERR("Factory reset failed: %d", rc);
+            return;
+        }
+        
+        // Load the reset settings
+        rc = hpi_settings_load_all(&current_ui_settings);
+        if (rc) {
+            LOG_ERR("Failed to load reset settings: %d", rc);
+            return;
+        }
+        
+        // Sync external variables
+        m_user_height = current_ui_settings.height;
+        m_user_weight = current_ui_settings.weight;
         
         // Update UI elements
-        // Height and weight will be updated when the screen is redrawn
-        // Setting buttons will be updated with new helper function
         hpi_update_setting_labels();
-        lv_obj_add_state(sw_auto_sleep, LV_STATE_CHECKED);
-        lv_slider_set_value(slider_sleep_timeout, 30, LV_ANIM_OFF);
+        lv_obj_add_state(sw_auto_sleep, current_ui_settings.auto_sleep_enabled ? LV_STATE_CHECKED : 0);
+        if (!current_ui_settings.auto_sleep_enabled) {
+            lv_obj_clear_state(sw_auto_sleep, LV_STATE_CHECKED);
+        }
+        lv_slider_set_value(slider_sleep_timeout, current_ui_settings.sleep_timeout, LV_ANIM_OFF);
         
-        LOG_INF("Settings reset to defaults");
+        LOG_INF("Factory reset completed successfully");
     }
 }
 
@@ -192,27 +204,54 @@ void hpi_update_setting_labels(void)
     if (btn_hand_worn) {
         lv_obj_t *lbl_hand_value = lv_obj_get_child(btn_hand_worn, 0);
         if (lbl_hand_value) {
-            lv_label_set_text(lbl_hand_value, m_hand_worn ? "Right" : "Left");
+            lv_label_set_text(lbl_hand_value, current_ui_settings.hand_worn ? "Right" : "Left");
         }
     }
     
     if (btn_time_format) {
         lv_obj_t *lbl_time_value = lv_obj_get_child(btn_time_format, 0);
         if (lbl_time_value) {
-            lv_label_set_text(lbl_time_value, m_time_format ? "12 H" : "24 H");
+            lv_label_set_text(lbl_time_value, current_ui_settings.time_format ? "12 H" : "24 H");
         }
     }
     
     if (btn_temp_unit) {
         lv_obj_t *lbl_temp_value = lv_obj_get_child(btn_temp_unit, 0);
         if (lbl_temp_value) {
-            lv_label_set_text(lbl_temp_value, m_temp_unit ? "Fahrenheit" : "Celsius");
+            lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "Fahrenheit" : "Celsius");
         }
     }
 }
 
 void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    // Initialize settings persistence if needed
+    int rc = hpi_settings_persistence_init();
+    if (rc) {
+        LOG_ERR("Failed to initialize settings persistence: %d", rc);
+    }
+    
+    // Load current settings
+    rc = hpi_settings_load_all(&current_ui_settings);
+    if (rc) {
+        LOG_ERR("Failed to load settings: %d", rc);
+        // Use defaults if load fails
+        current_ui_settings.height = DEFAULT_USER_HEIGHT;
+        current_ui_settings.weight = DEFAULT_USER_WEIGHT;
+        current_ui_settings.hand_worn = DEFAULT_HAND_WORN;
+        current_ui_settings.time_format = DEFAULT_TIME_FORMAT;
+        current_ui_settings.temp_unit = DEFAULT_TEMP_UNIT;
+        current_ui_settings.auto_sleep_enabled = DEFAULT_AUTO_SLEEP;
+        current_ui_settings.sleep_timeout = DEFAULT_SLEEP_TIMEOUT;
+        current_ui_settings.backlight_timeout = DEFAULT_BACKLIGHT_TIMEOUT;
+        current_ui_settings.raise_to_wake = DEFAULT_RAISE_TO_WAKE;
+        current_ui_settings.button_sounds = DEFAULT_BUTTON_SOUNDS;
+    }
+    
+    // Sync external variables with loaded settings
+    m_user_height = current_ui_settings.height;
+    m_user_weight = current_ui_settings.weight;
+
     scr_device_user_settings = lv_obj_create(NULL);
     draw_scr_common(scr_device_user_settings);
 
@@ -282,7 +321,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_event_cb(btn_hand_worn, btn_hand_worn_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_hand_value = lv_label_create(btn_hand_worn);
-    lv_label_set_text(lbl_hand_value, m_hand_worn ? "Right" : "Left");
+    lv_label_set_text(lbl_hand_value, current_ui_settings.hand_worn ? "Right" : "Left");
     lv_obj_center(lbl_hand_value);
 
     // Time format dropdown
@@ -300,7 +339,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_event_cb(btn_time_format, btn_time_format_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_time_value = lv_label_create(btn_time_format);
-    lv_label_set_text(lbl_time_value, m_time_format ? "12 H" : "24 H");
+    lv_label_set_text(lbl_time_value, current_ui_settings.time_format ? "12 H" : "24 H");
     lv_obj_center(lbl_time_value);
 
     // Temperature unit dropdown
@@ -318,7 +357,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_event_cb(btn_temp_unit, btn_temp_unit_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_temp_value = lv_label_create(btn_temp_unit);
-    lv_label_set_text(lbl_temp_value, m_temp_unit ? "Fahrenheit" : "Celsius");
+    lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "Fahrenheit" : "Celsius");
     lv_obj_center(lbl_temp_value);
 
     // Auto sleep switch
@@ -332,7 +371,9 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_style(lbl_auto_sleep, &style_lbl_white_14, 0);
     
     sw_auto_sleep = lv_switch_create(cont_auto_sleep);
-    lv_obj_add_state(sw_auto_sleep, LV_STATE_CHECKED);
+    if (current_ui_settings.auto_sleep_enabled) {
+        lv_obj_add_state(sw_auto_sleep, LV_STATE_CHECKED);
+    }
     lv_obj_add_event_cb(sw_auto_sleep, sw_auto_sleep_event_cb, LV_EVENT_ALL, NULL);
 
     // Sleep timeout slider
@@ -348,7 +389,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     slider_sleep_timeout = lv_slider_create(cont_sleep_timeout);
     lv_obj_set_size(slider_sleep_timeout, LV_PCT(100), 20);
     lv_slider_set_range(slider_sleep_timeout, 10, 120);
-    lv_slider_set_value(slider_sleep_timeout, 30, LV_ANIM_OFF);
+    lv_slider_set_value(slider_sleep_timeout, current_ui_settings.sleep_timeout, LV_ANIM_OFF);
     lv_obj_add_event_cb(slider_sleep_timeout, slider_sleep_timeout_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     // Factory Reset line item
@@ -547,7 +588,7 @@ static void roller_hand_worn_event_cb(lv_event_t *e)
     if (code == LV_EVENT_VALUE_CHANGED) {
         // Get selected hand and update immediately
         uint16_t selected = lv_roller_get_selected(roller_hand_worn);
-        m_hand_worn = selected;
+        current_ui_settings.hand_worn = selected;
         LOG_DBG("Hand worn changed to: %s", selected ? "Right hand" : "Left hand");
         
         // Auto-save settings
@@ -581,7 +622,7 @@ void draw_scr_hand_worn_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_add_event_cb(roller_hand_worn, roller_hand_worn_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     
     // Set current value
-    lv_roller_set_selected(roller_hand_worn, m_hand_worn, LV_ANIM_OFF);
+    lv_roller_set_selected(roller_hand_worn, current_ui_settings.hand_worn, LV_ANIM_OFF);
 
     hpi_disp_set_curr_screen(SCR_SPL_HAND_WORN_SELECT);
     hpi_show_screen(scr_hand_worn_select, m_scroll_dir);
@@ -609,7 +650,7 @@ static void roller_time_format_event_cb(lv_event_t *e)
     if (code == LV_EVENT_VALUE_CHANGED) {
         // Get selected time format and update immediately
         uint16_t selected = lv_roller_get_selected(roller_time_format);
-        m_time_format = selected;
+        current_ui_settings.time_format = selected;
         LOG_DBG("Time format changed to: %s", selected ? "12 Hours" : "24 Hours");
         
         // Auto-save settings
@@ -643,7 +684,7 @@ void draw_scr_time_format_select(enum scroll_dir m_scroll_dir, uint32_t arg1, ui
     lv_obj_add_event_cb(roller_time_format, roller_time_format_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     
     // Set current value
-    lv_roller_set_selected(roller_time_format, m_time_format, LV_ANIM_OFF);
+    lv_roller_set_selected(roller_time_format, current_ui_settings.time_format, LV_ANIM_OFF);
 
     hpi_disp_set_curr_screen(SCR_SPL_TIME_FORMAT_SELECT);
     hpi_show_screen(scr_time_format_select, m_scroll_dir);
@@ -671,7 +712,7 @@ static void roller_temp_unit_event_cb(lv_event_t *e)
     if (code == LV_EVENT_VALUE_CHANGED) {
         // Get selected temperature unit and update immediately
         uint16_t selected = lv_roller_get_selected(roller_temp_unit);
-        m_temp_unit = selected;
+        current_ui_settings.temp_unit = selected;
         LOG_DBG("Temperature unit changed to: %s", selected ? "Fahrenheit" : "Celsius");
         
         // Auto-save settings
@@ -705,7 +746,7 @@ void draw_scr_temp_unit_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_add_event_cb(roller_temp_unit, roller_temp_unit_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     
     // Set current value
-    lv_roller_set_selected(roller_temp_unit, m_temp_unit, LV_ANIM_OFF);
+    lv_roller_set_selected(roller_temp_unit, current_ui_settings.temp_unit, LV_ANIM_OFF);
 
     hpi_disp_set_curr_screen(SCR_SPL_TEMP_UNIT_SELECT);
     hpi_show_screen(scr_temp_unit_select, m_scroll_dir);
