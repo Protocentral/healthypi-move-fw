@@ -2,6 +2,7 @@
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
+#include <errno.h>
 
 LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 
@@ -49,6 +50,13 @@ struct s_object
 static uint16_t smf_ppg_spo2_last_measured_value = 0;
 static int64_t smf_ppg_spo2_last_measured_time;
 
+// Local variables for measured SPO2 and status
+static uint16_t measured_spo2 = 0;
+static enum spo2_meas_state measured_spo2_status = SPO2_MEAS_UNK;
+
+// Mutex for thread-safe access to measured SPO2 variables
+K_MUTEX_DEFINE(mutex_measured_spo2);
+
 static int m_curr_state;
 int sig_wake_on_motion_count = 0;
 static bool spo2_measurement_in_progress = false;
@@ -78,6 +86,34 @@ void work_on_skin_wait_handler(struct k_work *work)
     }
 }
 K_WORK_DELAYABLE_DEFINE(work_on_skin, work_on_skin_wait_handler);
+
+static void set_measured_spo2(uint16_t spo2_value, enum spo2_meas_state status)
+{
+    if (k_mutex_lock(&mutex_measured_spo2, K_MSEC(100)) == 0) {
+        measured_spo2 = spo2_value;
+        measured_spo2_status = status;
+        k_mutex_unlock(&mutex_measured_spo2);
+    } else {
+        LOG_WRN("Failed to acquire mutex for setting measured SPO2");
+    }
+}
+
+static int get_measured_spo2(uint16_t *spo2_value, enum spo2_meas_state *status)
+{
+    if (spo2_value == NULL || status == NULL) {
+        return -EINVAL;
+    }
+    
+    if (k_mutex_lock(&mutex_measured_spo2, K_MSEC(100)) == 0) {
+        *spo2_value = measured_spo2;
+        *status = measured_spo2_status;
+        k_mutex_unlock(&mutex_measured_spo2);
+        return 0;
+    } else {
+        LOG_WRN("Failed to acquire mutex for getting measured SPO2");
+        return -EBUSY;
+    }
+}
 
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 {
@@ -181,6 +217,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                     smf_ppg_spo2_last_measured_value = ppg_sensor_sample.spo2;
                     smf_ppg_spo2_last_measured_time = hw_get_sys_time_ts();
                     hpi_sys_set_last_spo2_update(ppg_sensor_sample.spo2, smf_ppg_spo2_last_measured_time);
+                    set_measured_spo2(ppg_sensor_sample.spo2, SPO2_MEAS_SUCCESS);
                 }
                 spo2_measurement_in_progress = false;
             }
@@ -189,6 +226,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             {
                 LOG_DBG("SPO2 MEAS TIMEOUT");
                 k_sem_give(&sem_stop_one_shot_spo2);
+                set_measured_spo2(0, SPO2_MEAS_TIMEOUT);
                 spo2_measurement_in_progress = false;
             }
 
@@ -353,8 +391,24 @@ static void ppg_wrist_ctrl_thread(void)
             k_timer_stop(&tmr_ppg_wrist_sampling);
             spo2_measurement_in_progress = false;
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
-
-            hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
+            uint16_t m_est_spo2 = 0;
+            enum spo2_meas_state m_est_spo2_status = SPO2_MEAS_UNK;
+            get_measured_spo2(&m_est_spo2, &m_est_spo2_status);
+            if (m_est_spo2_status == SPO2_MEAS_SUCCESS)
+            {
+                LOG_DBG("SPO2 Measurement Successful: %d", m_est_spo2);
+                 hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
+            }
+            else if (m_est_spo2_status == SPO2_MEAS_TIMEOUT)
+            {
+                LOG_DBG("SPO2 Measurement Timeout");
+                 hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
+            }
+            else
+            {
+                LOG_DBG("SPO2 Measurement Unknown Status");
+            }
+           
 
             k_msleep(1000);
 
