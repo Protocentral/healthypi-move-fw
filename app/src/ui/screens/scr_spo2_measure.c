@@ -35,10 +35,12 @@ extern lv_style_t style_tiny;
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
+static int spo2_source = 0;
+
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     int parent_screen = arg1; // Parent screen passed from the previous screen
-    int spo2_source = arg2;   // SpO2 source passed from the previous screen
+    spo2_source = arg2;       // SpO2 source passed from the previous screen
 
     scr_spo2_scr_measure = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr_measure, &style_scr_black, 0);
@@ -83,13 +85,14 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 
     lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
+
     if (spo2_source == SPO2_SOURCE_PPG_FI)
     {
         lv_chart_set_point_count(chart_ppg, BPT_DISP_WINDOW_SIZE * 2);
     }
     else if (spo2_source == SPO2_SOURCE_PPG_WR)
     {
-        lv_chart_set_point_count(chart_ppg, SPO2_DISP_WINDOW_SIZE);
+        lv_chart_set_point_count(chart_ppg, SPO2_DISP_WINDOW_SIZE_WR);
     }
 
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
@@ -153,7 +156,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     else if (state == SPO2_MEAS_SUCCESS)
     {
         lv_label_set_text(label_spo2_status, "Complete");
-        hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
+        //hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
     }
     else if (state == SPO2_MEAS_TIMEOUT)
     {
@@ -194,7 +197,15 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
         lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
 
         hpi_ppg_disp_add_samples(1);
-        hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE);
+
+        if (spo2_source == SPO2_SOURCE_PPG_WR)
+        {
+            hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_WR);
+        }
+        else
+        {
+            hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_FI);
+        }
     }
 }
 

@@ -336,7 +336,7 @@ static void ppg_wrist_ctrl_thread(void)
 
             LOG_DBG("Starting One Shot SpO2");
 
-            hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+            hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, SPO2_SOURCE_PPG_WR, 0, 0);
 
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             k_msleep(600);
@@ -353,6 +353,8 @@ static void ppg_wrist_ctrl_thread(void)
             k_timer_stop(&tmr_ppg_wrist_sampling);
             spo2_measurement_in_progress = false;
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+
+            hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
 
             k_msleep(1000);
 

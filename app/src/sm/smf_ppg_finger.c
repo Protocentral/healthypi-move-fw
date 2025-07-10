@@ -642,7 +642,7 @@ static void st_ppg_fi_spo2_est_entry(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_SPO2_EST;
-    hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, 0, 0, 0, 0);
+    hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
     hw_bpt_start_est();                 // Start the BPT estimation for SpO2
     k_sem_give(&sem_start_fi_sampling); // Give the semaphore to start sampling
 }
