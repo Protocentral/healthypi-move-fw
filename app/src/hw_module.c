@@ -687,6 +687,8 @@ void hw_module_init(void)
         hw_add_boot_msg("Battery: ERROR", false, true, false, 0);
     }
 
+     fs_module_init();
+
     // Init IMU device
     ret = device_init(imu_dev);
     k_msleep(10);
@@ -783,7 +785,7 @@ void hw_module_init(void)
         }
 
         // Option to force update regardless of current version
-        bool force_update = true;
+        bool force_update = false;
        
         if (force_update || (ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
         {
@@ -819,7 +821,10 @@ void hw_module_init(void)
         snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
         hw_add_boot_msg(ver_msg, true, false, false, 0);
 
-        if ((ver_get.val1 < hpi_max32664d_req_ver.major) || (ver_get.val2 < hpi_max32664d_req_ver.minor))
+        // Option to force update regardless of current version
+        bool force_update = true;
+
+        if (force_update || (ver_get.val1 < hpi_max32664d_req_ver.major) || (ver_get.val2 < hpi_max32664d_req_ver.minor))
         {
             LOG_INF("MAX32664D App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
@@ -881,7 +886,7 @@ void hw_module_init(void)
 
     // npm_fuel_gauge_update(charger, vbus_connected);
 
-    fs_module_init();
+   
 
     ret = settings_subsys_init();
     if (ret)

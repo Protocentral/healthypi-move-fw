@@ -308,6 +308,15 @@ static void st_ppg_samp_motion_detect_entry(void *o)
 {
     LOG_DBG("PPG SM Motion Detect Entry");
     sig_wake_on_motion_count = 0;
+    
+    // Stop I2C polling timer to prevent continuous bus blocking
+    k_timer_stop(&tmr_ppg_wrist_sampling);
+    
+    // Stop current algorithm and AFE to release I2C bus
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+    k_msleep(100);
+    
+    // Enter wake on motion mode
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
     m_curr_state = PPG_SAMP_STATE_MOTION_DETECT;
 }
@@ -320,15 +329,40 @@ static void st_ppg_samp_motion_detect_run(void *o)
     {
         k_msleep(1000);
         LOG_DBG("Switching to Probing");
+        
+        // Restart I2C polling timer when transitioning to probing state
+        k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+        
         smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
     }
+}
+
+static void st_ppg_samp_off_skin_entry(void *o)
+{
+    LOG_DBG("PPG SM Off Skin Entry");
+    m_curr_state = PPG_SAMP_STATE_OFF_SKIN;
+    
+    // Stop I2C polling timer to prevent continuous bus blocking
+    k_timer_stop(&tmr_ppg_wrist_sampling);
+    
+    // Stop current algorithm and AFE to release I2C bus
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+    k_msleep(100);
+}
+
+static void st_ppg_samp_off_skin_run(void *o)
+{
+    LOG_DBG("PPG SM Off Skin Running");
+    
+    // Transition to motion detection state to wait for user movement
+    smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
 }
 
 static const struct smf_state ppg_samp_states[] = {
     [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(st_ppg_samp_active_entry, st_ppg_samp_active_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_MOTION_DETECT] = SMF_CREATE_STATE(st_ppg_samp_motion_detect_entry, st_ppg_samp_motion_detect_run, NULL, NULL, NULL),
-    //[PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
+    [PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
 };
 
 static void smf_ppg_wrist_thread(void)
