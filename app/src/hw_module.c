@@ -822,7 +822,7 @@ void hw_module_init(void)
         hw_add_boot_msg(ver_msg, true, false, false, 0);
 
         // Option to force update regardless of current version
-        bool force_update = true;
+        bool force_update = false;
 
         if (force_update || (ver_get.val1 < hpi_max32664d_req_ver.major) || (ver_get.val2 < hpi_max32664d_req_ver.minor))
         {
