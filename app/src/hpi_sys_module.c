@@ -9,6 +9,7 @@
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/mgmt/mcumgr/mgmt/mgmt.h>
 #include <zephyr/mgmt/mcumgr/mgmt/callbacks.h>
+#include <zephyr/mgmt/mcumgr/grp/fs_mgmt/fs_mgmt.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -59,6 +60,31 @@ enum mgmt_cb_return img_callback_func(uint32_t event, enum mgmt_cb_return prev_s
 {
     LOG_DBG("Image callback event: %d, prev_status: %d, rc: %d, group: %d, abort_more: %d",
             event, prev_status, *rc, *group, *abort_more);
+
+    /* Return OK status code to continue with acceptance to underlying handler */
+    return MGMT_CB_OK;
+}
+
+struct mgmt_callback fs_callback;
+
+enum mgmt_cb_return fs_callback_func(uint32_t event, enum mgmt_cb_return prev_status,
+                                     int32_t *rc, uint16_t *group, bool *abort_more,
+                                     void *data, size_t data_size)
+{
+    LOG_DBG("FS callback event: %d, prev_status: %d, rc: %d, group: %d, abort_more: %d",
+            event, prev_status, *rc, *group, *abort_more);
+
+    if (event == MGMT_EVT_OP_FS_MGMT_FILE_ACCESS) {
+        struct fs_mgmt_file_access *fs_data = (struct fs_mgmt_file_access *)data;
+        
+        LOG_DBG("FS file access: %s, access type: %d", fs_data->filename, fs_data->access);
+        
+        // Allow all file operations for now
+        // Could add restrictions here based on filename or access type
+        
+        /* Return OK status code to continue with acceptance to underlying handler */
+        return MGMT_CB_OK;
+    }
 
     /* Return OK status code to continue with acceptance to underlying handler */
     return MGMT_CB_OK;
@@ -522,6 +548,11 @@ void hpi_sys_thread(void)
     // img_callback.event_id = (MGMT_EVT_OP_IMG_MGMT_DFU_CHUNK);
     // mgmt_callback_register(&img_callback);
     LOG_DBG("DFU callback registered");
+
+    fs_callback.callback = fs_callback_func;
+    fs_callback.event_id = MGMT_EVT_OP_FS_MGMT_FILE_ACCESS;
+    mgmt_callback_register(&fs_callback);
+    LOG_DBG("FS callback registered");
 
     // Load last update time
     ret = hpi_sys_load_update_time();

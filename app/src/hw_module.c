@@ -782,7 +782,10 @@ void hw_module_init(void)
             hw_add_boot_msg("\t Acc", true, true, false, 0);
         }
 
-        if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
+        // Option to force update regardless of current version
+        bool force_update = true;
+       
+        if (force_update || (ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
         {
             LOG_INF("MAX32664C App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);

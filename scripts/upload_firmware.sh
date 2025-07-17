@@ -20,7 +20,7 @@ upload_file() {
     
     # Use mcumgr to upload the file
     # Adjust the connection parameters as needed for your setup
-    mcumgr --conntype serial --connstring "dev=$DEVICE_PORT,baud=115200" fs upload "$local_file" "$remote_path"
+    mcumgr-client --conntype serial --connstring "dev=$DEVICE_PORT,baud=115200" fs upload "$local_file" "$remote_path"
     
     if [ $? -eq 0 ]; then
         echo "Successfully uploaded $local_file"
@@ -34,10 +34,10 @@ upload_file() {
 echo "MAX32664 Firmware Upload Script"
 echo "================================"
 
-# Check if mcumgr is available
-if ! command -v mcumgr &> /dev/null; then
-    echo "Error: mcumgr is not installed or not in PATH"
-    echo "Please install mcumgr first: https://github.com/apache/mynewt-mcumgr-cli"
+# Check if mcumgr-client is available
+if ! command -v mcumgr-client &> /dev/null; then
+    echo "Error: mcumgr-client is not installed or not in PATH"
+    echo "Please install mcumgr-client first"
     exit 1
 fi
 
@@ -50,7 +50,7 @@ fi
 
 # Create firmware directory on device
 echo "Creating firmware directory on device..."
-mcumgr --conntype serial --connstring "dev=$DEVICE_PORT,baud=115200" fs mkdir /lfs/firmware
+mcumgr-client --conntype serial --connstring "dev=$DEVICE_PORT,baud=115200" fs mkdir /lfs/firmware
 
 # Upload firmware files
 if [ -f "$FIRMWARE_DIR/max32664c_30_13_31.bin" ]; then
