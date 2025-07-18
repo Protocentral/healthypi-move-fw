@@ -11,6 +11,7 @@
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "trends.h"
+#include "hpi_user_settings_api.h"
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hr_scr2, LOG_LEVEL_DBG);
 
