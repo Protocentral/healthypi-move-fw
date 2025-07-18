@@ -21,7 +21,7 @@ static lv_obj_t *btn_hand_worn;
 static lv_obj_t *btn_time_format;
 static lv_obj_t *btn_temp_unit;
 static lv_obj_t *sw_auto_sleep;
-static lv_obj_t *slider_sleep_timeout;
+static lv_obj_t *btn_sleep_timeout;
 
 // External references to user settings (from smf_display.c)
 extern uint16_t m_user_height;
@@ -116,14 +116,14 @@ static void sw_auto_sleep_event_cb(lv_event_t *e)
     }
 }
 
-static void slider_sleep_timeout_event_cb(lv_event_t *e)
+static void btn_sleep_timeout_event_cb(lv_event_t *e)
 {
-    lv_obj_t *slider = lv_event_get_target(e);
-    current_ui_settings.sleep_timeout = lv_slider_get_value(slider);
-    LOG_DBG("Sleep timeout set to: %d seconds", current_ui_settings.sleep_timeout);
-    
-    // Auto-save settings
-    hpi_auto_save_settings();
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_CLICKED) {
+        LOG_DBG("Sleep timeout button clicked");
+        // Navigate to sleep timeout selection screen
+        hpi_load_scr_spl(SCR_SPL_TEMP_UNIT_SELECT + 1, SCROLL_DOWN, SCR_SPL_DEVICE_USER_SETTINGS, 0, 0, 0);
+    }
 }
 
 // Function to update height and weight button labels
@@ -165,6 +165,13 @@ void hpi_update_setting_labels(void)
         lv_obj_t *lbl_temp_value = lv_obj_get_child(btn_temp_unit, 0);
         if (lbl_temp_value) {
             lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "°F" : "°C");
+        }
+    }
+    
+    if (btn_sleep_timeout) {
+        lv_obj_t *lbl_sleep_timeout_value = lv_obj_get_child(btn_sleep_timeout, 0);
+        if (lbl_sleep_timeout_value) {
+            lv_label_set_text_fmt(lbl_sleep_timeout_value, "%d s", current_ui_settings.sleep_timeout);
         }
     }
 }
@@ -222,7 +229,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_set_pos(lbl_title, 130, 10);
 
     int16_t y_pos = 45;
-    const int16_t item_height = 50;
+    const int16_t item_height = 80;
     const int16_t label_x = 20;
     const int16_t button_x = 180;
 
@@ -230,11 +237,11 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_t *lbl_height = lv_label_create(cont_main);
     lv_label_set_text(lbl_height, "Height:");
     lv_obj_add_style(lbl_height, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_height, label_x, y_pos + 8);
+    lv_obj_set_pos(lbl_height, label_x, y_pos + 18);
     
     btn_user_height = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_user_height, 120, 32);
-    lv_obj_set_pos(btn_user_height, button_x, y_pos);
+    lv_obj_set_size(btn_user_height, 140, 55);
+    lv_obj_set_pos(btn_user_height, button_x - 10, y_pos);
     lv_obj_add_event_cb(btn_user_height, btn_height_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_height_value = lv_label_create(btn_user_height);
@@ -247,11 +254,11 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_t *lbl_weight = lv_label_create(cont_main);
     lv_label_set_text(lbl_weight, "Weight:");
     lv_obj_add_style(lbl_weight, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_weight, label_x, y_pos + 8);
+    lv_obj_set_pos(lbl_weight, label_x, y_pos + 18);
     
     btn_user_weight = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_user_weight, 120, 32);
-    lv_obj_set_pos(btn_user_weight, button_x, y_pos);
+    lv_obj_set_size(btn_user_weight, 140, 55);
+    lv_obj_set_pos(btn_user_weight, button_x - 10, y_pos);
     lv_obj_add_event_cb(btn_user_weight, btn_weight_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_weight_value = lv_label_create(btn_user_weight);
@@ -264,11 +271,11 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_t *lbl_hand_worn = lv_label_create(cont_main);
     lv_label_set_text(lbl_hand_worn, "Worn on:");
     lv_obj_add_style(lbl_hand_worn, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_hand_worn, label_x, y_pos + 8);
+    lv_obj_set_pos(lbl_hand_worn, label_x, y_pos + 18);
     
     btn_hand_worn = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_hand_worn, 120, 32);
-    lv_obj_set_pos(btn_hand_worn, button_x, y_pos);
+    lv_obj_set_size(btn_hand_worn, 140, 55);
+    lv_obj_set_pos(btn_hand_worn, button_x - 10, y_pos);
     lv_obj_add_event_cb(btn_hand_worn, btn_hand_worn_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_hand_value = lv_label_create(btn_hand_worn);
@@ -281,11 +288,11 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_t *lbl_time_format = lv_label_create(cont_main);
     lv_label_set_text(lbl_time_format, "Time:");
     lv_obj_add_style(lbl_time_format, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_time_format, label_x, y_pos + 8);
+    lv_obj_set_pos(lbl_time_format, label_x, y_pos + 18);
     
     btn_time_format = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_time_format, 100, 32);
-    lv_obj_set_pos(btn_time_format, button_x + 10, y_pos);
+    lv_obj_set_size(btn_time_format, 120, 55);
+    lv_obj_set_pos(btn_time_format, button_x, y_pos);
     lv_obj_add_event_cb(btn_time_format, btn_time_format_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_time_value = lv_label_create(btn_time_format);
@@ -298,11 +305,11 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_t *lbl_temp_unit = lv_label_create(cont_main);
     lv_label_set_text(lbl_temp_unit, "Temp:");
     lv_obj_add_style(lbl_temp_unit, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_temp_unit, label_x, y_pos + 8);
+    lv_obj_set_pos(lbl_temp_unit, label_x, y_pos + 18);
     
     btn_temp_unit = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_temp_unit, 100, 32);
-    lv_obj_set_pos(btn_temp_unit, button_x + 10, y_pos);
+    lv_obj_set_size(btn_temp_unit, 120, 55);
+    lv_obj_set_pos(btn_temp_unit, button_x, y_pos);
     lv_obj_add_event_cb(btn_temp_unit, btn_temp_unit_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_temp_value = lv_label_create(btn_temp_unit);
@@ -315,10 +322,11 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_t *lbl_auto_sleep = lv_label_create(cont_main);
     lv_label_set_text(lbl_auto_sleep, "Auto Sleep:");
     lv_obj_add_style(lbl_auto_sleep, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_auto_sleep, label_x, y_pos + 8);
+    lv_obj_set_pos(lbl_auto_sleep, label_x, y_pos + 18);
     
     sw_auto_sleep = lv_switch_create(cont_main);
-    lv_obj_set_pos(sw_auto_sleep, button_x + 30, y_pos + 4);
+    lv_obj_set_size(sw_auto_sleep, 80, 45);
+    lv_obj_set_pos(sw_auto_sleep, button_x + 20, y_pos + 8);
     if (current_ui_settings.auto_sleep_enabled) {
         lv_obj_add_state(sw_auto_sleep, LV_STATE_CHECKED);
     }
@@ -326,18 +334,20 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
 
     y_pos += item_height;
 
-    // Sleep timeout slider - optimized layout for round display
+    // Sleep timeout selection - optimized layout for round display
     lv_obj_t *lbl_sleep_timeout = lv_label_create(cont_main);
-    lv_label_set_text(lbl_sleep_timeout, "Sleep Timeout (s):");
+    lv_label_set_text(lbl_sleep_timeout, "Sleep Timeout:");
     lv_obj_add_style(lbl_sleep_timeout, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_sleep_timeout, label_x, y_pos);
-
-    slider_sleep_timeout = lv_slider_create(cont_main);
-    lv_obj_set_size(slider_sleep_timeout, 280, 20);
-    lv_obj_set_pos(slider_sleep_timeout, label_x, y_pos + 34);
-    lv_slider_set_range(slider_sleep_timeout, 10, 120);
-    lv_slider_set_value(slider_sleep_timeout, current_ui_settings.sleep_timeout, LV_ANIM_OFF);
-    lv_obj_add_event_cb(slider_sleep_timeout, slider_sleep_timeout_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_set_pos(lbl_sleep_timeout, label_x, y_pos + 18);
+    
+    btn_sleep_timeout = lv_btn_create(cont_main);
+    lv_obj_set_size(btn_sleep_timeout, 140, 55);
+    lv_obj_set_pos(btn_sleep_timeout, button_x - 10, y_pos);
+    lv_obj_add_event_cb(btn_sleep_timeout, btn_sleep_timeout_event_cb, LV_EVENT_ALL, NULL);
+    
+    lv_obj_t *lbl_sleep_timeout_value = lv_label_create(btn_sleep_timeout);
+    lv_label_set_text_fmt(lbl_sleep_timeout_value, "%d s", current_ui_settings.sleep_timeout);
+    lv_obj_center(lbl_sleep_timeout_value);
 
     hpi_disp_set_curr_screen(SCR_SPL_DEVICE_USER_SETTINGS);
     hpi_show_screen(scr_device_user_settings, m_scroll_dir);
@@ -696,6 +706,82 @@ void gesture_down_scr_temp_unit_select(void)
 }
 
 void gesture_right_scr_temp_unit_select(void)
+{
+    // Return to device settings screen
+    hpi_load_scr_spl(SCR_SPL_DEVICE_USER_SETTINGS, SCROLL_UP, 0, 0, 0, 0);
+}
+
+// Sleep timeout selection screen with roller widget
+static lv_obj_t *scr_sleep_timeout_select;
+static lv_obj_t *roller_sleep_timeout;
+
+// Sleep timeout options array
+static const int sleep_timeout_options[] = {10, 15, 30, 45, 60, 90, 120};
+static const int sleep_timeout_count = sizeof(sleep_timeout_options) / sizeof(sleep_timeout_options[0]);
+
+static void roller_sleep_timeout_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        // Get selected sleep timeout option and update immediately
+        uint16_t selected = lv_roller_get_selected(roller_sleep_timeout);
+        if (selected < sleep_timeout_count) {
+            current_ui_settings.sleep_timeout = sleep_timeout_options[selected];
+            LOG_DBG("Sleep timeout changed to: %d seconds", current_ui_settings.sleep_timeout);
+            
+            // Auto-save settings
+            hpi_auto_save_settings();
+        }
+    }
+}
+
+void draw_scr_sleep_timeout_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+{
+    scr_sleep_timeout_select = lv_obj_create(NULL);
+    draw_scr_common(scr_sleep_timeout_select);
+
+    // Create main container
+    lv_obj_t *cont_main = lv_obj_create(scr_sleep_timeout_select);
+    lv_obj_set_size(cont_main, 330, 330);
+    lv_obj_align_to(cont_main, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(cont_main, 10, 0);
+    lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
+
+    // Title
+    lv_obj_t *lbl_title = lv_label_create(cont_main);
+    lv_label_set_text(lbl_title, "Select Sleep Timeout");
+    lv_obj_add_style(lbl_title, &style_lbl_white_14, 0);
+
+    // Sleep timeout roller
+    roller_sleep_timeout = lv_roller_create(cont_main);
+    lv_obj_set_size(roller_sleep_timeout, 270, 210);
+    lv_roller_set_options(roller_sleep_timeout, "10 seconds\n15 seconds\n30 seconds\n45 seconds\n60 seconds\n90 seconds\n120 seconds", LV_ROLLER_MODE_NORMAL);
+    lv_obj_add_event_cb(roller_sleep_timeout, roller_sleep_timeout_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    
+    // Find and set current value
+    int current_index = 0;
+    for (int i = 0; i < sleep_timeout_count; i++) {
+        if (sleep_timeout_options[i] == current_ui_settings.sleep_timeout) {
+            current_index = i;
+            break;
+        }
+    }
+    lv_roller_set_selected(roller_sleep_timeout, current_index, LV_ANIM_OFF);
+
+    hpi_disp_set_curr_screen(SCR_SPL_TEMP_UNIT_SELECT + 1);
+    hpi_show_screen(scr_sleep_timeout_select, m_scroll_dir);
+}
+
+void gesture_down_scr_sleep_timeout_select(void)
+{
+    // Return to device settings screen
+    hpi_load_scr_spl(SCR_SPL_DEVICE_USER_SETTINGS, SCROLL_UP, 0, 0, 0, 0);
+}
+
+void gesture_right_scr_sleep_timeout_select(void)
 {
     // Return to device settings screen
     hpi_load_scr_spl(SCR_SPL_DEVICE_USER_SETTINGS, SCROLL_UP, 0, 0, 0, 0);
