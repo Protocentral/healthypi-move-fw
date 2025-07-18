@@ -329,9 +329,9 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     }
 }
 
-void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir)
+void hpi_move_load_scr_pulldown(enum scroll_dir m_scroll_dir)
 {
-    draw_scr_settings(m_scroll_dir);
+    draw_scr_pulldown(m_scroll_dir, 0, 0, 0, 0);
 }
 
 /*
@@ -345,7 +345,7 @@ void disp_spl_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printk("Down at %d\n", curr_screen);
 
-        if (curr_screen == SCR_SPL_SETTINGS)
+        if (curr_screen == SCR_SPL_PULLDOWN)
         {
             hpi_load_screen(SCR_HOME, SCROLL_DOWN);
         }

@@ -12,10 +12,35 @@
 #include "ui/move_ui.h"
 #include "max32664_updater.h"
 #include "hpi_sys.h"
+#include "hpi_user_settings_api.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
-#define HPI_DEFAULT_START_SCREEN SCR_SPO2
+#define HPI_DEFAULT_START_SCREEN SCR_HOME
+
+/**
+ * @brief Get the current sleep timeout in milliseconds based on user settings
+ * @return Sleep timeout in milliseconds, or default if auto sleep is disabled
+ */
+static uint32_t get_sleep_timeout_ms(void)
+{
+    if (!hpi_user_settings_get_auto_sleep_enabled()) {
+        return UINT32_MAX; // Never sleep if auto sleep is disabled
+    }
+    
+    uint8_t sleep_timeout_seconds = hpi_user_settings_get_sleep_timeout();
+    uint32_t timeout_ms = sleep_timeout_seconds * 1000;
+    
+    // Log the current sleep timeout occasionally for debugging
+    static uint32_t last_log_time = 0;
+    uint32_t now = k_uptime_get_32();
+    if (now - last_log_time > 60000) { // Log every minute
+        LOG_DBG("Sleep timeout: %d seconds (%d ms)", sleep_timeout_seconds, timeout_ms);
+        last_log_time = now;
+    }
+    
+    return timeout_ms;
+}
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -143,7 +168,13 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_BPT_CAL_REQUIRED] = {draw_scr_bpt_cal_required, gesture_down_scr_bpt_cal_required},
 
     [SCR_SPL_BLE] = {draw_scr_ble, NULL},
-    [SCR_SPL_SETTINGS] = {draw_scr_settings, gesture_down_scr_settings},
+    [SCR_SPL_PULLDOWN] = {draw_scr_pulldown, gesture_down_scr_pulldown},
+    [SCR_SPL_DEVICE_USER_SETTINGS] = {draw_scr_device_user_settings, gesture_down_scr_device_user_settings},
+    [SCR_SPL_HEIGHT_SELECT] = {draw_scr_height_select, gesture_down_scr_height_select},
+    [SCR_SPL_WEIGHT_SELECT] = {draw_scr_weight_select, gesture_down_scr_weight_select},
+    [SCR_SPL_HAND_WORN_SELECT] = {draw_scr_hand_worn_select, gesture_down_scr_hand_worn_select},
+    [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
+    [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -362,8 +393,8 @@ void disp_screen_event(lv_event_t *e)
         if (screen == SCR_HOME)
         {
             // If we are on the home screen, load the settings screen
-            // hpi_load_screen(SCR_SPL_SETTINGS, SCROLL_DOWN);
-            hpi_load_scr_spl(SCR_SPL_SETTINGS, SCROLL_DOWN, SCR_HOME, 0, 0, 0);
+            // hpi_load_screen(SCR_SPL_PULLDOWN, SCROLL_DOWN);
+            hpi_load_scr_spl(SCR_SPL_PULLDOWN, SCROLL_DOWN, SCR_HOME, 0, 0, 0);
             return;
         }
 
@@ -381,9 +412,13 @@ void disp_screen_event(lv_event_t *e)
         lv_indev_wait_release(lv_indev_get_act());
         printk("Up at %d\n", curr_screen);
 
-        if (curr_screen == SCR_SPL_SETTINGS)
+        if (curr_screen == SCR_SPL_PULLDOWN)
         {
             hpi_load_screen(SCR_HOME, SCROLL_UP);
+        }
+        else if (curr_screen == SCR_SPL_DEVICE_USER_SETTINGS)
+        {
+            hpi_load_scr_spl(SCR_SPL_PULLDOWN, SCROLL_UP, 0, 0, 0, 0);
         }
         /*else if (hpi_disp_get_curr_screen() == SCR_HR)
         {
@@ -425,8 +460,8 @@ extern struct k_sem sem_bpt_sensor_found;
 
 // User Profile settings
 
-static uint16_t m_user_height = 170; // Example height in m, adjust as needed
-static uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
+uint16_t m_user_height = 170; // Example height in m, adjust as needed
+uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
 static double m_user_met = 3.5;      // Example MET value based speed = 1.34 m/s , adjust as needed
 
 static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
@@ -740,7 +775,7 @@ static void hpi_disp_update_screens(void)
             last_today_trend_refresh = k_uptime_get_32();
         }
         break;
-    case SCR_SPL_SETTINGS:
+    case SCR_SPL_PULLDOWN:
         if (k_uptime_get_32() - last_settings_refresh > HPI_DISP_SETTINGS_REFRESH_INT)
         {
             // hpi_disp_settings_update_time_date(m_disp_sys_time);
@@ -804,7 +839,7 @@ static void st_display_active_run(void *o)
         {
             hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
         }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_SETTINGS)
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_PULLDOWN)
         {
             hpi_disp_settings_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
         }
@@ -858,8 +893,14 @@ static void st_display_active_run(void *o)
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
-    // Prevent sleep during low battery conditions
-    if (inactivity_time > DISP_SLEEP_TIME_MS && !hw_is_low_battery())
+    
+    // Get current sleep timeout based on user settings
+    uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
+    
+    // Prevent sleep during low battery conditions or if auto sleep is disabled
+    if (sleep_timeout_ms != UINT32_MAX && 
+        inactivity_time > sleep_timeout_ms && 
+        !hw_is_low_battery())
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
     }
@@ -885,7 +926,10 @@ static void st_display_sleep_run(void *o)
 {
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
-    if (inactivity_time < DISP_SLEEP_TIME_MS)
+    
+    uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
+    
+    if (sleep_timeout_ms == UINT32_MAX || inactivity_time < sleep_timeout_ms)
     {
         // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);

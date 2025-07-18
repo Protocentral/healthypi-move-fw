@@ -73,7 +73,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_LIST_START = 50,
 
     SCR_SPL_BOOT,
-    SCR_SPL_SETTINGS,
+    SCR_SPL_PULLDOWN,
     SCR_SPL_RAW_PPG,
     SCR_SPL_ECG_SCR2,
     SCR_SPL_ECG_COMPLETE,
@@ -99,6 +99,12 @@ enum hpi_disp_spl_screens
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
+    SCR_SPL_DEVICE_USER_SETTINGS,
+    SCR_SPL_HEIGHT_SELECT,
+    SCR_SPL_WEIGHT_SELECT,
+    SCR_SPL_HAND_WORN_SELECT,
+    SCR_SPL_TIME_FORMAT_SELECT,
+    SCR_SPL_TEMP_UNIT_SELECT,
 
     SCR_SPL_LIST_END,
 
@@ -223,7 +229,7 @@ void gesture_down_scr_bpt_cal_progress(void);
 void gesture_down_scr_bpt_cal_failed(void);
 void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
-void gesture_down_scr_settings(void);
+void gesture_down_scr_pulldown(void);
 void gesture_down_scr_bpt_cal_required(void);
 
 // PPG screen functions
@@ -258,14 +264,28 @@ void hpi_disp_hrv_scatter_update_rtor(int rtor);
 void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
 
 // Settings screen functions
-void draw_scr_settings(enum scroll_dir m_scroll_dir);
+void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_device_user_settings(void);
+void draw_scr_height_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_height_select(void);
+void draw_scr_weight_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_weight_select(void);
+void draw_scr_hand_worn_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_hand_worn_select(void);
+void draw_scr_time_format_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_time_format_select(void);
+void draw_scr_temp_unit_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_temp_unit_select(void);
+void hpi_update_height_weight_labels(void);
+void hpi_update_setting_labels(void);
 
 // Helper objects
 void draw_scr_common(lv_obj_t *parent);
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir);
 void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
-void hpi_move_load_scr_settings(enum scroll_dir m_scroll_dir);
+void hpi_move_load_scr_pulldown(enum scroll_dir m_scroll_dir);
 
 void hpi_disp_set_curr_screen(int screen);
 int hpi_disp_get_curr_screen(void);
@@ -306,5 +326,8 @@ void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32
 void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
-
 void disp_screen_event(lv_event_t *e);
+
+// User settings variables
+extern uint16_t m_user_height;
+extern uint16_t m_user_weight;
