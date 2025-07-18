@@ -2,7 +2,7 @@
 #define HPI_SETTINGS_PERSISTENCE_H
 
 #include <zephyr/kernel.h>
-#include <zephyr/settings/settings.h>
+#include <zephyr/fs/fs.h>
 #include <stdint.h>
 #include <stdbool.h>
 

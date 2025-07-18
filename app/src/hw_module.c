@@ -49,6 +49,7 @@
 #include "hpi_common_types.h"
 #include "ble_module.h"
 #include "hpi_sys.h"
+#include "hpi_user_settings_api.h"
 
 #include <max32664_updater.h>
 
@@ -879,6 +880,16 @@ void hw_module_init(void)
     // npm_fuel_gauge_update(charger, vbus_connected);
 
     fs_module_init();
+
+    // Initialize user settings (load from file)
+    ret = hpi_user_settings_init();
+    if (ret < 0) {
+        LOG_ERR("Failed to initialize user settings: %d", ret);
+        hw_add_boot_msg("User Settings", false, true, false, 0);
+    } else {
+        LOG_INF("User settings initialized successfully");
+        hw_add_boot_msg("User Settings", true, true, false, 0);
+    }
 
     ret = settings_subsys_init();
     if (ret)
