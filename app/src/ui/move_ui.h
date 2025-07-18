@@ -133,21 +133,13 @@ LV_IMG_DECLARE(img_spo2_hand);
 
 LV_IMG_DECLARE(img_complete_85);
 LV_IMG_DECLARE(img_failed_80);
-
 LV_IMG_DECLARE(img_bpt_finger_90);
-
 LV_IMG_DECLARE(img_bpt_finger_45);
 LV_IMG_DECLARE(img_wrist_45);
-
-//LV_IMG_DECLARE(pc_move_bg_200);
 LV_IMG_DECLARE(bck_heart_200);
 
-// LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(oxanium_90);
-//LV_FONT_DECLARE(fredoka_28);
-LV_FONT_DECLARE(ui_font_Number_big);
-LV_FONT_DECLARE(ui_font_Number_extra);
-//LV_FONT_DECLARE(orbitron_90px);
+LV_FONT_DECLARE(ui_font_number_big);
 
 /******** UI Function Prototypes ********/
 void display_init_styles(void);
