@@ -12,10 +12,35 @@
 #include "ui/move_ui.h"
 #include "max32664_updater.h"
 #include "hpi_sys.h"
+#include "hpi_user_settings_api.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 #define HPI_DEFAULT_START_SCREEN SCR_HOME
+
+/**
+ * @brief Get the current sleep timeout in milliseconds based on user settings
+ * @return Sleep timeout in milliseconds, or default if auto sleep is disabled
+ */
+static uint32_t get_sleep_timeout_ms(void)
+{
+    if (!hpi_user_settings_get_auto_sleep_enabled()) {
+        return UINT32_MAX; // Never sleep if auto sleep is disabled
+    }
+    
+    uint8_t sleep_timeout_seconds = hpi_user_settings_get_sleep_timeout();
+    uint32_t timeout_ms = sleep_timeout_seconds * 1000;
+    
+    // Log the current sleep timeout occasionally for debugging
+    static uint32_t last_log_time = 0;
+    uint32_t now = k_uptime_get_32();
+    if (now - last_log_time > 60000) { // Log every minute
+        LOG_DBG("Sleep timeout: %d seconds (%d ms)", sleep_timeout_seconds, timeout_ms);
+        last_log_time = now;
+    }
+    
+    return timeout_ms;
+}
 
 K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
@@ -868,8 +893,14 @@ static void st_display_active_run(void *o)
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
-    // Prevent sleep during low battery conditions
-    if (inactivity_time > DISP_SLEEP_TIME_MS && !hw_is_low_battery())
+    
+    // Get current sleep timeout based on user settings
+    uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
+    
+    // Prevent sleep during low battery conditions or if auto sleep is disabled
+    if (sleep_timeout_ms != UINT32_MAX && 
+        inactivity_time > sleep_timeout_ms && 
+        !hw_is_low_battery())
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
     }
@@ -895,7 +926,10 @@ static void st_display_sleep_run(void *o)
 {
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
-    if (inactivity_time < DISP_SLEEP_TIME_MS)
+    
+    uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
+    
+    if (sleep_timeout_ms == UINT32_MAX || inactivity_time < sleep_timeout_ms)
     {
         // hpi_display_sleep_on();
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);

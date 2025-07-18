@@ -10,6 +10,7 @@ LOG_MODULE_REGISTER(scr_device_user_settings, LOG_LEVEL_INF);
 #include "ui/move_ui.h"
 #include "hw_module.h"
 #include "hpi_settings_persistence.h"
+#include "sm/smf_ecg_bioz.h"
 
 lv_obj_t *scr_device_user_settings;
 
@@ -593,6 +594,9 @@ static void roller_hand_worn_event_cb(lv_event_t *e)
         
         // Auto-save settings
         hpi_auto_save_settings();
+        
+        // Reconfigure ECG leads immediately if ECG is active
+        reconfigure_ecg_leads_for_hand_worn();
     }
 }
 

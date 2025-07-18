@@ -15,6 +15,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
+#include "hpi_user_settings_api.h"
 
 LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
@@ -171,6 +172,44 @@ extern struct k_sem sem_ecg_bioz_smf_start;
 extern struct k_sem sem_ecg_bioz_sm_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
+
+/**
+ * @brief Configure ECG leads based on hand worn setting
+ * @return 0 on success, negative error code on failure
+ */
+static int hw_max30001_configure_leads(void)
+{
+    struct sensor_value lead_config;
+    uint8_t hand_worn = hpi_user_settings_get_hand_worn();
+    
+    // Set lead configuration: 0 = Left hand, 1 = Right hand
+    lead_config.val1 = hand_worn;
+    lead_config.val2 = 0;
+    
+    int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_LEAD_CONFIG, &lead_config);
+    if (ret != 0) {
+        LOG_ERR("Failed to configure ECG leads for %s hand: %d", 
+                hand_worn ? "right" : "left", ret);
+        return ret;
+    }
+    
+    LOG_INF("ECG leads configured for %s hand", hand_worn ? "right" : "left");
+    return 0;
+}
+
+/**
+ * @brief Reconfigure ECG leads when hand worn setting changes
+ * This function can be called from UI when the hand worn setting is changed
+ */
+void reconfigure_ecg_leads_for_hand_worn(void)
+{
+    // Only reconfigure if ECG is currently active
+    if (ecg_active && max30001_dev != NULL) {
+        hw_max30001_configure_leads();
+    }
+}
+
+
 
 // Thread-safe accessors for shared variables
 static bool get_ecg_active(void)
@@ -415,6 +454,12 @@ static int hw_max30001_ecg_enable(void)
     if (ret == 0) {
         set_ecg_active(true);
         LOG_DBG("ECG enabled successfully");
+        
+        // Configure leads based on hand worn setting
+        int lead_ret = hw_max30001_configure_leads();
+        if (lead_ret != 0) {
+            LOG_WRN("Failed to configure ECG leads, using default configuration");
+        }
     } else {
         LOG_ERR("Failed to enable ECG: %d", ret);
     }
