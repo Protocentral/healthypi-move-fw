@@ -50,24 +50,6 @@ uint8_t hpi_user_settings_get_sleep_timeout(void)
     return settings ? settings->sleep_timeout : DEFAULT_SLEEP_TIMEOUT;
 }
 
-uint8_t hpi_user_settings_get_backlight_timeout(void)
-{
-    const struct hpi_user_settings *settings = hpi_settings_get_current();
-    return settings ? settings->backlight_timeout : DEFAULT_BACKLIGHT_TIMEOUT;
-}
-
-bool hpi_user_settings_get_raise_to_wake(void)
-{
-    const struct hpi_user_settings *settings = hpi_settings_get_current();
-    return settings ? settings->raise_to_wake : DEFAULT_RAISE_TO_WAKE;
-}
-
-bool hpi_user_settings_get_button_sounds(void)
-{
-    const struct hpi_user_settings *settings = hpi_settings_get_current();
-    return settings ? settings->button_sounds : DEFAULT_BUTTON_SOUNDS;
-}
-
 int hpi_user_settings_set_height(uint16_t height)
 {
     if (height < 100 || height > 250) {

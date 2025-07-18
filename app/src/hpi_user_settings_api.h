@@ -58,24 +58,6 @@ bool hpi_user_settings_get_auto_sleep_enabled(void);
 uint8_t hpi_user_settings_get_sleep_timeout(void);
 
 /**
- * @brief Get backlight timeout setting
- * @return Backlight timeout in seconds
- */
-uint8_t hpi_user_settings_get_backlight_timeout(void);
-
-/**
- * @brief Get raise to wake setting
- * @return true if raise to wake is enabled
- */
-bool hpi_user_settings_get_raise_to_wake(void);
-
-/**
- * @brief Get button sounds setting
- * @return true if button sounds are enabled
- */
-bool hpi_user_settings_get_button_sounds(void);
-
-/**
  * @brief Set user's height and save
  * @param height Height in cm (100-250)
  * @return 0 on success, negative error code on failure
