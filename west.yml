@@ -1,6 +1,6 @@
 manifest:
   self:
-    path: app
+    west-commands: scripts/west-commands.yml
     
   remotes:
     - name: nrf
@@ -14,7 +14,23 @@ manifest:
       path: nrf
       revision: v2.9-branch
       import:
-        path-prefix: external
+         name-blocklist:
+          - ci-tools
+          - hal_altera
+          - hal_cypress
+          - hal_infineon
+          - hal_microchip
+          - hal_nxp
+          - hal_openisa
+          - hal_silabs
+          - hal_xtensa
+          - hal_ti
+          - loramac-node
+          - net-tools
+          - edtt
+          - trusted-firmware-m
+          - sof
+      clone-depth: 1
 
 #    - name: max30001
 #      repo-path: protocentral_max30001_zephyr_driver
