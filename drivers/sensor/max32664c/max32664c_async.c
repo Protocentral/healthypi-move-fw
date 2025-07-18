@@ -1,6 +1,7 @@
 #include <zephyr/drivers/sensor.h>
-
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
+
 LOG_MODULE_REGISTER(MAX32664C_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "max32664c.h"
@@ -311,70 +312,52 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
 int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
-    uint32_t min_buf_len = sizeof(struct max32664c_encoded_data);
-    int rc;
-    uint8_t *buf;
-    uint32_t buf_len;
-
-    struct max32664c_encoded_data *m_edata;
     struct max32664c_data *data = dev->data;
-
-    /* Get the buffer for the frame, it may be allocated dynamically by the rtio context */
-    rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_len, min_buf_len, &buf, &buf_len);
-    if (rc != 0)
-    {
-        LOG_ERR("Failed to get a read buffer of size %u bytes", min_buf_len);
+    const struct rtio_sqe *sqe = &iodev_sqe->sqe;
+    int rc;
+    
+    // Check if operation is already in progress
+    if (!atomic_cas(&data->async.in_progress, 0, 1)) {
+        LOG_DBG("Operation already in progress");
+        rtio_iodev_sqe_err(iodev_sqe, -EBUSY);
+        return -EBUSY;
+    }
+    
+    // Validate operation
+    if (sqe->op != RTIO_OP_RX) {
+        LOG_ERR("Unsupported operation: %d", sqe->op);
+        atomic_clear(&data->async.in_progress);
+        rtio_iodev_sqe_err(iodev_sqe, -ENOTSUP);
+        return -ENOTSUP;
+    }
+    
+    // Check if sensor is in idle mode
+    if (data->op_mode == MAX32664C_OP_MODE_IDLE) {
+        LOG_ERR("Sensor is in idle mode");
+        atomic_clear(&data->async.in_progress);
+        rtio_iodev_sqe_err(iodev_sqe, -ENODEV);
+        return -ENODEV;
+    }
+    
+    // Store the pending SQE
+    data->async.pending_sqe = iodev_sqe;
+    
+    // Enable interrupts if not already enabled
+    rc = max32664c_stream_enable(dev);
+    if (rc != 0) {
+        LOG_ERR("Failed to enable stream: %d", rc);
+        data->async.pending_sqe = NULL;
+        atomic_clear(&data->async.in_progress);
         rtio_iodev_sqe_err(iodev_sqe, rc);
         return rc;
     }
-
-    if (data->op_mode == MAX32664C_OP_MODE_ALGO_AGC || data->op_mode == MAX32664C_OP_MODE_ALGO_AEC ||
-        data->op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
-    {
-        m_edata = (struct max32664c_encoded_data *)buf;
-        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples,
-                                          &m_edata->num_samples, &m_edata->spo2, &m_edata->spo2_confidence, &m_edata->spo2_valid_percent_complete,
-                                          &m_edata->spo2_low_quality, &m_edata->spo2_excessive_motion, &m_edata->spo2_low_pi, &m_edata->spo2_state,
-                                          &m_edata->hr, &m_edata->hr_confidence, &m_edata->rtor,&m_edata->rtor_confidence, &m_edata->scd_state, 
-                                          &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode);
+    
+    // Check if data is already available
+    uint8_t hub_status = max32664c_read_hub_status(dev);
+    if (hub_status & MAX32664C_HUB_STAT_DRDY_MASK) {
+        LOG_DBG("Data ready, triggering immediate processing");
+        k_work_schedule(&data->async.work, K_NO_WAIT);
     }
-    else if (data->op_mode == MAX32664C_OP_MODE_RAW)
-    {
-        m_edata = (struct max32664c_encoded_data *)buf;
-        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch_raw(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples, &m_edata->num_samples, &m_edata->chip_op_mode);
-    }
-    else if (data->op_mode == MAX32664C_OP_MODE_SCD)
-    {
-        m_edata = (struct max32664c_encoded_data *)buf;
-        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch_scd(dev, &m_edata->chip_op_mode, &m_edata->scd_state);
-    }
-    else if (data->op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
-    {
-        m_edata = (struct max32664c_encoded_data *)buf;
-        m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode);
-    }
-    else if (data->op_mode == MAX32664C_OP_MODE_IDLE)
-    {
-        // Idle mode, do nothing, take a break
-    }
-    else
-    {
-        LOG_ERR("Invalid operation mode %d", data->op_mode);
-        // return 4;
-    }
-
-    if (rc != 0)
-    {
-        // LOG_ERR("Failed to fetch samples");
-        rtio_iodev_sqe_err(iodev_sqe, rc);
-        return rc;
-    }
-
-    rtio_iodev_sqe_ok(iodev_sqe, 0);
-
+    
     return 0;
 }

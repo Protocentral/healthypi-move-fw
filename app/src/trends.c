@@ -33,12 +33,18 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 #define TEMP_TREND_MINUTE_PTS 12
 
 #define NUM_HOURS 24
-#define MAX_POINTS_PER_HOUR 60
+#define MAX_POINTS_PER_HOUR 60  // Reduced from potentially unlimited
 #define MAX_POINTS_SPO2_PER_HOUR 10
+#define MAX_TREND_POINTS_BUFFER 720  // Reduced from 1440 to save memory
 
 // Store raw HR values for the current minute
 static uint16_t m_hr_curr_minute[60] = {0};   // Assumed max 60 points per minute
 static uint16_t m_temp_curr_minute[13] = {0}; // Assumed max 10 points per minute
+
+// Static buffers for trend processing (moved from stack to reduce RAM usage)
+static struct hpi_hr_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
+static struct hpi_hr_trend_point_t trend_point_all[MAX_TREND_POINTS_BUFFER];
+static K_MUTEX_DEFINE(trend_buffer_mutex);
 
 static uint16_t m_spo2 = 0;
 K_SEM_DEFINE(sem_spo2_updated, 0, 1);
@@ -134,6 +140,7 @@ static int hpi_trend_process_points()
     }
 
     m_trends_hr_minute_sample_counter = 0;
+    return 0;
 }
 
 void work_process_points_handler(struct k_work *work)
@@ -220,10 +227,15 @@ void hpi_trend_record_thread(void)
 
 int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, struct hpi_minutely_trend_point_t *minutely_trend_points, int *num_points, enum trend_type m_trend_type)
 {
+    // Lock the static buffers to prevent concurrent access
+    if (k_mutex_lock(&trend_buffer_mutex, K_SECONDS(1)) != 0) {
+        LOG_ERR("Failed to lock trend buffer mutex");
+        return -EBUSY;
+    }
 
-    // Trend buffers
-    struct hpi_hr_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
-    struct hpi_hr_trend_point_t trend_point_all[1440];
+    // Clear the static buffers before use
+    memset(trend_day_points, 0, sizeof(trend_day_points));
+    memset(trend_point_all, 0, sizeof(trend_point_all));
 
     struct fs_file_t file;
     int ret = 0;
@@ -260,14 +272,21 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
             *num_points = 0;
             LOG_ERR("File not found: %s", fname);
         }
+        k_mutex_unlock(&trend_buffer_mutex);
         return ret;
     }
 
     LOG_DBG("Read from file %s | Size: %d", fname, trend_file_ent.size);
 
     num_trend_points = trend_file_ent.size / sizeof(struct hpi_hr_trend_point_t);
+    
+    // Limit to buffer size to prevent overflow
+    if (num_trend_points > MAX_TREND_POINTS_BUFFER) {
+        LOG_WRN("Trend points (%d) exceed buffer size (%d), truncating", num_trend_points, MAX_TREND_POINTS_BUFFER);
+        num_trend_points = MAX_TREND_POINTS_BUFFER;
+    }
+    
     *num_points = num_trend_points;
-
     LOG_DBG("Num Trend Points: %d", num_trend_points);
 
     ret = fs_open(&file, fname, FS_O_READ);
@@ -275,6 +294,8 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
     if (ret < 0)
     {
         LOG_ERR("FAIL: open %s: %d", fname, ret);
+        k_mutex_unlock(&trend_buffer_mutex);
+        return ret;
     }
 
     struct hpi_hr_trend_point_t hr_trend_point;
@@ -287,6 +308,9 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
         if (ret < 0)
         {
             LOG_ERR("FAIL: read %s: %d", fname, ret);
+            fs_close(&file);
+            k_mutex_unlock(&trend_buffer_mutex);
+            return ret;
         }
         trend_point_all[i] = hr_trend_point;
     }
@@ -356,6 +380,9 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
 
         // LOG_DBG("Hour %d: | %d | %d | %d", hr_hourly_trend_points[i].hour_no, hr_hourly_trend_points[i].max, hr_hourly_trend_points[i].min, hr_hourly_trend_points[i].avg);
     }
+    
+    // Release the mutex before returning
+    k_mutex_unlock(&trend_buffer_mutex);
     return 0;
 }
 

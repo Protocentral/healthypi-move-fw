@@ -27,9 +27,9 @@ K_SEM_DEFINE(sem_start_one_shot_spo2, 0, 1);
 K_SEM_DEFINE(sem_stop_one_shot_spo2, 0, 1);
 K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
-K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
+K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 32, 1);
 
-RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
+RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_ctx, 8, 8, 64, 128, 4);
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 
 ZBUS_CHAN_DECLARE(spo2_chan);
@@ -241,27 +241,43 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     }
 }
 
-void work_sample_handler(struct k_work *work)
+static int ppg_start_async_read(void)
 {
-    uint8_t wrist_buf[512];
-    int ret;
-    ret = sensor_read(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, wrist_buf, sizeof(wrist_buf));
-    if (ret < 0)
-    {
-        LOG_ERR("Error reading sensor data");
+    int ret = sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_ctx, NULL);
+    if (ret < 0) {
+        LOG_ERR("Failed to start async read: %d", ret);
+        return ret;
+    }
+    return 0;
+}
+
+static void ppg_async_callback(int result, uint8_t *buf, uint32_t buf_len, void *userdata)
+{
+    if (result < 0) {
+        LOG_ERR("Async read failed: %d", result);
+        // Restart async read after error
+        k_msleep(100);
+        ppg_start_async_read();
         return;
     }
-    sensor_ppg_wrist_decode(wrist_buf, sizeof(wrist_buf));
+    
+    sensor_ppg_wrist_decode(buf, buf_len);
+    
+    // Immediately restart async read for continuous operation
+    // Only restart if we're still in an active state
+    if (m_curr_state == PPG_SAMP_STATE_ACTIVE || 
+        m_curr_state == PPG_SAMP_STATE_PROBING || 
+        m_curr_state == PPG_SAMP_STATE_MOTION_DETECT) {
+        ppg_start_async_read();
+    }
 }
 
-K_WORK_DEFINE(work_sample, work_sample_handler);
-
-void ppg_wrist_sampling_handler(struct k_timer *dummy)
+static void ppg_async_processing_thread(void)
 {
-    k_work_submit(&work_sample);
+    while (1) {
+        sensor_processing_with_callback(&max32664c_read_rtio_ctx, ppg_async_callback);
+    }
 }
-
-K_TIMER_DEFINE(tmr_ppg_wrist_sampling, ppg_wrist_sampling_handler, NULL);
 
 static void st_ppg_samp_active_entry(void *o)
 {
@@ -269,10 +285,9 @@ static void st_ppg_samp_active_entry(void *o)
     m_curr_state = PPG_SAMP_STATE_ACTIVE;
 
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
+    
+    // Start async data collection
+    ppg_start_async_read();
 }
 
 static void st_ppg_samp_active_run(void *o)
@@ -292,6 +307,9 @@ static void st_ppg_samp_probing_entry(void *o)
 
     // Enter SCD mode
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    
+    // Start async data collection for skin contact detection
+    ppg_start_async_read();
 }
 
 static void st_ppg_samp_probing_run(void *o)
@@ -310,6 +328,9 @@ static void st_ppg_samp_motion_detect_entry(void *o)
     sig_wake_on_motion_count = 0;
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
     m_curr_state = PPG_SAMP_STATE_MOTION_DETECT;
+    
+    // Start async data collection for motion detection
+    ppg_start_async_read();
 }
 
 static void st_ppg_samp_motion_detect_run(void *o)
@@ -345,9 +366,7 @@ static void smf_ppg_wrist_thread(void)
 
     smf_set_initial(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
-    k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
-
-    LOG_INF("PPG State Machine Thread starting");
+    LOG_INF("PPG State Machine Thread starting with async RTIO");
     for (;;)
     {
         ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
@@ -368,10 +387,6 @@ static void ppg_wrist_ctrl_thread(void)
     {
         if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
         {
-            // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
-            LOG_DBG("Stopping PPG Sampling");
-            k_timer_stop(&tmr_ppg_wrist_sampling);
-
             LOG_DBG("Starting One Shot SpO2");
 
             hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, SPO2_SOURCE_PPG_WR, 0, 0);
@@ -380,7 +395,9 @@ static void ppg_wrist_ctrl_thread(void)
             k_msleep(600);
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
             k_msleep(600);
-            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+            
+            // Restart async data collection for SPO2 measurement
+            ppg_start_async_read();
 
             spo2_measurement_in_progress = true;
         }
@@ -388,7 +405,6 @@ static void ppg_wrist_ctrl_thread(void)
         if (k_sem_take(&sem_stop_one_shot_spo2, K_NO_WAIT) == 0)
         {
             LOG_DBG("Stopping One Shot SpO2");
-            k_timer_stop(&tmr_ppg_wrist_sampling);
             spo2_measurement_in_progress = false;
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             uint16_t m_est_spo2 = 0;
@@ -415,7 +431,9 @@ static void ppg_wrist_ctrl_thread(void)
             LOG_DBG("Switching to Continuous Sampling HR");
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
             k_msleep(600);
-            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+            
+            // Restart async data collection for continuous HR
+            ppg_start_async_read();
         }
 
         k_msleep(100);
@@ -428,5 +446,9 @@ static void ppg_wrist_ctrl_thread(void)
 #define SMF_PPG_THREAD_STACKSIZE 4096
 #define SMF_PPG_THREAD_PRIORITY 7
 
+#define PPG_ASYNC_THREAD_STACKSIZE 2048
+#define PPG_ASYNC_THREAD_PRIORITY 6
+
 K_THREAD_DEFINE(smf_ppg_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
 K_THREAD_DEFINE(ppg_ctrl_thread_id, PPG_CTRL_THREAD_STACKSIZE, ppg_wrist_ctrl_thread, NULL, NULL, NULL, PPG_CTRL_THREAD_PRIORITY, 0, 0);
+K_THREAD_DEFINE(ppg_async_thread_id, PPG_ASYNC_THREAD_STACKSIZE, ppg_async_processing_thread, NULL, NULL, NULL, PPG_ASYNC_THREAD_PRIORITY, 0, 0);

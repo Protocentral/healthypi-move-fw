@@ -661,18 +661,24 @@ static int max32664c_attr_set(const struct device *dev,
                               const struct sensor_value *val)
 {
     struct max32664c_data *data = dev->data;
+    int rc;
 
     switch (attr)
     {
     case MAX32664C_ATTR_OP_MODE:
+        // Disable streaming during mode changes
+        if (data->async.interrupt_enabled) {
+            max32664c_stream_disable(dev);
+        }
+
         if (val->val1 == MAX32664C_OP_MODE_ALGO_AEC)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2);
             data->op_mode = MAX32664C_OP_MODE_ALGO_AEC;
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_AGC)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2);
             data->op_mode = MAX32664C_OP_MODE_ALGO_AGC;
         }
         else if (val->val1 == MAX32664C_OP_MODE_ALGO_EXTENDED)
@@ -709,6 +715,15 @@ static int max32664c_attr_set(const struct device *dev,
         {
             LOG_ERR("Unsupported sensor operation mode");
             return -ENOTSUP;
+        }
+
+        // Re-enable streaming after mode change
+        if (data->op_mode != MAX32664C_OP_MODE_IDLE) {
+            rc = max32664c_stream_enable(dev);
+            if (rc != 0) {
+                LOG_ERR("Failed to re-enable streaming: %d", rc);
+                return rc;
+            }
         }
         break;
     case MAX32664C_ATTR_ENTER_BOOTLOADER:
@@ -792,6 +807,7 @@ static int max32664c_chip_init(const struct device *dev)
 {
     const struct max32664c_config *config = dev->config;
     struct max32664c_data *data = dev->data;
+    int rc;
 
     if (!device_is_ready(config->i2c.bus))
     {
@@ -816,6 +832,13 @@ static int max32664c_chip_init(const struct device *dev)
     }
 
     max32664c_check_sensors(dev);
+
+    // Initialize async streaming
+    rc = max32664c_stream_init(dev);
+    if (rc != 0) {
+        LOG_ERR("Failed to initialize streaming: %d", rc);
+        return rc;
+    }
 
     return 0;
 }

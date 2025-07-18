@@ -7,6 +7,9 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
+#include <zephyr/sys/atomic.h>
+#include <zephyr/rtio/rtio.h>
+#include <zephyr/kernel.h>
 
 #define MAX32664C_I2C_ADDRESS 0x55
 
@@ -83,25 +86,40 @@ struct max32664c_config
 {
 	struct i2c_dt_spec i2c;
 	struct gpio_dt_spec reset_gpio;
-	struct gpio_dt_spec mfio_gpio;
+	struct gpio_dt_spec mfio_gpio;  // Also acts as interrupt after initialization
 };
 
 struct max32664c_data
 {
     uint8_t num_channels;
     uint8_t num_samples;
-
-    uint32_t samples_led_ir[128];
-    uint32_t samples_led_red[128];
-
     uint8_t op_mode;
 
+    // Async RTIO state
+    struct {
+        atomic_t in_progress;
+        struct gpio_callback int_callback;
+        struct k_work_delayable work;
+        struct rtio_iodev_sqe *pending_sqe;
+        bool interrupt_enabled;
+        uint32_t last_interrupt_time;
+    } async;
+
+    // Hardware state
     uint16_t hr;
     uint16_t spo2;
     uint16_t spo2_r_val;
     uint8_t hr_above_resting;
+    uint8_t scd_state;
 
     uint8_t calib_vector[824];
+
+    // Buffer management
+    struct {
+        uint8_t fifo_count;
+        uint32_t expected_samples;
+        bool data_ready;
+    } buffer_state;
 
 	// Chip info	
 	uint8_t hub_ver[4];
@@ -149,5 +167,19 @@ struct max32664c_encoded_data
 	uint32_t steps_walk;
 };
 
+// Function prototypes
 int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664c_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
+
+// Stream functions
+int max32664c_stream_init(const struct device *dev);
+int max32664c_stream_enable(const struct device *dev);
+int max32664c_stream_disable(const struct device *dev);
+
+// Trigger configuration
+struct max32664c_trigger_config {
+    bool data_ready_en;
+    bool fifo_watermark_en;
+    bool scd_change_en;
+    uint8_t fifo_watermark_level;
+};
