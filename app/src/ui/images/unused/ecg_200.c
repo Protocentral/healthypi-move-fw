@@ -835,10 +835,10 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_ECG_200 u
 #endif
 };
 
-const lv_img_dsc_t ecg_200 = {
-  .header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA,
-  .header.always_zero = 0,
-  .header.reserved = 0,
+const lv_image_dsc_t ecg_200 = {
+  .header.color_format = LV_COLOR_FORMAT_ARGB8888,
+  .header.stride = 0,
+  .header.flags = 0,
   .header.w = 200,
   .header.h = 200,
   .data_size = 40000 * LV_IMG_PX_SIZE_ALPHA_BYTE,

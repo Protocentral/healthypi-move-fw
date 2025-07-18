@@ -37,8 +37,8 @@ lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent)
     LV_IMG_DECLARE( o2);
 
     lv_obj_t *cui_o2;
-    cui_o2 = lv_img_create(btn_spo2_disp);
-    lv_img_set_src(cui_o2, &o2);
+    cui_o2 = lv_image_create(btn_spo2_disp);
+    lv_image_set_src(cui_o2, &o2);
     lv_obj_set_width(cui_o2, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(cui_o2, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(cui_o2, LV_ALIGN_TOP_MID);

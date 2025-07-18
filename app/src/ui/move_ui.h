@@ -112,29 +112,29 @@ enum hpi_disp_subscreens
 };
 
 // Images used in the UI
-LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
-LV_IMG_DECLARE(img_heart_35);
-LV_IMG_DECLARE(img_steps_48);
-LV_IMG_DECLARE(img_calories_48);
-LV_IMG_DECLARE(img_timer_48);
-LV_IMG_DECLARE(ecg_70);
-LV_IMG_DECLARE(bp_70);
-//LV_IMG_DECLARE(icon_spo2_30x35);
-LV_IMG_DECLARE(img_heart_70);
-LV_IMG_DECLARE(img_temp_100);
-LV_IMG_DECLARE(icon_spo2_100);
-LV_IMG_DECLARE(img_spo2_hand);
+LV_IMAGE_DECLARE(img_heart_48px); // assets/heart2.png
+LV_IMAGE_DECLARE(img_heart_35);
+LV_IMAGE_DECLARE(img_steps_48);
+LV_IMAGE_DECLARE(img_calories_48);
+LV_IMAGE_DECLARE(img_timer_48);
+LV_IMAGE_DECLARE(ecg_70);
+LV_IMAGE_DECLARE(bp_70);
+//LV_IMAGE_DECLARE(icon_spo2_30x35);
+LV_IMAGE_DECLARE(img_heart_70);
+LV_IMAGE_DECLARE(img_temp_100);
+LV_IMAGE_DECLARE(icon_spo2_100);
+LV_IMAGE_DECLARE(img_spo2_hand);
 
-LV_IMG_DECLARE(img_complete_85);
-LV_IMG_DECLARE(img_failed_80);
+LV_IMAGE_DECLARE(img_complete_85);
+LV_IMAGE_DECLARE(img_failed_80);
 
-LV_IMG_DECLARE(img_bpt_finger_90);
+LV_IMAGE_DECLARE(img_bpt_finger_90);
 
-LV_IMG_DECLARE(img_bpt_finger_45);
-LV_IMG_DECLARE(img_wrist_45);
+LV_IMAGE_DECLARE(img_bpt_finger_45);
+LV_IMAGE_DECLARE(img_wrist_45);
 
-//LV_IMG_DECLARE(pc_move_bg_200);
-LV_IMG_DECLARE(bck_heart_200);
+//LV_IMAGE_DECLARE(pc_move_bg_200);
+LV_IMAGE_DECLARE(bck_heart_200);
 
 // LV_FONT_DECLARE( ui_font_H1);
 LV_FONT_DECLARE(oxanium_90);

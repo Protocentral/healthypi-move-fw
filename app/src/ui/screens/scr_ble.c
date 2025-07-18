@@ -85,8 +85,8 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
         lv_obj_add_style(label_info, &style_white_medium, 0);
         lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
-        lv_obj_t *img1 = lv_img_create(cont_col);
-        lv_img_set_src(img1, &img_complete_85);
+        lv_obj_t *img1 = lv_image_create(cont_col);
+        lv_image_set_src(img1, &img_complete_85);
 
         btn_cancel = lv_btn_create(cont_col);
         lv_obj_add_event_cb(btn_cancel, scr_btn_cancel_handler, LV_EVENT_ALL, NULL);
@@ -105,8 +105,8 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
         lv_obj_add_style(label_info, &style_white_medium, 0);
         lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
-        lv_obj_t *img1 = lv_img_create(cont_col);
-        lv_img_set_src(img1, &img_failed_80);
+        lv_obj_t *img1 = lv_image_create(cont_col);
+        lv_image_set_src(img1, &img_failed_80);
 
         btn_cancel = lv_btn_create(cont_col);
         lv_obj_add_event_cb(btn_cancel, scr_btn_cancel_handler, LV_EVENT_ALL, NULL);

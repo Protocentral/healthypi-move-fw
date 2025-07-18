@@ -59,8 +59,8 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_clear_flag(cont_hr, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *img_hr = lv_img_create(cont_hr);
-    lv_img_set_src(img_hr, &img_heart_70);
+    lv_obj_t *img_hr = lv_image_create(cont_hr);
+    lv_image_set_src(img_hr, &img_heart_70);
 
     uint16_t hr = 0;
     int64_t last_update_ts = 0;

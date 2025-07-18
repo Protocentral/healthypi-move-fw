@@ -99,8 +99,8 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_color(today_arc_active_time, lv_color_hex(0xFFFFFF), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(today_arc_active_time, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
 
-    lv_obj_t *img_steps = lv_img_create(today_group);
-    lv_img_set_src(img_steps, &img_steps_48);
+    lv_obj_t *img_steps = lv_image_create(today_group);
+    lv_image_set_src(img_steps, &img_steps_48);
     lv_obj_align_to(img_steps, NULL, LV_ALIGN_CENTER, -25, -40);
 
     label_today_steps = lv_label_create(today_group);  
@@ -115,8 +115,8 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_font(lbl_title_steps, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_align_to(lbl_title_steps, label_today_steps, LV_ALIGN_OUT_RIGHT_MID, 40, 0);
 
-    lv_obj_t *img_cals = lv_img_create(today_group);
-    lv_img_set_src(img_cals, &img_calories_48);
+    lv_obj_t *img_cals = lv_image_create(today_group);
+    lv_image_set_src(img_cals, &img_calories_48);
     lv_obj_align_to(img_cals, img_steps, LV_ALIGN_OUT_BOTTOM_MID, 4, 5);
 
     label_today_cals = lv_label_create(today_group);
@@ -132,8 +132,8 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_obj_align_to(lbl_title_cals, label_today_cals, LV_ALIGN_OUT_RIGHT_MID, 40, 0);
 
     lv_obj_t *img_time;
-    img_time = lv_img_create(today_group);
-    lv_img_set_src(img_time, &img_timer_48);
+    img_time = lv_image_create(today_group);
+    lv_image_set_src(img_time, &img_timer_48);
     lv_obj_align_to(img_time, img_cals, LV_ALIGN_OUT_BOTTOM_MID, -3, 5);
 
     label_today_active_time = lv_label_create(today_group);

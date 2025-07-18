@@ -52,8 +52,8 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Blood Pressure");
 
-    //lv_obj_t *img1 = lv_img_create(cont_col);
-    //lv_img_set_src(img1, &bp_70);
+    //lv_obj_t *img1 = lv_image_create(cont_col);
+    //lv_image_set_src(img1, &bp_70);
 
     lv_obj_t *cont_row_bpt = lv_obj_create(cont_col);
     lv_obj_set_size(cont_row_bpt, lv_pct(100), LV_SIZE_CONTENT);

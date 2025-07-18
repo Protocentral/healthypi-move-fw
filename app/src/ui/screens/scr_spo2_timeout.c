@@ -35,8 +35,8 @@ void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Measurement Failed");
 
-    lv_obj_t *img1 = lv_img_create(cont_col);
-    lv_img_set_src(img1, &img_failed_80);
+    lv_obj_t *img1 = lv_image_create(cont_col);
+    lv_image_set_src(img1, &img_failed_80);
 
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);

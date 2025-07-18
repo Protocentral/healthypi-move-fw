@@ -76,8 +76,8 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Draw Countdown Timer
     LV_IMG_DECLARE(timer_32);
-    lv_obj_t *img_timer = lv_img_create(cont_timer);
-    lv_img_set_src(img_timer, &timer_32);
+    lv_obj_t *img_timer = lv_image_create(cont_timer);
+    lv_image_set_src(img_timer, &timer_32);
 
     label_timer = lv_label_create(cont_timer);
     lv_label_set_text(label_timer, "00");
@@ -131,8 +131,8 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_35);
+    lv_obj_t *img_heart = lv_image_create(cont_hr);
+    lv_image_set_src(img_heart, &img_heart_35);
 
     label_ecg_hr = lv_label_create(cont_hr);
     lv_label_set_text(label_ecg_hr, "00");

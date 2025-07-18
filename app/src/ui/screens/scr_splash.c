@@ -24,13 +24,13 @@ void draw_scr_splash(void)
     lv_obj_add_style(scr_splash, &style_scr_black, 0);
 
     LV_IMG_DECLARE(pc_logo_text_300);
-    lv_obj_t *img1 = lv_img_create(scr_splash);
-    lv_img_set_src(img1, &pc_logo_text_300);
+    lv_obj_t *img1 = lv_image_create(scr_splash);
+    lv_image_set_src(img1, &pc_logo_text_300);
     lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
 
     /*LV_IMG_DECLARE(pc_logo_round_120);
-    lv_obj_t *img_logo = lv_img_create(scr_splash);
-    lv_img_set_src(img_logo, &pc_logo_round_120);
+    lv_obj_t *img_logo = lv_image_create(scr_splash);
+    lv_image_set_src(img_logo, &pc_logo_round_120);
     lv_obj_align_to(img_logo, NULL, LV_ALIGN_CENTER, 0, 0);*/
 
     lv_scr_load_anim(scr_splash, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0, true);
