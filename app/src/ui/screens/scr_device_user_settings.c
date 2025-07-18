@@ -126,61 +126,6 @@ static void slider_sleep_timeout_event_cb(lv_event_t *e)
     hpi_auto_save_settings();
 }
 
-static void timer_close_msgbox_cb(lv_timer_t *timer)
-{
-    lv_obj_t *mbox = (lv_obj_t *)timer->user_data;
-    lv_msgbox_close(mbox);
-    lv_timer_del(timer);
-}
-
-static void btn_save_settings_event_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED) {
-        LOG_INF("Settings saved");
-        // Here you would typically save settings to non-volatile storage
-        // For now, just show a confirmation message
-        lv_obj_t *mbox = lv_msgbox_create(NULL, "Settings", "Settings saved successfully!", NULL, true);
-        lv_obj_center(mbox);
-        // Auto-close after 2 seconds
-        lv_timer_create(timer_close_msgbox_cb, 2000, mbox);
-    }
-}
-
-static void btn_reset_settings_event_cb(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED) {
-        // Perform factory reset using persistence module
-        int rc = hpi_settings_factory_reset();
-        if (rc) {
-            LOG_ERR("Factory reset failed: %d", rc);
-            return;
-        }
-        
-        // Load the reset settings
-        rc = hpi_settings_load_all(&current_ui_settings);
-        if (rc) {
-            LOG_ERR("Failed to load reset settings: %d", rc);
-            return;
-        }
-        
-        // Sync external variables
-        m_user_height = current_ui_settings.height;
-        m_user_weight = current_ui_settings.weight;
-        
-        // Update UI elements
-        hpi_update_setting_labels();
-        lv_obj_add_state(sw_auto_sleep, current_ui_settings.auto_sleep_enabled ? LV_STATE_CHECKED : 0);
-        if (!current_ui_settings.auto_sleep_enabled) {
-            lv_obj_clear_state(sw_auto_sleep, LV_STATE_CHECKED);
-        }
-        lv_slider_set_value(slider_sleep_timeout, current_ui_settings.sleep_timeout, LV_ANIM_OFF);
-        
-        LOG_INF("Factory reset completed successfully");
-    }
-}
-
 // Function to update height and weight button labels
 void hpi_update_height_weight_labels(void)
 {
@@ -219,7 +164,7 @@ void hpi_update_setting_labels(void)
     if (btn_temp_unit) {
         lv_obj_t *lbl_temp_value = lv_obj_get_child(btn_temp_unit, 0);
         if (lbl_temp_value) {
-            lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "Fahrenheit" : "Celsius");
+            lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "°F" : "°C");
         }
     }
 }
@@ -255,161 +200,144 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
 
     scr_device_user_settings = lv_obj_create(NULL);
     draw_scr_common(scr_device_user_settings);
+    
+    // Disable scrolling on the main screen
+    lv_obj_set_scrollbar_mode(scr_device_user_settings, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(scr_device_user_settings, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Create main container with scroll capability
+    // Create simplified main container with scroll capability - optimized for 390x390 round display
     lv_obj_t *cont_main = lv_obj_create(scr_device_user_settings);
-    lv_obj_set_size(cont_main, 300, 400);
-    lv_obj_align_to(cont_main, NULL, LV_ALIGN_TOP_MID, 0, 45);
-    lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(cont_main, 10, 0);
+    lv_obj_set_size(cont_main, 340, 340);
+    lv_obj_align_to(cont_main, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_pad_all(cont_main, 12, 0);
     lv_obj_add_style(cont_main, &style_scr_black, 0);
-    lv_obj_set_scrollbar_mode(cont_main, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_scrollbar_mode(cont_main, LV_SCROLLBAR_MODE_ON);
+    lv_obj_set_style_radius(cont_main, 170, 0); // Make container circular
+    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
-    // Title
+    // Title - centered for round display
     lv_obj_t *lbl_title = lv_label_create(cont_main);
     lv_label_set_text(lbl_title, "Settings");
     lv_obj_add_style(lbl_title, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_title, 130, 10);
 
-    // Height input
-    lv_obj_t *cont_height = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_height, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_height, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_height, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    lv_obj_t *lbl_height = lv_label_create(cont_height);
+    int16_t y_pos = 45;
+    const int16_t item_height = 50;
+    const int16_t label_x = 20;
+    const int16_t button_x = 180;
+
+    // Height input - optimized layout for round display
+    lv_obj_t *lbl_height = lv_label_create(cont_main);
     lv_label_set_text(lbl_height, "Height:");
     lv_obj_add_style(lbl_height, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_height, label_x, y_pos + 8);
     
-    btn_user_height = lv_btn_create(cont_height);
-    lv_obj_set_size(btn_user_height, 120, 40);
+    btn_user_height = lv_btn_create(cont_main);
+    lv_obj_set_size(btn_user_height, 120, 32);
+    lv_obj_set_pos(btn_user_height, button_x, y_pos);
     lv_obj_add_event_cb(btn_user_height, btn_height_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_height_value = lv_label_create(btn_user_height);
     lv_label_set_text_fmt(lbl_height_value, "%d cm", m_user_height);
     lv_obj_center(lbl_height_value);
 
-    // Weight input
-    lv_obj_t *cont_weight = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_weight, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_weight, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_weight, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    lv_obj_t *lbl_weight = lv_label_create(cont_weight);
+    y_pos += item_height;
+
+    // Weight input - optimized layout for round display
+    lv_obj_t *lbl_weight = lv_label_create(cont_main);
     lv_label_set_text(lbl_weight, "Weight:");
     lv_obj_add_style(lbl_weight, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_weight, label_x, y_pos + 8);
     
-    btn_user_weight = lv_btn_create(cont_weight);
-    lv_obj_set_size(btn_user_weight, 120, 40);
+    btn_user_weight = lv_btn_create(cont_main);
+    lv_obj_set_size(btn_user_weight, 120, 32);
+    lv_obj_set_pos(btn_user_weight, button_x, y_pos);
     lv_obj_add_event_cb(btn_user_weight, btn_weight_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_weight_value = lv_label_create(btn_user_weight);
     lv_label_set_text_fmt(lbl_weight_value, "%d kg", m_user_weight);
     lv_obj_center(lbl_weight_value);
 
-    // Hand worn dropdown (for ECG measurement)
-    lv_obj_t *cont_hand_worn = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_hand_worn, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_hand_worn, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_hand_worn, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    lv_obj_t *lbl_hand_worn = lv_label_create(cont_hand_worn);
-    lv_label_set_text(lbl_hand_worn, "Watch worn on:");
+    y_pos += item_height;
+
+    // Hand worn - optimized layout for round display
+    lv_obj_t *lbl_hand_worn = lv_label_create(cont_main);
+    lv_label_set_text(lbl_hand_worn, "Worn on:");
     lv_obj_add_style(lbl_hand_worn, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_hand_worn, label_x, y_pos + 8);
     
-    btn_hand_worn = lv_btn_create(cont_hand_worn);
-    lv_obj_set_size(btn_hand_worn, 120, 40);
+    btn_hand_worn = lv_btn_create(cont_main);
+    lv_obj_set_size(btn_hand_worn, 120, 32);
+    lv_obj_set_pos(btn_hand_worn, button_x, y_pos);
     lv_obj_add_event_cb(btn_hand_worn, btn_hand_worn_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_hand_value = lv_label_create(btn_hand_worn);
     lv_label_set_text(lbl_hand_value, current_ui_settings.hand_worn ? "Right" : "Left");
     lv_obj_center(lbl_hand_value);
 
-    // Time format dropdown
-    lv_obj_t *cont_time_format = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_time_format, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_time_format, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_time_format, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    lv_obj_t *lbl_time_format = lv_label_create(cont_time_format);
-    lv_label_set_text(lbl_time_format, "Time Format:");
+    y_pos += item_height;
+
+    // Time format - optimized layout for round display
+    lv_obj_t *lbl_time_format = lv_label_create(cont_main);
+    lv_label_set_text(lbl_time_format, "Time:");
     lv_obj_add_style(lbl_time_format, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_time_format, label_x, y_pos + 8);
     
-    btn_time_format = lv_btn_create(cont_time_format);
-    lv_obj_set_size(btn_time_format, 100, 40);
+    btn_time_format = lv_btn_create(cont_main);
+    lv_obj_set_size(btn_time_format, 100, 32);
+    lv_obj_set_pos(btn_time_format, button_x + 10, y_pos);
     lv_obj_add_event_cb(btn_time_format, btn_time_format_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_time_value = lv_label_create(btn_time_format);
     lv_label_set_text(lbl_time_value, current_ui_settings.time_format ? "12 H" : "24 H");
     lv_obj_center(lbl_time_value);
 
-    // Temperature unit dropdown
-    lv_obj_t *cont_temp_unit = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_temp_unit, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_temp_unit, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_temp_unit, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    lv_obj_t *lbl_temp_unit = lv_label_create(cont_temp_unit);
-    lv_label_set_text(lbl_temp_unit, "Temperature:");
+    y_pos += item_height;
+
+    // Temperature unit - optimized layout for round display
+    lv_obj_t *lbl_temp_unit = lv_label_create(cont_main);
+    lv_label_set_text(lbl_temp_unit, "Temp:");
     lv_obj_add_style(lbl_temp_unit, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_temp_unit, label_x, y_pos + 8);
     
-    btn_temp_unit = lv_btn_create(cont_temp_unit);
-    lv_obj_set_size(btn_temp_unit, 100, 40);
+    btn_temp_unit = lv_btn_create(cont_main);
+    lv_obj_set_size(btn_temp_unit, 100, 32);
+    lv_obj_set_pos(btn_temp_unit, button_x + 10, y_pos);
     lv_obj_add_event_cb(btn_temp_unit, btn_temp_unit_event_cb, LV_EVENT_ALL, NULL);
     
     lv_obj_t *lbl_temp_value = lv_label_create(btn_temp_unit);
-    lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "Fahrenheit" : "Celsius");
+    lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "°F" : "°C");
     lv_obj_center(lbl_temp_value);
 
-    // Auto sleep switch
-    lv_obj_t *cont_auto_sleep = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_auto_sleep, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_auto_sleep, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_auto_sleep, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    lv_obj_t *lbl_auto_sleep = lv_label_create(cont_auto_sleep);
+    y_pos += item_height;
+
+    // Auto sleep switch - optimized layout for round display
+    lv_obj_t *lbl_auto_sleep = lv_label_create(cont_main);
     lv_label_set_text(lbl_auto_sleep, "Auto Sleep:");
     lv_obj_add_style(lbl_auto_sleep, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_auto_sleep, label_x, y_pos + 8);
     
-    sw_auto_sleep = lv_switch_create(cont_auto_sleep);
+    sw_auto_sleep = lv_switch_create(cont_main);
+    lv_obj_set_pos(sw_auto_sleep, button_x + 30, y_pos + 4);
     if (current_ui_settings.auto_sleep_enabled) {
         lv_obj_add_state(sw_auto_sleep, LV_STATE_CHECKED);
     }
     lv_obj_add_event_cb(sw_auto_sleep, sw_auto_sleep_event_cb, LV_EVENT_ALL, NULL);
 
-    // Sleep timeout slider
-    lv_obj_t *cont_sleep_timeout = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_sleep_timeout, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_sleep_timeout, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_sleep_timeout, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    y_pos += item_height;
 
-    lv_obj_t *lbl_sleep_timeout = lv_label_create(cont_sleep_timeout);
-    lv_label_set_text(lbl_sleep_timeout, "Sleep Timeout (sec):");
+    // Sleep timeout slider - optimized layout for round display
+    lv_obj_t *lbl_sleep_timeout = lv_label_create(cont_main);
+    lv_label_set_text(lbl_sleep_timeout, "Sleep Timeout (s):");
     lv_obj_add_style(lbl_sleep_timeout, &style_lbl_white_14, 0);
+    lv_obj_set_pos(lbl_sleep_timeout, label_x, y_pos);
 
-    slider_sleep_timeout = lv_slider_create(cont_sleep_timeout);
-    lv_obj_set_size(slider_sleep_timeout, LV_PCT(100), 20);
+    slider_sleep_timeout = lv_slider_create(cont_main);
+    lv_obj_set_size(slider_sleep_timeout, 280, 20);
+    lv_obj_set_pos(slider_sleep_timeout, label_x, y_pos + 34);
     lv_slider_set_range(slider_sleep_timeout, 10, 120);
     lv_slider_set_value(slider_sleep_timeout, current_ui_settings.sleep_timeout, LV_ANIM_OFF);
     lv_obj_add_event_cb(slider_sleep_timeout, slider_sleep_timeout_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
-
-    // Factory Reset line item
-    lv_obj_t *cont_factory_reset = lv_obj_create(cont_main);
-    lv_obj_set_size(cont_factory_reset, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_factory_reset, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_factory_reset, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    lv_obj_t *lbl_factory_reset = lv_label_create(cont_factory_reset);
-    lv_label_set_text(lbl_factory_reset, "Factory Reset:");
-    lv_obj_add_style(lbl_factory_reset, &style_lbl_white_14, 0);
-    
-    lv_obj_t *btn_factory_reset = lv_btn_create(cont_factory_reset);
-    lv_obj_set_size(btn_factory_reset, 120, 40);
-    lv_obj_add_event_cb(btn_factory_reset, btn_reset_settings_event_cb, LV_EVENT_ALL, NULL);
-    
-    lv_obj_t *lbl_btn_factory_reset = lv_label_create(btn_factory_reset);
-    lv_label_set_text(lbl_btn_factory_reset, LV_SYMBOL_REFRESH " Reset");
-    lv_obj_center(lbl_btn_factory_reset);
 
     hpi_disp_set_curr_screen(SCR_SPL_DEVICE_USER_SETTINGS);
     hpi_show_screen(scr_device_user_settings, m_scroll_dir);
@@ -460,6 +388,7 @@ void draw_scr_height_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
     lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
     lv_obj_t *lbl_title = lv_label_create(cont_main);
@@ -535,6 +464,7 @@ void draw_scr_weight_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
     lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
     lv_obj_t *lbl_title = lv_label_create(cont_main);
@@ -577,6 +507,7 @@ void gesture_right_scr_weight_select(void)
 {
     // Return to device settings screen
     hpi_load_scr_spl(SCR_SPL_DEVICE_USER_SETTINGS, SCROLL_UP, 0, 0, 0, 0);
+    
 }
 
 // Hand worn selection screen with roller widget
@@ -613,6 +544,7 @@ void draw_scr_hand_worn_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
     lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
     lv_obj_t *lbl_title = lv_label_create(cont_main);
@@ -675,6 +607,7 @@ void draw_scr_time_format_select(enum scroll_dir m_scroll_dir, uint32_t arg1, ui
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
     lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
     lv_obj_t *lbl_title = lv_label_create(cont_main);

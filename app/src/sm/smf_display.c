@@ -372,6 +372,12 @@ void disp_screen_event(lv_event_t *e)
             return;
         }
 
+        if( hpi_disp_get_curr_screen() == SCR_SPL_DEVICE_USER_SETTINGS)
+        {
+            // If we are in the device user settings screen, go back to the pull down screen
+            hpi_load_screen(SCR_HOME, SCROLL_RIGHT);
+            return;
+        }
         if ((curr_screen - 1) == SCR_LIST_START)
         {
             printk("Start of list\n");
