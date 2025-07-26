@@ -3,12 +3,12 @@
 #include <stdio.h>
 #include <app_version.h>
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(scr_settings, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(scr_pulldown, LOG_LEVEL_INF);
 
 #include "ui/move_ui.h"
 #include "hw_module.h"
 
-lv_obj_t *scr_settings;
+lv_obj_t *scr_pulldown;
 
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
@@ -76,6 +76,18 @@ static void hpi_show_shutdown_mbox(void)
     lv_obj_center(lbl_btn_no);
 }
 
+static void btn_device_user_settings_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        LOG_INF("Device & User Settings button clicked");
+        k_msleep(100);
+        hpi_load_scr_spl(SCR_SPL_DEVICE_USER_SETTINGS, SCROLL_DOWN, SCR_SPL_PULLDOWN, 0, 0, 0);
+    }
+}
+
 static void btn_shutdown_event_cb(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -88,14 +100,14 @@ static void btn_shutdown_event_cb(lv_event_t *e)
     }
 }
 
-void draw_scr_settings(enum scroll_dir m_scroll_dir)
+void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
-    scr_settings = lv_obj_create(NULL);
+    scr_pulldown = lv_obj_create(NULL);
 
-    draw_scr_common(scr_settings);
+    draw_scr_common(scr_pulldown);
 
     /*Create a container with COLUMN flex direction*/
-    lv_obj_t *cont_col = lv_obj_create(scr_settings);
+    lv_obj_t *cont_col = lv_obj_create(scr_pulldown);
     lv_obj_set_size(cont_col, 300, LV_SIZE_CONTENT);
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 45);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
@@ -121,20 +133,36 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(slider_brightness, brightness_slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_slider_set_value(slider_brightness, hpi_disp_get_brightness(), LV_ANIM_OFF);
 
-    lv_obj_t *btn_shutdown = lv_btn_create(cont_col);
-    lv_obj_set_size(btn_shutdown, LV_PCT(100), LV_SIZE_CONTENT);
+    /*Create a container with ROW flex direction for buttons*/
+    lv_obj_t *cont_buttons = lv_obj_create(cont_col);
+    lv_obj_set_size(cont_buttons, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cont_buttons, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_buttons, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_style(cont_buttons, &style_scr_black, 0);
+
+    lv_obj_t *btn_device_user_settings = lv_btn_create(cont_buttons);
+    lv_obj_set_size(btn_device_user_settings, LV_PCT(48), LV_SIZE_CONTENT);
+    lv_obj_add_event_cb(btn_device_user_settings, btn_device_user_settings_event_cb, LV_EVENT_ALL, NULL);
+
+    lv_obj_t *lbl_btn_device_user_settings = lv_label_create(btn_device_user_settings);
+    lv_label_set_text(lbl_btn_device_user_settings, LV_SYMBOL_SETTINGS);
+    lv_obj_set_height(btn_device_user_settings, 60);
+    lv_obj_center(lbl_btn_device_user_settings);
+
+    lv_obj_t *btn_shutdown = lv_btn_create(cont_buttons);
+    lv_obj_set_size(btn_shutdown, LV_PCT(48), LV_SIZE_CONTENT);
     lv_obj_add_event_cb(btn_shutdown, btn_shutdown_event_cb, LV_EVENT_ALL, NULL);
 
     lv_obj_t *lbl_btn_shutdown = lv_label_create(btn_shutdown);
-    lv_label_set_text(lbl_btn_shutdown, LV_SYMBOL_POWER " Power Off");
-    lv_obj_set_height(btn_shutdown, 80);
+    lv_label_set_text(lbl_btn_shutdown, LV_SYMBOL_POWER);
+    lv_obj_set_height(btn_shutdown, 60);
     lv_obj_center(lbl_btn_shutdown);
 
     lv_obj_t *lbl_ver = lv_label_create(cont_col);
     lv_label_set_text(lbl_ver, "v" APP_VERSION_STRING);
 
-    hpi_disp_set_curr_screen(SCR_SPL_SETTINGS);
-    hpi_show_screen(scr_settings, m_scroll_dir);
+    hpi_disp_set_curr_screen(SCR_SPL_PULLDOWN);
+    hpi_show_screen(scr_pulldown, m_scroll_dir);
 }
 
 void hpi_disp_settings_update_batt_level(int batt_level, bool charging)
@@ -187,7 +215,7 @@ void hpi_disp_settings_update_batt_level(int batt_level, bool charging)
     }
 }
 
-void gesture_down_scr_settings(void)
+void gesture_down_scr_pulldown(void)
 {
     hpi_load_screen(SCR_HOME, SCROLL_DOWN);
 }

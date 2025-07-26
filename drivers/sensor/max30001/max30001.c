@@ -462,6 +462,13 @@ static int max30001_attr_set(const struct device *dev,
             max30001_disable_rtor(dev);
         }
         break;
+    case MAX30001_ATTR_LEAD_CONFIG:
+        // Configure ECG lead polarity based on hand worn setting
+        // val->val1: 0 = Left hand, 1 = Right hand
+        data->chip_cfg.reg_cnfg_emux.bit.pol = val->val1;
+        _max30001RegWrite(dev, CNFG_EMUX, data->chip_cfg.reg_cnfg_emux.all);
+        LOG_INF("ECG lead configuration set for %s hand", val->val1 ? "right" : "left");
+        break;
     default:
         return -ENOTSUP;
     }

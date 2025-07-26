@@ -15,6 +15,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
+#include "hpi_user_settings_api.h"
 
 LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
@@ -171,6 +172,44 @@ extern struct k_sem sem_ecg_bioz_smf_start;
 extern struct k_sem sem_ecg_bioz_sm_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
+
+/**
+ * @brief Configure ECG leads based on hand worn setting
+ * @return 0 on success, negative error code on failure
+ */
+static int hw_max30001_configure_leads(void)
+{
+    struct sensor_value lead_config;
+    uint8_t hand_worn = hpi_user_settings_get_hand_worn();
+    
+    // Set lead configuration: 0 = Left hand, 1 = Right hand
+    lead_config.val1 = hand_worn;
+    lead_config.val2 = 0;
+    
+    int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_LEAD_CONFIG, &lead_config);
+    if (ret != 0) {
+        LOG_ERR("Failed to configure ECG leads for %s hand: %d", 
+                hand_worn ? "right" : "left", ret);
+        return ret;
+    }
+    
+    LOG_INF("ECG leads configured for %s hand", hand_worn ? "right" : "left");
+    return 0;
+}
+
+/**
+ * @brief Reconfigure ECG leads when hand worn setting changes
+ * This function can be called from UI when the hand worn setting is changed
+ */
+void reconfigure_ecg_leads_for_hand_worn(void)
+{
+    // Only reconfigure if ECG is currently active
+    if (ecg_active && max30001_dev != NULL) {
+        hw_max30001_configure_leads();
+    }
+}
+
+
 
 // Thread-safe accessors for shared variables
 static bool get_ecg_active(void)
@@ -415,6 +454,12 @@ static int hw_max30001_ecg_enable(void)
     if (ret == 0) {
         set_ecg_active(true);
         LOG_DBG("ECG enabled successfully");
+        
+        // Configure leads based on hand worn setting
+        int lead_ret = hw_max30001_configure_leads();
+        if (lead_ret != 0) {
+            LOG_WRN("Failed to configure ECG leads, using default configuration");
+        }
     } else {
         LOG_ERR("Failed to enable ECG: %d", ret);
     }
@@ -480,7 +525,7 @@ static void st_ecg_bioz_stream_entry(void *o)
     int ret;
     bool stabilization_complete;
 
-    // Check if coming from stabilization in a thread-safe way
+    // Check if coming from stabilization 
     get_ecg_stabilization_values(NULL, &stabilization_complete);
     if (!stabilization_complete) {
         ret = hw_max30001_ecg_enable();
@@ -492,10 +537,10 @@ static void st_ecg_bioz_stream_entry(void *o)
         k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     }
     
-    // Now start actual recording
+    // Start actual recording
     hpi_data_set_ecg_record_active(true);
     
-    // Thread-safe timer initialization
+    // Timer initialization
     set_ecg_timer_values(k_uptime_get_32(), ECG_RECORD_DURATION_S);
     
     LOG_INF("ECG recording started - %d seconds", ECG_RECORD_DURATION_S);
@@ -544,9 +589,9 @@ static void st_ecg_bioz_stream_exit(void *o)
 
     hpi_data_set_ecg_record_active(false);
 
-    // Thread-safe reset of timer values
+    // Reset timer
     set_ecg_timer_values(0, 0);
-    set_ecg_stabilization_values(0, false);  // Reset for next recording
+    set_ecg_stabilization_values(0, false); 
 }
 
 static void st_ecg_bioz_complete_entry(void *o)
@@ -598,6 +643,7 @@ static void st_ecg_bioz_stabilizing_entry(void *o)
     LOG_DBG("ECG/BioZ SM Stabilizing Entry");
     int ret;
 
+    // Enable ECG
     // Reset ECG smoothing filter for clean start
     ecg_smooth_reset();
 
@@ -605,20 +651,20 @@ static void st_ecg_bioz_stabilizing_entry(void *o)
     ret = hw_max30001_ecg_enable();
     if (ret != 0) {
         LOG_ERR("Failed to enable ECG in stabilizing entry: %d", ret);
-        // Consider transitioning to error state or retry logic
+       
         return;
     }
     
     k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     
-    // Thread-safe initialization of stabilization values
+    // Init stabilization values
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
     set_ecg_timer_values(k_uptime_get_32(), 0);
     
     // Publish status indicating stabilization phase
     struct hpi_ecg_status_t ecg_stat = {
         .ts_complete = 0,
-        .status = HPI_ECG_STATUS_STREAMING, // You might want to add HPI_ECG_STATUS_STABILIZING
+        .status = HPI_ECG_STATUS_STREAMING, // add HPI_ECG_STATUS_STABILIZING
         .hr = 0,
         .progress_timer = ECG_RECORD_DURATION_S + ECG_STABILIZATION_DURATION_S};
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
@@ -695,8 +741,6 @@ void smf_ecg_bioz_thread(void)
     LOG_INF("ECG/BioZ SMF Thread Started");
 
     smf_set_initial(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
-
-    // k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
 
     for (;;)
     {
