@@ -3,14 +3,14 @@
 #include <zephyr/device.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/zbus/zbus.h>
+// #include <zephyr/zbus/zbus.h>  // Commented out - requires CONFIG_ZBUS
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "hw_module.h"
 
 static lv_obj_t *scr_ecg_scr2;
-static lv_obj_t *btn_ecg_cancel;
+// static lv_obj_t *btn_ecg_cancel;  // Commented out - not used
 static lv_obj_t *chart_ecg;
 static lv_chart_series_t *ser_ecg;
 static lv_obj_t *label_ecg_hr;
@@ -38,6 +38,8 @@ extern lv_style_t style_bg_red;
 
 extern struct k_sem sem_ecg_cancel;
 
+// Commented out - unused function
+/*
 static void btn_ecg_cancel_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -47,6 +49,7 @@ static void btn_ecg_cancel_handler(lv_event_t *e)
         hpi_load_screen(SCR_ECG, SCROLL_DOWN);
     }
 }
+*/
 
 void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
@@ -101,27 +104,42 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_label_set_text(label_btn, LV_SYMBOL_CLOSE);
     lv_obj_center(label_btn);*/
 
-    // Create Chart 1 - ECG
+    // Create optimized ECG Chart for LVGL 9
     chart_ecg = lv_chart_create(cont_col);
     lv_obj_set_size(chart_ecg, 390, 140);
-    lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(chart_ecg, 0, LV_PART_MAIN);
-
-    // LVGL 9: Chart point styling changed - commented out
-
-
-    // lv_obj_set_style_width(...);
-    // LVGL 9: Chart point styling changed - commented out
-
-    // lv_obj_set_style_height(...);
-    lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
+    
+    // Set chart type and properties for efficiency
+    lv_chart_set_type(chart_ecg, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
-    lv_chart_set_div_line_count(chart_ecg, 0, 0);
     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
+    
+    // Optimize visual settings for performance
+    lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(chart_ecg, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(chart_ecg, 5, LV_PART_MAIN);
+    
+    // Disable grid lines for better performance
+    lv_chart_set_div_line_count(chart_ecg, 0, 0);
+    
+    // Create series with optimized settings
+    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
+    
+    // Optimize line rendering for real-time data
+    lv_obj_set_style_line_width(chart_ecg, 2, LV_PART_ITEMS);
+    lv_obj_set_style_line_rounded(chart_ecg, false, LV_PART_ITEMS);
+    lv_obj_set_style_line_opa(chart_ecg, LV_OPA_COVER, LV_PART_ITEMS);
+    
+    // Set initial range for ECG data (will be auto-adjusted)
+    lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
+    
+    // Position the chart
     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
-    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_darken(LV_PALETTE_ORANGE, 2), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_ecg, 6, LV_PART_ITEMS);
-    // lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+    
+    // Pre-fill series with zero values for smoother startup
+    for (int i = 0; i < ECG_DISP_WINDOW_SIZE; i++) {
+        lv_chart_set_next_value(chart_ecg, ser_ecg, 0);
+    }
 
     // Draw Lead off label
     label_ecg_lead_off = lv_label_create(cont_col);
@@ -150,25 +168,22 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     hpi_show_screen(scr_ecg_scr2, m_scroll_dir);
 }
 
+// Simplified scaling function - now handled more efficiently in main plot function
 void hpi_ecg_disp_do_set_scale(int disp_window_size)
 {
-    if (gx >= (disp_window_size))
+    // This function is now simplified as range updating is handled 
+    // more efficiently in the main plotting function
+    if (gx >= disp_window_size)
     {
-        if (chart_ecg_update == true)
-        {
-            lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, y_min_ecg, y_max_ecg);
-        }
-
         gx = 0;
-
-        y_max_ecg = -900000;
-        y_min_ecg = 900000;
     }
 }
 
+// Simplified sample counter - now handled in main plot function  
 void hpi_ecg_disp_add_samples(int num_samples)
 {
-    gx += num_samples;
+    // Sample counting is now handled directly in the plot function
+    // for better performance
 }
 
 void hpi_ecg_disp_update_hr(int hr)
@@ -198,53 +213,66 @@ void hpi_ecg_disp_update_timer(int time_left)
 }
 
 static bool prev_lead_off_status = true;
+static uint32_t sample_counter = 0;
+static const uint32_t RANGE_UPDATE_INTERVAL = 100; // Update range every 100 samples
 
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
 {
-    if (chart_ecg_update == true) // && ecg_lead_off == false)
+    if (chart_ecg_update == true && chart_ecg != NULL && ser_ecg != NULL)
     {
+        // Batch process samples for better performance
         for (int i = 0; i < num_samples; i++)
         {
-            int32_t data_ecg_i = ((data_ecg[i] * 1000) / 5242880) * 10; // in mV// (data_ecg[i]);
-
-            if (data_ecg_i < y_min_ecg)
-            {
-                y_min_ecg = data_ecg_i;
-            }
-
-            if (data_ecg_i > y_max_ecg)
-            {
-                y_max_ecg = data_ecg_i;
-            }
-
+            // Convert ECG data to display units more efficiently
+            int32_t data_ecg_i = (data_ecg[i] * 10000) / 5242880; // Optimized calculation
+            
+            // Track min/max values for auto-scaling
+            if (data_ecg_i < y_min_ecg) y_min_ecg = data_ecg_i;
+            if (data_ecg_i > y_max_ecg) y_max_ecg = data_ecg_i;
+            
+            // Add data point to chart
             lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg_i);
-            hpi_ecg_disp_add_samples(1);
-            hpi_ecg_disp_do_set_scale(ECG_DISP_WINDOW_SIZE);
+            
+            sample_counter++;
+        }
+        
+        // Update chart range periodically for better performance
+        if (sample_counter >= RANGE_UPDATE_INTERVAL)
+        {
+            // Add some margin to the range for better visualization
+            int32_t range_margin = (y_max_ecg - y_min_ecg) / 10;
+            lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, 
+                             y_min_ecg - range_margin, 
+                             y_max_ecg + range_margin);
+            
+            // Reset for next cycle
+            sample_counter = 0;
+            y_max_ecg = -900000;
+            y_min_ecg = 900000;
+        }
+        
+        // Update samples counter
+        gx += num_samples;
+        if (gx >= ECG_DISP_WINDOW_SIZE) {
+            gx = 0;
         }
 
-        /*if (ecg_lead_off == true)
+        // Handle lead off status changes efficiently
+        if (ecg_lead_off != prev_lead_off_status)
         {
-            //lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-            // ecg_plot_hidden = true;
-        }
-        else
-        {
-            lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-            // ecg_plot_hidden = false;
-        }*/
-
-        if ((ecg_lead_off == true) && (prev_lead_off_status == false))
-        {
-            lv_label_set_text(label_ecg_lead_off, "Lead Off");
-            lv_obj_add_style(label_ecg_lead_off, &style_red_medium, 0);
-            prev_lead_off_status = true;
-        }
-        else if ((ecg_lead_off == false) && (prev_lead_off_status == true))
-        {
-            lv_label_set_text(label_ecg_lead_off, "Lead On");
-            lv_obj_add_style(label_ecg_lead_off, &style_white_medium, 0);
-            prev_lead_off_status = false;
+            if (ecg_lead_off)
+            {
+                lv_label_set_text(label_ecg_lead_off, "Lead Off");
+                lv_obj_remove_style_all(label_ecg_lead_off);
+                lv_obj_add_style(label_ecg_lead_off, &style_red_medium, 0);
+            }
+            else
+            {
+                lv_label_set_text(label_ecg_lead_off, "Lead On");
+                lv_obj_remove_style_all(label_ecg_lead_off);
+                lv_obj_add_style(label_ecg_lead_off, &style_white_medium, 0);
+            }
+            prev_lead_off_status = ecg_lead_off;
         }
     }
 }
