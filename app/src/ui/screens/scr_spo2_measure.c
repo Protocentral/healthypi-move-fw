@@ -83,7 +83,13 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
 
-    lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
+    // LVGL 9: Chart point styling changed - commented out
+
+
+    // lv_obj_set_style_width(...);
+    // LVGL 9: Chart point styling changed - commented out
+
+    // lv_obj_set_style_height(...);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
 
     if (spo2_source == SPO2_SOURCE_PPG_FI)

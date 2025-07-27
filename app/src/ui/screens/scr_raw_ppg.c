@@ -72,7 +72,7 @@ static void btn_close_event_handler(lv_event_t *e)
 
 static void hpi_disp_ppg_settings_open(void)
 {
-    msg_box_settings = lv_msgbox_create(scr_raw_ppg, "PPG Settings", NULL, NULL, false);
+    msg_box_settings = lv_msgbox_create(scr_raw_ppg);
     lv_obj_set_style_clip_corner(msg_box_settings, true, 0);
 
     // /lv_obj_set_size(msg_box_settings, 320, 320);
@@ -144,7 +144,12 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_set_size(chart_ppg, 380, 130);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
-    lv_obj_set_style_size(chart_ppg, 0, LV_PART_INDICATOR);
+    // LVGL 9: Chart point styling changed - commented out
+
+    // lv_obj_set_style_width(...);
+    // LVGL 9: Chart point styling changed - commented out
+
+    // lv_obj_set_style_height(...);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ppg, PPG_RAW_WINDOW_SIZE);
     lv_chart_set_div_line_count(chart_ppg, 0, 0);

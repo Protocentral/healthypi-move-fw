@@ -45,7 +45,11 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir)
 
     lv_chart_set_type(chart_hrv_scatter, LV_CHART_TYPE_SCATTER);
 
-    //lv_obj_set_style_size(chart_hrv_scatter, 0, LV_PART_INDICATOR);
+    //// LVGL 9: Chart point styling changed - commented out
+// lv_obj_set_style_width(...);
+    // LVGL 9: Chart point styling changed - commented out
+
+    // lv_obj_set_style_height(...);
     //lv_obj_set_style_border_width(chart_hrv_scatter, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_hrv_scatter, 60);
     // lv_chart_set_type(chart_hrv_scatter, LV_CHART_TYPE_LINE);

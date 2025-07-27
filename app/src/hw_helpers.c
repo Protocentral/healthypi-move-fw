@@ -31,8 +31,6 @@
 
 LOG_MODULE_REGISTER(hw_helpers);
 
-static const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
-
 void hpi_switch_cpu_64mhz(void)
 {
     LOG_DBG("Switching application core from 128 MHz and 64 MHz.");
