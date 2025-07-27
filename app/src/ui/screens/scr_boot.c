@@ -50,8 +50,8 @@ void draw_scr_boot(void)
     */
 
     // lv_obj_add_event_cb(ta, textarea_event_handler, LV_EVENT_READY, ta);
-    lv_obj_add_state(ta_boot, LV_STATE_FOCUSED);
-    lv_label_set_recolor(ta_boot, true);
+    //lv_obj_add_state(ta_boot, LV_STATE_FOCUSED);
+    //lv_label_set_recolor(ta_boot, true);
 
     hpi_disp_set_curr_screen(SCR_SPL_BOOT);
     hpi_show_screen(scr_boot, SCROLL_RIGHT);
@@ -59,7 +59,7 @@ void draw_scr_boot(void)
 
 void scr_boot_add_status(char *dev_label, bool status, bool show_status)
 {
-    char buf[32];
+    /*char buf[32];
     if (show_status)
     {
         sprintf(buf, "%s: %s\n", dev_label, status ? "OK" : "FAIL");
@@ -72,11 +72,12 @@ void scr_boot_add_status(char *dev_label, bool status, bool show_status)
     lv_textarea_add_text(ta_boot, buf);
     lv_textarea_cursor_down(ta_boot);
     //lv_obj_scroll_by(ta_boot, 0, -20, LV_ANIM_ON);
+    */
 }
 
 void scr_boot_add_final(bool status)
 {
-    char buf[32];
+    /*char buf[32];
     sprintf(buf, "  \nCOMPLETE: %s\n", status ? "OK" : "FAIL");
-    lv_textarea_add_text(ta_boot, buf);
+    lv_textarea_add_text(ta_boot, buf);*/
 }
