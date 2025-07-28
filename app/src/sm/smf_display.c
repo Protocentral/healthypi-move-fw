@@ -591,7 +591,7 @@ static void st_display_progress_entry(void *o)
 
     LOG_DBG("Display SM Progress Entry");
     draw_scr_progress(s->title, "Please wait...");
-    max32664_set_progress_callback(hpi_max32664_update_progress);
+    //max32664_set_progress_callback(hpi_max32664_update_progress);
     max32664_update_progress = 0;
     hpi_disp_scr_update_progress(max32664_update_progress, "Starting...");
 }

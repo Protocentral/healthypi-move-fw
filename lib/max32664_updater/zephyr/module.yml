@@ -1,6 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-name: max32664-updater
-build:
-  kconfig: Kconfig
-  cmake: .
-

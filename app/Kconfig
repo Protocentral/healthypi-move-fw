@@ -1,0 +1,6 @@
+# Copyright (c) 2024 Protocentral
+# SPDX-License-Identifier: Apache-2.0
+
+# Application-specific Kconfig options
+
+rsource "lib/max32664_updater/Kconfig"
