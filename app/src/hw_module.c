@@ -389,8 +389,7 @@ int npm_fuel_gauge_init(const struct device *charger)
 
 int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uint8_t *batt_level, bool *batt_charging, float *batt_voltage)
 {
-    /* nPM1300 CHARGER.BCHGCHARGESTATUS.CONSTANTCURRENT register bitmask */
-#define NPM1300_CHG_STATUS_CC_MASK BIT_MASK(3)
+    static int32_t chg_status_prev;
     float voltage;
     float current;
     float temp;
@@ -409,20 +408,38 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uin
         return ret;
     }
 
-    cc_charging = (chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0;
+    ret = nrf_fuel_gauge_ext_state_update(
+        vbus_connected ? NRF_FUEL_GAUGE_EXT_STATE_INFO_VBUS_CONNECTED
+                       : NRF_FUEL_GAUGE_EXT_STATE_INFO_VBUS_DISCONNECTED,
+        NULL);
+    if (ret < 0)
+    {
+        printk("Error: Could not inform of state\n");
+        return ret;
+    }
+
+    /*if (chg_status != chg_status_prev) {
+        chg_status_prev = chg_status;
+
+        ret = charge_status_inform(chg_status);
+        if (ret < 0) {
+            printk("Error: Could not inform of charge status\n");
+            return ret;
+        }
+    }*/
 
     delta = (float)k_uptime_delta(&ref_time) / 1000.f;
 
-    /*soc = nrf_fuel_gauge_process(voltage, current, temp, delta, vbus_connected, NULL);
+    /* Process fuel gauge data with nRF Connect SDK 3.0.2 API */
+    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, NULL);
     tte = nrf_fuel_gauge_tte_get();
-    ttf = nrf_fuel_gauge_ttf_get(cc_charging, term_charge_current);
-    */
+    ttf = nrf_fuel_gauge_ttf_get();
 
-    // printk("V: %.3f, I: %.3f, T: %.2f, ", voltage, current, temp);
-    // printk("SoC: %.2f, TTE: %.0f, TTF: %.0f, ", soc, tte, ttf);
-    // printk("Charge status: %d\n", chg_status);
+    LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
+            (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
+
     *batt_level = (uint8_t)soc;
-    *batt_charging = ((chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0);
+    *batt_charging = chg_status;
     *batt_voltage = voltage; // Return the battery voltage
     return 0;
 }
