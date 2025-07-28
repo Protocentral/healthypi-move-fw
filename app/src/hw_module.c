@@ -788,7 +788,7 @@ void hw_module_init(void)
             LOG_INF("MAX32664C App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
             k_sem_give(&sem_boot_update_req);
-            // max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
         }
 
         k_sem_give(&sem_ppg_wrist_sm_start);
