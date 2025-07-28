@@ -38,15 +38,15 @@ set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 # This places images in the external flash memory
 
-zephyr_code_relocate(FILES ../lib/max32664_updater/max32664_updater.c LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(FILES ../lib/max32664_updater/msbl/max32664c_30_13_31.c LOCATION EXTFLASH_RODATA NOCOPY)
-zephyr_code_relocate(FILES ../lib/max32664_updater/msbl/max32664d_40_6_0.c LOCATION EXTFLASH_RODATA NOCOPY)
+#zephyr_code_relocate(FILES ../lib/max32664_updater/max32664_updater.c LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(FILES ../lib/max32664_updater/msbl/max32664c_30_13_31.c LOCATION EXTFLASH_RODATA NOCOPY)
+#zephyr_code_relocate(FILES ../lib/max32664_updater/msbl/max32664d_40_6_0.c LOCATION EXTFLASH_RODATA NOCOPY)
 
-zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__mgmt LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__transport LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__util LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__smp LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__grp__img_mgmt LOCATION EXTFLASH_TEXT NOCOPY)
-zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__grp__os_mgmt LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__mgmt LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__transport LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__util LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__smp LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__grp__img_mgmt LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(LIBRARY subsys__mgmt__mcumgr__grp__os_mgmt LOCATION EXTFLASH_TEXT NOCOPY)
 
-zephyr_code_relocate(LIBRARY modules__cmsis-dsp LOCATION EXTFLASH_TEXT NOCOPY)
+#zephyr_code_relocate(LIBRARY modules__cmsis-dsp LOCATION EXTFLASH_TEXT NOCOPY)

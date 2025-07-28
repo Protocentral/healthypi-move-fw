@@ -57,9 +57,9 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 
 // Battery cutoff thresholds - voltage based (typical Li-ion voltages)
 // These values can be adjusted based on the specific battery characteristics
-#define HPI_BATTERY_CRITICAL_VOLTAGE    3.2f   // Show critical low battery screen (V)
-#define HPI_BATTERY_SHUTDOWN_VOLTAGE    3.0f   // Auto shutdown level (V) - prevents over-discharge
-#define HPI_BATTERY_RECOVERY_VOLTAGE    3.4f   // Recovery threshold when charging (V) - allows hysteresis
+#define HPI_BATTERY_CRITICAL_VOLTAGE 3.2f // Show critical low battery screen (V)
+#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f // Auto shutdown level (V) - prevents over-discharge
+#define HPI_BATTERY_RECOVERY_VOLTAGE 3.4f // Recovery threshold when charging (V) - allows hysteresis
 
 char curr_string[40];
 
@@ -257,7 +257,7 @@ void send_usb_cdc(const char *buf, size_t len)
     uart_irq_tx_enable(usb_cdc_uart_dev);
 }
 
-#if 0  // USB CDC interrupt handler - not currently used
+#if 0 // USB CDC interrupt handler - not currently used
 static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_data)
 {
     ARG_UNUSED(user_data);
@@ -423,11 +423,11 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uin
     // printk("Charge status: %d\n", chg_status);
     *batt_level = (uint8_t)soc;
     *batt_charging = ((chg_status & NPM1300_CHG_STATUS_CC_MASK) != 0);
-    *batt_voltage = voltage;  // Return the battery voltage
+    *batt_voltage = voltage; // Return the battery voltage
     return 0;
 }
 
-#if 0  // USB init function - not currently used
+#if 0 // USB init function - not currently used
 static int usb_init()
 {
     int ret = 0;
@@ -478,12 +478,11 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
         .tm_min = m_min,
         .tm_hour = m_hour,
         .tm_mday = m_day,
-        .tm_mon = m_month - 1,  // Convert 1-based month to 0-based (Jan=0, Dec=11)
-        .tm_year = m_year +2000 -1900,  // Convert full year to years since 1900, app send only YY
-        .tm_wday = 0,  
-        .tm_yday = 0   
-    };
-    
+        .tm_mon = m_month - 1,           // Convert 1-based month to 0-based (Jan=0, Dec=11)
+        .tm_year = m_year + 2000 - 1900, // Convert full year to years since 1900, app send only YY
+        .tm_wday = 0,
+        .tm_yday = 0};
+
     hpi_sys_set_rtc_time(&time_to_set);
 }
 
@@ -626,8 +625,8 @@ void hw_module_init(void)
     // Reset all sensors before starting
     regulator_disable(ldsw_sens_1_8);
     k_msleep(100);
-    regulator_enable(ldsw_sens_1_8);  
-    k_msleep(100);  
+    regulator_enable(ldsw_sens_1_8);
+    k_msleep(100);
 
     // Signal to start display state machine
     k_sem_give(&sem_disp_smf_start);
@@ -651,19 +650,19 @@ void hw_module_init(void)
     uint8_t boot_batt_level = 0;
     bool boot_batt_charging = false;
     float boot_batt_voltage = 0.0f;
-    
+
     if (npm_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
     {
         char batt_msg[32];
         snprintf(batt_msg, sizeof(batt_msg), "Battery: %.2fV (%d%%)", (double)boot_batt_voltage, boot_batt_level);
-        
+
         // Check if battery voltage is critically low
         if (boot_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE && !boot_batt_charging)
         {
             hw_add_boot_msg(batt_msg, false, true, false, 0);
             hw_add_boot_msg("CRITICAL LOW VOLTAGE", false, true, false, 0);
             hw_add_boot_msg("Connect charger to boot", false, false, false, 0);
-            
+
             // Wait a bit to show the message, then shutdown
             k_msleep(3000);
             LOG_ERR("Boot aborted - critical battery voltage: %.2fV", (double)boot_batt_voltage);
@@ -789,7 +788,7 @@ void hw_module_init(void)
             LOG_INF("MAX32664C App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
             k_sem_give(&sem_boot_update_req);
-            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+            // max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
         }
 
         k_sem_give(&sem_ppg_wrist_sm_start);
@@ -823,7 +822,7 @@ void hw_module_init(void)
             LOG_INF("MAX32664D App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
             k_sem_give(&sem_boot_update_req);
-            max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+            // max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
         }
 
         k_sem_give(&sem_ppg_finger_sm_start);
@@ -874,7 +873,7 @@ void hw_module_init(void)
     }
     struct tm m_tm_time = *rtc_time_to_tm(&rtc_sys_time);
     hpi_sys_set_sys_time(&m_tm_time);
-    
+
     // Initialize time synchronization
     hpi_sys_force_time_sync(); // Force initial sync
 
@@ -884,10 +883,13 @@ void hw_module_init(void)
 
     // Initialize user settings (load from file)
     ret = hpi_user_settings_init();
-    if (ret < 0) {
+    if (ret < 0)
+    {
         LOG_ERR("Failed to initialize user settings: %d", ret);
         hw_add_boot_msg("User Settings", false, true, false, 0);
-    } else {
+    }
+    else
+    {
         LOG_INF("User settings initialized successfully");
         hw_add_boot_msg("User Settings", true, true, false, 0);
     }
@@ -933,7 +935,7 @@ void hw_thread(void)
 
     uint8_t sys_batt_level = 0;
     bool sys_batt_charging = false;
-    float sys_batt_voltage = 4.2f;  // Add voltage tracking
+    float sys_batt_voltage = 4.2f; // Add voltage tracking
 
     // Variables for tracking daily reset
     static int last_day = -1;
@@ -948,8 +950,8 @@ void hw_thread(void)
     {
         // Read and publish battery level
         npm_fuel_gauge_update(charger, vbus_connected, &sys_batt_level, &sys_batt_charging, &sys_batt_voltage);
-        last_battery_level = sys_batt_level;  // Store for external access
-        last_battery_voltage = sys_batt_voltage;  // Store voltage for external access
+        last_battery_level = sys_batt_level;     // Store for external access
+        last_battery_voltage = sys_batt_voltage; // Store voltage for external access
 
         struct hpi_batt_status_t batt_s = {
             .batt_level = (uint8_t)sys_batt_level,
@@ -958,27 +960,34 @@ void hw_thread(void)
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
         // Check for low battery conditions (voltage-based)
-        if (!sys_batt_charging) {  // Only check cutoff when not charging
-            if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE) {
+        if (!sys_batt_charging)
+        { // Only check cutoff when not charging
+            if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
+            {
                 // Critical battery voltage - immediately shutdown
                 LOG_ERR("Critical battery voltage (%.2fV) - shutting down", (double)sys_batt_voltage);
-                k_msleep(1000);  // Give time for log message
+                k_msleep(1000); // Give time for log message
                 hpi_hw_pmic_off();
             }
-            else if (sys_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !low_battery_screen_active) {
+            else if (sys_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !low_battery_screen_active)
+            {
                 // Show low battery warning screen
                 LOG_WRN("Low battery voltage (%.2fV) - showing warning screen", (double)sys_batt_voltage);
                 low_battery_screen_active = true;
                 critical_battery_notified = true;
-                
+
                 // Load the low battery screen with battery level and voltage as arguments
                 // Pass voltage as arg3 (multiply by 100 to preserve 2 decimal places in uint32_t)
                 hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
             }
-        } else {
+        }
+        else
+        {
             // Reset flags when charging and voltage recovers
-            if (sys_batt_voltage > HPI_BATTERY_RECOVERY_VOLTAGE) {
-                if (low_battery_screen_active) {
+            if (sys_batt_voltage > HPI_BATTERY_RECOVERY_VOLTAGE)
+            {
+                if (low_battery_screen_active)
+                {
                     LOG_INF("Battery voltage recovered (%.2fV) - dismissing low battery screen", (double)sys_batt_voltage);
                     // Return to home screen
                     hpi_load_screen(SCR_HOME, SCROLL_NONE);
@@ -989,9 +998,11 @@ void hw_thread(void)
         }
 
         // Update low battery screen if it's currently active and status changed
-        if (low_battery_screen_active) {
+        if (low_battery_screen_active)
+        {
             // Only refresh every 5 seconds to avoid excessive updates
-            if (k_uptime_get_32() - low_battery_last_update > 5000) {
+            if (k_uptime_get_32() - low_battery_last_update > 5000)
+            {
                 // Refresh the low battery screen to show updated charging status and voltage
                 hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
                 low_battery_last_update = k_uptime_get_32();
@@ -999,10 +1010,11 @@ void hw_thread(void)
         }
 
         // Sync time with RTC if needed
-        if (hpi_sys_sync_time_if_needed() < 0) {
+        if (hpi_sys_sync_time_if_needed() < 0)
+        {
             LOG_ERR("Failed to sync time with RTC");
         }
-        
+
         // Get current synced time and publish
         struct tm m_tm_time = hpi_sys_get_current_time();
         zbus_chan_pub(&sys_time_chan, &m_tm_time, K_SECONDS(1));
