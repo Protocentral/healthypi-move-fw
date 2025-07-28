@@ -27,8 +27,12 @@ FILE(GLOB app_sources   src/*.c
 target_sources(app PRIVATE ${app_sources})
 
 if(CONFIG_MAX32664_UPDATER)
-    add_subdirectory(lib/max32664_updater)
-    target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/lib/max32664_updater)
+    FILE(GLOB max32664_updater_sources 
+         src/max32664_updater/*.c)
+         #src/max32664_updater/msbl/*.c)
+    #add_subdirectory(src/max32664_updater)
+    #target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/max32664_updater)
+    zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/max32664_updater)
 endif()
 
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)

@@ -3,4 +3,5 @@
 
 # Application-specific Kconfig options
 
-rsource "lib/max32664_updater/Kconfig"
+rsource "src/max32664_updater/Kconfig"
+source "Kconfig.zephyr"
