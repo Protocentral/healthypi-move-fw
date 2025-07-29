@@ -1,16 +1,11 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/fs/fs.h>
 
 #include "max32664_updater.h"
 
-extern const uint8_t max32664c_msbl[238112];
-extern const uint8_t max32664d_40_6_0[172448];
-
 LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_DBG); // CONFIG_MAX32664_UPDATER_LOG_LEVEL);
-
-uint8_t max32664_fw_init_vector[11] = {0};
-uint8_t max32664_fw_auth_vector[16] = {0};
 
 #define MAX32664C_DEFAULT_CMD_DELAY 10
 
@@ -19,6 +14,15 @@ uint8_t max32664_fw_auth_vector[16] = {0};
 
 #define MAX32664C_FW_BIN_INCLUDE 0
 #define MAX32664C_WR_SIM_ONLY 0
+
+// File paths for firmware binaries
+#define MAX32664C_FW_PATH "/lfs/max32664c_msbl.bin"
+#define MAX32664D_FW_PATH "/lfs/max32664d_40_6_0.bin"
+
+// Small shared buffer for temporary operations
+// SAFETY: This buffer is only used in single-threaded context during firmware updates
+#define SHARED_BUFFER_SIZE 1026
+static uint8_t shared_rw_buffer[SHARED_BUFFER_SIZE]; // Reusable buffer for I2C operations and file reading
 
 static int m_read_op_mode(const struct device *dev);
 
@@ -170,46 +174,48 @@ static int m_fw_write_page_single(const struct device *dev, uint8_t *msbl_data, 
 	return 0;
 }
 */
-static uint8_t tmp_wr_buf[8][1026];
 
-static int m_fw_write_page(const struct device *dev, const uint8_t *msbl_data, uint32_t msbl_page_offset)
+static int m_fw_write_page(const struct device *dev, struct fs_file_t *file, uint32_t msbl_page_offset)
 {
 	const struct max32664_config *config = dev->config;
 
 	uint8_t rd_buf[1] = {0x00};
 	uint8_t cmd_wr_buf[2] = {0x80, 0x04};
 
-	// memcpy(&fw_data_wr_buf[2], &max32664d_msbl[msbl_page_offset], (MAX32664C_FW_UPDATE_WRITE_SIZE+2));
-	// memcpy(fw_data_wr_buf, &max32664_msbl[msbl_page_offset], MAX32664C_FW_UPDATE_WRITE_SIZE);
-
 	int msg_len = 1026;
-	int num_msgs = ((MAX32664C_FW_UPDATE_WRITE_SIZE) / msg_len);
 
-	struct i2c_msg max32664_i2c_msgs[9];
+	LOG_DBG("Num Msgs: %d", ((MAX32664C_FW_UPDATE_WRITE_SIZE) / msg_len));
 
-	LOG_DBG("Num Msgs: %d", num_msgs);
+	// Seek to the correct position in the file
+	fs_seek(file, msbl_page_offset, FS_SEEK_SET);
 
-	max32664_i2c_msgs[0].buf = cmd_wr_buf; // fw_data_wr_buf[0];
-	max32664_i2c_msgs[0].len = 2;
-	max32664_i2c_msgs[0].flags = I2C_MSG_WRITE;
+	// Send the command first
+	int ret = i2c_write_dt(&config->i2c, cmd_wr_buf, sizeof(cmd_wr_buf));
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to send write page command, error: %d", ret);
+		return ret;
+	}
 
-	// #if (MAX32664C_FW_BIN_INCLUDE == 1)
+	// Stream the firmware data directly from file to I2C in chunks
 	for (int i = 0; i < 8; i++)
 	{
-		memcpy(tmp_wr_buf[i], &max32664d_40_6_0[(i * msg_len) + msbl_page_offset], msg_len);
+		// Read chunk directly into shared buffer
+		ssize_t bytes_read = fs_read(file, shared_rw_buffer, msg_len);
+		if (bytes_read != msg_len)
+		{
+			LOG_ERR("Failed to read firmware chunk %d, read %d bytes", i, bytes_read);
+			return -EIO;
+		}
 
-		max32664_i2c_msgs[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
-		max32664_i2c_msgs[i + 1].len = msg_len;
-		max32664_i2c_msgs[i + 1].flags = I2C_MSG_WRITE;
-		//LOG_DBG("Msg %d: L %d msg_len: %d", (i + 1), max32664_i2c_msgs[i + 1].len, msg_len);
+		// Send chunk directly via I2C
+		ret = i2c_write_dt(&config->i2c, shared_rw_buffer, msg_len);
+		if (ret < 0)
+		{
+			LOG_ERR("Failed to send firmware chunk %d, error: %d", i, ret);
+			return ret;
+		}
 	}
-	// #endif
-
-	max32664_i2c_msgs[8].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
-
-	int ret = i2c_transfer_dt(&config->i2c, max32664_i2c_msgs, 9);
-
-	LOG_DBG("Transfer Ret: %d", ret);
 
 	k_sleep(K_MSEC(800));
 
@@ -338,32 +344,57 @@ static void update_progress(int progress, int status)
 	}
 }
 
-static int max32664_load_fw(const struct device *dev, const int8_t *fw_bin_array, bool is_sim)
+static int max32664_load_fw(const struct device *dev, const char *fw_file_path, bool is_sim)
 {
 	uint8_t msbl_num_pages = 0;
+	struct fs_file_t file;
 
-	LOG_DBG("Loading MSBL...");
+	LOG_DBG("Loading MSBL from file: %s", fw_file_path);
 
-	LOG_DBG("MSBL Array Size: %d", sizeof(fw_bin_array));
+	// Open the firmware file
+	int ret = fs_open(&file, fw_file_path, FS_O_READ);
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to open firmware file: %s, error: %d", fw_file_path, ret);
+		return ret;
+	}
 
-	msbl_num_pages = fw_bin_array[0x44];
+	// Read header to get firmware information - reuse shared buffer for header
+	// Only need first ~80 bytes for header data
+	ret = fs_read(&file, shared_rw_buffer, 128);
+	if (ret < 0)
+	{
+		LOG_ERR("Failed to read firmware file header, error: %d", ret);
+		fs_close(&file);
+		return ret;
+	}
+
+	msbl_num_pages = shared_rw_buffer[0x44];
 	LOG_DBG("MSBL Load: Pages: %d (%x)", msbl_num_pages, msbl_num_pages);
 
 	m_read_mcu_id(dev);
 
 	m_write_set_num_pages(dev, msbl_num_pages);
 
-	memcpy(max32664_fw_init_vector, &fw_bin_array[0x28], 11);
-	m_write_init_vector(dev, max32664_fw_init_vector);
-	LOG_DBG("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x", max32664_fw_init_vector[0], max32664_fw_init_vector[1], max32664_fw_init_vector[2], max32664_fw_init_vector[3], max32664_fw_init_vector[4], max32664_fw_init_vector[5], max32664_fw_init_vector[6], max32664_fw_init_vector[7], max32664_fw_init_vector[8], max32664_fw_init_vector[9], max32664_fw_init_vector[10]);
+	// Use local variables for vectors to save RAM
+	uint8_t init_vector[11];
+	uint8_t auth_vector[16];
 
-	memcpy(max32664_fw_auth_vector, &fw_bin_array[0x34], 16);
-	m_write_auth_vector(dev, max32664_fw_auth_vector);
+	memcpy(init_vector, &shared_rw_buffer[0x28], 11);
+	m_write_init_vector(dev, init_vector);
+	LOG_DBG("MSBL Init Vector: %x %x %x %x %x %x %x %x %x %x %x",
+			init_vector[0], init_vector[1], init_vector[2],
+			init_vector[3], init_vector[4], init_vector[5],
+			init_vector[6], init_vector[7], init_vector[8],
+			init_vector[9], init_vector[10]);
+
+	memcpy(auth_vector, &shared_rw_buffer[0x34], 16);
+	m_write_auth_vector(dev, auth_vector);
 
 	m_erase_app(dev);
 
 	int _progress_counter = 0;
-	int _progress_step = (100/msbl_num_pages);
+	int _progress_step = (100 / msbl_num_pages);
 
 	update_progress(_progress_counter, MAX32664_UPDATER_STATUS_IN_PROGRESS);
 
@@ -374,19 +405,29 @@ static int max32664_load_fw(const struct device *dev, const int8_t *fw_bin_array
 		{
 			LOG_DBG("Writing Page: %d of %d", (i + 1), msbl_num_pages);
 
-			// memcpy(max32664_fw_page_buf, &fw_bin_array[MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE)], MAX32664C_FW_UPDATE_WRITE_SIZE);
 			uint32_t msbl_page_offset = (MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE));
-			LOG_DBG("MSBL Page Offset: %d (%x)\n", msbl_page_offset, msbl_page_offset);
-			m_fw_write_page(dev, fw_bin_array, msbl_page_offset);
-			// m_fw_write_page_single(dev, max32664_msbl, msbl_page_offset);
+			LOG_DBG("MSBL Page Offset: %d (%x)", msbl_page_offset, msbl_page_offset);
+
+			ret = m_fw_write_page(dev, &file, msbl_page_offset);
+			if (ret < 0)
+			{
+				LOG_ERR("Failed to write firmware page %d, error: %d", i, ret);
+				fs_close(&file);
+				update_progress(_progress_counter, MAX32664_UPDATER_STATUS_FAILED);
+				return ret;
+			}
+
 			_progress_counter += _progress_step;
 			update_progress(_progress_counter, MAX32664_UPDATER_STATUS_IN_PROGRESS);
-
-			// k_sleep(K_MSEC(500));
 		}
-		max32664_do_enter_app(dev);
 
-		update_progress(100, MAX32664_UPDATER_STATUS_SUCCESS);		
+		fs_close(&file);
+		max32664_do_enter_app(dev);
+		update_progress(100, MAX32664_UPDATER_STATUS_SUCCESS);
+	}
+	else
+	{
+		fs_close(&file);
 	}
 
 	LOG_DBG("End Load MSBL");
@@ -412,7 +453,6 @@ static int m_read_op_mode(const struct device *dev)
 
 	return rd_buf[1];
 }
-
 
 void max32664_updater_start(const struct device *dev, enum max32664_updater_device_type type)
 {
@@ -441,10 +481,10 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 
 	if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664C)
 	{
-		//max32664_load_fw(dev, max32664c_msbl, false);
+		max32664_load_fw(dev, MAX32664C_FW_PATH, false);
 	}
 	else if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664D)
 	{
-		//max32664_load_fw(dev, max32664d_40_6_0, false);
+		max32664_load_fw(dev, MAX32664D_FW_PATH, false);
 	}
 }
