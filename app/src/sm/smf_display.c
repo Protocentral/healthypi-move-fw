@@ -591,7 +591,7 @@ static void st_display_progress_entry(void *o)
 
     LOG_DBG("Display SM Progress Entry");
     draw_scr_progress(s->title, "Please wait...");
-    max32664_set_progress_callback(hpi_max32664_update_progress);
+    //max32664_set_progress_callback(hpi_max32664_update_progress);
     max32664_update_progress = 0;
     hpi_disp_scr_update_progress(max32664_update_progress, "Starting...");
 }
@@ -1096,7 +1096,7 @@ static void disp_ecg_stat_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
 
-#define SMF_DISPLAY_THREAD_STACK_SIZE 32768
+#define SMF_DISPLAY_THREAD_STACK_SIZE 24576
 #define SMF_DISPLAY_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(smf_display_thread_id, SMF_DISPLAY_THREAD_STACK_SIZE, smf_display_thread, NULL, NULL, NULL, SMF_DISPLAY_THREAD_PRIORITY, 0, 0);

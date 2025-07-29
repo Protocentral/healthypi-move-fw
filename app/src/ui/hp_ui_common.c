@@ -64,10 +64,7 @@ static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
 {
     LV_UNUSED(th);
 
-    if (lv_obj_check_type(obj, &lv_btn_class))
-    {
-        lv_obj_add_style(obj, &style_btn, 0);
-    }
+    
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
 }
 
@@ -78,25 +75,6 @@ void display_init_styles(void)
     lv_style_set_bg_color(&style_btn, lv_palette_darken(LV_PALETTE_GREY, 4));
     lv_style_set_border_color(&style_btn, lv_palette_darken(LV_PALETTE_RED, 3));
     lv_style_set_border_width(&style_btn, 3);
-
-    /*Initialize the new theme from the current theme*/
-    lv_theme_t *th_act = lv_disp_get_theme(NULL);
-    static lv_theme_t th_new;
-    th_new = *th_act;
-
-    /*Set the parent theme and the style apply callback for the new theme*/
-    lv_theme_set_parent(&th_new, th_act);
-    lv_theme_set_apply_cb(&th_new, new_theme_apply_cb);
-
-    /*Assign the new theme to the current display*/
-    lv_disp_set_theme(NULL, &th_new);
-
-    /*lv_theme_t *th = lv_theme_default_init(NULL,
-        lv_palette_main(LV_PALETTE_RED), lv_palette_main(LV_PALETTE_RED) ,
-                                           true,
-                                           &fredoka_28);
-
-    lv_disp_set_theme(NULL, th);*/
 
     // Subscript (Unit) label style
     lv_style_init(&style_tiny);
@@ -191,7 +169,7 @@ void display_init_styles(void)
     grad_purple.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_purple, &grad_purple);
 
-    lv_disp_set_bg_color(NULL, lv_color_black());
+    //lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
 void draw_scr_common(lv_obj_t *parent)

@@ -6,4 +6,5 @@
 # module options by going to Zephyr -> Modules in Kconfig.
 
 rsource "drivers/Kconfig"
+#rsource "app/Kconfig"
 #rsource "lib/Kconfig"

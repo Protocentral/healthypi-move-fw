@@ -47,7 +47,9 @@ static void btn_shutdown_no_cb(lv_event_t *e)
 
 static void hpi_show_shutdown_mbox(void)
 {
-    msgbox_shutdown = lv_msgbox_create(NULL, "", "Shutdown?", NULL, false);
+    /*msgbox_shutdown = lv_msgbox_create(NULL);
+    lv_msgbox_set_title(msgbox_shutdown, "");
+    lv_msgbox_set_text(msgbox_shutdown, "Shutdown?");
     lv_obj_center(msgbox_shutdown);
 
     lv_obj_t *content = lv_msgbox_get_content(msgbox_shutdown);
@@ -74,6 +76,7 @@ static void hpi_show_shutdown_mbox(void)
     lv_obj_t *lbl_btn_no = lv_label_create(btn_no);
     lv_label_set_text(lbl_btn_no, LV_SYMBOL_CLOSE " No");
     lv_obj_center(lbl_btn_no);
+    */
 }
 
 static void btn_device_user_settings_event_cb(lv_event_t *e)

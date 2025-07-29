@@ -12,7 +12,7 @@ manifest:
     - name: sdk-nrf
       remote: nrf
       path: nrf
-      revision: v2.9-branch
+      revision: v3.0-branch
       import:
          name-blocklist:
           - ci-tools
@@ -37,9 +37,3 @@ manifest:
 #      remote: protocentral
 #      revision: main
 #      path: drivers/sensor/max30001
-
-    - name: max32664_updater_zephyr
-      remote: protocentral
-      repo-path: pc_max32664_updater_zephyr
-      revision: main
-      path: app/lib/max32664_updater
