@@ -137,7 +137,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_anim_set_values(&a, 10, 300);
     lv_anim_start(&a);
 
-    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
+   // hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
 
     // Add screen to display
     hpi_show_screen(scr_hrv, m_scroll_dir);
