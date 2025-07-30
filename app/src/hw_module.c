@@ -61,6 +61,11 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 #define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f // Auto shutdown level (V) - prevents over-discharge
 #define HPI_BATTERY_RECOVERY_VOLTAGE 3.4f // Recovery threshold when charging (V) - allows hysteresis
 
+// Force update option for testing MAX32664 updater logic
+// Uncomment the line(s) below to force updates regardless of version
+// #define FORCE_MAX32664C_UPDATE_FOR_TESTING
+#define FORCE_MAX32664D_UPDATE_FOR_TESTING
+
 char curr_string[40];
 
 // Peripheral Device Pointers
@@ -435,8 +440,8 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uin
     tte = nrf_fuel_gauge_tte_get();
     ttf = nrf_fuel_gauge_ttf_get();
 
-    LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
-            (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
+    //LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
+    //        (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
 
     *batt_level = (uint8_t)soc;
     *batt_charging = chg_status;
@@ -803,10 +808,25 @@ void hw_module_init(void)
             hw_add_boot_msg("\t Acc", true, true, false, 0);
         }
 
+        bool update_required_c = false;
+        
+#ifdef FORCE_MAX32664C_UPDATE_FOR_TESTING
+        // Force update for testing purposes (compile-time)
+        update_required_c = true;
+        LOG_INF("MAX32664C Force update enabled for testing (compile-time)");
+        hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
+#else
+        // Normal version check
         if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
         {
+            update_required_c = true;
             LOG_INF("MAX32664C App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+        }
+#endif
+
+        if (update_required_c)
+        {
             k_sem_give(&sem_boot_update_req);
             max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
         }
@@ -837,12 +857,27 @@ void hw_module_init(void)
         snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
         hw_add_boot_msg(ver_msg, true, false, false, 0);
 
+        bool update_required = false;
+        
+#ifdef FORCE_MAX32664D_UPDATE_FOR_TESTING
+        // Force update for testing purposes (compile-time)
+        update_required = true;
+        LOG_INF("MAX32664D Force update enabled for testing (compile-time)");
+        hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
+#else
+        // Normal version check
         if ((ver_get.val1 < hpi_max32664d_req_ver.major) || (ver_get.val2 < hpi_max32664d_req_ver.minor))
         {
+            update_required = true;
             LOG_INF("MAX32664D App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+        }
+#endif
+
+        if (update_required)
+        {
             k_sem_give(&sem_boot_update_req);
-            // max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+            max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
         }
 
         k_sem_give(&sem_ppg_finger_sm_start);
