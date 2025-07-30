@@ -13,14 +13,14 @@
 LOG_MODULE_REGISTER(hpi_cmd_module, LOG_LEVEL_DBG);
 
 #define MAX_MSG_SIZE 32
-K_MSGQ_DEFINE(q_cmd_msg, sizeof(struct hpi_cmd_data_obj_t), 128, 4);
+K_MSGQ_DEFINE(q_cmd_msg, sizeof(struct hpi_cmd_data_obj_t), 64, 4);  // Reduced from 128 to 64 messages
 
 int cmd_pkt_len;
 int cmd_pkt_pos_counter, cmd_pkt_data_counter;
 int cmd_pkt_pkttype;
-uint8_t ces_pkt_data_buffer[1000]; // = new char[1000];
+uint8_t ces_pkt_data_buffer[512]; // Reduced from 1000 to 512 bytes - sufficient for command packets
 volatile bool cmd_module_ble_connected = false;
-uint8_t data_pkt_buffer[256];
+uint8_t data_pkt_buffer[128]; // Reduced from 256 to 128 bytes - adequate for BLE MTU size
 uint8_t log_type=0;
 
 // Externs
@@ -201,7 +201,7 @@ void cmd_thread(void)
     }
 }
 
-#define CMD_THREAD_STACKSIZE 3072
+#define CMD_THREAD_STACKSIZE 2048  // Reduced from 3072 - adequate for command processing
 #define CMD_THREAD_PRIORITY 7
 
 K_THREAD_DEFINE(cmd_thread_id, CMD_THREAD_STACKSIZE, cmd_thread, NULL, NULL, NULL, CMD_THREAD_PRIORITY, 0, 0);

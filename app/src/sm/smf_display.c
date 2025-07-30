@@ -42,10 +42,10 @@ static uint32_t get_sleep_timeout_ms(void)
     return timeout_ms;
 }
 
-K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);
-K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
-K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 64, 1);
-K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 32, 1);  // Reduced from 64 to 32
+K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);         // Reduced from 64 to 32
+K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);           // Reduced from 64 to 32
+K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);             // Reduced from 64 to 16
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
 K_SEM_DEFINE(sem_disp_ready, 0, 1);

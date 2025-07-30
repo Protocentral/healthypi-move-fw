@@ -139,7 +139,8 @@ static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
 
 //volatile uint8_t fw_data_wr_buf[MAX32664_FW_UPDATE_WRITE_SIZE + 2];
 
-volatile uint8_t tmp_wr_buf[8][1026];
+// Reduced from 8x1026 (8.2KB) to single buffer approach
+static uint8_t tmp_wr_buf[1026]; // Single buffer, reused for each message
 
 static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_t msbl_page_offset)
 {
@@ -158,38 +159,30 @@ static int m_fw_write_page(const struct device *dev, uint8_t *msbl_data, uint32_
 
 	LOG_DBG("Num Msgs: %d", num_msgs);
 
-	max32664_i2c_msg[0].buf = cmd_wr_buf; // fw_data_wr_buf[0];
-	max32664_i2c_msg[0].len = 2;
-	max32664_i2c_msg[0].flags = I2C_MSG_WRITE;
-
+	// Memory-optimized approach: Send messages one at a time instead of parallel
+	// First send the command
+	i2c_write_dt(&config->i2c, cmd_wr_buf, sizeof(cmd_wr_buf));
+	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
 #if (MAX32664D_FW_BIN_INCLUDE == 1)
+	// Send data messages sequentially to reduce memory usage
 	for (int i = 0; i < num_msgs; i++)
 	{
-		memcpy(tmp_wr_buf[i], &max32664d_msbl[(i * msg_len) + msbl_page_offset], msg_len);
-
-		max32664_i2c_msg[i + 1].buf = tmp_wr_buf[i]; // fw_data_wr_buf[(i * msg_len)];
-		max32664_i2c_msg[i + 1].len = msg_len;
-		max32664_i2c_msg[i + 1].flags = I2C_MSG_WRITE;
-		LOG_DBG("Msg %d: L %d\n", (i + 1), max32664_i2c_msg[i + 1].len);
-
-		// Dump max32664_i2c_msg[i + 1].buf
-		//for (int j = 0; j < max32664_i2c_msg[i + 1].len; j++)
-		//{
-		//	printk("%x ", max32664_i2c_msg[i + 1].buf[j]);
-		//}
-		//printk("\n");
-	}
+		memcpy(tmp_wr_buf, &max32664d_msbl[(i * msg_len) + msbl_page_offset], msg_len);
+		
+		int ret = i2c_write_dt(&config->i2c, tmp_wr_buf, msg_len);
+		if (ret != 0) {
+			LOG_ERR("Failed to write message %d, error: %d", i, ret);
+			return ret;
+		}
+		k_sleep(K_USEC(100)); // Small delay between messages
+		LOG_DBG("Sent msg %d of %d", i + 1, num_msgs);
+#else
+	LOG_WRN("Firmware binary not included, skipping data send");
 #endif
 
-	max32664_i2c_msg[(num_msgs)].flags = I2C_MSG_WRITE | I2C_MSG_STOP;
-
-	int ret = i2c_transfer_dt(&config->i2c, max32664_i2c_msg, (num_msgs + 1));
-	LOG_DBG("Transfer Ret: %d", ret);
-
-	// i2c_write_dt(&config->i2c, fw_data_wr_buf, 8192);
+	// Read response
 	k_sleep(K_MSEC(2000));
-
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 

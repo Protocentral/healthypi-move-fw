@@ -21,7 +21,7 @@ LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
 SENSOR_DT_READ_IODEV(max30001_iodev, DT_ALIAS(max30001), SENSOR_CHAN_VOLTAGE);
 
-K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
+K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);  // Reduced from 128 to 64
 
 K_SEM_DEFINE(sem_ecg_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_lon, 0, 1);

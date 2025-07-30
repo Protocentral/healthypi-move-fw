@@ -103,7 +103,7 @@ static uint8_t last_battery_level = 100;  // Store last known battery level
 static float last_battery_voltage = 4.2f; // Store last known battery voltage
 
 // USB CDC UART
-#define RING_BUF_SIZE 1024
+#define RING_BUF_SIZE 512  // Reduced from 1024 to 512 bytes
 uint8_t ring_buffer[RING_BUF_SIZE];
 struct ring_buf ringbuf_usb_cdc;
 static bool rx_throttled;
