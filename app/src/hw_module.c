@@ -671,7 +671,10 @@ void hw_module_init(void)
     if (npm_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
     {
         char batt_msg[32];
-        snprintf(batt_msg, sizeof(batt_msg), "Battery: %.2fV (%d%%)", (double)boot_batt_voltage, boot_batt_level);
+        // Convert voltage to millivolts to avoid floating point in snprintf
+        int voltage_mv = (int)(boot_batt_voltage * 1000);
+        snprintf(batt_msg, sizeof(batt_msg), "Battery: %d.%02d V (%d%%)", 
+                voltage_mv / 1000, (voltage_mv % 1000) / 10, boot_batt_level);
 
         // Check if battery voltage is critically low
         if (boot_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE && !boot_batt_charging)
@@ -682,7 +685,7 @@ void hw_module_init(void)
 
             // Wait a bit to show the message, then shutdown
             k_msleep(3000);
-            LOG_ERR("Boot aborted - critical battery voltage: %.2fV", (double)boot_batt_voltage);
+            LOG_ERR("Boot aborted - critical battery voltage: %.2f V", (double)boot_batt_voltage);
             hpi_hw_pmic_off();
             return; // This should never be reached, but just in case
         }
@@ -982,14 +985,14 @@ void hw_thread(void)
             if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
             {
                 // Critical battery voltage - immediately shutdown
-                LOG_ERR("Critical battery voltage (%.2fV) - shutting down", (double)sys_batt_voltage);
+                LOG_ERR("Critical battery voltage (%.2f V) - shutting down", (double)sys_batt_voltage);
                 k_msleep(1000); // Give time for log message
                 hpi_hw_pmic_off();
             }
             else if (sys_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !low_battery_screen_active)
             {
                 // Show low battery warning screen
-                LOG_WRN("Low battery voltage (%.2fV) - showing warning screen", (double)sys_batt_voltage);
+                LOG_WRN("Low battery voltage (%.2f V) - showing warning screen", (double)sys_batt_voltage);
                 low_battery_screen_active = true;
                 critical_battery_notified = true;
 
@@ -1005,7 +1008,7 @@ void hw_thread(void)
             {
                 if (low_battery_screen_active)
                 {
-                    LOG_INF("Battery voltage recovered (%.2fV) - dismissing low battery screen", (double)sys_batt_voltage);
+                    LOG_INF("Battery voltage recovered (%.2f V) - dismissing low battery screen", (double)sys_batt_voltage);
                     // Return to home screen
                     hpi_load_screen(SCR_HOME, SCROLL_NONE);
                 }
