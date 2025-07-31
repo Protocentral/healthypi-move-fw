@@ -713,6 +713,8 @@ void hw_module_init(void)
         hw_add_boot_msg("Battery: ERROR", false, true, false, 0);
     }
 
+    fs_module_init();
+
     // Init IMU device
     ret = device_init(imu_dev);
     k_msleep(10);
@@ -934,7 +936,6 @@ void hw_module_init(void)
 
     // npm_fuel_gauge_update(charger, vbus_connected);
 
-    fs_module_init();
 
     // Initialize user settings (load from file)
     ret = hpi_user_settings_init();

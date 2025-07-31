@@ -107,7 +107,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_today_steps, "0");
     lv_obj_align_to(label_today_steps, img_steps, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
     lv_obj_set_style_text_color(label_today_steps, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label_today_steps, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label_today_steps, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(label_today_steps, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
     
     lv_obj_t *lbl_title_steps = lv_label_create(today_group);
@@ -123,7 +123,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_today_cals, "0");
     lv_obj_align_to(label_today_cals, img_cals, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
     lv_obj_set_style_text_color(label_today_cals, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label_today_cals, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label_today_cals, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(label_today_cals, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
     
     lv_obj_t *lbl_title_cals = lv_label_create(today_group);
@@ -140,7 +140,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_today_active_time, "00:00");
     lv_obj_align_to(label_today_active_time, img_time, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
     lv_obj_set_style_text_color(label_today_active_time, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label_today_active_time, &lv_font_montserrat_34, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label_today_active_time, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     hpi_disp_set_curr_screen(SCR_TODAY);
     hpi_show_screen(scr_today, m_scroll_dir);
