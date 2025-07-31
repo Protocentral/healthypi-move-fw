@@ -57,3 +57,4 @@ dkms.conf
 CMakeFiles/
 app/.DS_Store
 CMakeCache.txt
+app/src/add_headers.sh
