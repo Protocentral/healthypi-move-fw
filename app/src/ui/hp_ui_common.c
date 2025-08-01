@@ -95,7 +95,7 @@ static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
     LV_UNUSED(th);
 
     
-    lv_style_set_bg_color(&style_scr_black, lv_color_black());
+    //lv_style_set_bg_color(&style_scr_black, lv_color_black());
 }
 
 void display_init_styles(void)
@@ -118,7 +118,7 @@ void display_init_styles(void)
 
     lv_style_init(&style_white_medium);
     lv_style_set_text_color(&style_white_medium, lv_color_white());
-    lv_style_set_text_font(&style_white_medium, &lv_font_montserrat_34);
+    lv_style_set_text_font(&style_white_medium, &lv_font_montserrat_24);
 
     lv_style_init(&style_white_large);
     lv_style_set_text_color(&style_white_large, lv_color_white());
@@ -127,7 +127,7 @@ void display_init_styles(void)
     // Label Red
     lv_style_init(&style_red_medium);
     lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_34);
+    lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_24);
 
     // Label White 14
     lv_style_init(&style_lbl_white_14);
@@ -137,7 +137,7 @@ void display_init_styles(void)
     // Label Black
     lv_style_init(&style_lbl_white_medium);
     lv_style_set_text_color(&style_lbl_white_medium, lv_color_black());
-    lv_style_set_text_font(&style_lbl_white_medium, &lv_font_montserrat_34);
+    lv_style_set_text_font(&style_lbl_white_medium, &lv_font_montserrat_24);
 
     // Container for scrollable screen layout
     lv_style_init(&style_scr_container);

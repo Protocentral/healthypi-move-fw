@@ -40,6 +40,7 @@ enum max32664_updater_status
     MAX32664_UPDATER_STATUS_IN_PROGRESS,
     MAX32664_UPDATER_STATUS_SUCCESS,
     MAX32664_UPDATER_STATUS_FAILED,
+    MAX32664_UPDATER_STATUS_FILE_NOT_FOUND,
 };
 
 void max32664_updater_start(const struct device *dev, enum max32664_updater_device_type type);

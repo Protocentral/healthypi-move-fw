@@ -267,6 +267,8 @@ int hpi_disp_reset_all_last_updated(void)
     m_disp_bp_last_refresh = 0;
     m_disp_bpt_status = 0;
     m_disp_bpt_progress = 0;
+    
+    return 0;
 }
 
 /**
@@ -610,7 +612,7 @@ static void st_display_boot_exit(void *o)
 
 static void hpi_max32664_update_progress(int progress, int status)
 {
-    LOG_DBG("MAX32664 Update Progress: %d", progress);
+    LOG_DBG("MAX32664 Update Progress: %d%%, Status: %d", progress, status);
     max32664_update_progress = progress;
     max32664_update_status = status;
 }
@@ -621,8 +623,13 @@ static void st_display_progress_entry(void *o)
 
     LOG_DBG("Display SM Progress Entry");
     draw_scr_progress(s->title, "Please wait...");
-    //max32664_set_progress_callback(hpi_max32664_update_progress);
+    
+    // Reset progress screen to normal state
+    hpi_disp_scr_reset_progress();
+    
+    max32664_set_progress_callback(hpi_max32664_update_progress);
     max32664_update_progress = 0;
+    max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
     hpi_disp_scr_update_progress(max32664_update_progress, "Starting...");
 }
 
@@ -630,17 +637,53 @@ static void st_display_progress_run(void *o)
 {
     if (max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
     {
-        hpi_disp_scr_update_progress(max32664_update_progress, "Updating...");
+        // Provide detailed status messages based on progress
+        const char *status_msg = "Updating...";
+        if (max32664_update_progress <= 5) {
+            status_msg = "Checking filesystem...";
+        } else if (max32664_update_progress <= 10) {
+            status_msg = "Entering bootloader...";
+        } else if (max32664_update_progress <= 15) {
+            status_msg = "Loading firmware file...";
+        } else if (max32664_update_progress <= 25) {
+            status_msg = "Setting up bootloader...";
+        } else if (max32664_update_progress <= 35) {
+            status_msg = "Erasing flash...";
+        } else if (max32664_update_progress < 95) {
+            status_msg = "Writing firmware...";
+        } else {
+            status_msg = "Finalizing update...";
+        }
+        
+        hpi_disp_scr_update_progress(max32664_update_progress, status_msg);
     }
     else if (max32664_update_status == MAX32664_UPDATER_STATUS_SUCCESS)
     {
-        hpi_disp_scr_update_progress(max32664_update_progress, "Update Success");
+        hpi_disp_scr_update_progress(100, "Update Complete!");
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
     }
+    else if (max32664_update_status == MAX32664_UPDATER_STATUS_FILE_NOT_FOUND)
+    {
+        // Provide specific error message based on when the error occurred
+        const char *error_msg = "Firmware File Not Found!";
+        if (max32664_update_progress <= 5) {
+            error_msg = "No Firmware Files in LFS!";
+        }
+        hpi_disp_scr_update_progress(max32664_update_progress, error_msg);
+        // Also show the error display for better visual feedback
+        hpi_disp_scr_show_error(error_msg);
+        LOG_ERR("MAX32664 firmware file missing from LFS filesystem");
+        k_msleep(3000);
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+    }
     else if (max32664_update_status == MAX32664_UPDATER_STATUS_FAILED)
     {
-        hpi_disp_scr_update_progress(max32664_update_progress, "Update Failed");
+        const char *error_msg = "Update Failed!";
+        hpi_disp_scr_update_progress(max32664_update_progress, error_msg);
+        // Also show the error display for better visual feedback
+        hpi_disp_scr_show_error(error_msg);
+        LOG_ERR("MAX32664 firmware update failed");
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
@@ -649,6 +692,8 @@ static void st_display_progress_run(void *o)
 static void st_display_progress_exit(void *o)
 {
     LOG_DBG("Display SM Progress Exit");
+    // Clear the progress callback when exiting the progress state
+    max32664_set_progress_callback(NULL);
     lv_disp_trig_activity(NULL);
 }
 

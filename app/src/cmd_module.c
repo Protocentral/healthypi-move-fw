@@ -158,7 +158,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
     case HPI_CMD_RECORDING_WIPE_ALL:
         LOG_DBG("RX CMD Recording Wipe Records");
         log_wipe_records();
-        break;    
+        break;
     default:
         LOG_DBG("RX CMD Unknown");
         break;

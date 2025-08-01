@@ -57,4 +57,5 @@ dkms.conf
 CMakeFiles/
 app/.DS_Store
 CMakeCache.txt
+.github/copilot-instructions.md
 app/src/add_headers.sh
