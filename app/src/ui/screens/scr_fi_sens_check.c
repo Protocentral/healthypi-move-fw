@@ -66,9 +66,9 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
     lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
 
-    /*lv_obj_t *img_bpt = lv_img_create(cont_col);
-    lv_img_set_src(img_bpt, &img_bpt_finger_120);
-    */
+    lv_obj_t *img_bpt = lv_img_create(cont_col);
+    lv_img_set_src(img_bpt, &img_bpt_finger_90);
+    
 
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
@@ -76,9 +76,11 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
     lv_label_set_text(label_info, "Waiting for sensor to connect...");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
-    /*lv_obj_t *spinner = lv_spinner_create(cont_col, 1000, 60);
+    /* LVGL 9.2 compatible spinner widget */
+    lv_obj_t *spinner = lv_spinner_create(cont_col);
     lv_obj_set_size(spinner, 100, 100);
-    lv_obj_center(spinner);*/
+    lv_spinner_set_anim_params(spinner, 1000, 270); /* 1000ms period, 270 degree arc */
+    lv_obj_center(spinner);
 
     hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_CHECK);
     hpi_show_screen(scr_bpt_scr3, dir);

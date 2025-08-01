@@ -59,12 +59,12 @@ static float gx = 0;
 // Performance optimization variables - LVGL 9.2 optimized
 static bool prev_lead_off_status = true;
 static uint32_t sample_counter = 0;
-static const uint32_t RANGE_UPDATE_INTERVAL = 250; // Optimized for LVGL 9.2 refresh cycles
+static const uint32_t RANGE_UPDATE_INTERVAL = 125; // Reduced from 250 for faster response
 static uint32_t display_update_counter = 0;
-static const uint32_t DISPLAY_UPDATE_INTERVAL = 3; // LVGL 9.2 optimal refresh frequency
+static const uint32_t DISPLAY_UPDATE_INTERVAL = 1; // Reduced from 3 for immediate response
 
 // High-performance batch processing buffer - aligned for LVGL 9.2
-static int32_t batch_data[32] __attribute__((aligned(4))); // Memory-aligned for better performance
+static int32_t batch_data[8] __attribute__((aligned(4))); // Reduced from 32 to 8 for lower latency
 static uint32_t batch_count = 0;
 
 // LVGL 9.2 Chart performance configuration flags
@@ -351,46 +351,27 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
         return;
     }
 
-    // Intelligent refresh control for smooth performance
-    display_update_counter++;
-    bool should_refresh_display = (display_update_counter >= DISPLAY_UPDATE_INTERVAL);
-    if (should_refresh_display) {
-        display_update_counter = 0;
-    }
-
-    // Efficient batch processing of ECG samples
+    // Immediate response mode - process samples directly for low latency
     for (int i = 0; i < num_samples; i++)
     {
         // Scale ECG data appropriately for display
         // ECG data in microvolts (µV), divide by 4 for good visualization range
         int32_t scaled_sample = data_ecg[i] / 4;
         
-        // Add to batch buffer for efficient processing
-        batch_data[batch_count] = scaled_sample;
-        batch_count++;
+        // Add directly to chart for immediate response
+        lv_chart_set_next_value(chart_ecg, ser_ecg, scaled_sample);
         
-        // Update min/max for auto-ranging (every 4th sample for performance)
-        if ((sample_counter & 0x3) == 0) { // Bitwise AND is faster than modulo
+        // Update min/max for auto-ranging (every 8th sample for performance)
+        if ((sample_counter & 0x7) == 0) { // Process every 8th sample
             if (scaled_sample < y_min_ecg) y_min_ecg = scaled_sample;
             if (scaled_sample > y_max_ecg) y_max_ecg = scaled_sample;
         }
         
         sample_counter++;
-        
-        // Process batch when full or at end - LVGL 9.2 batch optimization
-        if (batch_count >= 32 || i == num_samples - 1) {
-            // Use LVGL 9.2 efficient batch update method
-            for (int j = 0; j < batch_count; j++) {
-                lv_chart_set_next_value(chart_ecg, ser_ecg, batch_data[j]);
-            }
-            batch_count = 0;
-            
-            // Optional: Force immediate refresh for this batch if needed
-            if (should_refresh_display) {
-                lv_chart_refresh(chart_ecg);  // LVGL 9.2 recommended refresh method
-            }
-        }
     }
+    
+    // Force immediate chart refresh for real-time response
+    lv_chart_refresh(chart_ecg);
     
     // Periodic range adjustment for auto-scaling
     if (sample_counter >= RANGE_UPDATE_INTERVAL)
@@ -437,10 +418,8 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
         prev_lead_off_status = ecg_lead_off;
     }
 
-    // Smart display invalidation - only when necessary
-    if (should_refresh_display) {
-        lv_obj_invalidate(chart_ecg);  // LVGL 9.2 preferred invalidation method
-    }
+    // Immediate display invalidation for real-time response
+    lv_obj_invalidate(chart_ecg);
 }
 
 void scr_ecg_lead_on_off_handler(bool lead_on_off)
