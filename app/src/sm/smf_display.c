@@ -593,6 +593,10 @@ static void st_display_progress_entry(void *o)
 
     LOG_DBG("Display SM Progress Entry");
     draw_scr_progress(s->title, "Please wait...");
+    
+    // Reset progress screen to normal state
+    hpi_disp_scr_reset_progress();
+    
     max32664_set_progress_callback(hpi_max32664_update_progress);
     max32664_update_progress = 0;
     max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
@@ -631,13 +635,25 @@ static void st_display_progress_run(void *o)
     }
     else if (max32664_update_status == MAX32664_UPDATER_STATUS_FILE_NOT_FOUND)
     {
-        hpi_disp_scr_update_progress(max32664_update_progress, "Firmware File Missing!");
+        // Provide specific error message based on when the error occurred
+        const char *error_msg = "Firmware File Not Found!";
+        if (max32664_update_progress <= 5) {
+            error_msg = "No Firmware Files in LFS!";
+        }
+        hpi_disp_scr_update_progress(max32664_update_progress, error_msg);
+        // Also show the error display for better visual feedback
+        hpi_disp_scr_show_error(error_msg);
+        LOG_ERR("MAX32664 firmware file missing from LFS filesystem");
         k_msleep(3000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
     else if (max32664_update_status == MAX32664_UPDATER_STATUS_FAILED)
     {
-        hpi_disp_scr_update_progress(max32664_update_progress, "Update Failed!");
+        const char *error_msg = "Update Failed!";
+        hpi_disp_scr_update_progress(max32664_update_progress, error_msg);
+        // Also show the error display for better visual feedback
+        hpi_disp_scr_show_error(error_msg);
+        LOG_ERR("MAX32664 firmware update failed");
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }

@@ -64,7 +64,7 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 // Force update option for testing MAX32664 updater logic
 // Uncomment the line(s) below to force updates regardless of version
 // #define FORCE_MAX32664C_UPDATE_FOR_TESTING
-#define FORCE_MAX32664D_UPDATE_FOR_TESTING
+// #define FORCE_MAX32664D_UPDATE_FOR_TESTING
 
 char curr_string[40];
 

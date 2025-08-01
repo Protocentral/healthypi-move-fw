@@ -65,7 +65,7 @@ static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
     LV_UNUSED(th);
 
     
-    lv_style_set_bg_color(&style_scr_black, lv_color_black());
+    //lv_style_set_bg_color(&style_scr_black, lv_color_black());
 }
 
 void display_init_styles(void)

@@ -18,8 +18,8 @@ LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_ERR);
 #define MAX32664C_WR_SIM_ONLY 0
 
 // File paths for firmware binaries
-#define MAX32664C_FW_PATH "/lfs/max32664c_msbl.msbl"
-#define MAX32664D_FW_PATH "/lfs/max32664d_40_6_0.msbl"
+#define MAX32664C_FW_PATH "/lfs/sys/max32664c_30_13_31.msbl"
+#define MAX32664D_FW_PATH "/lfs/sys/max32664d_40_6_0.msbl"
 
 // Small shared buffer for temporary operations
 // SAFETY: This buffer is only used in single-threaded context during firmware updates
@@ -371,8 +371,16 @@ static void update_progress(int progress, int status)
 		progress_callback(progress, status);
 	}
 	
-	// Progress logging at debug level
-	LOG_DBG("Update: %d%% (status: %d)", progress, status);
+	// Progress logging with status information
+	if (status == MAX32664_UPDATER_STATUS_FILE_NOT_FOUND) {
+		LOG_ERR("Update failed: Firmware file not found (progress: %d%%)", progress);
+	} else if (status == MAX32664_UPDATER_STATUS_FAILED) {
+		LOG_ERR("Update failed: Error during update process (progress: %d%%)", progress);
+	} else if (status == MAX32664_UPDATER_STATUS_SUCCESS) {
+		LOG_INF("Update completed successfully (progress: %d%%)", progress);
+	} else {
+		LOG_DBG("Update: %d%% (status: %d)", progress, status);
+	}
 }
 
 static int check_filesystem_status(void)
@@ -400,15 +408,21 @@ static int verify_firmware_files_exist(void)
 	// Check for MAX32664C firmware
 	if (fs_stat(MAX32664C_FW_PATH, &entry) == 0) {
 		c_variant_found = true;
+		LOG_DBG("MAX32664C firmware found: %zu bytes", entry.size);
+	} else {
+		LOG_WRN("MAX32664C firmware not found at: %s", MAX32664C_FW_PATH);
 	}
 	
 	// Check for MAX32664D firmware
 	if (fs_stat(MAX32664D_FW_PATH, &entry) == 0) {
 		d_variant_found = true;
+		LOG_DBG("MAX32664D firmware found: %zu bytes", entry.size);
+	} else {
+		LOG_WRN("MAX32664D firmware not found at: %s", MAX32664D_FW_PATH);
 	}
 	
 	if (!c_variant_found && !d_variant_found) {
-		LOG_ERR("No firmware files found");
+		LOG_ERR("No firmware files found in filesystem");
 		return -ENOENT;
 	}
 	
@@ -666,10 +680,14 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 	if (load_ret < 0) {
 		if (load_ret == -ENOENT) {
 			LOG_ERR("%s firmware file not found - update cannot proceed", device_name);
+			// Ensure the UI shows the correct error state with file-specific message
 			update_progress(5, MAX32664_UPDATER_STATUS_FILE_NOT_FOUND);
 		} else {
 			LOG_ERR("%s firmware loading failed with error: %d", device_name, load_ret);
 			update_progress(0, MAX32664_UPDATER_STATUS_FAILED);
 		}
+		return;
 	}
+	
+	LOG_INF("%s firmware update completed successfully", device_name);
 }

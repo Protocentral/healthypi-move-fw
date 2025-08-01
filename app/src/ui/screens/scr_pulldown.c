@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <lvgl.h>
 #include <stdio.h>
+#include <string.h>
 #include <app_version.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(scr_pulldown, LOG_LEVEL_INF);
@@ -30,6 +31,8 @@ static void btn_shutdown_yes_cb(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         LOG_DBG("Shutdown confirmed");
+        lv_obj_del(msgbox_shutdown);
+        msgbox_shutdown = NULL;
         hpi_hw_pmic_off();
     }
 }
@@ -41,42 +44,57 @@ static void btn_shutdown_no_cb(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         LOG_DBG("Shutdown cancelled");
-        lv_msgbox_close(msgbox_shutdown);
+        lv_obj_del(msgbox_shutdown);
+        msgbox_shutdown = NULL;
     }
 }
 
 static void hpi_show_shutdown_mbox(void)
 {
-    /*msgbox_shutdown = lv_msgbox_create(NULL);
-    lv_msgbox_set_title(msgbox_shutdown, "");
-    lv_msgbox_set_text(msgbox_shutdown, "Shutdown?");
+    /* Create modal background */
+    msgbox_shutdown = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(msgbox_shutdown, LV_PCT(100), LV_PCT(100));
     lv_obj_center(msgbox_shutdown);
+    lv_obj_set_style_bg_opa(msgbox_shutdown, LV_OPA_50, 0);
+    lv_obj_set_style_bg_color(msgbox_shutdown, lv_color_black(), 0);
 
-    lv_obj_t *content = lv_msgbox_get_content(msgbox_shutdown);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(content, -1, LV_PART_SCROLLBAR);
+    /* Create dialog box */
+    lv_obj_t *dialog = lv_obj_create(msgbox_shutdown);
+    lv_obj_set_size(dialog, 380, 228);
+    lv_obj_center(dialog);
+    lv_obj_set_style_bg_color(dialog, lv_color_make(64, 64, 64), 0);
+    lv_obj_set_style_border_width(dialog, 2, 0);
 
-    lv_obj_set_height(content, 220);
+    /* Create message label */
+    lv_obj_t *label = lv_label_create(dialog);
+    lv_label_set_text(label, "Shutdown?");
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 38);
 
-    // lv_obj_add_style(content, &style, 0);
+    /* Create button container */
+    lv_obj_t *btn_cont = lv_obj_create(dialog);
+    lv_obj_set_size(btn_cont, LV_PCT(90), 76);
+    lv_obj_align(btn_cont, LV_ALIGN_BOTTOM_MID, 0, -19);
+    lv_obj_set_flex_flow(btn_cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn_cont, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *btn_yes = lv_btn_create(content);
-    lv_obj_set_size(btn_yes, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_add_event_cb(btn_yes, btn_shutdown_yes_cb, LV_EVENT_ALL, NULL);
+    /* Create Yes button */
+    lv_obj_t *btn_yes = lv_btn_create(btn_cont);
+    lv_obj_set_size(btn_yes, 114, 57);
+    lv_obj_add_event_cb(btn_yes, btn_shutdown_yes_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *lbl_btn_yes = lv_label_create(btn_yes);
-    lv_label_set_text(lbl_btn_yes, LV_SYMBOL_OK " Yes");
-    lv_obj_center(lbl_btn_yes);
+    lv_obj_t *label_yes = lv_label_create(btn_yes);
+    lv_label_set_text(label_yes, "Yes");
+    lv_obj_center(label_yes);
 
-    lv_obj_t *btn_no = lv_btn_create(content);
-    lv_obj_set_size(btn_no, LV_PCT(100), LV_SIZE_CONTENT);
-    lv_obj_add_event_cb(btn_no, btn_shutdown_no_cb, LV_EVENT_ALL, NULL);
+    /* Create No button */
+    lv_obj_t *btn_no = lv_btn_create(btn_cont);
+    lv_obj_set_size(btn_no, 114, 57);
+    lv_obj_add_event_cb(btn_no, btn_shutdown_no_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *lbl_btn_no = lv_label_create(btn_no);
-    lv_label_set_text(lbl_btn_no, LV_SYMBOL_CLOSE " No");
-    lv_obj_center(lbl_btn_no);
-    */
+    lv_obj_t *label_no = lv_label_create(btn_no);
+    lv_label_set_text(label_no, "No");
+    lv_obj_center(label_no);
 }
 
 static void btn_device_user_settings_event_cb(lv_event_t *e)
