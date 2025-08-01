@@ -92,7 +92,7 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
 // Allow runtime configuration of smoothing (optional)
 #ifndef CONFIG_ECG_SMOOTHING_ENABLED
-#define CONFIG_ECG_SMOOTHING_ENABLED 1  // Enable smoothing by default
+#define CONFIG_ECG_SMOOTHING_ENABLED 0  // Disable smoothing for testing
 #endif
 
 #if CONFIG_ECG_SMOOTHING_ENABLED

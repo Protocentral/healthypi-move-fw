@@ -135,6 +135,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_HAND_WORN_SELECT,
     SCR_SPL_TIME_FORMAT_SELECT,
     SCR_SPL_TEMP_UNIT_SELECT,
+    SCR_SPL_SLEEP_TIMEOUT_SELECT,
 
     SCR_SPL_LIST_END,
 
@@ -302,6 +303,9 @@ void draw_scr_time_format_select(enum scroll_dir m_scroll_dir, uint32_t arg1, ui
 void gesture_down_scr_time_format_select(void);
 void draw_scr_temp_unit_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void gesture_down_scr_temp_unit_select(void);
+void draw_scr_sleep_timeout_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_sleep_timeout_select(void);
+void gesture_right_scr_sleep_timeout_select(void);
 void hpi_update_height_weight_labels(void);
 void hpi_update_setting_labels(void);
 

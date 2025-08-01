@@ -64,10 +64,21 @@ extern lv_style_t style_bg_purple;
 static uint16_t convert_f_to_c(uint16_t temp_f)
 {
     // Convert from raw F to raw C: C = (F - 32) * 5/9
-    // Since temp_f is already * 100, we need to handle the scaling
-    double temp_f_actual = temp_f / 100.0;
-    double temp_c_actual = (temp_f_actual - 32.0) * 5.0 / 9.0;
-    return (uint16_t)(temp_c_actual * 100.0);
+    // Since temp_f is already * 100, we handle integer arithmetic
+    // Formula: C_raw = (F_raw - 3200) * 5 / 9
+    if (temp_f < 3200) {
+        // Handle temperatures below freezing point
+        return 0;
+    }
+    
+    uint32_t temp_f_minus_32 = temp_f - 3200; // Subtract 32*100
+    uint32_t temp_c_raw = (temp_f_minus_32 * 5) / 9;
+    uint16_t result = (uint16_t)temp_c_raw;
+    
+    LOG_DBG("Temperature conversion: %d.%d°F -> %d.%d°C (raw: %d -> %d)", 
+            temp_f/100, (temp_f%100)/10, result/100, (result%100)/10, temp_f, result);
+    
+    return result;
 }
 
 /**
@@ -85,15 +96,22 @@ static void get_formatted_temperature(uint16_t temp_f, char *temp_str, size_t te
     
     if (temp_f == 0) {
         snprintf(temp_str, temp_str_size, "--");
+        snprintf(unit_str, unit_str_size, "°C"); // Default unit when no data
     } else {
         if (temp_unit == 0) {
-            // Celsius
+            // Celsius - convert from stored Fahrenheit
             uint16_t temp_c = convert_f_to_c(temp_f);
-            snprintf(temp_str, temp_str_size, "%.1f", temp_c / 100.0);
+            // Format as integer with decimal: e.g., 2456 becomes "24.5"
+            int whole = temp_c / 100;
+            int decimal = (temp_c % 100) / 10; // Only show 1 decimal place
+            snprintf(temp_str, temp_str_size, "%d.%d", whole, decimal);
             snprintf(unit_str, unit_str_size, "°C");
         } else {
-            // Fahrenheit
-            snprintf(temp_str, temp_str_size, "%.1f", temp_f / 100.0);
+            // Fahrenheit - use stored value directly
+            // Format as integer with decimal: e.g., 9860 becomes "98.6"
+            int whole = temp_f / 100;
+            int decimal = (temp_f % 100) / 10; // Only show 1 decimal place
+            snprintf(temp_str, temp_str_size, "%d.%d", whole, decimal);
             snprintf(unit_str, unit_str_size, "°F");
         }
     }
@@ -127,7 +145,9 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
 
     if (hpi_sys_get_last_temp_update(&temp_f, &temp_f_last_update) == 0)
     {
-        LOG_DBG("Last Temp value: %d", temp_f);
+        uint16_t temp_c = convert_f_to_c(temp_f);
+        LOG_DBG("Last Temp value: %d (%d.%d°F, %d.%d°C)", temp_f, 
+                temp_f/100, (temp_f%100)/10, temp_c/100, (temp_c%100)/10);
     }
     else
     {
@@ -158,6 +178,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
 
     label_temp_unit = lv_label_create(cont_temp);
     lv_label_set_text(label_temp_unit, unit_str);
+    lv_obj_add_style(label_temp_unit, &style_white_medium, 0);  // Add proper styling to unit label
 
     char last_meas_str[25];
     hpi_helper_get_relative_time_str(temp_f_last_update, last_meas_str, sizeof(last_meas_str));
@@ -171,16 +192,23 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
 
 void hpi_temp_disp_update_temp_f(double temp_f, int64_t temp_f_last_update)
 {
-    if (label_temp_f == NULL || label_temp_unit == NULL)
+    if (label_temp_f == NULL || label_temp_unit == NULL) {
+        LOG_WRN("Temperature display labels not initialized");
         return;
+    }
 
     // Convert double to uint16_t for consistency with the helper function
     uint16_t temp_f_raw = (uint16_t)(temp_f * 100.0);
+    
+    LOG_DBG("Updating temperature display: %d.%d°F (raw: %d)", 
+            temp_f_raw/100, (temp_f_raw%100)/10, temp_f_raw);
     
     // Format temperature according to user setting
     char temp_str[10];
     char unit_str[5];
     get_formatted_temperature(temp_f_raw, temp_str, sizeof(temp_str), unit_str, sizeof(unit_str));
+    
+    LOG_DBG("Formatted temperature: %s %s", temp_str, unit_str);
     
     lv_label_set_text(label_temp_f, temp_str);
     lv_label_set_text(label_temp_unit, unit_str);

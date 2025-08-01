@@ -152,7 +152,7 @@ static void btn_sleep_timeout_event_cb(lv_event_t *e)
     if (code == LV_EVENT_CLICKED) {
         LOG_DBG("Sleep timeout button clicked");
         // Navigate to sleep timeout selection screen
-        hpi_load_scr_spl(SCR_SPL_TEMP_UNIT_SELECT + 1, SCROLL_DOWN, SCR_SPL_DEVICE_USER_SETTINGS, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SLEEP_TIMEOUT_SELECT, SCROLL_DOWN, SCR_SPL_DEVICE_USER_SETTINGS, 0, 0, 0);
     }
 }
 
@@ -366,7 +366,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
 
     // Sleep timeout selection - optimized layout for round display
     lv_obj_t *lbl_sleep_timeout = lv_label_create(cont_main);
-    lv_label_set_text(lbl_sleep_timeout, "Sleep Timeout:");
+    lv_label_set_text(lbl_sleep_timeout, "Sleep Time");
     lv_obj_add_style(lbl_sleep_timeout, &style_lbl_white_14, 0);
     lv_obj_set_pos(lbl_sleep_timeout, label_x, y_pos + 18);
     
@@ -801,7 +801,7 @@ void draw_scr_sleep_timeout_select(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     }
     lv_roller_set_selected(roller_sleep_timeout, current_index, LV_ANIM_OFF);
 
-    hpi_disp_set_curr_screen(SCR_SPL_TEMP_UNIT_SELECT + 1);
+    hpi_disp_set_curr_screen(SCR_SPL_SLEEP_TIMEOUT_SELECT);
     hpi_show_screen(scr_sleep_timeout_select, m_scroll_dir);
 }
 

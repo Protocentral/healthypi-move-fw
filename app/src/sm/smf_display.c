@@ -205,6 +205,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_HAND_WORN_SELECT] = {draw_scr_hand_worn_select, gesture_down_scr_hand_worn_select},
     [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
+    [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
 };
 
 // Screen state persistence for sleep/wake cycles
