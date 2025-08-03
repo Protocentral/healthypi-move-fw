@@ -61,7 +61,7 @@ static float gx = 0;
 // Performance optimization variables - LVGL 9.2 optimized
 static bool prev_lead_off_status = true;
 static uint32_t sample_counter = 0;
-static const uint32_t RANGE_UPDATE_INTERVAL = 16; // Update range every 16 samples - More responsive
+static const uint32_t RANGE_UPDATE_INTERVAL = 128; // Update range every 64 samples - Less frequent for better performance
 static uint32_t display_update_counter = 0;
 static const uint32_t DISPLAY_UPDATE_INTERVAL = 3; // Reduced display updates for performance
 
