@@ -39,3 +39,4 @@ void ble_ppg_notify_wr(uint32_t *ppg_data, uint8_t len);
 void ble_ppg_notify_fi(uint32_t *ppg_data, uint8_t len);
 void ble_ecg_notify(int32_t *ecg_data, uint8_t len);
 void ble_gsr_notify(int32_t *gsr_data, uint8_t len);
+void ble_gsr_data_notify(struct hpi_gsr_data_t *gsr_data);

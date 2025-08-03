@@ -40,6 +40,7 @@ HealthyPi specific common data types
 #define BIOZ_POINTS_PER_SAMPLE 8
 #define PPG_POINTS_PER_SAMPLE 8
 #define BPT_PPG_POINTS_PER_SAMPLE 32
+#define GSR_POINTS_PER_SAMPLE 8
 
 #define ECG_RECORD_BUFFER_SAMPLES 1920 // Reduced from 3840 to 1920 (128*15 instead of 128*30) - saves 7.68KB 
 
@@ -121,6 +122,25 @@ struct hpi_ppg_fi_data_t
     uint8_t rtor_confidence;
     
     uint8_t scd_state;
+};
+
+struct hpi_gsr_data_t
+{
+    int32_t gsr_samples[BIOZ_POINTS_PER_SAMPLE];  // Use BioZ samples for GSR
+    uint8_t gsr_num_samples;
+    
+    float gsr_conductance_us;  // Current conductance in microsiemens
+    uint8_t gsr_quality;       // Signal quality (0-100)
+    uint8_t stress_level;      // Computed stress level (0-4: Very Low, Low, Moderate, High, Very High)
+    uint8_t trend_direction;   // 0: stable, 1: rising, 2: falling
+    
+    // Correlation data
+    uint16_t corr_hr;         // Correlated heart rate
+    float corr_hrv_sdnn;      // Correlated HRV metric
+    
+    bool motion_detected;     // Movement artifact flag
+    bool gsr_lead_off;        // Lead-off detection from BioZ channel
+    int64_t timestamp;
 };
 
 /*struct hpi_ppg_fi_bpt_cal_t

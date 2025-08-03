@@ -91,6 +91,7 @@ enum hpi_disp_screens
     SCR_ECG,
     SCR_TEMP,
     SCR_BPT,
+    SCR_GSR,
 
     SCR_LIST_END,
     // Should not go here
@@ -126,6 +127,8 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_COMPLETE,
     SCR_SPL_SPO2_TIMEOUT,
     SCR_SPL_HR_SCR2,
+    SCR_SPL_GSR_MEASURE,
+    SCR_SPL_GSR_TRENDS,
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -257,6 +260,7 @@ void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
 void gesture_down_scr_pulldown(void);
 void gesture_down_scr_bpt_cal_required(void);
+void gesture_down_scr_gsr_measure(void);
 
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
@@ -288,6 +292,18 @@ void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir);
 void hpi_disp_hrv_scatter_draw_plot_rtor(float rtor, float prev_rtor);
 void hpi_disp_hrv_scatter_update_rtor(int rtor);
 void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
+
+// GSR screen functions
+void draw_scr_gsr(enum scroll_dir m_scroll_dir);
+void hpi_disp_gsr_update_value(float gsr_value);
+void hpi_disp_gsr_update_stress_level(uint8_t stress_level);
+void hpi_disp_gsr_update_quality(uint8_t quality);
+void draw_scr_gsr_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void hpi_disp_gsr_draw_plot(struct hpi_gsr_data_t gsr_sensor_sample);
+void gesture_down_scr_gsr_measure(void);
+void draw_scr_gsr_trends(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void hpi_disp_gsr_trends_update_stats(uint8_t peak_events, float avg_baseline, uint8_t stress_score);
+void hpi_disp_gsr_trends_add_point(uint8_t stress_value);
 
 // Settings screen functions
 void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);

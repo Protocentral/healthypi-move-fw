@@ -191,6 +191,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
+    [SCR_SPL_GSR_MEASURE] = {draw_scr_gsr_measure, gesture_down_scr_gsr_measure},
+    [SCR_SPL_GSR_TRENDS] = {draw_scr_gsr_trends, NULL},
 
     [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
     [SCR_SPL_BPT_FAILED] = {draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed},
@@ -486,6 +488,7 @@ extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_plot_ecg_bioz;
 extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_hrv;
+extern struct k_msgq q_gsr_sample;
 
 extern struct k_sem sem_crown_key_pressed;
 
@@ -896,6 +899,7 @@ static void st_display_active_run(void *o)
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+    struct hpi_gsr_data_t gsr_sensor_sample;
 
     if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
     {
@@ -910,6 +914,11 @@ static void st_display_active_run(void *o)
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
     {
         hpi_disp_process_ppg_fi_data(ppg_fi_sensor_sample);
+    }
+
+    if (k_msgq_get(&q_gsr_sample, &gsr_sensor_sample, K_NO_WAIT) == 0)
+    {
+        hpi_disp_gsr_draw_plot(gsr_sensor_sample);
     }
 
     // Do screen specific updates
@@ -956,6 +965,10 @@ static void st_display_active_run(void *o)
         {
             k_sem_give(&sem_stop_one_shot_spo2);
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_GSR_MEASURE)
+        {
+            gesture_down_scr_gsr_measure();
         }
         else
         {

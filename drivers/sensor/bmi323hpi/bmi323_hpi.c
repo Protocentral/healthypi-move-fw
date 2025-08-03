@@ -562,7 +562,7 @@ static int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
 static int bosch_bmi323_driver_api_sample_fetch(const struct device *dev, enum sensor_channel chan)
 {
 	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
-	int ret;
+	int ret=0;
 
 	k_mutex_lock(&data->lock, K_FOREVER);
 

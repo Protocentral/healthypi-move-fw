@@ -35,6 +35,7 @@
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/drivers/sensor.h>
 #include <string.h>
+#include <math.h>
 
 #include <time.h>
 #include <zephyr/posix/time.h>
@@ -46,12 +47,14 @@
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
+#include "ble_module.h"
 
 LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
 
 SENSOR_DT_READ_IODEV(max30001_iodev, DT_ALIAS(max30001), SENSOR_CHAN_VOLTAGE);
 
 K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);  // Reduced from 128 to 64
+K_MSGQ_DEFINE(q_gsr_sample, sizeof(struct hpi_gsr_data_t), 32, 1);  // GSR message queue
 
 K_SEM_DEFINE(sem_ecg_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_lon, 0, 1);
@@ -85,6 +88,14 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 #define MAX_BIOZ_SAMPLES 32
 #define ECG_STATS_LOG_INTERVAL_SAMPLES 2000
 #define ECG_DEBUG_LOG_INTERVAL_SAMPLES 500
+
+// GSR processing constants
+#define GSR_SAMPLING_RATE_HZ 64.0f  // BioZ sampling rate
+#define GSR_BASELINE_WINDOW_SIZE 128  // Samples for baseline calculation
+#define GSR_STRESS_THRESHOLD_LOW 0.1f   // µS change for low stress
+#define GSR_STRESS_THRESHOLD_MODERATE 0.3f  // µS change for moderate stress
+#define GSR_STRESS_THRESHOLD_HIGH 0.6f     // µS change for high stress
+#define GSR_STRESS_THRESHOLD_VERY_HIGH 1.0f // µS change for very high stress
 
 // ECG Signal Smoothing Configuration
 #define ECG_FILTER_WINDOW_SIZE 5  // Moving average window size
@@ -192,6 +203,20 @@ static bool ecg_active = false;
 static bool m_ecg_lead_on_off = true;
 
 static uint16_t m_ecg_hr = 0;
+
+// GSR state variables
+static bool gsr_active = false;
+static float gsr_baseline = 0.0;
+static float gsr_current_value = 0.0;
+static uint8_t current_stress_level = 0;
+
+// GSR baseline buffer for adaptive calculation
+static float gsr_baseline_buffer[GSR_BASELINE_WINDOW_SIZE];
+static uint16_t baseline_buffer_index = 0;
+static bool baseline_buffer_full = false;
+
+// GSR mutex for thread-safe access
+K_MUTEX_DEFINE(gsr_state_mutex);
 
 static int hw_max30001_ecg_enable(void);
 static int hw_max30001_ecg_disable(void);
@@ -320,6 +345,171 @@ static void get_ecg_stabilization_values(int *stabilization_countdown, bool *com
     k_mutex_unlock(&ecg_timer_mutex);
 }
 
+/**
+ * @brief Convert BioZ sample to GSR conductance value
+ * @param bioz_sample Raw BioZ sample from MAX30001
+ * @return GSR conductance in microsiemens (µS)
+ */
+static float bioz_to_gsr_conductance(int32_t bioz_sample)
+{
+    // Convert BioZ impedance measurement to conductance
+    // GSR = 1/Resistance, measured in Siemens (S)
+    // MAX30001 BioZ channel measures impedance in ohms
+    
+    // Apply scaling and conversion specific to MAX30001 BioZ channel
+    // This conversion may need calibration based on electrode setup
+    float impedance_ohms = (float)bioz_sample * 0.001f;  // Convert to ohms
+    
+    // Prevent division by zero
+    if (fabs(impedance_ohms) < 0.001f) {
+        impedance_ohms = 0.001f;
+    }
+    
+    // Calculate conductance in microsiemens (µS)
+    float conductance_us = 1000000.0f / fabs(impedance_ohms);
+    
+    // Clamp to reasonable GSR range (0.1 - 100 µS)
+    if (conductance_us < 0.1f) conductance_us = 0.1f;
+    if (conductance_us > 100.0f) conductance_us = 100.0f;
+    
+    return conductance_us;
+}
+
+/**
+ * @brief Update GSR baseline using moving average
+ * @param new_value New GSR conductance value
+ */
+static void update_gsr_baseline(float new_value)
+{
+    k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+    
+    gsr_baseline_buffer[baseline_buffer_index] = new_value;
+    baseline_buffer_index = (baseline_buffer_index + 1) % GSR_BASELINE_WINDOW_SIZE;
+    
+    if (baseline_buffer_index == 0) {
+        baseline_buffer_full = true;
+    }
+    
+    // Calculate new baseline as moving average
+    float sum = 0.0f;
+    int count = baseline_buffer_full ? GSR_BASELINE_WINDOW_SIZE : baseline_buffer_index;
+    
+    for (int i = 0; i < count; i++) {
+        sum += gsr_baseline_buffer[i];
+    }
+    
+    if (count > 0) {
+        gsr_baseline = sum / count;
+    }
+    
+    k_mutex_unlock(&gsr_state_mutex);
+}
+
+/**
+ * @brief Calculate stress level based on GSR change from baseline
+ * @param current_gsr Current GSR value
+ * @param baseline_gsr Baseline GSR value
+ * @return Stress level (0-4)
+ */
+static uint8_t calculate_stress_level(float current_gsr, float baseline_gsr)
+{
+    float gsr_change = fabs(current_gsr - baseline_gsr);
+    
+    if (gsr_change < GSR_STRESS_THRESHOLD_LOW) {
+        return 0; // Very Low
+    } else if (gsr_change < GSR_STRESS_THRESHOLD_MODERATE) {
+        return 1; // Low
+    } else if (gsr_change < GSR_STRESS_THRESHOLD_HIGH) {
+        return 2; // Moderate
+    } else if (gsr_change < GSR_STRESS_THRESHOLD_VERY_HIGH) {
+        return 3; // High
+    } else {
+        return 4; // Very High
+    }
+}
+
+/**
+ * @brief Calculate signal quality based on signal stability
+ * @param samples Array of recent samples
+ * @param num_samples Number of samples
+ * @return Quality percentage (0-100)
+ */
+static uint8_t calculate_signal_quality(int32_t *samples, uint8_t num_samples)
+{
+    if (num_samples < 2) return 50;
+    
+    // Calculate coefficient of variation
+    float sum = 0.0f;
+    float sum_sq = 0.0f;
+    
+    for (int i = 0; i < num_samples; i++) {
+        float val = (float)samples[i];
+        sum += val;
+        sum_sq += val * val;
+    }
+    
+    float mean = sum / num_samples;
+    float variance = (sum_sq / num_samples) - (mean * mean);
+    float std_dev = sqrt(variance);
+    
+    // Calculate coefficient of variation
+    float cv = (mean != 0.0f) ? (std_dev / fabs(mean)) : 1.0f;
+    
+    // Convert to quality percentage (lower variation = higher quality)
+    uint8_t quality = (uint8_t)(100.0f * exp(-cv * 2.0f));
+    
+    return (quality > 100) ? 100 : quality;
+}
+
+/**
+ * @brief Process ECG/BioZ data and extract GSR information
+ * @param ecg_bioz_data ECG/BioZ sensor data
+ * @return Processed GSR data
+ */
+static struct hpi_gsr_data_t process_bioz_to_gsr(struct hpi_ecg_bioz_sensor_data_t *ecg_bioz_data)
+{
+    struct hpi_gsr_data_t gsr_data = {0};
+    
+    // Copy BioZ samples to GSR structure
+    gsr_data.gsr_num_samples = ecg_bioz_data->bioz_num_samples;
+    for (int i = 0; i < gsr_data.gsr_num_samples && i < BIOZ_POINTS_PER_SAMPLE; i++) {
+        gsr_data.gsr_samples[i] = ecg_bioz_data->bioz_sample[i];
+    }
+    
+    // Calculate conductance from the latest BioZ sample
+    if (gsr_data.gsr_num_samples > 0) {
+        int32_t latest_sample = gsr_data.gsr_samples[gsr_data.gsr_num_samples - 1];
+        gsr_data.gsr_conductance_us = bioz_to_gsr_conductance(latest_sample);
+        
+        // Update baseline
+        update_gsr_baseline(gsr_data.gsr_conductance_us);
+        
+        // Calculate stress level
+        gsr_data.stress_level = calculate_stress_level(gsr_data.gsr_conductance_us, gsr_baseline);
+        
+        // Update global state
+        k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+        gsr_current_value = gsr_data.gsr_conductance_us;
+        current_stress_level = gsr_data.stress_level;
+        k_mutex_unlock(&gsr_state_mutex);
+    }
+    
+    // Calculate signal quality
+    gsr_data.gsr_quality = calculate_signal_quality(gsr_data.gsr_samples, gsr_data.gsr_num_samples);
+    
+    // Copy correlation data
+    gsr_data.corr_hr = ecg_bioz_data->hr;
+    gsr_data.gsr_lead_off = ecg_bioz_data->bioz_lead_off;
+    
+    // Set timestamp
+    gsr_data.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
+    
+    // Detect motion artifacts (simplified - based on signal quality)
+    gsr_data.motion_detected = (gsr_data.gsr_quality < 50);
+    
+    return gsr_data;
+}
+
 static void work_ecg_lon_handler(struct k_work *work)
 {
     LOG_DBG("ECG LON Work");
@@ -431,6 +621,24 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
                         ret, total_samples_dropped, total_samples_queued);
             } else {
                 total_samples_queued += ecg_num_samples;
+            }
+            
+            // Process GSR if enabled
+            k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+            bool gsr_enabled = gsr_active;
+            k_mutex_unlock(&gsr_state_mutex);
+            
+            if (gsr_enabled && bioz_samples > 0) {
+                struct hpi_gsr_data_t gsr_sample = process_bioz_to_gsr(&ecg_bioz_sensor_sample);
+                
+                // Send to GSR queue
+                int gsr_ret = k_msgq_put(&q_gsr_sample, &gsr_sample, K_NO_WAIT);
+                if (gsr_ret != 0) {
+                    LOG_WRN("GSR sample dropped - queue full");
+                }
+                
+                // Send via BLE if enabled
+                ble_gsr_data_notify(&gsr_sample);
             }
             
             // Log statistics every interval
@@ -685,6 +893,15 @@ static void st_ecg_bioz_stabilizing_entry(void *o)
         return;
     }
     
+    // Enable BioZ for GSR data collection alongside ECG
+    ret = hw_max30001_bioz_enable();
+    if (ret != 0) {
+        LOG_WRN("Failed to enable BioZ in stabilizing entry: %d", ret);
+        // Continue with ECG even if BioZ fails
+    } else {
+        LOG_INF("BioZ enabled for GSR data collection");
+    }
+    
     k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     
     // Init stabilization values
@@ -751,6 +968,142 @@ static void st_ecg_bioz_stabilizing_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stabilizing Exit");
     set_ecg_stabilization_values(0, true);
+}
+
+/**
+ * @brief GSR API Functions (integrated with ECG/BioZ state machine)
+ */
+
+/**
+ * @brief Start GSR measurement
+ * @return 0 on success, negative error code on failure
+ */
+int hpi_gsr_start_measurement(void)
+{
+    LOG_INF("Starting GSR measurement");
+    
+    int ret = 0;
+    
+    // Enable BioZ channel for GSR measurement
+    ret = hw_max30001_bioz_enable();
+    if (ret != 0) {
+        LOG_ERR("Failed to enable BioZ channel for GSR: %d", ret);
+        return ret;
+    }
+    
+    // Start ECG/BioZ sampling if not already active
+    if (!get_ecg_active()) {
+        ret = hw_max30001_ecg_enable();
+        if (ret != 0) {
+            LOG_ERR("Failed to enable ECG for GSR sampling: %d", ret);
+            hw_max30001_bioz_disable(); // Cleanup on failure
+            return ret;
+        }
+        
+        // Start sampling timer
+        k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+        LOG_INF("Started ECG/BioZ sampling for GSR measurement");
+    }
+    
+    k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+    gsr_active = true;
+    
+    // Reset baseline calculation
+    baseline_buffer_index = 0;
+    baseline_buffer_full = false;
+    gsr_baseline = 0.0f;
+    
+    k_mutex_unlock(&gsr_state_mutex);
+    
+    LOG_INF("GSR measurement started successfully");
+    return 0;
+}
+
+/**
+ * @brief Stop GSR measurement
+ * @return 0 on success, negative error code on failure
+ */
+int hpi_gsr_stop_measurement(void)
+{
+    LOG_INF("Stopping GSR measurement");
+    
+    k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+    gsr_active = false;
+    k_mutex_unlock(&gsr_state_mutex);
+    
+    // Check if ECG recording is not active before disabling hardware
+    if (!hpi_data_is_ecg_record_active()) {
+        // Stop sampling timer if ECG is not recording
+        k_timer_stop(&tmr_ecg_bioz_sampling);
+        
+        // Disable BioZ channel
+        int ret = hw_max30001_bioz_disable();
+        if (ret != 0) {
+            LOG_ERR("Failed to disable BioZ channel: %d", ret);
+        }
+        
+        // Disable ECG if it was only enabled for GSR
+        if (get_ecg_active()) {
+            ret = hw_max30001_ecg_disable();
+            if (ret != 0) {
+                LOG_ERR("Failed to disable ECG after GSR measurement: %d", ret);
+            }
+        }
+        
+        LOG_INF("GSR hardware disabled");
+    } else {
+        LOG_INF("GSR measurement stopped, but ECG recording active - keeping hardware enabled");
+    }
+    
+    return 0;
+}
+
+/**
+ * @brief Get current GSR value
+ * @return Current GSR conductance in microsiemens
+ */
+float hpi_gsr_get_current_value(void)
+{
+    k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+    float value = gsr_current_value;
+    k_mutex_unlock(&gsr_state_mutex);
+    return value;
+}
+
+/**
+ * @brief Get current stress level
+ * @return Current stress level (0-4)
+ */
+uint8_t hpi_gsr_get_stress_level(void)
+{
+    k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+    uint8_t level = current_stress_level;
+    k_mutex_unlock(&gsr_state_mutex);
+    return level;
+}
+
+/**
+ * @brief Get GSR baseline value
+ * @return GSR baseline in microsiemens
+ */
+float hpi_gsr_get_baseline(void)
+{
+    k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+    float baseline = gsr_baseline;
+    k_mutex_unlock(&gsr_state_mutex);
+    return baseline;
+}
+
+/**
+ * @brief Check if GSR measurement is active
+ * @return true if GSR is active, false otherwise
+ */
+bool hpi_gsr_is_active(void)
+{
+    k_mutex_lock(&gsr_state_mutex, K_FOREVER);
+    bool active = gsr_active;
+    k_mutex_unlock(&gsr_state_mutex);
+    return active;
 }
 
 static const struct smf_state ecg_bioz_states[] = {

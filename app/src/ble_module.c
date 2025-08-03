@@ -370,7 +370,7 @@ void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 
 void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
 {
-	uint8_t out_data[128];
+	uint8_t out_data[len * 4];
 	int32_t gsr_data_i32 = 0;
 
 	for (int i = 0; i < len; i++)
@@ -381,9 +381,18 @@ void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
 		out_data[i * 4 + 3] = (uint8_t)(gsr_data_i32 >> 24);
 	}
 
-	//LOG_DBG("GSR Not len %d", len);
+	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[6], &out_data, len * 4);
+}
 
-	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[4], &out_data, len * 4);
+void ble_gsr_data_notify(struct hpi_gsr_data_t *gsr_data)
+{
+	if (gsr_data == NULL) return;
+	
+	// Notify raw GSR samples
+	ble_gsr_notify(gsr_data->gsr_samples, gsr_data->gsr_num_samples);
+	
+	// Additional structured data could be sent via separate characteristics
+	// For now, just send the raw samples
 }
 
 void ble_bpt_cal_progress_notify(uint8_t bpt_status, uint8_t bpt_progress)

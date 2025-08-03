@@ -77,10 +77,6 @@ static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 static lv_obj_t *label_batt_level;
 static lv_obj_t *label_batt_level_val;
 
-static lv_obj_t *lbl_hdr_hour;
-static lv_obj_t *lbl_hdr_min;
-static lv_obj_t *ui_label_date;
-
 lv_obj_t *cui_battery_percent;
 int tmp_scr_parent = 0;
 
@@ -327,6 +323,9 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
         break;
     case SCR_ECG:
         draw_scr_ecg(m_scroll_dir);
+        break;
+    case SCR_GSR:
+        draw_scr_gsr(m_scroll_dir);
         break;
 
     /*case SCR_PLOT_EDA:
