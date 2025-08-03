@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -26,7 +26,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 
 #include <zephyr/kernel.h>
 
@@ -117,20 +116,21 @@ void scr_boot_add_status(char *dev_label, bool status, bool show_status)
     // Get current text and append new message using static buffer
     const char *current_text = lv_label_get_text(label_boot_messages);
     static char full_text[2048]; // Static buffer to avoid malloc/free
-    
+
     // Safely copy and concatenate
     strncpy(full_text, current_text, sizeof(full_text) - 1);
     full_text[sizeof(full_text) - 1] = '\0';
-    
+
     size_t current_len = strlen(full_text);
     size_t remaining = sizeof(full_text) - current_len - 1;
-    
-    if (remaining > 0) {
+
+    if (remaining > 0)
+    {
         strncat(full_text, buf, remaining);
     }
-    
+
     lv_label_set_text(label_boot_messages, full_text);
-    
+
     // Auto-scroll to bottom to show latest message
     lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_ON);
 }
@@ -139,24 +139,25 @@ void scr_boot_add_final(bool status)
 {
     char buf[64];
     sprintf(buf, "\nCOMPLETE: %s\n", status ? "OK" : "FAIL");
-    
+
     // Get current text and append final message using static buffer
     const char *current_text = lv_label_get_text(label_boot_messages);
     static char full_text[2048]; // Static buffer to avoid malloc/free
-    
+
     // Safely copy and concatenate
     strncpy(full_text, current_text, sizeof(full_text) - 1);
     full_text[sizeof(full_text) - 1] = '\0';
-    
+
     size_t current_len = strlen(full_text);
     size_t remaining = sizeof(full_text) - current_len - 1;
-    
-    if (remaining > 0) {
+
+    if (remaining > 0)
+    {
         strncat(full_text, buf, remaining);
     }
-    
+
     lv_label_set_text(label_boot_messages, full_text);
-    
+
     // Auto-scroll to bottom to show final message
     lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_ON);
 }

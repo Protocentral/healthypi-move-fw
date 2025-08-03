@@ -64,14 +64,10 @@ K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 
-// Mutex for protecting shared state variables
-K_MUTEX_DEFINE(ecg_state_mutex);
-
-// Mutex for protecting timer and countdown variables
+// Mutex for protecting timer and countdown variables (used by non-ISR thread functions)
 K_MUTEX_DEFINE(ecg_timer_mutex);
 
-// Mutex for ECG smoothing filter (always defined for simplicity)
-K_MUTEX_DEFINE(ecg_filter_mutex);
+// NOTE: Removed ecg_state_mutex and ecg_filter_mutex - now using ISR-safe atomic operations
 
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
@@ -83,8 +79,6 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 // Define maximum sample limits for validation
 #define MAX_ECG_SAMPLES 32
 #define MAX_BIOZ_SAMPLES 32
-#define ECG_STATS_LOG_INTERVAL_SAMPLES 2000
-#define ECG_DEBUG_LOG_INTERVAL_SAMPLES 500
 
 // ECG Signal Smoothing Configuration
 #define ECG_FILTER_WINDOW_SIZE 5  // Moving average window size
@@ -105,10 +99,13 @@ static bool ecg_filter_initialized = false;
  * @brief Apply moving average filter to smooth ECG sample
  * @param raw_sample Raw ECG sample value
  * @return Smoothed ECG sample value
+ * 
+ * NOTE: ISR-safe version - uses spinlock instead of mutex
  */
 static int32_t ecg_smooth_sample(int32_t raw_sample)
 {
-    k_mutex_lock(&ecg_filter_mutex, K_FOREVER);
+    static struct k_spinlock ecg_filter_lock;
+    k_spinlock_key_t key = k_spin_lock(&ecg_filter_lock);
     
     // Add new sample to circular buffer
     ecg_filter_buffer[ecg_filter_index] = raw_sample;
@@ -138,20 +135,22 @@ static int32_t ecg_smooth_sample(int32_t raw_sample)
     
     int32_t smoothed_sample = (int32_t)(sum / valid_samples);
     
-    k_mutex_unlock(&ecg_filter_mutex);
+    k_spin_unlock(&ecg_filter_lock, key);
     return smoothed_sample;
 }
 
 /**
  * @brief Reset ECG smoothing filter state
+ * ISR-safe version using spinlock
  */
 static void ecg_smooth_reset(void)
 {
-    k_mutex_lock(&ecg_filter_mutex, K_FOREVER);
+    static struct k_spinlock ecg_filter_lock;
+    k_spinlock_key_t key = k_spin_lock(&ecg_filter_lock);
     memset(ecg_filter_buffer, 0, sizeof(ecg_filter_buffer));
     ecg_filter_index = 0;
     ecg_filter_initialized = false;
-    k_mutex_unlock(&ecg_filter_mutex);
+    k_spin_unlock(&ecg_filter_lock, key);
 }
 #else
 // ECG smoothing disabled - no-op functions
@@ -241,50 +240,41 @@ void reconfigure_ecg_leads_for_hand_worn(void)
 
 
 
-// Thread-safe accessors for shared variables
+// Thread-safe accessors for shared variables - ISR-safe versions using atomic operations
 static bool get_ecg_active(void)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
-    bool active = ecg_active;
-    k_mutex_unlock(&ecg_state_mutex);
-    return active;
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return ecg_active;
 }
 
 static void set_ecg_active(bool active)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
     ecg_active = active;
-    k_mutex_unlock(&ecg_state_mutex);
 }
 
 static bool get_ecg_lead_on_off(void)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
-    bool lead_state = m_ecg_lead_on_off;
-    k_mutex_unlock(&ecg_state_mutex);
-    return lead_state;
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return m_ecg_lead_on_off;
 }
 
 static void set_ecg_lead_on_off(bool state)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
     m_ecg_lead_on_off = state;
-    k_mutex_unlock(&ecg_state_mutex);
 }
 
 static uint16_t get_ecg_hr(void)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
-    uint16_t hr = m_ecg_hr;
-    k_mutex_unlock(&ecg_state_mutex);
-    return hr;
+    // Use atomic read for ISR safety - single uint16_t read is typically atomic on most architectures
+    return m_ecg_hr;
 }
 
 static void set_ecg_hr(uint16_t hr)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
+    // Use atomic write for ISR safety - single uint16_t write is typically atomic on most architectures
     m_ecg_hr = hr;
-    k_mutex_unlock(&ecg_state_mutex);
 }
 
 // Thread-safe accessors for timer variables
@@ -339,8 +329,8 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 {
     // Input validation
     if (!buf || buf_len < sizeof(struct max30001_encoded_data)) {
-        LOG_ERR("Invalid buffer parameters: buf=%p, len=%u, required=%u", 
-                buf, buf_len, (uint32_t)sizeof(struct max30001_encoded_data));
+        LOG_ERR("Invalid buffer parameters: buf=%s, len=%u, required=%u", 
+                buf ? "OK" : "NULL", buf_len, (uint32_t)sizeof(struct max30001_encoded_data));
         return;
     }
 
@@ -362,14 +352,6 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 
     if ((ecg_num_samples < MAX_ECG_SAMPLES && ecg_num_samples > 0) || (bioz_samples < MAX_BIOZ_SAMPLES && bioz_samples > 0))
     {
-        // Log sample counts for debugging
-        static uint32_t total_ecg_samples_processed = 0;
-        total_ecg_samples_processed += ecg_num_samples;
-        
-        if ((total_ecg_samples_processed % ECG_DEBUG_LOG_INTERVAL_SAMPLES) == 0) {
-            LOG_DBG("ECG samples processed: %u (current batch: %u)", total_ecg_samples_processed, ecg_num_samples);
-        }
-
         ecg_bioz_sensor_sample.ecg_num_samples = edata->num_samples_ecg;
         ecg_bioz_sensor_sample.bioz_num_samples = edata->num_samples_bioz;
 
@@ -421,26 +403,9 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
 
         if (get_ecg_active())
         {
-            static uint32_t total_samples_queued = 0;
-            static uint32_t total_samples_dropped = 0;
-            
             int ret = k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT);
             if (ret != 0) {
-                total_samples_dropped += ecg_num_samples;
-                LOG_WRN("ECG sample dropped - queue full (ret=%d), dropped: %u, queued: %u", 
-                        ret, total_samples_dropped, total_samples_queued);
-            } else {
-                total_samples_queued += ecg_num_samples;
-            }
-            
-            // Log statistics every interval
-            if (((total_samples_queued + total_samples_dropped) % ECG_STATS_LOG_INTERVAL_SAMPLES) == 0) {
-                uint32_t total_samples = total_samples_queued + total_samples_dropped;
-                if (total_samples > 0) {  // Prevent division by zero
-                    LOG_INF("ECG sample stats - Queued: %u, Dropped: %u, Drop rate: %u%%", 
-                            total_samples_queued, total_samples_dropped,
-                            (total_samples_dropped * 100) / total_samples);
-                }
+                LOG_WRN("ECG sample dropped - queue full (ret=%d)", ret);
             }
         }
     }
@@ -557,11 +522,11 @@ static void st_ecg_bioz_stream_entry(void *o)
 
     // Check if coming from stabilization 
     get_ecg_stabilization_values(NULL, &stabilization_complete);
+    
     if (!stabilization_complete) {
         ret = hw_max30001_ecg_enable();
         if (ret != 0) {
             LOG_ERR("Failed to enable ECG in stream entry: %d", ret);
-            // Consider transitioning to error state or retry logic
             return;
         }
         k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));

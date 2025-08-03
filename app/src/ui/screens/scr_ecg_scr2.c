@@ -35,6 +35,8 @@
 #include <stdio.h>
 // #include <zephyr/zbus/zbus.h>  // Commented out - requires CONFIG_ZBUS
 
+LOG_MODULE_REGISTER(scr_ecg_scr2, LOG_LEVEL_DBG);
+
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "hw_module.h"
@@ -49,8 +51,8 @@ static lv_obj_t *label_ecg_lead_off;
 static lv_obj_t *label_info;
 
 static bool chart_ecg_update = true;
-static float y_max_ecg = -1500;
-static float y_min_ecg = 1500;
+static float y_max_ecg = -10000;
+static float y_min_ecg = 10000;
 
 // static bool ecg_plot_hidden = false;
 
@@ -59,12 +61,12 @@ static float gx = 0;
 // Performance optimization variables - LVGL 9.2 optimized
 static bool prev_lead_off_status = true;
 static uint32_t sample_counter = 0;
-static const uint32_t RANGE_UPDATE_INTERVAL = 125; // Reduced from 250 for faster response
+static const uint32_t RANGE_UPDATE_INTERVAL = 16; // Update range every 16 samples - More responsive
 static uint32_t display_update_counter = 0;
-static const uint32_t DISPLAY_UPDATE_INTERVAL = 1; // Reduced from 3 for immediate response
+static const uint32_t DISPLAY_UPDATE_INTERVAL = 3; // Reduced display updates for performance
 
 // High-performance batch processing buffer - aligned for LVGL 9.2
-static int32_t batch_data[8] __attribute__((aligned(4))); // Reduced from 32 to 8 for lower latency
+static int32_t batch_data[32] __attribute__((aligned(4))); // Batch buffer for efficiency
 static uint32_t batch_count = 0;
 
 // LVGL 9.2 Chart performance configuration flags
@@ -163,9 +165,8 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
     lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);  // ECG-like behavior
     
-    // Set Y-axis range for ECG data (microvolts scaled by /4)
-    // ECG signals typically 500-4000 µV, scaled gives us 125-1000 units
-    lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -500, 1500);
+    // Set Y-axis range for ECG data - start with reasonable defaults
+    lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -5000, 5000);
     
     // Disable division lines for clean ECG display (LVGL 9 recommendation for performance)
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
@@ -253,8 +254,9 @@ static void ecg_chart_reset_performance_counters(void)
     sample_counter = 0;
     display_update_counter = 0;
     batch_count = 0;
-    y_max_ecg = -1500;
-    y_min_ecg = 1500;
+    // Initialize for proper range detection
+    y_max_ecg = -10000;
+    y_min_ecg = 10000;
 }
 
 // Simplified scaling function - LVGL 9.2 optimized
@@ -351,75 +353,50 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
         return;
     }
 
-    // Immediate response mode - process samples directly for low latency
+    // Batch processing for efficiency
     for (int i = 0; i < num_samples; i++)
     {
-        // Scale ECG data appropriately for display
-        // ECG data in microvolts (µV), divide by 4 for good visualization range
-        int32_t scaled_sample = data_ecg[i] / 4;
+        batch_data[batch_count++] = data_ecg[i];
         
-        // Add directly to chart for immediate response
-        lv_chart_set_next_value(chart_ecg, ser_ecg, scaled_sample);
-        
-        // Update min/max for auto-ranging (every 8th sample for performance)
-        if ((sample_counter & 0x7) == 0) { // Process every 8th sample
-            if (scaled_sample < y_min_ecg) y_min_ecg = scaled_sample;
-            if (scaled_sample > y_max_ecg) y_max_ecg = scaled_sample;
+        // Process batch when full or at end of samples
+        if (batch_count >= 32 || i == num_samples - 1) {
+            // Process batch
+            for (uint32_t j = 0; j < batch_count; j++) {
+                lv_chart_set_next_value(chart_ecg, ser_ecg, batch_data[j]);
+                
+                // Track min/max for auto-scaling
+                if (batch_data[j] < y_min_ecg) y_min_ecg = batch_data[j];
+                if (batch_data[j] > y_max_ecg) y_max_ecg = batch_data[j];
+            }
+            
+            sample_counter += batch_count; // Fix: Update sample counter correctly
+            batch_count = 0;
         }
-        
-        sample_counter++;
     }
     
-    // Force immediate chart refresh for real-time response
-    lv_chart_refresh(chart_ecg);
-    
-    // Periodic range adjustment for auto-scaling
-    if (sample_counter >= RANGE_UPDATE_INTERVAL)
-    {
-        // Calculate dynamic range with safety margins
-        int32_t range_span = y_max_ecg - y_min_ecg;
-        int32_t range_margin = (range_span > 0) ? (range_span / 8) : 100; // 12.5% margin or minimum 100
-        
-        // Ensure minimum margin for visibility
-        if (range_margin < 50) range_margin = 50;
-        
-        // Update chart range using LVGL 9.2 method
-        lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, 
-                         y_min_ecg - range_margin, 
-                         y_max_ecg + range_margin);
-        
-        // Reset tracking variables for next cycle
-        sample_counter = 0;
-        y_max_ecg = -1500;
-        y_min_ecg = 1500;
-    }
-    
-    // Update circular buffer position counter
-    gx += num_samples;
-    if (gx >= ECG_DISP_WINDOW_SIZE) {
-        gx = 0;
-    }
-
-    // Efficient lead status handling - only update on state change
-    if (ecg_lead_off != prev_lead_off_status)
-    {
-        if (ecg_lead_off)
-        {
-            lv_label_set_text_static(label_ecg_lead_off, "Lead Off");  // LVGL 9.2 static text optimization
-            lv_obj_remove_style_all(label_ecg_lead_off);
-            lv_obj_add_style(label_ecg_lead_off, &style_red_medium, 0);
+    // Auto-scaling logic
+    if (sample_counter % RANGE_UPDATE_INTERVAL == 0) {
+        if (y_max_ecg > y_min_ecg) {
+            float range = y_max_ecg - y_min_ecg;
+            float margin = range * 0.1f; // 10% margin
+            
+            int32_t new_min = (int32_t)(y_min_ecg - margin);
+            int32_t new_max = (int32_t)(y_max_ecg + margin);
+            
+            // Ensure reasonable minimum range
+            if ((new_max - new_min) < 1000) {
+                int32_t center = (new_min + new_max) / 2;
+                new_min = center - 500;
+                new_max = center + 500;
+            }
+            
+            lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, new_min, new_max);
         }
-        else
-        {
-            lv_label_set_text_static(label_ecg_lead_off, "Lead On");   // LVGL 9.2 static text optimization
-            lv_obj_remove_style_all(label_ecg_lead_off);
-            lv_obj_add_style(label_ecg_lead_off, &style_white_medium, 0);
-        }
-        prev_lead_off_status = ecg_lead_off;
+        
+        // Reset for next interval
+        y_min_ecg = 10000;
+        y_max_ecg = -10000;
     }
-
-    // Immediate display invalidation for real-time response
-    lv_obj_invalidate(chart_ecg);
 }
 
 void scr_ecg_lead_on_off_handler(bool lead_on_off)

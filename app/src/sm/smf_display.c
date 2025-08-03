@@ -72,10 +72,10 @@ static uint32_t get_sleep_timeout_ms(void)
     return timeout_ms;
 }
 
-K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 32, 1);  // Reduced from 64 to 32
-K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);         // Reduced from 64 to 32
-K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);           // Reduced from 64 to 32
-K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);             // Reduced from 64 to 16
+K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
+K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);
+K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);
+K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
@@ -902,9 +902,14 @@ static void st_display_active_run(void *o)
         hpi_disp_process_ppg_wr_data(ppg_sensor_sample);
     }
 
-    if (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+    // Process multiple ECG samples per cycle to prevent queue backups
+    int ecg_processed_count = 0;
+    while (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
     {
         hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
+        ecg_processed_count++;
+        
+        if (ecg_processed_count >= 8) break;  // Prevent blocking other processing
     }
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)

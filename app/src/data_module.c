@@ -282,7 +282,14 @@ void data_thread(void)
             }
             if (settings_plot_enabled)
             {
-                k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
+                int ret = k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
+                if (ret != 0) {
+                    static uint32_t plot_drops = 0;
+                    plot_drops++;
+                    if ((plot_drops % 10) == 0) {
+                        LOG_WRN("Plot queue full - dropped %u ECG sample batches", plot_drops);
+                    }
+                }
             }
 
             if (is_ecg_record_active == true)
