@@ -96,6 +96,10 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 // #define FORCE_MAX32664C_UPDATE_FOR_TESTING
 // #define FORCE_MAX32664D_UPDATE_FOR_TESTING
 
+// MSBL firmware file paths - must match max32664_updater.c
+#define MAX32664C_FW_PATH "/lfs/sys/max32664c_30_13_31.msbl"
+#define MAX32664D_FW_PATH "/lfs/sys/max32664d_40_6_0.msbl"
+
 char curr_string[40];
 
 // Peripheral Device Pointers
@@ -644,6 +648,18 @@ void hpi_hw_ldsw2_off(void)
     regulator_disable(ldsw_sens_1_8);
 }
 
+static bool hw_check_msbl_file_exists(const char *file_path)
+{
+    struct fs_dirent entry;
+    int ret = fs_stat(file_path, &entry);
+    if (ret < 0) {
+        LOG_ERR("MSBL file not found: %s (error: %d)", file_path, ret);
+        return false;
+    }
+    LOG_INF("MSBL file found: %s (%zu bytes)", file_path, entry.size);
+    return true;
+}
+
 void hw_module_init(void)
 {
     int ret = 0;
@@ -859,9 +875,18 @@ void hw_module_init(void)
 
         if (update_required_c)
         {
-            k_sem_give(&sem_boot_update_req);
-            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
-
+            // Check if MSBL file exists before starting update
+            if (!hw_check_msbl_file_exists(MAX32664C_FW_PATH))
+            {
+                LOG_ERR("MAX32664C MSBL file not available - skipping update");
+                hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
+                hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
+            }
+            else
+            {
+                k_sem_give(&sem_boot_update_req);
+                max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+            }
         }
 
         k_sem_give(&sem_ppg_wrist_sm_start);
@@ -909,8 +934,18 @@ void hw_module_init(void)
 
         if (update_required)
         {
-            k_sem_give(&sem_boot_update_req);
-            max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+            // Check if MSBL file exists before starting update
+            if (!hw_check_msbl_file_exists(MAX32664D_FW_PATH))
+            {
+                LOG_ERR("MAX32664D MSBL file not available - skipping update");
+                hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
+                hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
+            }
+            else
+            {
+                k_sem_give(&sem_boot_update_req);
+                max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+            }
         }
 
         k_sem_give(&sem_ppg_finger_sm_start);
