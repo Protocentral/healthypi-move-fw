@@ -53,7 +53,7 @@ static lv_obj_t *btn_spo2_measure;
 
 // Externs
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
@@ -123,7 +123,7 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     {
         lv_label_set_text_fmt(label_spo2_percent, "%d", m_spo2_val);
     }
-    lv_obj_add_style(label_spo2_percent, &style_white_large, 0);
+    lv_obj_add_style(label_spo2_percent, &style_white_large_numeric, 0);
 
     lv_obj_t *label_spo2_percent_sign = lv_label_create(cont_spo2);
     lv_label_set_text(label_spo2_percent_sign, " %");

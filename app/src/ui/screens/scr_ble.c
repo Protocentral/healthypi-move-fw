@@ -45,7 +45,7 @@ static lv_obj_t *lbl_pair_code;
 
 // Externs
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
@@ -96,7 +96,7 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
         lbl_pair_code = lv_label_create(cont_col);
         lv_label_set_text_fmt(lbl_pair_code, "%06d", hpi_ble_passkey);
         lv_obj_set_style_text_align(lbl_pair_code, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_add_style(lbl_pair_code, &style_white_large, 0);
+        lv_obj_add_style(lbl_pair_code, &style_white_large_numeric, 0);
 
         btn_cancel = lv_btn_create(cont_col);
         lv_obj_add_event_cb(btn_cancel, scr_btn_cancel_handler, LV_EVENT_ALL, NULL);

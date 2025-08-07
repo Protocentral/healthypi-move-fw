@@ -87,9 +87,9 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 
 // Battery cutoff thresholds - voltage based (typical Li-ion voltages)
 // These values can be adjusted based on the specific battery characteristics
-#define HPI_BATTERY_CRITICAL_VOLTAGE 3.2f // Show critical low battery screen (V)
+#define HPI_BATTERY_CRITICAL_VOLTAGE 3.3f // Show critical low battery screen (V)
 #define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f // Auto shutdown level (V) - prevents over-discharge
-#define HPI_BATTERY_RECOVERY_VOLTAGE 3.4f // Recovery threshold when charging (V) - allows hysteresis
+#define HPI_BATTERY_RECOVERY_VOLTAGE 3.5f // Recovery threshold when charging (V) - allows hysteresis
 
 // Force update option for testing MAX32664 updater logic
 // Uncomment the line(s) below to force updates regardless of version
@@ -740,7 +740,7 @@ void hw_module_init(void)
             hpi_hw_pmic_off();
             return; // This should never be reached, but just in case
         }
-        else if (boot_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !boot_batt_charging)
+        else if (boot_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE) // && !boot_batt_charging)
         {
             hw_add_boot_msg(batt_msg, false, true, false, 0);
             hw_add_boot_msg("LOW VOLTAGE WARNING", false, true, false, 0);
@@ -1082,7 +1082,8 @@ void hw_thread(void)
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
         // Check for low battery conditions (voltage-based)
-        if (!sys_batt_charging)
+        if(1)
+        //if (!sys_batt_charging)
         { // Only check cutoff when not charging
             if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
             {

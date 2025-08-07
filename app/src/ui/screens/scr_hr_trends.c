@@ -67,7 +67,7 @@ static lv_obj_t *btn_hr_settings;
 // Externs
 extern lv_style_t style_scr_container;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_white_small;
 

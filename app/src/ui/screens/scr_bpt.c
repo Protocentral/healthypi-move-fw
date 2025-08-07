@@ -47,7 +47,7 @@ static lv_obj_t *label_bpt_last_update_time;
 
 extern lv_style_t style_scr_black;
 extern lv_style_t style_scr_container;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_white_small;
 extern lv_style_t style_red_medium;
@@ -132,7 +132,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     {
         lv_label_set_text_fmt(label_bpt_sys, "%d", bpt_sys);
     }
-    lv_obj_add_style(label_bpt_sys, &style_white_large, 0);
+    lv_obj_add_style(label_bpt_sys, &style_white_large_numeric, 0);
 
     lv_obj_t *label_bpt_sys_unit = lv_label_create(cont_col_sys);
     lv_label_set_text(label_bpt_sys_unit, "mmHg");
@@ -164,7 +164,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     {
         lv_label_set_text_fmt(label_bpt_dia, "%d", bpt_dia);
     }
-    lv_obj_add_style(label_bpt_dia, &style_white_large, 0);
+    lv_obj_add_style(label_bpt_dia, &style_white_large_numeric, 0);
 
     lv_obj_t *label_bpt_dia_unit = lv_label_create(cont_col_dia);
     lv_label_set_text(label_bpt_dia_unit, "mmHg");

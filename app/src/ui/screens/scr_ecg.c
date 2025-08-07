@@ -49,7 +49,7 @@ static lv_obj_t *label_ecg_hr;
 
 // Externs
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
@@ -121,7 +121,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     {
         lv_label_set_text_fmt(label_ecg_hr, "%d", m_ecg_hr);
     }
-    lv_obj_add_style(label_ecg_hr, &style_white_large, 0);
+    lv_obj_add_style(label_ecg_hr, &style_white_large_numeric, 0);
 
     lv_obj_t *label_ecg_hr_unit = lv_label_create(cont_ecg);
     lv_label_set_text(label_ecg_hr_unit, "bpm");

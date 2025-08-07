@@ -44,7 +44,7 @@ static lv_obj_t *btn_close;
 
 // Externs
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
@@ -105,7 +105,7 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_add_style(lbl_bpt_sys, &style_red_medium, 0);
 
     lv_obj_t *lbl_val_sys = lv_label_create(cont_sys);
-    lv_obj_add_style(lbl_val_sys, &style_white_large, 0);
+    lv_obj_add_style(lbl_val_sys, &style_white_large_numeric, 0);
     lv_label_set_text_fmt(lbl_val_sys, "%03d", arg1);
 
     lv_obj_t *cont_dia = lv_obj_create(cont_col);
@@ -119,7 +119,7 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_add_style(lbl_bpt_dia, &style_red_medium, 0);
 
     lv_obj_t *lbl_val_dia = lv_label_create(cont_dia);
-    lv_obj_add_style(lbl_val_dia, &style_white_large, 0);
+    lv_obj_add_style(lbl_val_dia, &style_white_large_numeric, 0);
     lv_label_set_text_fmt(lbl_val_dia, "%03d", arg2);
 
     lv_obj_t *cont_hr = lv_obj_create(cont_col);

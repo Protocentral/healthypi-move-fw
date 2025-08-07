@@ -52,7 +52,7 @@ static lv_obj_t *label_temp_last_update_time;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_white_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 
 extern lv_style_t style_bg_purple;
 
@@ -174,7 +174,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     get_formatted_temperature(temp_f, temp_str, sizeof(temp_str), unit_str, sizeof(unit_str));
     
     lv_label_set_text(label_temp_f, temp_str);
-    lv_obj_add_style(label_temp_f, &style_white_large, 0);
+    lv_obj_add_style(label_temp_f, &style_white_large_numeric, 0);
 
     label_temp_unit = lv_label_create(cont_temp);
     lv_label_set_text(label_temp_unit, unit_str);

@@ -65,7 +65,7 @@ lv_style_t style_scr_container;
 
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_white_medium;
-lv_style_t style_white_large;
+lv_style_t style_white_large_numeric;
 
 lv_style_t style_bg_blue;
 lv_style_t style_bg_red;
@@ -120,9 +120,9 @@ void display_init_styles(void)
     lv_style_set_text_color(&style_white_medium, lv_color_white());
     lv_style_set_text_font(&style_white_medium, &lv_font_montserrat_24);
 
-    lv_style_init(&style_white_large);
-    lv_style_set_text_color(&style_white_large, lv_color_white());
-    lv_style_set_text_font(&style_white_large, &oxanium_90); // &ui_font_number_big); //&ui_font_Number_extra);
+    lv_style_init(&style_white_large_numeric);
+    lv_style_set_text_color(&style_white_large_numeric, lv_color_white());
+    lv_style_set_text_font(&style_white_large_numeric, &oxanium_90); // &ui_font_number_big); //&ui_font_Number_extra);
 
     // Label Red
     lv_style_init(&style_red_medium);

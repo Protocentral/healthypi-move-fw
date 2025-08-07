@@ -52,7 +52,7 @@ static lv_obj_t *label_hr_last_update_time;
 // Externs
 extern lv_style_t style_scr_container;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_white_small;
 extern lv_style_t style_tiny;
@@ -101,7 +101,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     }
 
     label_hr_bpm = lv_label_create(cont_hr);
-    lv_obj_add_style(label_hr_bpm, &style_white_large, 0);
+    lv_obj_add_style(label_hr_bpm, &style_white_large_numeric, 0);
 
     if (hr == 0)
     {

@@ -168,9 +168,11 @@ LV_IMG_DECLARE(img_bpt_finger_90);
 LV_IMG_DECLARE(img_bpt_finger_45);
 LV_IMG_DECLARE(img_wrist_45);
 LV_IMG_DECLARE(bck_heart_200);
+LV_IMG_DECLARE(low_batt_100);
 
 LV_FONT_DECLARE(oxanium_90);
 LV_FONT_DECLARE(ui_font_number_big);
+
 
 /******** UI Function Prototypes ********/
 void display_init_styles(void);
