@@ -1,0 +1,1 @@
+ nrfutil sdk-manager toolchain launch --ncs-version v3.0.2 --shell
