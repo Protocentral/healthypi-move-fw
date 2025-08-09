@@ -55,13 +55,13 @@
 		};
 	};
 
-	gpio_fwd: nrf-gpio-forwarder {
+	/*gpio_fwd: nrf-gpio-forwarder {
 		compatible = "nordic,nrf-gpio-forwarder";
 		status = "okay";
 		uart {
 			gpios = <&gpio1 1 0>, <&gpio1 0 0>, <&gpio0 10 0>;
 		};
-	};
+	};*/
 
 	/*mipi_dbi {
 		compatible = "zephyr,mipi-dbi-spi";
@@ -253,7 +253,7 @@
 	status = "okay";
 	pinctrl-0 = <&i2c2_default>;
 	pinctrl-1 = <&i2c2_sleep>;
-	clock-frequency = <I2C_BITRATE_FAST>;
+	//clock-frequency = <390000>;
 	pinctrl-names = "default", "sleep";
 	zephyr,concat-buf-size = <8250>;
 	zephyr,flash-buf-max-size = <8250>;

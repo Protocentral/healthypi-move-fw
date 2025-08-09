@@ -79,17 +79,6 @@
 	pinctrl-names = "default", "sleep";
 };
 
-arduino_serial: &uart0{};
-
-arduino_i2c: &i2c0 {
-	compatible = "nordic,nrf-twim";
-	/* Cannot be used together with uart0. */
-	/* status = "okay"; */
-	pinctrl-0 = <&i2c0_default>;
-	pinctrl-1 = <&i2c0_sleep>;
-	pinctrl-names = "default", "sleep";
-};
-
 &flash1 {
 
 	partitions {
