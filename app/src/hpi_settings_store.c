@@ -28,13 +28,13 @@
  */
 
 
-#include "hpi_settings_persistence.h"
+#include "hpi_settings_store.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/fs/fs.h>
 #include <string.h>
 #include <stdint.h>
 
-LOG_MODULE_REGISTER(hpi_settings_persistence, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(hpi_settings_store, LOG_LEVEL_INF);
 
 // Settings file path
 #define SETTINGS_FILE_PATH "/lfs/user_settings.bin"
@@ -86,14 +86,14 @@ static void settings_load_defaults(void)
     current_settings.raise_to_wake = DEFAULT_RAISE_TO_WAKE;
     current_settings.button_sounds = DEFAULT_BUTTON_SOUNDS;
 
-    LOG_INF("Default settings loaded:");
-    LOG_INF("  Height: %d cm", current_settings.height);
-    LOG_INF("  Weight: %d kg", current_settings.weight);
-    LOG_INF("  Hand worn: %s", current_settings.hand_worn ? "Right" : "Left");
-    LOG_INF("  Time format: %s", current_settings.time_format ? "12H" : "24H");
-    LOG_INF("  Temperature unit: %s", current_settings.temp_unit ? "Fahrenheit" : "Celsius");
-    LOG_INF("  Auto sleep: %s", current_settings.auto_sleep_enabled ? "Enabled" : "Disabled");
-    LOG_INF("  Sleep timeout: %d seconds", current_settings.sleep_timeout);
+    LOG_DBG("Default settings loaded:");
+    LOG_DBG("  Height: %d cm", current_settings.height);
+    LOG_DBG("  Weight: %d kg", current_settings.weight);
+    LOG_DBG("  Hand worn: %s", current_settings.hand_worn ? "Right" : "Left");
+    LOG_DBG("  Time format: %s", current_settings.time_format ? "12H" : "24H");
+    LOG_DBG("  Temperature unit: %s", current_settings.temp_unit ? "Fahrenheit" : "Celsius");
+    LOG_DBG("  Auto sleep: %s", current_settings.auto_sleep_enabled ? "Enabled" : "Disabled");
+    LOG_DBG("  Sleep timeout: %d seconds", current_settings.sleep_timeout);
 }
 
 static int settings_read_from_file(void)
@@ -245,7 +245,7 @@ close_file:
     return rc;
 }
 
-int hpi_settings_persistence_init(void)
+int hpi_settings_store_init(void)
 {
     int rc;
 
