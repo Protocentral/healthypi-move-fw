@@ -7,6 +7,13 @@ config SENSOR_MAX32664C
 	help
 		Enable the driver for the Maxim MAX32664C sensor
 
+config MAX32664C_STREAM
+	bool "MAX32664C Streaming Support"
+	default n
+	depends on SENSOR_MAX32664C && SENSOR_ASYNC_API
+	help
+		Enable streaming support for MAX32664C using MFIO interrupts and RTIO
+
 module = MAX32664C
 module-str = max32664c
 

@@ -800,6 +800,7 @@ static int max32664c_chip_init(const struct device *dev)
     }
 
     gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
+    /* Configure MFIO as output by default for command mode */
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
     max32664c_do_enter_app(dev);
@@ -816,6 +817,14 @@ static int max32664c_chip_init(const struct device *dev)
     }
 
     max32664c_check_sensors(dev);
+
+#ifdef CONFIG_MAX32664C_STREAM
+    /* Configure MFIO pin for interrupt if streaming is enabled */
+    if (max32664c_init_streaming(dev) != 0) {
+        LOG_ERR("Failed to initialize streaming support");
+        return -EIO;
+    }
+#endif
 
     return 0;
 }

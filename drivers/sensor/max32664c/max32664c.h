@@ -107,6 +107,14 @@ struct max32664c_data
 	uint8_t hub_ver[4];
 	uint8_t max86141_id;
 	uint8_t accel_id;
+    
+    /* RTIO streaming support */
+    struct rtio *rtio_ctx;
+    struct rtio_iodev *iodev;
+    struct rtio_iodev_sqe *sqe;
+    struct gpio_callback mfio_cb;
+    uint64_t timestamp;
+    const struct device *sensor_dev;  /* Reference to self for callback usage */
 };
 
 // Async API types
@@ -149,5 +157,15 @@ struct max32664c_encoded_data
 	uint32_t steps_walk;
 };
 
+#include <zephyr/rtio/rtio.h>
+
 int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664c_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
+
+/* GPIO helper functions */
+int max32664c_configure_mfio(const struct device *dev, bool command_mode);
+
+/* RTIO streaming support functions */
+void max32664c_stream_irq_handler(const struct device *dev);
+void max32664c_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+int max32664c_init_streaming(const struct device *dev);

@@ -12,8 +12,15 @@ int max32664c_get_fifo_count(const struct device *dev)
     const struct max32664c_config *config = dev->config;
     uint8_t rd_buf[2] = {0x00, 0x00};
     uint8_t wr_buf[2] = {0x12, 0x00};
-
     uint8_t fifo_count;
+    int rc;
+
+    /* Configure MFIO for command mode */
+    rc = max32664c_configure_mfio(dev, true);
+    if (rc < 0) {
+        return rc;
+    }
+
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
@@ -311,6 +318,8 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
 int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
+    const struct sensor_read_config *cfg =
+        (const struct sensor_read_config *) iodev_sqe->sqe.iodev->data;
     uint32_t min_buf_len = sizeof(struct max32664c_encoded_data);
     int rc;
     uint8_t *buf;
@@ -318,6 +327,12 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
     struct max32664c_encoded_data *m_edata;
     struct max32664c_data *data = dev->data;
+    
+    /* Handle streaming requests differently */
+    if (cfg->is_streaming) {
+        max32664c_submit_stream(dev, iodev_sqe);
+        return 0;
+    }
 
     /* Get the buffer for the frame, it may be allocated dynamically by the rtio context */
     rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_len, min_buf_len, &buf, &buf_len);
