@@ -108,9 +108,6 @@ struct max32664c_data
 	uint8_t max86141_id;
 	uint8_t accel_id;
     
-    /* RTIO streaming support */
-    struct rtio *rtio_ctx;
-    struct rtio_iodev *iodev;
     struct rtio_iodev_sqe *sqe;
     struct gpio_callback mfio_cb;
     uint64_t timestamp;

@@ -63,8 +63,6 @@ int max32664c_configure_mfio(const struct device *dev, bool command_mode)
  */
 void max32664c_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
-    const struct sensor_read_config *cfg =
-        (const struct sensor_read_config *)iodev_sqe->sqe.iodev->data;
     struct max32664c_data *data = (struct max32664c_data *)dev->data;
     const struct max32664c_config *config = dev->config;
     int rc;
@@ -84,10 +82,6 @@ void max32664c_submit_stream(const struct device *dev, struct rtio_iodev_sqe *io
 
     /* Store the SQE for later processing when MFIO interrupt happens */
     data->sqe = iodev_sqe;
-
-    /* Store RTIO context and device references for use in interrupt handler */
-    data->rtio_ctx = iodev_sqe->sqe.iodev->ctx;
-    data->iodev = iodev_sqe->sqe.iodev;
     data->sensor_dev = dev;  /* Store reference to self */
 
     /* Re-enable the MFIO interrupt for falling edge (active low) */
