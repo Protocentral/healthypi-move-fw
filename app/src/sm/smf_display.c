@@ -751,7 +751,46 @@ static void st_display_active_entry(void *o)
 
     if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
     {
-        hpi_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
+        // Check for post-boot critical battery before loading the home screen
+        extern bool boot_critical_voltage_detected;
+        extern uint8_t boot_battery_level;
+        extern bool boot_battery_charging;
+        extern float boot_battery_voltage;
+        extern volatile bool vbus_connected;
+        
+        if (boot_critical_voltage_detected) {
+            LOG_WRN("Handling post-boot critical battery voltage: %.2f V", (double)boot_battery_voltage);
+            
+            // Show low battery screen briefly (3 seconds)
+            hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, boot_battery_level, boot_battery_charging, (uint32_t)(boot_battery_voltage * 100), 0);
+            k_msleep(3000);
+            
+            // Check USB connection status
+            if (!vbus_connected) {
+                // Not connected to USB - show shutting down message and shutdown
+                LOG_ERR("Critical battery voltage (%.2f V) and no USB power - shutting down", (double)boot_battery_voltage);
+                
+                // Draw a simple shutdown screen
+                draw_scr_progress("CRITICAL BATTERY", "Shutting down...");
+                k_msleep(2000); // Show message briefly
+                
+                extern void hpi_hw_pmic_off(void);
+                hpi_hw_pmic_off(); // Shutdown
+            } else {
+                // Connected to USB - show charging message and continue
+                LOG_INF("Critical battery voltage (%.2f V) but USB connected - continuing with charging", (double)boot_battery_voltage);
+                
+                // Show charging message briefly
+                draw_scr_progress("LOW BATTERY", "USB connected - charging...");
+                k_msleep(2000); // Show message briefly
+                
+                // Continue to home screen
+                hpi_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
+            }
+        } else {
+            // Normal boot - load default start screen
+            hpi_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
+        }
     }
     /*else
     {

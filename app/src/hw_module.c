@@ -131,7 +131,7 @@ volatile bool max30001_device_present = false;
 volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 
-static volatile bool vbus_connected;
+volatile bool vbus_connected; // Make non-static for display access
 static int64_t ref_time;
 
 // Low battery state tracking
@@ -140,6 +140,12 @@ static bool critical_battery_notified = false;
 static uint32_t low_battery_last_update = 0;
 static uint8_t last_battery_level = 100;  // Store last known battery level
 static float last_battery_voltage = 4.2f; // Store last known battery voltage
+
+// Boot battery state for post-boot critical voltage handling (non-static for display access)
+uint8_t boot_battery_level = 100;
+bool boot_battery_charging = false;
+float boot_battery_voltage = 4.2f;
+bool boot_critical_voltage_detected = false;
 
 // USB CDC UART
 #define RING_BUF_SIZE 512  // Reduced from 1024 to 512 bytes
@@ -721,29 +727,32 @@ void hw_module_init(void)
 
     if (npm_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
     {
+        // Store boot battery state for post-boot handling
+        boot_battery_level = boot_batt_level;
+        boot_battery_charging = boot_batt_charging;
+        boot_battery_voltage = boot_batt_voltage;
+        
         char batt_msg[32];
         // Convert voltage to millivolts to avoid floating point in snprintf
         int voltage_mv = (int)(boot_batt_voltage * 1000);
         snprintf(batt_msg, sizeof(batt_msg), "Battery: %d.%02d V (%d%%)", 
                 voltage_mv / 1000, (voltage_mv % 1000) / 10, boot_batt_level);
 
-        // Check if battery voltage is critically low
-        if (boot_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE && !boot_batt_charging)
+        // Check if battery voltage is critically low - but don't shutdown during boot
+        // Instead, store the state and handle it after boot completion
+        if (boot_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE)
         {
+            boot_critical_voltage_detected = true;
             hw_add_boot_msg(batt_msg, false, true, false, 0);
-            hw_add_boot_msg("CRITICAL LOW VOLTAGE", false, true, false, 0);
-            hw_add_boot_msg("Connect charger to boot", false, false, false, 0);
-
-            // Wait a bit to show the message, then shutdown
-            k_msleep(3000);
-            LOG_ERR("Boot aborted - critical battery voltage: %.2f V", (double)boot_batt_voltage);
-            hpi_hw_pmic_off();
-            return; // This should never be reached, but just in case
-        }
-        else if (boot_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE) // && !boot_batt_charging)
-        {
-            hw_add_boot_msg(batt_msg, false, true, false, 0);
-            hw_add_boot_msg("LOW VOLTAGE WARNING", false, true, false, 0);
+            if (boot_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE) {
+                hw_add_boot_msg("CRITICAL LOW VOLTAGE", false, true, false, 0);
+            } else {
+                hw_add_boot_msg("LOW VOLTAGE WARNING", false, true, false, 0);
+            }
+            
+            if (boot_batt_charging) {
+                hw_add_boot_msg("Charging detected", true, false, false, 0);
+            }
         }
         else
         {
