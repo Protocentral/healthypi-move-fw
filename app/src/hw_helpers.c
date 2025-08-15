@@ -45,9 +45,9 @@
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/usbd.h>
 
-#include <zephyr/drivers/sensor/npm1300_charger.h>
-#include <zephyr/dt-bindings/regulator/npm1300.h>
-#include <zephyr/drivers/mfd/npm1300.h>
+#include <zephyr/drivers/sensor/npm13xx_charger.h>
+#include <zephyr/dt-bindings/regulator/npm13xx.h>
+#include <zephyr/drivers/mfd/npm13xx.h>
 
 #include <zephyr/input/input.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
