@@ -43,9 +43,9 @@
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/usbd.h>
 
-#include <zephyr/drivers/sensor/npm1300_charger.h>
-#include <zephyr/dt-bindings/regulator/npm1300.h>
-#include <zephyr/drivers/mfd/npm1300.h>
+#include <zephyr/drivers/sensor/npm13xx_charger.h>
+#include <zephyr/dt-bindings/regulator/npm13xx.h>
+#include <zephyr/drivers/mfd/npm13xx.h>
 #include <zephyr/drivers/regulator.h>
 
 #include <zephyr/input/input.h>
@@ -390,7 +390,7 @@ static int npm_read_sensors(const struct device *charger,
     sensor_channel_get(charger, SENSOR_CHAN_GAUGE_AVG_CURRENT, &value);
     *current = (float)value.val1 + ((float)value.val2 / 1000000);
 
-    sensor_channel_get(charger, SENSOR_CHAN_NPM1300_CHARGER_STATUS, &value);
+    sensor_channel_get(charger, SENSOR_CHAN_NPM13XX_CHARGER_STATUS, &value);
     *chg_status = value.val1;
 
     return 0;
@@ -584,13 +584,13 @@ int hw_max32664c_stop_algo(void)
 
 static void pmic_event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-    if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))
+    if (pins & BIT(NPM13XX_EVENT_VBUS_DETECTED))
     {
         printk("Vbus connected\n");
         vbus_connected = true;
     }
 
-    if (pins & BIT(NPM1300_EVENT_VBUS_REMOVED))
+    if (pins & BIT(NPM13XX_EVENT_VBUS_REMOVED))
     {
         printk("Vbus removed\n");
         vbus_connected = false;
@@ -616,9 +616,9 @@ static int hw_enable_pmic_callback(void)
     int ret = 0;
 
     gpio_init_callback(&event_cb, pmic_event_callback,
-                       BIT(NPM1300_EVENT_VBUS_DETECTED) | BIT(NPM1300_EVENT_VBUS_REMOVED));
+                       BIT(NPM13XX_EVENT_VBUS_DETECTED) | BIT(NPM13XX_EVENT_VBUS_REMOVED));
 
-    ret = mfd_npm1300_add_callback(pmic, &event_cb);
+    ret = mfd_npm13xx_add_callback(pmic, &event_cb);
     if (ret)
     {
         LOG_ERR("Failed to add pmic callback");

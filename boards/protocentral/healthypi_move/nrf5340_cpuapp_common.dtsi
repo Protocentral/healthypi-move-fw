@@ -6,7 +6,7 @@
  */
 #include "nrf5340_cpuapp_common-pinctrl.dtsi"
 #include <zephyr/dt-bindings/input/input-event-codes.h>
-#include <dt-bindings/regulator/npm1300.h>
+#include <zephyr/dt-bindings/regulator/npm13xx.h>
 
 #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
 #include <zephyr/dt-bindings/lvgl/lvgl.h>
@@ -174,23 +174,23 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt = <3100000>;
-				regulator-initial-mode = <NPM1300_BUCK_MODE_AUTO>;
+				regulator-initial-mode = <NPM13XX_BUCK_MODE_AUTO>;
 			};
 
 			npm_pmic_buck2: BUCK2 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-init-microvolt =<2000000>;
-				regulator-initial-mode = <NPM1300_BUCK_MODE_AUTO>;
+				regulator-initial-mode = <NPM13XX_BUCK_MODE_AUTO>;
 			};
 
 			npm_pmic_ldo1: LDO1 {
-				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				regulator-initial-mode = <NPM13XX_LDSW_MODE_LDSW>;
 				//regulator-boot-on;
 			};
 
 			npm_pmic_ldo2: LDO2 {
-				regulator-initial-mode = <NPM1300_LDSW_MODE_LDSW>;
+				regulator-initial-mode = <NPM13XX_LDSW_MODE_LDSW>;
 				//regulator-boot-on;
 			};
 		};
@@ -406,4 +406,4 @@ zephyr_udc0: &usbd {
 };
 
 /* Include default memory partition configuration file */
-#include <common/nordic/nrf5340_cpuapp_partition.dtsi>
+#include <nordic/nrf5340_cpuapp_partition.dtsi>
