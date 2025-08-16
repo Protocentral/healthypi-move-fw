@@ -34,7 +34,7 @@ int max32664c_get_fifo_count(const struct device *dev)
     return (int)fifo_count;
 }
 
-static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *chip_op_mode, uint8_t *scd_state)
+int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *chip_op_mode, uint8_t *scd_state)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -43,10 +43,54 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
     static uint8_t buf[2048];
     static int sample_len = 1;
 
-    uint8_t hub_stat = max32664c_read_hub_status(dev);
+    /* Direct hub status read with minimal delay */
+    uint8_t hub_status_cmd[2] = {0x00, 0x00};
+    uint8_t hub_status_buf[3];
+    
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_busy_wait(50);  /* Reduced from 300us to 50us */
+    
+    int rc = i2c_write_dt(&config->i2c, hub_status_cmd, sizeof(hub_status_cmd));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    rc = i2c_read_dt(&config->i2c, hub_status_buf, sizeof(hub_status_buf));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    k_busy_wait(50);
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+    
+    uint8_t hub_stat = hub_status_buf[1];
+    
     if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK)
     {
-        int fifo_count = max32664c_get_fifo_count(dev);
+        /* Direct FIFO count read with minimal delay */
+        uint8_t fifo_count_cmd[2] = {0x12, 0x00};
+        uint8_t fifo_count_buf[2];
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 0);
+        k_busy_wait(50);
+        
+        rc = i2c_write_dt(&config->i2c, fifo_count_cmd, sizeof(fifo_count_cmd));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        rc = i2c_read_dt(&config->i2c, fifo_count_buf, sizeof(fifo_count_buf));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        
+        int fifo_count = (int)fifo_count_buf[1];
 
         if (fifo_count > 8)
         {
@@ -59,11 +103,21 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
             *chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
-            k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
+            
+            rc = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
-            k_sleep(K_USEC(300));
+            rc = i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
+            
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
             for (int i = 0; i < fifo_count; i++)
@@ -82,7 +136,7 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
     return 0;
 }
 
-static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode)
+int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -91,10 +145,54 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
     static uint8_t buf[2048];
     static int sample_len = 1;
 
-    uint8_t hub_stat = max32664c_read_hub_status(dev);
+    /* Direct hub status read with minimal delay */
+    uint8_t hub_status_cmd[2] = {0x00, 0x00};
+    uint8_t hub_status_buf[3];
+    
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_busy_wait(50);
+    
+    int rc = i2c_write_dt(&config->i2c, hub_status_cmd, sizeof(hub_status_cmd));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    rc = i2c_read_dt(&config->i2c, hub_status_buf, sizeof(hub_status_buf));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    k_busy_wait(50);
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+    
+    uint8_t hub_stat = hub_status_buf[1];
+    
     if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK)
     {
-        int fifo_count = max32664c_get_fifo_count(dev);
+        /* Direct FIFO count read with minimal delay */
+        uint8_t fifo_count_cmd[2] = {0x12, 0x00};
+        uint8_t fifo_count_buf[2];
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 0);
+        k_busy_wait(50);
+        
+        rc = i2c_write_dt(&config->i2c, fifo_count_cmd, sizeof(fifo_count_cmd));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        rc = i2c_read_dt(&config->i2c, fifo_count_buf, sizeof(fifo_count_buf));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        
+        int fifo_count = (int)fifo_count_buf[1];
 
         if (fifo_count > 8)
         {
@@ -107,11 +205,21 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
             *chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
-            k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
+            
+            rc = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
-            k_sleep(K_USEC(300));
+            rc = i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
+            
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
             for (int i = 0; i < fifo_count; i++)
@@ -124,7 +232,7 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
     return 0;
 }
 
-static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16], uint32_t *num_samples, uint8_t *chip_op_mode)
+int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16], uint32_t *num_samples, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -133,10 +241,54 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
     static uint8_t buf[2048];
     static int sample_len = 24;
 
-    uint8_t hub_stat = max32664c_read_hub_status(dev);
+    /* Direct hub status read with minimal delay */
+    uint8_t hub_status_cmd[2] = {0x00, 0x00};
+    uint8_t hub_status_buf[3];
+    
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_busy_wait(50);
+    
+    int rc = i2c_write_dt(&config->i2c, hub_status_cmd, sizeof(hub_status_cmd));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    rc = i2c_read_dt(&config->i2c, hub_status_buf, sizeof(hub_status_buf));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    k_busy_wait(50);
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+    
+    uint8_t hub_stat = hub_status_buf[1];
+    
     if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK)
     {
-        int fifo_count = max32664c_get_fifo_count(dev);
+        /* Direct FIFO count read with minimal delay */
+        uint8_t fifo_count_cmd[2] = {0x12, 0x00};
+        uint8_t fifo_count_buf[2];
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 0);
+        k_busy_wait(50);
+        
+        rc = i2c_write_dt(&config->i2c, fifo_count_cmd, sizeof(fifo_count_cmd));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        rc = i2c_read_dt(&config->i2c, fifo_count_buf, sizeof(fifo_count_buf));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        
+        int fifo_count = (int)fifo_count_buf[1];
 
         // printk("F: %d | ", fifo_count);
 
@@ -152,11 +304,21 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
             *chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
-            k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
+            
+            rc = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
-            k_sleep(K_USEC(300));
+            rc = i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
+            
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
             for (int i = 0; i < fifo_count; i++)
@@ -184,7 +346,7 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
     return 0;
 }
 
-static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
+int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
                                         uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint8_t *spo2_valid_percent_complete, uint8_t *spo2_low_quality,
                                         uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor,
                                         uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
@@ -199,12 +361,55 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
 #define MAX32664C_ALGO_DATA_OFFSET 24
 
-    uint8_t hub_stat = max32664c_read_hub_status(dev);
-    // int fifo_count = max32664c_get_fifo_count(dev);
+    /* Direct hub status read with minimal delay */
+    uint8_t hub_status_cmd[2] = {0x00, 0x00};
+    uint8_t hub_status_buf[3];
+    
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_busy_wait(50);
+    
+    int rc = i2c_write_dt(&config->i2c, hub_status_cmd, sizeof(hub_status_cmd));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    rc = i2c_read_dt(&config->i2c, hub_status_buf, sizeof(hub_status_buf));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return rc;
+    }
+    
+    k_busy_wait(50);
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+    
+    uint8_t hub_stat = hub_status_buf[1];
+    
     if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK)
     {
         // printk("DRDY ");
-        int fifo_count = max32664c_get_fifo_count(dev);
+        /* Direct FIFO count read with minimal delay */
+        uint8_t fifo_count_cmd[2] = {0x12, 0x00};
+        uint8_t fifo_count_buf[2];
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 0);
+        k_busy_wait(50);
+        
+        rc = i2c_write_dt(&config->i2c, fifo_count_cmd, sizeof(fifo_count_cmd));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        rc = i2c_read_dt(&config->i2c, fifo_count_buf, sizeof(fifo_count_buf));
+        if (rc != 0) {
+            gpio_pin_set_dt(&config->mfio_gpio, 1);
+            return rc;
+        }
+        
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        
+        int fifo_count = (int)fifo_count_buf[1];
         // printk("AL F: %d | ", fifo_count);
 
         if (fifo_count > 16)
@@ -228,11 +433,21 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
             *chip_op_mode = data->op_mode;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
-            k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
+            
+            rc = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
-            k_sleep(K_USEC(300));
+            rc = i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            if (rc != 0) {
+                gpio_pin_set_dt(&config->mfio_gpio, 1);
+                return rc;
+            }
+            
+            k_busy_wait(50);  /* Reduced from 300us to 50us */
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
             for (int i = 0; i < fifo_count; i++)
@@ -334,14 +549,43 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         return 0;
     }
 
-    /* Get the buffer for the frame, it may be allocated dynamically by the rtio context */
-    rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_len, min_buf_len, &buf, &buf_len);
+    /* Calculate buffer size based on operational mode - following Zephyr RTIO guidelines */
+    uint32_t min_buf_size = sizeof(struct max32664c_decoder_header) + 32; /* Header + minimal data */
+    uint32_t max_buf_size = sizeof(struct max32664c_encoded_data);        /* Full structure */
+    
+    /* Adjust minimum size based on operational mode to avoid over-allocation */
+    switch (data->op_mode) {
+        case MAX32664C_OP_MODE_SCD:
+        case MAX32664C_OP_MODE_WAKE_ON_MOTION:
+        case MAX32664C_OP_MODE_IDLE:
+            /* These modes need minimal data */
+            min_buf_size = sizeof(struct max32664c_decoder_header) + 16;
+            break;
+        case MAX32664C_OP_MODE_RAW:
+            /* Raw mode needs sample arrays but not all algorithm data */
+            min_buf_size = sizeof(struct max32664c_decoder_header) + 200;
+            break;
+        case MAX32664C_OP_MODE_ALGO_AGC:
+        case MAX32664C_OP_MODE_ALGO_AEC:
+        case MAX32664C_OP_MODE_ALGO_EXTENDED:
+            /* Algorithm modes need more data but allow flexible sizing */
+            min_buf_size = sizeof(struct max32664c_decoder_header) + 300;
+            break;
+        default:
+            min_buf_size = sizeof(struct max32664c_decoder_header) + 32;
+            break;
+    }
+
+    /* Get the buffer for the frame with flexible sizing */
+    rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_size, max_buf_size, &buf, &buf_len);
     if (rc != 0)
     {
-        LOG_ERR("Failed to get a read buffer of size %u bytes", min_buf_len);
+        LOG_ERR("Failed to get a read buffer (min: %u, max: %u)", min_buf_size, max_buf_size);
         rtio_iodev_sqe_err(iodev_sqe, rc);
         return rc;
     }
+    
+    LOG_DBG("Allocated RTIO buffer: requested [%u, %u], got %u bytes", min_buf_size, max_buf_size, buf_len);
 
     if (data->op_mode == MAX32664C_OP_MODE_ALGO_AGC || data->op_mode == MAX32664C_OP_MODE_ALGO_AEC ||
         data->op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)

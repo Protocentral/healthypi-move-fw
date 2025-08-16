@@ -78,6 +78,7 @@
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
 #include "ble_module.h"
+#include "hr_monitor_rtio.h"
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
 
@@ -154,8 +155,9 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
 K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
-K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
+
+K_SEM_DEFINE(sem_hr_monitor_start, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ble_thread_start, 0, 1);
 K_SEM_DEFINE(sem_hpi_sys_thread_start, 0, 1);
@@ -889,7 +891,9 @@ void hw_module_init(void)
             }
         }
 
-        k_sem_give(&sem_ppg_wrist_sm_start);
+        //k_sem_give(&sem_ppg_wrist_sm_start);
+        // Signal HR monitor thread to start after MAX32664C is detected and ready
+        hr_monitor_start_thread();  // This will signal the sem_hr_monitor_thread_start
     }
 
     device_init(max32664d_dev);

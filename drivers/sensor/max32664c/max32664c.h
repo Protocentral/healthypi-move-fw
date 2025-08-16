@@ -112,6 +112,11 @@ struct max32664c_data
     struct gpio_callback mfio_cb;
     uint64_t timestamp;
     const struct device *sensor_dev;  /* Reference to self for callback usage */
+    
+    /* RTIO buffers for asynchronous operations */
+    uint8_t hub_status_buf[3];        /* Buffer for hub status read */
+    uint8_t fifo_count_cmd[2];        /* Command buffer for FIFO count */
+    uint8_t fifo_count_buf[2];        /* Buffer for FIFO count read */
 };
 
 // Async API types
@@ -166,3 +171,16 @@ int max32664c_configure_mfio(const struct device *dev, bool command_mode);
 void max32664c_stream_irq_handler(const struct device *dev);
 void max32664c_submit_stream(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664c_init_streaming(const struct device *dev);
+
+/* Async sample fetch functions */
+int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *chip_op_mode, uint8_t *scd_state);
+int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode);
+int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], 
+                                    uint32_t red_samples[16], uint32_t *num_samples, uint8_t *chip_op_mode);
+int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], 
+                                uint32_t red_samples[16], uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, 
+                                uint8_t *spo2_valid_percent_complete, uint8_t *spo2_low_quality, 
+                                uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state,
+                                uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor, uint8_t *rtor_conf, 
+                                uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, 
+                                uint32_t *steps_walk, uint8_t *chip_op_mode);

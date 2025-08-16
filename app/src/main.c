@@ -40,6 +40,7 @@
 #include <zephyr/sys/poweroff.h>
 
 #include "hw_module.h"
+#include "hr_monitor_rtio.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -47,8 +48,10 @@ int main(void)
 {
 	hw_module_init();
 
-	LOG_INF("HealthyPi Move %d.%d.%d started!", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
+	/* Note: HR monitor thread is automatically created via K_THREAD_DEFINE
+	 * It will wait for semaphore signal from hw_module after MAX32664C detection */
 
+	LOG_INF("HealthyPi Move %d.%d.%d started!", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 	// For power profiling. Full poweroff
 	//sys_poweroff();
 

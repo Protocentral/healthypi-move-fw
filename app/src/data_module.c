@@ -51,6 +51,7 @@ LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
 #include "hpi_sys.h"
 
 #include "log_module.h"
+//#include "hr_monitor_rtio.h"  // DISABLED for debugging
 
 // ProtoCentral data formats
 #define CES_CMDIF_PKT_START_1 0x0A
@@ -95,6 +96,10 @@ K_MUTEX_DEFINE(mutex_is_ecg_record_active);
 
 static uint32_t last_hr_update_time = 0;
 
+// HR Monitor integration
+
+//static uint32_t hr_monitor_last_update = 0;  // DISABLED for debugging
+
 K_MUTEX_DEFINE(mutex_hr_change);
 
 // Externs
@@ -104,11 +109,9 @@ ZBUS_CHAN_DECLARE(hr_chan);
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 
 extern struct k_msgq q_ecg_bioz_sample;
-extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_ppg_fi_sample;
 
 extern struct k_msgq q_plot_ecg_bioz;
-extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_ppg_fi;
 extern struct k_msgq q_plot_hrv;
 
@@ -256,10 +259,11 @@ bool hpi_data_is_ecg_record_active(void)
     return active;
 }
 
+
+
 void data_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
-    struct hpi_ppg_wr_data_t ppg_wr_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
     static uint32_t hr_zbus_last_pub_time = 0;
@@ -338,44 +342,58 @@ void data_thread(void)
             }
         }
 
-        // Check if PPG data is available
-        if (k_msgq_get(&q_ppg_wrist_sample, &ppg_wr_sensor_sample, K_NO_WAIT) == 0)
-        {
-            processed_data = true;
-            if (settings_send_ble_enabled)
-            {
-                ble_ppg_notify_wr(ppg_wr_sensor_sample.raw_green, ppg_wr_sensor_sample.ppg_num_samples);
-            }
-            if (settings_plot_enabled)
-            {
-                k_msgq_put(&q_plot_ppg_wrist, &ppg_wr_sensor_sample, K_NO_WAIT);
-            }
-
-            if (settings_send_usb_enabled)
-            {
-            }
-
-            if (ppg_wr_sensor_sample.scd_state == HPI_PPG_SCD_ON_SKIN)
-            {
-                if (ppg_wr_sensor_sample.hr_confidence > 75)
-                {
-                    if (hr_zbus_last_pub_time == 0)
-                    {
-                        hr_zbus_last_pub_time = k_uptime_seconds();
-                    }
-                    if ((k_uptime_seconds() - hr_zbus_last_pub_time) > 2)
-                    {
-                        struct hpi_hr_t hr_chan_value = {
-                            .timestamp = hw_get_sys_time_ts(),
-                            .hr = ppg_wr_sensor_sample.hr,
-                            .hr_ready_flag = true,
-                        };
-                        zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
-                        hr_zbus_last_pub_time = k_uptime_seconds();
+        // Process HR data from RTIO HR monitor (DISABLED for debugging)
+        /*
+        if (hr_monitor_is_initialized()) {
+            uint16_t hr;
+            uint8_t confidence, spo2, scd_state;
+            
+            // Check for new HR data from the monitor
+            int ret = hr_monitor_get_detailed(&hr, &confidence, &spo2, &scd_state);
+            if (ret == 0) {
+                processed_data = true;
+                hr_monitor_last_update = k_uptime_get_32();
+                
+                LOG_INF("HR Monitor data: HR=%d bpm, conf=%d%%, SpO2=%d%%, SCD=%d", 
+                       hr, confidence, spo2, scd_state);
+                
+                // Create a PPG sample structure for compatibility with existing code
+                struct hpi_ppg_wr_data_t ppg_wr_sensor_sample = {
+                    .hr = hr,
+                    .hr_confidence = confidence,
+                    .spo2 = spo2,
+                    .scd_state = scd_state,
+                    .ppg_num_samples = 1,
+                    // Note: raw PPG data not available from HR monitor
+                };
+                
+                if (settings_send_ble_enabled) {
+                    // Send HR data via BLE (raw PPG data not available)
+                    // You may need to implement a dedicated HR BLE notification
+                }
+                
+                if (scd_state == HPI_PPG_SCD_ON_SKIN) {
+                    if (confidence > 75) {
+                        if (hr_zbus_last_pub_time == 0) {
+                            hr_zbus_last_pub_time = k_uptime_seconds();
+                        }
+                        if ((k_uptime_seconds() - hr_zbus_last_pub_time) > 2) {
+                            struct hpi_hr_t hr_chan_value = {
+                                .timestamp = hw_get_sys_time_ts(),
+                                .hr = hr,
+                                .hr_ready_flag = true,
+                            };
+                            zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
+                            hr_zbus_last_pub_time = k_uptime_seconds();
+                            
+                            LOG_DBG("Published HR from RTIO monitor: %d bpm (confidence: %d%%)", 
+                                   hr, confidence);
+                        }
                     }
                 }
             }
         }
+        */
 
         // Sleep longer if no data was processed to reduce CPU usage
         if (processed_data) {

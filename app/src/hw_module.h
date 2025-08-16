@@ -30,6 +30,11 @@
 
 #pragma once
 
+#include <zephyr/kernel.h>
+
+// External semaphore declarations
+extern struct k_sem sem_hr_monitor_start;
+
 void hw_module_init(void);
 void hw_pwr_display_enable(bool enable);
 
@@ -51,6 +56,11 @@ void hpi_pwr_display_wake(void);
 bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
 int hw_max32664c_stop_algo(void);
+
+// HR monitoring access functions
+int hw_get_heart_rate(uint16_t *hr, uint8_t *confidence);
+int hw_get_spo2(uint16_t *spo2, uint8_t *confidence);
+bool hw_is_hr_data_ready(void);
 
 bool get_on_skin(void);
 void set_on_skin(bool on_skin);

@@ -60,3 +60,7 @@ struct tm hpi_sys_get_current_time(void);
 
 void hpi_data_set_ecg_record_active(bool active);
 bool hpi_data_is_ecg_record_active(void);
+
+// HR Monitor integration functions
+bool hpi_data_is_hr_monitor_active(void);
+int hpi_data_get_hr_monitor_stats(uint16_t *hr, uint8_t *confidence);
