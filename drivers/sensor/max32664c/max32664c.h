@@ -7,6 +7,7 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
+#include <zephyr/rtio/rtio.h>
 
 #define MAX32664C_I2C_ADDRESS 0x55
 
@@ -107,6 +108,10 @@ struct max32664c_data
 	uint8_t hub_ver[4];
 	uint8_t max86141_id;
 	uint8_t accel_id;
+
+	/* RTIO context and iodev for I2C RTIO operations (optional) */
+	struct rtio *r;
+	struct rtio_iodev *iodev;
 };
 
 // Async API types
@@ -149,5 +154,5 @@ struct max32664c_encoded_data
 	uint32_t steps_walk;
 };
 
-int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664c_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);

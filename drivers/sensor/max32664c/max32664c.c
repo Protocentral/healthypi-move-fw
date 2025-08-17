@@ -429,29 +429,127 @@ static int max32664c_set_mode_raw(const struct device *dev)
     return 0;
 }
 
+/* No separate completion callback needed for the synchronous path. */
+
 static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
     const struct max32664c_config *config = dev->config;
-
+    struct max32664c_data *data = dev->data;
+    struct rtio *ctx = data->r;
+    struct rtio_iodev *iodev = data->iodev;
+    struct rtio_sqe *write_sqe, *read_sqe;
+        LOG_DBG("RTIO ctx=%p iodev=%p", ctx, iodev);
+    struct rtio_cqe *cqe;
+    int err = 0;
     uint8_t wr_buf[2] = {0xFF, 0x03};
 
+    /* Do write then read as two separate RTIO submissions with a command delay
+     * between them. This matches the device requirement: write command, wait
+     * the CMD delay, then read the response. */
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
-    i2c_read_dt(&config->i2c, ver_buf, 4);
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+    /* --- Submit write SQE --- */
+    write_sqe = rtio_sqe_acquire(ctx);
+    if (!write_sqe) {
+        LOG_ERR("Failed to acquire RTIO write SQE");
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return -ENOMEM;
+    }
+
+    rtio_sqe_prep_tiny_write(write_sqe, iodev, RTIO_PRIO_HIGH, wr_buf, sizeof(wr_buf), NULL);
+    /* Ensure the write completes with a STOP so the device processes the command */
+    write_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
+
+    err = rtio_submit(ctx, 0);
+        LOG_DBG("rtio_submit(write) returned %d", err);
+        if (err) {
+            LOG_ERR("rtio_submit(write) failed: %d", err);
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return err;
+    }
+
+    /* Wait for write completion CQE(s): block until at least one CQE arrives,
+     * then drain any remaining non-blocking CQEs. This ensures the transfer
+     * finished and the device processed the command before proceeding. */
+    cqe = rtio_cqe_consume_block(ctx);
+    if (cqe != NULL) {
+        LOG_DBG("write CQE result=%d", cqe->result);
+        if (cqe->result < 0) {
+            err = cqe->result;
+        }
+        rtio_cqe_release(ctx, cqe);
+    }
+    /* Drain any remaining CQEs without blocking */
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
+        LOG_DBG("drained write CQE result=%d", cqe->result);
+        if (cqe->result < 0) {
+            err = cqe->result;
+        }
+        rtio_cqe_release(ctx, cqe);
+    }
+
+    if (err < 0) {
+        LOG_ERR("MAX32664C RTIO write error: %d", err);
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return err;
+    }
+
+    /* Wait device-specific command delay before reading */
+    k_sleep(K_MSEC(100));
+
+    /* --- Submit read SQE --- */
+    read_sqe = rtio_sqe_acquire(ctx);
+    if (!read_sqe) {
+        LOG_ERR("Failed to acquire RTIO read SQE");
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return -ENOMEM;
+    }
+
+    rtio_sqe_prep_read(read_sqe, iodev, RTIO_PRIO_HIGH, ver_buf, 4, NULL);
+    read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
+
+    err = rtio_submit(ctx, 0);
+        LOG_DBG("rtio_submit(read) returned %d", err);
+    if (err) {
+        LOG_ERR("rtio_submit(read) failed: %d", err);
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        return err;
+    }
+
+    /* Wait for read completion CQE(s): block until at least one CQE arrives,
+     * then drain any remaining non-blocking CQEs. This guarantees the read
+     * data is present in ver_buf before we proceed. */
+    cqe = rtio_cqe_consume_block(ctx);
+    if (cqe != NULL) {
+        LOG_DBG("read CQE result=%d", cqe->result);
+        if (cqe->result < 0) {
+            err = cqe->result;
+        }
+        rtio_cqe_release(ctx, cqe);
+    }
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
+        LOG_DBG("drained read CQE result=%d", cqe->result);
+        if (cqe->result < 0) {
+            err = cqe->result;
+        }
+        rtio_cqe_release(ctx, cqe);
+    }
+
+    LOG_DBG("Version raw: %02x %02x %02x %02x", ver_buf[0], ver_buf[1], ver_buf[2], ver_buf[3]);
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    if (err) {
+        LOG_ERR("MAX32664C RTIO transfer error: %d", err);
+        return err;
+    }
 
-    if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
-    {
+    if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00) {
         LOG_ERR("MAX32664C not found");
         return -ENODEV;
     }
+
     return 0;
 }
 
@@ -633,7 +731,7 @@ int max32664c_do_enter_app(const struct device *dev)
     // gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
     // k_sleep(K_MSEC(10));
 
-    m_read_op_mode(dev);
+    //m_read_op_mode(dev);
 
     return 0;
 }
@@ -783,7 +881,7 @@ static const struct sensor_driver_api max32664c_driver_api = {
     .channel_get = max32664c_channel_get,
 
 #ifdef CONFIG_SENSOR_ASYNC_API
-    .submit = max32664c_submit,
+    .submit = (void (*)(const struct device *, struct rtio_iodev_sqe *))max32664c_submit,
     .get_decoder = max32664c_get_decoder,
 #endif
 };
@@ -798,6 +896,16 @@ static int max32664c_chip_init(const struct device *dev)
         LOG_ERR("I2C not ready");
         return -ENODEV;
     }
+
+#if CONFIG_I2C_RTIO
+    /* If RTIO I2C is enabled, ensure the iodev is ready (match reference checks) */
+    if (data->r && data->iodev) {
+        if (!i2c_is_ready_iodev(data->iodev)) {
+            LOG_ERR("I2C RTIO iodev not ready");
+            return -ENODEV;
+        }
+    }
+#endif
 
     gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
@@ -844,8 +952,19 @@ static int max32664c_pm_action(const struct device *dev,
 }
 #endif /* CONFIG_PM_DEVICE */
 
+/* Define RTIO I2C iodev and RTIO context for each instance and wire into data */
+/* Forward-declare instance symbols that are generated by macros to help static analysis */
+extern struct rtio_iodev max32664c_iodev_0;
+extern struct rtio max32664c_rtio_0;
+
 #define MAX32664C_DEFINE(inst)                                      \
-    static struct max32664c_data max32664c_data_##inst;             \
+    I2C_DT_IODEV_DEFINE(max32664c_iodev_##inst, DT_DRV_INST(inst)); \
+    /* Use a slightly larger RTIO queue (matches reference driver) */ \
+    RTIO_DEFINE(max32664c_rtio_##inst, 8, 8);                       \
+    static struct max32664c_data max32664c_data_##inst = {           \
+        .r = &max32664c_rtio_##inst,                                \
+        .iodev = &max32664c_iodev_##inst,                           \
+    };                                                              \
     static const struct max32664c_config max32664c_config_##inst =  \
         {                                                           \
             .i2c = I2C_DT_SPEC_INST_GET(inst),                      \

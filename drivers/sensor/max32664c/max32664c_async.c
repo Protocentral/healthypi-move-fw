@@ -309,7 +309,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
     return 0;
 }
 
-int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
     uint32_t min_buf_len = sizeof(struct max32664c_encoded_data);
     int rc;
@@ -325,7 +325,7 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         LOG_ERR("Failed to get a read buffer of size %u bytes", min_buf_len);
         rtio_iodev_sqe_err(iodev_sqe, rc);
-        return rc;
+        return;
     }
 
     if (data->op_mode == MAX32664C_OP_MODE_ALGO_AGC || data->op_mode == MAX32664C_OP_MODE_ALGO_AEC ||
@@ -369,12 +369,10 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
     if (rc != 0)
     {
-        // LOG_ERR("Failed to fetch samples");
         rtio_iodev_sqe_err(iodev_sqe, rc);
-        return rc;
+        return;
     }
 
     rtio_iodev_sqe_ok(iodev_sqe, 0);
-
-    return 0;
+    return;
 }
