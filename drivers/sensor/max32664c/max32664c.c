@@ -24,6 +24,97 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 
 #define MAX32664C_FW_BIN_INCLUDE 0
 
+#include <zephyr/rtio/rtio.h>
+
+/* RTIO-based I2C wrappers that submit and wait for completion. These use
+ * the driver's RTIO context and iodev stored in struct max32664c_data.
+ */
+int max32664c_i2c_write(const struct device *dev, const uint8_t *buf, size_t len)
+{
+    const struct max32664c_config *config = dev->config;
+    struct max32664c_data *data = dev->data;
+    struct rtio *ctx = data->r;
+    struct rtio_iodev *iodev = data->iodev;
+    struct rtio_sqe *sqe;
+    struct rtio_cqe *cqe;
+    int err = 0;
+
+    /* If RTIO is not available, fall back to blocking I2C */
+    if (!ctx || !iodev) {
+        return i2c_write_dt(&config->i2c, buf, len);
+    }
+
+    sqe = rtio_sqe_acquire(ctx);
+    if (!sqe) {
+        return -ENOMEM;
+    }
+
+    rtio_sqe_prep_write(sqe, iodev, RTIO_PRIO_HIGH, (void *)buf, len, NULL);
+    sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
+
+    err = rtio_submit(ctx, 0);
+    if (err) {
+        return err;
+    }
+
+    cqe = rtio_cqe_consume_block(ctx);
+    if (cqe != NULL) {
+        err = cqe->result;
+        rtio_cqe_release(ctx, cqe);
+    }
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
+        if (cqe->result < 0) {
+            err = cqe->result;
+        }
+        rtio_cqe_release(ctx, cqe);
+    }
+
+    return err;
+}
+
+int max32664c_i2c_read(const struct device *dev, uint8_t *buf, size_t len)
+{
+    const struct max32664c_config *config = dev->config;
+    struct max32664c_data *data = dev->data;
+    struct rtio *ctx = data->r;
+    struct rtio_iodev *iodev = data->iodev;
+    struct rtio_sqe *sqe;
+    struct rtio_cqe *cqe;
+    int err = 0;
+
+    /* If RTIO not available, fall back to blocking I2C */
+    if (!ctx || !iodev) {
+        return i2c_read_dt(&config->i2c, buf, len);
+    }
+
+    sqe = rtio_sqe_acquire(ctx);
+    if (!sqe) {
+        return -ENOMEM;
+    }
+
+    rtio_sqe_prep_read(sqe, iodev, RTIO_PRIO_HIGH, buf, len, NULL);
+    sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
+
+    err = rtio_submit(ctx, 0);
+    if (err) {
+        return err;
+    }
+
+    cqe = rtio_cqe_consume_block(ctx);
+    if (cqe != NULL) {
+        err = cqe->result;
+        rtio_cqe_release(ctx, cqe);
+    }
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
+        if (cqe->result < 0) {
+            err = cqe->result;
+        }
+        rtio_cqe_release(ctx, cqe);
+    }
+
+    return err;
+}
+
 static int __attribute__((used)) m_read_op_mode(const struct device *dev)
 {
     // struct max32664c_data *data = dev->data;
@@ -33,11 +124,11 @@ static int __attribute__((used)) m_read_op_mode(const struct device *dev)
     uint8_t wr_buf[2] = {0x02, 0x00};
 
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -61,9 +152,9 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     // k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -85,9 +176,9 @@ static int m_i2c_write_cmd_2(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -113,11 +204,11 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
 
     k_sleep(K_MSEC(cmd_delay));
 
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -143,9 +234,9 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(cmd_delay));
-    i2c_read_dt(&config->i2c, rd_buf, 1);
+    max32664c_i2c_read(dev, rd_buf, 1);
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -172,9 +263,9 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, 1);
+    max32664c_i2c_read(dev, rd_buf, 1);
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -202,9 +293,9 @@ static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, 1);
+    max32664c_i2c_read(dev, rd_buf, 1);
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -224,12 +315,12 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, wr_len);
+    max32664c_i2c_write(dev, wr_buf, wr_len);
 
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -285,13 +376,13 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
 
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     // gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(500));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -549,7 +640,7 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    if (i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf)) < 0) {
+    if (max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf)) < 0) {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         LOG_ERR("i2c write failed in get_ver");
         return -EIO;
@@ -557,7 +648,7 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     k_sleep(K_MSEC(100));
 
-    if (i2c_read_dt(&config->i2c, ver_buf, 4) < 0) {
+    if (max32664c_i2c_read(dev, ver_buf, 4) < 0) {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         LOG_ERR("i2c read failed in get_ver");
         return -EIO;
@@ -750,10 +841,10 @@ int max32664c_do_enter_app(const struct device *dev)
     gpio_pin_set_dt(&config->reset_gpio, 1);
     k_sleep(K_MSEC(1600));
 
-    // gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-    // k_sleep(K_MSEC(10));
+    //gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
+    //k_sleep(K_MSEC(10));
 
-    //m_read_op_mode(dev);
+    m_read_op_mode(dev);
 
     return 0;
 }

@@ -165,6 +165,10 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
                                  uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor,
                                  uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode);
 
+/* RTIO-aware I2C wrapper helpers (available to other compilation units) */
+int max32664c_i2c_write(const struct device *dev, const uint8_t *buf, size_t len);
+int max32664c_i2c_read(const struct device *dev, uint8_t *buf, size_t len);
+
 #endif /* CONFIG_SENSOR */
 
 #endif /* __MAX32664C_SENSOR_H */

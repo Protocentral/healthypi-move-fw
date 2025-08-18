@@ -114,8 +114,8 @@ int max32664c_get_fifo_count(const struct device *dev)
     if (!ctx || !iodev) {
         gpio_pin_set_dt(&config->mfio_gpio, 0);
         k_sleep(K_USEC(300));
-        i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-        i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+        max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
+        max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         fifo_count = rd_buf[1];
         return (int)fifo_count;
@@ -344,9 +344,9 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
                 /* fallback blocking path */
                 gpio_pin_set_dt(&config->mfio_gpio, 0);
                 k_sleep(K_USEC(300));
-                i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+                max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
 
-                i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+                max32664c_i2c_read(dev, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
                 k_sleep(K_USEC(300));
                 gpio_pin_set_dt(&config->mfio_gpio, 1);
             }
