@@ -69,7 +69,7 @@
 #include "max30001.h"
 #include "max32664d.h"
 #include "bmi323_hpi.h"
-#include "max32664c.h"
+#include "max32664c_sensor.h"
 #include "nrf_fuel_gauge.h"
 #include "display_sh8601.h"
 

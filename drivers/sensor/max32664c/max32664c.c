@@ -10,7 +10,7 @@
 #include <zephyr/pm/device.h>
 #include <zephyr/drivers/gpio.h>
 
-#include "max32664c.h"
+#include "max32664c_sensor.h"
 
 LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 
@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 
 #define MAX32664C_FW_BIN_INCLUDE 0
 
-static int m_read_op_mode(const struct device *dev)
+static int __attribute__((used)) m_read_op_mode(const struct device *dev)
 {
     // struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -431,25 +431,22 @@ static int max32664c_set_mode_raw(const struct device *dev)
 
 /* No separate completion callback needed for the synchronous path. */
 
-static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
+static int max32664c_get_ver_rtio(const struct device *dev, uint8_t *ver_buf)
 {
+    /* Preserve the RTIO-based implementation for testing. */
     const struct max32664c_config *config = dev->config;
     struct max32664c_data *data = dev->data;
     struct rtio *ctx = data->r;
     struct rtio_iodev *iodev = data->iodev;
     struct rtio_sqe *write_sqe, *read_sqe;
-        LOG_DBG("RTIO ctx=%p iodev=%p", ctx, iodev);
+    LOG_DBG("RTIO ctx=%p iodev=%p", ctx, iodev);
     struct rtio_cqe *cqe;
     int err = 0;
     uint8_t wr_buf[2] = {0xFF, 0x03};
 
-    /* Do write then read as two separate RTIO submissions with a command delay
-     * between them. This matches the device requirement: write command, wait
-     * the CMD delay, then read the response. */
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    /* --- Submit write SQE --- */
     write_sqe = rtio_sqe_acquire(ctx);
     if (!write_sqe) {
         LOG_ERR("Failed to acquire RTIO write SQE");
@@ -458,20 +455,16 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     }
 
     rtio_sqe_prep_tiny_write(write_sqe, iodev, RTIO_PRIO_HIGH, wr_buf, sizeof(wr_buf), NULL);
-    /* Ensure the write completes with a STOP so the device processes the command */
     write_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-        LOG_DBG("rtio_submit(write) returned %d", err);
-        if (err) {
-            LOG_ERR("rtio_submit(write) failed: %d", err);
+    LOG_DBG("rtio_submit(write) returned %d", err);
+    if (err) {
+        LOG_ERR("rtio_submit(write) failed: %d", err);
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
 
-    /* Wait for write completion CQE(s): block until at least one CQE arrives,
-     * then drain any remaining non-blocking CQEs. This ensures the transfer
-     * finished and the device processed the command before proceeding. */
     cqe = rtio_cqe_consume_block(ctx);
     if (cqe != NULL) {
         LOG_DBG("write CQE result=%d", cqe->result);
@@ -480,7 +473,6 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
         }
         rtio_cqe_release(ctx, cqe);
     }
-    /* Drain any remaining CQEs without blocking */
     while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
         LOG_DBG("drained write CQE result=%d", cqe->result);
         if (cqe->result < 0) {
@@ -495,10 +487,8 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
         return err;
     }
 
-    /* Wait device-specific command delay before reading */
     k_sleep(K_MSEC(100));
 
-    /* --- Submit read SQE --- */
     read_sqe = rtio_sqe_acquire(ctx);
     if (!read_sqe) {
         LOG_ERR("Failed to acquire RTIO read SQE");
@@ -510,16 +500,13 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-        LOG_DBG("rtio_submit(read) returned %d", err);
+    LOG_DBG("rtio_submit(read) returned %d", err);
     if (err) {
         LOG_ERR("rtio_submit(read) failed: %d", err);
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
 
-    /* Wait for read completion CQE(s): block until at least one CQE arrives,
-     * then drain any remaining non-blocking CQEs. This guarantees the read
-     * data is present in ver_buf before we proceed. */
     cqe = rtio_cqe_consume_block(ctx);
     if (cqe != NULL) {
         LOG_DBG("read CQE result=%d", cqe->result);
@@ -544,6 +531,41 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
         LOG_ERR("MAX32664C RTIO transfer error: %d", err);
         return err;
     }
+
+    if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00) {
+        LOG_ERR("MAX32664C not found");
+        return -ENODEV;
+    }
+
+    return 0;
+}
+
+static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
+{
+    /* Blocking, non-RTIO implementation used by the synchronous init path. */
+    const struct max32664c_config *config = dev->config;
+    uint8_t wr_buf[2] = {0xFF, 0x03};
+
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+
+    if (i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf)) < 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        LOG_ERR("i2c write failed in get_ver");
+        return -EIO;
+    }
+
+    k_sleep(K_MSEC(100));
+
+    if (i2c_read_dt(&config->i2c, ver_buf, 4) < 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        LOG_ERR("i2c read failed in get_ver");
+        return -EIO;
+    }
+
+    LOG_DBG("Version raw: %02x %02x %02x %02x", ver_buf[0], ver_buf[1], ver_buf[2], ver_buf[3]);
+
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00) {
         LOG_ERR("MAX32664C not found");
@@ -739,7 +761,53 @@ int max32664c_do_enter_app(const struct device *dev)
 static int max32664c_sample_fetch(const struct device *dev,
                                   enum sensor_channel chan)
 {
-    // Not implemented
+    ARG_UNUSED(chan);
+
+    struct max32664c_data *data = dev->data;
+
+    /* Temporary buffers to receive samples from the fetch routine */
+    uint32_t green_samples[16] = {0};
+    uint32_t ir_samples[16] = {0};
+    uint32_t red_samples[16] = {0};
+    uint32_t num_samples = 0;
+
+    uint16_t spo2 = 0;
+    uint8_t spo2_conf = 0;
+    uint8_t spo2_valid_percent_complete = 0;
+    uint8_t spo2_low_quality = 0;
+    uint8_t spo2_excessive_motion = 0;
+    uint8_t spo2_low_pi = 0;
+    uint8_t spo2_state = 0;
+    uint16_t hr = 0;
+    uint8_t hr_conf = 0;
+    uint16_t rtor = 0;
+    uint8_t rtor_conf = 0;
+    uint8_t scd_state = 0;
+    uint8_t activity_class = 0;
+    uint32_t steps_run = 0;
+    uint32_t steps_walk = 0;
+    uint8_t chip_op_mode = 0;
+
+    /* Call the moved/RTIO-aware fetch function */
+    int rc = max32664c_async_sample_fetch(dev, green_samples, ir_samples, red_samples,
+                                         &num_samples, &spo2, &spo2_conf, &spo2_valid_percent_complete, &spo2_low_quality,
+                                         &spo2_excessive_motion, &spo2_low_pi, &spo2_state, &hr, &hr_conf, &rtor,
+                                         &rtor_conf, &scd_state, &activity_class, &steps_run, &steps_walk, &chip_op_mode);
+    if (rc) {
+        return rc;
+    }
+
+    /* Copy into driver state */
+    data->num_samples = (uint8_t)MIN(num_samples, (uint32_t)ARRAY_SIZE(data->samples_led_ir));
+    data->spo2 = spo2;
+    data->hr = hr;
+    data->spo2_r_val = rtor;
+    data->op_mode = chip_op_mode;
+
+    for (uint32_t i = 0; i < data->num_samples; i++) {
+        data->samples_led_ir[i] = ir_samples[i];
+        data->samples_led_red[i] = red_samples[i];
+    }
 
     return 0;
 }

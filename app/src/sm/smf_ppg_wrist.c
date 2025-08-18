@@ -37,7 +37,7 @@
 LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 
 #include "hw_module.h"
-#include "max32664c.h"
+#include "max32664c_sensor.h"
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
 #include "ui/move_ui.h"
