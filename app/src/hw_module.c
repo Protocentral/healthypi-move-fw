@@ -1217,8 +1217,8 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        //if (hpi_sys_get_device_on_skin() == true)
-        if(true)
+        if (hpi_sys_get_device_on_skin() == true)
+        //if(true)
         {
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {

@@ -116,6 +116,13 @@ struct max32664c_data
     /* RTIO context and iodev for I2C RTIO operations (optional) */
     struct rtio *r;
     struct rtio_iodev *iodev;
+    const struct device *dev;
+    /* Streaming state (when CONFIG_MAX32664C_STREAM enabled) */
+    struct rtio_iodev_sqe *streaming_sqe;
+    uint8_t int_status;
+    uint16_t fifo_count;
+    uint64_t timestamp;
+    struct gpio_callback mfio_cb;
 };
 
 // Async API types

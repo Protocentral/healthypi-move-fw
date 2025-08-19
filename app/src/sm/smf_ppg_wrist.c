@@ -33,6 +33,12 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 #include <errno.h>
+/* sensor definitions (sensor_read_config, sensor_stream_trigger) - only when sensors enabled */
+#ifdef CONFIG_SENSOR
+#include <zephyr/drivers/sensor.h>
+#endif
+#include <stddef.h>
+#include <string.h>
 
 LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 
@@ -60,7 +66,10 @@ K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
-SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
+/* Use a stream iodev so the sensor framework provides mempool-backed
+ * multishot RX buffers and the iodev->data already contains a
+ * sensor_read_config with is_streaming == true for the driver. */
+SENSOR_DT_STREAM_IODEV(max32664c_iodev, DT_ALIAS(max32664c), {SENSOR_TRIG_FIFO_WATERMARK, SENSOR_STREAM_DATA_INCLUDE});
 
 ZBUS_CHAN_DECLARE(spo2_chan);
 
@@ -79,6 +88,9 @@ struct s_object
 
 static uint16_t smf_ppg_spo2_last_measured_value = 0;
 static int64_t smf_ppg_spo2_last_measured_time;
+
+/* handle to the active streaming sqe returned by sensor_stream() */
+static struct rtio_sqe *ppg_wrist_stream_handle = NULL;
 
 // Local variables for measured SPO2 and status
 static uint16_t measured_spo2 = 0;
@@ -271,27 +283,27 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     }
 }
 
-void work_sample_handler(struct k_work *work)
+static int ppg_wrist_start_streaming(void)
 {
-    uint8_t wrist_buf[512];
-    int ret;
-    ret = sensor_read(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, wrist_buf, sizeof(wrist_buf));
-    if (ret < 0)
-    {
-        LOG_ERR("Error reading sensor data");
-        return;
+    /* Request a mempool-backed multishot stream from the sensor framework.
+     * This returns a kernel SQE handle which the driver sees as an active
+     * streaming iodev SQE and from which rtio_sqe_rx_buf() will allocate
+     * per-sample RX buffers. */
+    struct rtio_sqe *handle = NULL;
+    int rc = sensor_stream(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, NULL, &handle);
+    if (rc == 0) {
+        ppg_wrist_stream_handle = handle;
     }
-    sensor_ppg_wrist_decode(wrist_buf, sizeof(wrist_buf));
+    return rc;
 }
 
-K_WORK_DEFINE(work_sample, work_sample_handler);
-
-void ppg_wrist_sampling_handler(struct k_timer *dummy)
+static void ppg_wrist_stop_streaming(void)
 {
-    k_work_submit(&work_sample);
+    if (ppg_wrist_stream_handle) {
+        rtio_sqe_cancel(ppg_wrist_stream_handle);
+        ppg_wrist_stream_handle = NULL;
+    }
 }
-
-K_TIMER_DEFINE(tmr_ppg_wrist_sampling, ppg_wrist_sampling_handler, NULL);
 
 static void st_ppg_samp_active_entry(void *o)
 {
@@ -300,6 +312,12 @@ static void st_ppg_samp_active_entry(void *o)
 
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
 
+    /* Start streaming from the sensor so the driver can use MFIO+RTIO
+     * interrupt-driven reads instead of periodic polling. */
+    int rc = ppg_wrist_start_streaming();
+    if (rc < 0) {
+        LOG_ERR("Failed to start MAX32664C streaming: %d", rc);
+    }
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
     // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
@@ -375,7 +393,7 @@ static void smf_ppg_wrist_thread(void)
 
     smf_set_initial(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
-    //k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+    // legacy timer-based polling removed; streaming is active
 
     LOG_INF("PPG State Machine Thread starting");
     for (;;)
@@ -400,7 +418,7 @@ static void ppg_wrist_ctrl_thread(void)
         {
             // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
             LOG_DBG("Stopping PPG Sampling");
-            k_timer_stop(&tmr_ppg_wrist_sampling);
+            ppg_wrist_stop_streaming();
 
             LOG_DBG("Starting One Shot SpO2");
 
@@ -410,7 +428,7 @@ static void ppg_wrist_ctrl_thread(void)
             k_msleep(600);
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
             k_msleep(600);
-            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+            ppg_wrist_start_streaming();
 
             spo2_measurement_in_progress = true;
         }
@@ -418,7 +436,7 @@ static void ppg_wrist_ctrl_thread(void)
         if (k_sem_take(&sem_stop_one_shot_spo2, K_NO_WAIT) == 0)
         {
             LOG_DBG("Stopping One Shot SpO2");
-            k_timer_stop(&tmr_ppg_wrist_sampling);
+            ppg_wrist_stop_streaming();
             spo2_measurement_in_progress = false;
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             uint16_t m_est_spo2 = 0;
@@ -445,7 +463,7 @@ static void ppg_wrist_ctrl_thread(void)
             LOG_DBG("Switching to Continuous Sampling HR");
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
             k_msleep(600);
-            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+            ppg_wrist_start_streaming();
         }
 
         k_msleep(100);
@@ -458,5 +476,5 @@ static void ppg_wrist_ctrl_thread(void)
 #define SMF_PPG_THREAD_STACKSIZE 4096
 #define SMF_PPG_THREAD_PRIORITY 5
 
-//K_THREAD_DEFINE(smf_ppg_wrist_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(smf_ppg_wrist_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
 //K_THREAD_DEFINE(ppg_ctrl_thread_id, PPG_CTRL_THREAD_STACKSIZE, ppg_wrist_ctrl_thread, NULL, NULL, NULL, PPG_CTRL_THREAD_PRIORITY, 0, 0);

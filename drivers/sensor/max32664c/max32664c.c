@@ -9,6 +9,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/sensor_clock.h>
 
 #include "max32664c_sensor.h"
 
@@ -126,6 +127,36 @@ int max32664c_i2c_read(const struct device *dev, uint8_t *buf, size_t len)
 
     return err;
 }
+
+/* Forward declare streaming event handler implemented in max32664c_rtio.c */
+void max32664c_stream_event_handler(const struct device *dev);
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+static void max32664c_mfio_gpio_cb(const struct device *port, struct gpio_callback *cb, uint32_t pins)
+{
+    /* Locate parent device from callback owner by container_of on data->mfio_cb is tricky here; instead the callback is registered per-device in chip_init so cb is inside device data */
+    struct max32664c_data *data = CONTAINER_OF(cb, struct max32664c_data, mfio_cb);
+    const struct device *dev = data->dev;
+    const struct max32664c_config *config = dev->config;
+
+    ARG_UNUSED(port);
+    ARG_UNUSED(pins);
+
+    /* Disable interrupt until we've handled this event */
+    gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_DISABLE);
+
+    /* Record timestamp for streaming and call the RTIO handler */
+    uint64_t cycles = 0;
+    if (sensor_clock_get_cycles(&cycles) == 0) {
+        data->timestamp = sensor_clock_cycles_to_ns(cycles);
+    } else {
+        data->timestamp = 0;
+    }
+
+    max32664c_stream_event_handler(dev);
+}
+#endif
+
 
 static int __attribute__((used)) m_read_op_mode(const struct device *dev)
 {
@@ -974,6 +1005,13 @@ static int max32664c_chip_init(const struct device *dev)
 
     gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+    /* Initialize MFIO gpio callback but leave interrupt disabled until streaming starts */
+    gpio_init_callback(&data->mfio_cb, max32664c_mfio_gpio_cb, BIT(config->mfio_gpio.pin));
+    gpio_add_callback(config->mfio_gpio.port, &data->mfio_cb);
+    data->dev = dev;
+#endif
 
     max32664c_do_enter_app(dev);
 

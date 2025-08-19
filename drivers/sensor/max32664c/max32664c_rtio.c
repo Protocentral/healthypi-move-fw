@@ -10,6 +10,7 @@
 #include <zephyr/logging/log.h>
 
 #include "max32664c_sensor.h"
+#include <zephyr/drivers/sensor.h>
 
 LOG_MODULE_REGISTER(MAX32664C_RTIO, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -41,6 +42,39 @@ static void max32664c_complete_result(struct rtio *ctx,
     LOG_DBG("One-shot RTIO fetch completed (err=%d)", err);
 }
 
+static void max32664c_stream_complete_cb(struct rtio *ctx,
+                                         const struct rtio_sqe *sqe,
+                                         void *arg)
+{
+    const struct device *dev = (const struct device *)arg;
+    struct max32664c_data *data = dev->data;
+    struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
+    const struct max32664c_config *cfg = dev->config;
+
+    /* Consume and clear any CQEs */
+    struct rtio_cqe *cqe;
+    int err = 0;
+    do {
+        cqe = rtio_cqe_consume(ctx);
+        if (cqe != NULL) {
+            if (cqe->result < 0) {
+                err = cqe->result;
+            }
+            rtio_cqe_release(ctx, cqe);
+        }
+    } while (cqe != NULL);
+
+    if (err) {
+        rtio_iodev_sqe_err(iodev_sqe, err);
+    } else {
+        rtio_iodev_sqe_ok(iodev_sqe, data->fifo_count);
+    }
+
+    /* Set MFIO back to high (release gate) and re-enable interrupt */
+    gpio_pin_set_dt(&cfg->mfio_gpio, 1);
+    gpio_pin_interrupt_configure_dt(&cfg->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+}
+
 
 void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
@@ -53,6 +87,28 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
     struct rtio *r = data->r;
     struct rtio_iodev *iodev = data->iodev;
     struct rtio_sqe *write_sqe, *read_sqe, *complete_sqe;
+
+    const struct max32664c_config *config = dev->config;
+
+    /* If this request is a streaming request (sensor_read_config->is_streaming)
+     * then prepare the gpio interrupt and store the streaming SQE. The actual
+     * FIFO read will be performed from the MFIO event handler.
+     */
+    struct sensor_read_config *read_cfg = (struct sensor_read_config *)iodev_sqe->sqe.iodev->data;
+    if (read_cfg && read_cfg->is_streaming) {
+        /* Disable interrupt while we configure */
+        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_DISABLE);
+        /* Ensure pin is configured as input for interrupts */
+        gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
+        /* Store streaming SQE and enable interrupts */
+        data->streaming_sqe = iodev_sqe;
+        int rc = gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        if (rc) {
+            rtio_iodev_sqe_err(iodev_sqe, rc);
+            data->streaming_sqe = NULL;
+        }
+        return;
+    }
 
     /* If RTIO not available, handle fallback in other code path */
     if (!r || !iodev) {
@@ -93,6 +149,100 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
     rtio_submit(r, 0);
 
     return;
+}
+
+
+/* Streaming event handler called from MFIO gpio callback. This will be executed
+ * in interrupt context via the gpio callback; it should queue RTIO work to read
+ * FIFO data and complete the stored streaming iodev_sqe. The gpio interrupt is
+ * disabled in the gpio callback and will be re-enabled in the completion
+ * callback below.
+ */
+void max32664c_stream_event_handler(const struct device *dev)
+{
+    struct max32664c_data *data = dev->data;
+    const struct max32664c_config *config = dev->config;
+
+    struct rtio_iodev_sqe *streaming_sqe = data->streaming_sqe;
+    struct rtio *r = data->r;
+    struct rtio_iodev *iodev = data->iodev;
+
+    if (!streaming_sqe || !r || !iodev) {
+        /* Nothing to do; re-enable interrupt so future events are handled */
+        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        return;
+    }
+
+    /* Read FIFO count (blocking RTIO call inside helper) */
+    int fifo = max32664c_get_fifo_count(dev);
+    if (fifo < 0) {
+        rtio_iodev_sqe_err(streaming_sqe, fifo);
+        data->streaming_sqe = NULL;
+        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        return;
+    }
+
+    if (fifo > 16) {
+        fifo = 16;
+    }
+
+    data->fifo_count = fifo;
+
+    /* Acquire buffer for RTIO into the streaming SQE */
+    uint8_t *buf;
+    uint32_t buf_len;
+    int rc = rtio_sqe_rx_buf(streaming_sqe, sizeof(struct max32664c_encoded_data), (sizeof(struct max32664c_encoded_data)), &buf, &buf_len);
+    if (rc != 0) {
+        rtio_iodev_sqe_err(streaming_sqe, rc);
+        data->streaming_sqe = NULL;
+        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        return;
+    }
+
+    /* Prepare RTIO SQEs: write command then chained read into buffer, then completion cb */
+    struct rtio_sqe *write_sqe = rtio_sqe_acquire(r);
+    struct rtio_sqe *read_sqe = rtio_sqe_acquire(r);
+    struct rtio_sqe *cb_sqe = rtio_sqe_acquire(r);
+
+    if (!write_sqe || !read_sqe || !cb_sqe) {
+        rtio_iodev_sqe_err(streaming_sqe, -ENOMEM);
+        data->streaming_sqe = NULL;
+        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        return;
+    }
+
+    uint8_t cmd_wr[2] = {0x12, 0x01};
+    size_t sample_len = 62; /* conservative default; decoder will parse based on op_mode */
+    size_t read_len = (sample_len * fifo) + MAX32664C_SENSOR_DATA_OFFSET;
+    if (read_len > buf_len) {
+        read_len = buf_len;
+    }
+
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+
+    rtio_sqe_prep_tiny_write(write_sqe, iodev, RTIO_PRIO_HIGH, cmd_wr, sizeof(cmd_wr), NULL);
+    write_sqe->flags |= RTIO_SQE_TRANSACTION;
+
+    rtio_sqe_prep_read(read_sqe, iodev, RTIO_PRIO_HIGH, buf, read_len, NULL);
+    read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP | RTIO_IODEV_I2C_RESTART;
+    read_sqe->flags |= RTIO_SQE_CHAINED;
+
+    /* Completion callback: consume cqe and finish the iodev_sqe, re-enable interrupt and free streaming state */
+    rtio_sqe_prep_callback(cb_sqe, max32664c_stream_complete_cb, (void *)dev, streaming_sqe);
+
+    /* Submit all SQEs */
+    rc = rtio_submit(r, 0);
+    if (rc) {
+        rtio_iodev_sqe_err(streaming_sqe, rc);
+        data->streaming_sqe = NULL;
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        return;
+    }
+
+    /* Clear stored streaming SQE; completion handler will call rtio_iodev_sqe_ok/err */
+    data->streaming_sqe = NULL;
 }
 
 
