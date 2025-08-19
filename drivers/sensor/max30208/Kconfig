@@ -4,3 +4,12 @@
 config SENSOR_MAX30208
 	bool "MAX30208 Temperature Sensor"
 	depends on I2C
+	default y
+	help
+	  Enable the driver for the Maxim MAX30208 temperature sensor.
+	  This driver supports both blocking and non-blocking (RTIO-based) I2C operations.
+
+module = MAX30208
+module-str = max30208
+
+source "subsys/logging/Kconfig.template.log_config"

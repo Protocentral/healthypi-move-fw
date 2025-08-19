@@ -40,12 +40,14 @@ int max32664c_i2c_write(const struct device *dev, const uint8_t *buf, size_t len
     int err = 0;
 
     /* If RTIO is not available, fall back to blocking I2C */
-    if (!ctx || !iodev) {
+    if (!ctx || !iodev)
+    {
         return i2c_write_dt(&config->i2c, buf, len);
     }
 
     sqe = rtio_sqe_acquire(ctx);
-    if (!sqe) {
+    if (!sqe)
+    {
         return -ENOMEM;
     }
 
@@ -53,17 +55,21 @@ int max32664c_i2c_write(const struct device *dev, const uint8_t *buf, size_t len
     sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-    if (err) {
+    if (err)
+    {
         return err;
     }
 
     cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
+    if (cqe != NULL)
+    {
         err = cqe->result;
         rtio_cqe_release(ctx, cqe);
     }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        if (cqe->result < 0) {
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
@@ -83,12 +89,14 @@ int max32664c_i2c_read(const struct device *dev, uint8_t *buf, size_t len)
     int err = 0;
 
     /* If RTIO not available, fall back to blocking I2C */
-    if (!ctx || !iodev) {
+    if (!ctx || !iodev)
+    {
         return i2c_read_dt(&config->i2c, buf, len);
     }
 
     sqe = rtio_sqe_acquire(ctx);
-    if (!sqe) {
+    if (!sqe)
+    {
         return -ENOMEM;
     }
 
@@ -96,17 +104,21 @@ int max32664c_i2c_read(const struct device *dev, uint8_t *buf, size_t len)
     sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-    if (err) {
+    if (err)
+    {
         return err;
     }
 
     cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
+    if (cqe != NULL)
+    {
         err = cqe->result;
         rtio_cqe_release(ctx, cqe);
     }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        if (cqe->result < 0) {
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
@@ -520,117 +532,6 @@ static int max32664c_set_mode_raw(const struct device *dev)
     return 0;
 }
 
-/* No separate completion callback needed for the synchronous path. */
-
-static int max32664c_get_ver_rtio(const struct device *dev, uint8_t *ver_buf)
-{
-    /* Preserve the RTIO-based implementation for testing. */
-    const struct max32664c_config *config = dev->config;
-    struct max32664c_data *data = dev->data;
-    struct rtio *ctx = data->r;
-    struct rtio_iodev *iodev = data->iodev;
-    struct rtio_sqe *write_sqe, *read_sqe;
-    LOG_DBG("RTIO ctx=%p iodev=%p", ctx, iodev);
-    struct rtio_cqe *cqe;
-    int err = 0;
-    uint8_t wr_buf[2] = {0xFF, 0x03};
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    write_sqe = rtio_sqe_acquire(ctx);
-    if (!write_sqe) {
-        LOG_ERR("Failed to acquire RTIO write SQE");
-        gpio_pin_set_dt(&config->mfio_gpio, 1);
-        return -ENOMEM;
-    }
-
-    rtio_sqe_prep_tiny_write(write_sqe, iodev, RTIO_PRIO_HIGH, wr_buf, sizeof(wr_buf), NULL);
-    write_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
-
-    err = rtio_submit(ctx, 0);
-    LOG_DBG("rtio_submit(write) returned %d", err);
-    if (err) {
-        LOG_ERR("rtio_submit(write) failed: %d", err);
-        gpio_pin_set_dt(&config->mfio_gpio, 1);
-        return err;
-    }
-
-    cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
-        LOG_DBG("write CQE result=%d", cqe->result);
-        if (cqe->result < 0) {
-            err = cqe->result;
-        }
-        rtio_cqe_release(ctx, cqe);
-    }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        LOG_DBG("drained write CQE result=%d", cqe->result);
-        if (cqe->result < 0) {
-            err = cqe->result;
-        }
-        rtio_cqe_release(ctx, cqe);
-    }
-
-    if (err < 0) {
-        LOG_ERR("MAX32664C RTIO write error: %d", err);
-        gpio_pin_set_dt(&config->mfio_gpio, 1);
-        return err;
-    }
-
-    k_sleep(K_MSEC(100));
-
-    read_sqe = rtio_sqe_acquire(ctx);
-    if (!read_sqe) {
-        LOG_ERR("Failed to acquire RTIO read SQE");
-        gpio_pin_set_dt(&config->mfio_gpio, 1);
-        return -ENOMEM;
-    }
-
-    rtio_sqe_prep_read(read_sqe, iodev, RTIO_PRIO_HIGH, ver_buf, 4, NULL);
-    read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
-
-    err = rtio_submit(ctx, 0);
-    LOG_DBG("rtio_submit(read) returned %d", err);
-    if (err) {
-        LOG_ERR("rtio_submit(read) failed: %d", err);
-        gpio_pin_set_dt(&config->mfio_gpio, 1);
-        return err;
-    }
-
-    cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
-        LOG_DBG("read CQE result=%d", cqe->result);
-        if (cqe->result < 0) {
-            err = cqe->result;
-        }
-        rtio_cqe_release(ctx, cqe);
-    }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        LOG_DBG("drained read CQE result=%d", cqe->result);
-        if (cqe->result < 0) {
-            err = cqe->result;
-        }
-        rtio_cqe_release(ctx, cqe);
-    }
-
-    LOG_DBG("Version raw: %02x %02x %02x %02x", ver_buf[0], ver_buf[1], ver_buf[2], ver_buf[3]);
-
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    if (err) {
-        LOG_ERR("MAX32664C RTIO transfer error: %d", err);
-        return err;
-    }
-
-    if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00) {
-        LOG_ERR("MAX32664C not found");
-        return -ENODEV;
-    }
-
-    return 0;
-}
-
 static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 {
     /* Blocking, non-RTIO implementation used by the synchronous init path. */
@@ -640,7 +541,8 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    if (max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf)) < 0) {
+    if (max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf)) < 0)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         LOG_ERR("i2c write failed in get_ver");
         return -EIO;
@@ -648,17 +550,17 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     k_sleep(K_MSEC(100));
 
-    if (max32664c_i2c_read(dev, ver_buf, 4) < 0) {
+    if (max32664c_i2c_read(dev, ver_buf, 4) < 0)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         LOG_ERR("i2c read failed in get_ver");
         return -EIO;
     }
 
-    LOG_DBG("Version raw: %02x %02x %02x %02x", ver_buf[0], ver_buf[1], ver_buf[2], ver_buf[3]);
-
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00) {
+    if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
+    {
         LOG_ERR("MAX32664C not found");
         return -ENODEV;
     }
@@ -841,8 +743,8 @@ int max32664c_do_enter_app(const struct device *dev)
     gpio_pin_set_dt(&config->reset_gpio, 1);
     k_sleep(K_MSEC(1600));
 
-    //gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-    //k_sleep(K_MSEC(10));
+    // gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
+    // k_sleep(K_MSEC(10));
 
     m_read_op_mode(dev);
 
@@ -881,10 +783,11 @@ static int max32664c_sample_fetch(const struct device *dev,
 
     /* Call the moved/RTIO-aware fetch function */
     int rc = max32664c_async_sample_fetch(dev, green_samples, ir_samples, red_samples,
-                                         &num_samples, &spo2, &spo2_conf, &spo2_valid_percent_complete, &spo2_low_quality,
-                                         &spo2_excessive_motion, &spo2_low_pi, &spo2_state, &hr, &hr_conf, &rtor,
-                                         &rtor_conf, &scd_state, &activity_class, &steps_run, &steps_walk, &chip_op_mode);
-    if (rc) {
+                                          &num_samples, &spo2, &spo2_conf, &spo2_valid_percent_complete, &spo2_low_quality,
+                                          &spo2_excessive_motion, &spo2_low_pi, &spo2_state, &hr, &hr_conf, &rtor,
+                                          &rtor_conf, &scd_state, &activity_class, &steps_run, &steps_walk, &chip_op_mode);
+    if (rc)
+    {
         return rc;
     }
 
@@ -895,7 +798,8 @@ static int max32664c_sample_fetch(const struct device *dev,
     data->spo2_r_val = rtor;
     data->op_mode = chip_op_mode;
 
-    for (uint32_t i = 0; i < data->num_samples; i++) {
+    for (uint32_t i = 0; i < data->num_samples; i++)
+    {
         data->samples_led_ir[i] = ir_samples[i];
         data->samples_led_red[i] = red_samples[i];
     }
@@ -1058,8 +962,10 @@ static int max32664c_chip_init(const struct device *dev)
 
 #if CONFIG_I2C_RTIO
     /* If RTIO I2C is enabled, ensure the iodev is ready (match reference checks) */
-    if (data->r && data->iodev) {
-        if (!i2c_is_ready_iodev(data->iodev)) {
+    if (data->r && data->iodev)
+    {
+        if (!i2c_is_ready_iodev(data->iodev))
+        {
             LOG_ERR("I2C RTIO iodev not ready");
             return -ENODEV;
         }
@@ -1116,28 +1022,28 @@ static int max32664c_pm_action(const struct device *dev,
 extern struct rtio_iodev max32664c_iodev_0;
 extern struct rtio max32664c_rtio_0;
 
-#define MAX32664C_DEFINE(inst)                                      \
-    I2C_DT_IODEV_DEFINE(max32664c_iodev_##inst, DT_DRV_INST(inst)); \
+#define MAX32664C_DEFINE(inst)                                        \
+    I2C_DT_IODEV_DEFINE(max32664c_iodev_##inst, DT_DRV_INST(inst));   \
     /* Use a slightly larger RTIO queue (matches reference driver) */ \
-    RTIO_DEFINE(max32664c_rtio_##inst, 8, 8);                       \
-    static struct max32664c_data max32664c_data_##inst = {           \
-        .r = &max32664c_rtio_##inst,                                \
-        .iodev = &max32664c_iodev_##inst,                           \
-    };                                                              \
-    static const struct max32664c_config max32664c_config_##inst =  \
-        {                                                           \
-            .i2c = I2C_DT_SPEC_INST_GET(inst),                      \
-            .reset_gpio = GPIO_DT_SPEC_INST_GET(inst, reset_gpios), \
-            .mfio_gpio = GPIO_DT_SPEC_INST_GET(inst, mfio_gpios),   \
-    };                                                              \
-    PM_DEVICE_DT_INST_DEFINE(inst, max32664c_pm_action);            \
-    SENSOR_DEVICE_DT_INST_DEFINE(inst,                              \
-                                 max32664c_chip_init,               \
-                                 PM_DEVICE_DT_INST_GET(inst),       \
-                                 &max32664c_data_##inst,            \
-                                 &max32664c_config_##inst,          \
-                                 POST_KERNEL,                       \
-                                 CONFIG_SENSOR_INIT_PRIORITY,       \
+    RTIO_DEFINE(max32664c_rtio_##inst, 8, 8);                         \
+    static struct max32664c_data max32664c_data_##inst = {            \
+        .r = &max32664c_rtio_##inst,                                  \
+        .iodev = &max32664c_iodev_##inst,                             \
+    };                                                                \
+    static const struct max32664c_config max32664c_config_##inst =    \
+        {                                                             \
+            .i2c = I2C_DT_SPEC_INST_GET(inst),                        \
+            .reset_gpio = GPIO_DT_SPEC_INST_GET(inst, reset_gpios),   \
+            .mfio_gpio = GPIO_DT_SPEC_INST_GET(inst, mfio_gpios),     \
+    };                                                                \
+    PM_DEVICE_DT_INST_DEFINE(inst, max32664c_pm_action);              \
+    SENSOR_DEVICE_DT_INST_DEFINE(inst,                                \
+                                 max32664c_chip_init,                 \
+                                 PM_DEVICE_DT_INST_GET(inst),         \
+                                 &max32664c_data_##inst,              \
+                                 &max32664c_config_##inst,            \
+                                 POST_KERNEL,                         \
+                                 CONFIG_SENSOR_INIT_PRIORITY,         \
                                  &max32664c_driver_api)
 
 DT_INST_FOREACH_STATUS_OKAY(MAX32664C_DEFINE)

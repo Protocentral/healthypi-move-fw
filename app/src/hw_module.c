@@ -37,6 +37,7 @@
 #include <zephyr/dfu/mcuboot.h>
 #include <stdio.h>
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/drivers/fuel_gauge.h>
 #include <zephyr/sys/ring_buffer.h>
 #include <zephyr/drivers/pwm.h>
@@ -104,6 +105,10 @@ char curr_string[40];
 
 // Peripheral Device Pointers
 static const struct device *max30208_dev = DEVICE_DT_GET_ANY(maxim_max30208);
+
+/* RTIO + sensor read helpers for MAX30208 (use sensor_read instead of direct RTIO) */
+RTIO_DEFINE(max30208_read_rtio_ctx, 1, 1);
+SENSOR_DT_READ_IODEV(max30208_iodev, DT_NODELABEL(max30208), SENSOR_CHAN_AMBIENT_TEMP);
 
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
@@ -515,15 +520,33 @@ static int usb_init()
 
 double read_temp_f(void)
 {
+#if defined(CONFIG_SENSOR)
+    /* Use a raw buffer for the encoded payload: header (uint64_t) + int16 raw */
+    uint8_t edata_buf[sizeof(uint64_t) + sizeof(int16_t)];
+
+    /* max30208_iodev and max30208_read_rtio_ctx are defined via SENSOR_DT_READ_IODEV and RTIO_DEFINE in this file */
+    int ret = sensor_read(&max30208_iodev, &max30208_read_rtio_ctx, edata_buf, sizeof(edata_buf));
+    if (ret < 0) {
+        LOG_ERR("sensor_read failed: %d", ret);
+        return 0.0;
+    }
+
+    /* Raw temperature stored as big-endian int16 in the encoded payload */
+    int16_t raw = (int16_t)sys_get_be16(&edata_buf[sizeof(uint64_t)]);
+
+    double temp_c = (double)raw * 0.005;
+    double temp_f = (temp_c * 1.8) + 32.0;
+    return temp_f;
+#else
+    /* Fallback to blocking API when sensor async API not enabled */
     struct sensor_value temp_sample;
 
     sensor_sample_fetch(max30208_dev);
     sensor_channel_get(max30208_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
-    // last_read_temp_value = temp_sample.val1;
     double temp_c = (double)temp_sample.val1 * 0.005;
     double temp_f = (temp_c * 1.8) + 32.0;
-    // printk("Temp: %.2f F\n", temp_f);
     return temp_f;
+#endif
 }
 
 // Compatibility wrapper called by the app to set RTC time
@@ -666,8 +689,8 @@ void hw_module_init(void)
     static struct rtc_time curr_time;
 
     // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
-    NRF_TWIM2->FREQUENCY = 0x06200000;
-    NRF_TWIM1->FREQUENCY = 0x06200000;
+    //NRF_TWIM2->FREQUENCY = 0x06200000;
+    //NRF_TWIM1->FREQUENCY = 0x06200000;
 
     if (!device_is_ready(pmic))
     {
@@ -1194,7 +1217,8 @@ void hw_thread(void)
         }
 
         // Read and publish temperature
-        if (hpi_sys_get_device_on_skin() == true)
+        //if (hpi_sys_get_device_on_skin() == true)
+        if(true)
         {
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {

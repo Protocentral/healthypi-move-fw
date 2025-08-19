@@ -6,7 +6,6 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/kernel.h>
-
 #include "max30208.h"
 
 #define BUFFER_LENGTH 200
@@ -14,67 +13,37 @@
 
 LOG_MODULE_REGISTER(MAX30208, CONFIG_SENSOR_LOG_LEVEL);
 
-static uint8_t m_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf)
+/* sensor-specific headers */
+#if defined(CONFIG_SENSOR)
+#include <zephyr/rtio/rtio.h>
+#include <zephyr/drivers/sensor.h>
+
+static int max30208_i2c_read(const struct device *dev, uint8_t reg, uint8_t *buf, size_t len)
 {
 	const struct max30208_config *config = dev->config;
 
-	struct i2c_msg msgs[2] = {
-		{
-			.buf = &reg,
-			.len = 1,
-			.flags = I2C_MSG_WRITE,
-		},
-		{
-			.buf = read_buf,
-			.len = 1,
-			.flags = I2C_MSG_RESTART | I2C_MSG_READ | I2C_MSG_STOP,
-		},
-	};
-
-	return i2c_transfer_dt(&config->i2c, msgs, 2);
-}
-
-static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t *read_buf, uint8_t read_len)
-{
-	const struct max30208_config *config = dev->config;
-
-	struct i2c_msg m_msgs[2];
-	uint8_t reg_buf[1] = {reg};
-
-	m_msgs[0].buf = reg_buf;
-	m_msgs[0].len = 1U;
-	m_msgs[0].flags = I2C_MSG_WRITE;
-
-	m_msgs[1].buf = read_buf;
-	m_msgs[1].len = read_len;
-	m_msgs[1].flags = I2C_MSG_READ | I2C_MSG_STOP | I2C_MSG_RESTART;
-
-	int ret = i2c_transfer_dt(&config->i2c, m_msgs, 2);
-	if (ret < 0)
-	{
-		LOG_ERR("Failed to read register: %d", ret);
+	int ret = i2c_write_read_dt(&config->i2c, &reg, 1, buf, len);
+	if (ret < 0) {
+		LOG_ERR("i2c write_read failed reg=0x%02x ret=%d", reg, ret);
 	}
-
-	// printk("Read register: %x\n", read_buf[0]);
-	return 0;
+	return ret;
 }
 
-static int max30208_write_reg(const struct device *dev, uint8_t reg, uint8_t val)
+static int max30208_i2c_write(const struct device *dev, uint8_t reg, uint8_t val)
 {
 	const struct max30208_config *config = dev->config;
-
-	uint8_t write_buf[2] = {reg, val};
-
-	i2c_write_dt(&config->i2c, write_buf, sizeof(write_buf));
-
-	return 0;
+	int ret = i2c_reg_write_byte_dt(&config->i2c, reg, val);
+	if (ret < 0) {
+		LOG_ERR("i2c reg write failed reg=0x%02x val=0x%02x ret=%d", reg, val, ret);
+	}
+	return ret;
 }
 
 static int max30208_get_chip_id(const struct device *dev, uint8_t* id)
 {
 	uint8_t read_buf[1] = {0};
 
-	max30208_read_reg(dev, MAX30208_REG_CHIP_ID, read_buf, 1U);
+	max30208_i2c_read(dev, MAX30208_REG_CHIP_ID, read_buf, 1U);
 	LOG_DBG("MAX30208 Chip ID: %x", read_buf[0]);
 	id[0] = read_buf[0];
 	return 0;
@@ -82,24 +51,60 @@ static int max30208_get_chip_id(const struct device *dev, uint8_t* id)
 
 static int max30208_start_convert(const struct device *dev)
 {
-	max30208_write_reg(dev, MAX30208_REG_TEMP_SENSOR_SETUP, MAX30208_CONVERT_T);
+	max30208_i2c_write(dev, MAX30208_REG_TEMP_SENSOR_SETUP, MAX30208_CONVERT_T);
 	return 0;
 }
 
 static uint8_t max30208_get_status(const struct device *dev)
 {
 	uint8_t read_buf[1] = {0};
-	max30208_read_reg(dev, MAX30208_REG_STATUS, read_buf, 1U);
+	max30208_i2c_read(dev, MAX30208_REG_STATUS, read_buf, 1U);
 	// LOG_DBG("MAX30208 Status: %x\n", read_buf[0]);
 	return read_buf[0];
 }
 
-static int max30208_get_temp(const struct device *dev)
+/* Blocking spot measurement sequence:
+ * 1) write TEMP_SENSOR_SETUP to request a one-shot conversion
+ * 2) poll STATUS until data ready or timeout
+ * 3) read two bytes from FIFO data and return signed int16 raw value
+ */
+int max30208_get_temp(const struct device *dev, int32_t timeout_ms)
 {
-	uint8_t read_buf[2] = {0, 0};
-	max30208_read_reg(dev, MAX30208_REG_FIFO_DATA, read_buf, 2U);
-	int16_t raw = read_buf[0] << 8 | read_buf[1];
-	// LOG_DBG("Raw Temp: %d\n", raw);
+	uint8_t buf[2] = {0};
+	int ret;
+
+	/* Start a single conversion */
+	ret = max30208_i2c_write(dev, MAX30208_REG_TEMP_SENSOR_SETUP, MAX30208_CONVERT_T);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* Poll status register until bit0 indicates data ready or timeout */
+	uint32_t elapsed = 0U;
+	const uint32_t poll_ms = 5U;
+	while (elapsed < (uint32_t)timeout_ms) {
+		uint8_t status = 0;
+		ret = max30208_i2c_read(dev, MAX30208_REG_STATUS, &status, 1);
+		if (ret < 0) {
+			return ret;
+		}
+		if (status & 0x01) {
+			break;
+		}
+		k_msleep(poll_ms);
+		elapsed += poll_ms;
+	}
+	if (elapsed >= (uint32_t)timeout_ms) {
+		LOG_ERR("MAX30208: conversion timeout after %d ms", timeout_ms);
+		return -ETIMEDOUT;
+	}
+
+	ret = max30208_i2c_read(dev, MAX30208_REG_FIFO_DATA, buf, 2);
+	if (ret < 0) {
+		return ret;
+	}
+
+	int16_t raw = (int16_t)((buf[0] << 8) | buf[1]);
 	return raw;
 }
 
@@ -107,17 +112,17 @@ static int max30208_sample_fetch(const struct device *dev,
 								 enum sensor_channel chan)
 {
 	struct max30208_data *data = dev->data;
+	int ret;
 
-	max30208_start_convert(dev);
+	ARG_UNUSED(chan);
 
-	// while(!(max30208_get_status(dev) & 0x01))
-	//{
-	//	k_sleep(K_MSEC(10));
-	// }
-	k_sleep(K_MSEC(100));
+	ret = max30208_get_temp(dev, 500); /* 500 ms timeout */
+	if (ret < 0) {
+		LOG_ERR("sample_fetch failed: %d", ret);
+		return ret;
+	}
 
-	data->temp_int = max30208_get_temp(dev);
-
+	data->temp_int = ret;
 	return 0;
 }
 
@@ -127,9 +132,9 @@ static int max30208_channel_get(const struct device *dev, enum sensor_channel ch
 	switch (chan)
 	{
 	case SENSOR_CHAN_AMBIENT_TEMP:
-		val->val1 = (int)((data->temp_int));
-
-		val->val2 = 0;
+	/* data->temp_int is raw counts (LSB = 0.005 degC) */
+	val->val1 = data->temp_int; /* keep raw in val1 for backwards compat */
+	val->val2 = 0;
 
 		break;
 	default:
@@ -144,6 +149,15 @@ static const struct sensor_driver_api max30208_driver_api = {
 	.sample_fetch = max30208_sample_fetch,
 	.channel_get = max30208_channel_get,
 };
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+static const struct sensor_driver_api max30208_driver_api_async = {
+	.sample_fetch = max30208_sample_fetch,
+	.channel_get = max30208_channel_get,
+	.submit = (void (*)(const struct device *, struct rtio_iodev_sqe *))max30208_submit,
+	.get_decoder = max30208_get_decoder,
+};
+#endif
 
 static int max30208_init(const struct device *dev)
 {
@@ -197,8 +211,24 @@ static int max30208_pm_action(const struct device *dev, enum pm_device_action ac
 }
 #endif /* CONFIG_PM_DEVICE */
 
+/* Define optional RTIO iodev and ctx per instance when async API enabled */
+/* Per-instance RTIO/iodev definitions when async API is enabled */
+#ifdef CONFIG_SENSOR_ASYNC_API
+#define MAX30208_RTIO_INIT(inst)           \
+	I2C_DT_IODEV_DEFINE(max30208_iodev_##inst, DT_DRV_INST(inst)); \
+	/* Use a larger RTIO SQE/CQE pool (matches other reference drivers) */ \
+	RTIO_DEFINE(max30208_rtio_##inst, 8, 8);                        \
+	static struct max30208_data max30208_data_##inst = {             \
+		.r = &max30208_rtio_##inst,                                   \
+		.iodev = &max30208_iodev_##inst,                              \
+	};
+#else
+#define MAX30208_RTIO_INIT(inst)           \
+	static struct max30208_data max30208_data_##inst;
+#endif
+
 #define MAX30208_DEFINE(inst)                                    \
-	static struct max30208_data max30208_data_##inst;            \
+	MAX30208_RTIO_INIT(inst)                                     \
 	static const struct max30208_config max30208_config_##inst = \
 		{                                                        \
 			.i2c = I2C_DT_SPEC_INST_GET(inst),                   \
@@ -211,6 +241,12 @@ static int max30208_pm_action(const struct device *dev, enum pm_device_action ac
 								 &max30208_config_##inst,        \
 								 POST_KERNEL,                    \
 								 CONFIG_SENSOR_INIT_PRIORITY,    \
-								 &max30208_driver_api)
+								 IS_ENABLED(CONFIG_SENSOR_ASYNC_API) ? &max30208_driver_api_async : &max30208_driver_api)
 
 DT_INST_FOREACH_STATUS_OKAY(MAX30208_DEFINE)
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+/* The application should use SENSOR_DT_READ_IODEV to obtain an iodev symbol */
+#endif
+
+#endif /* CONFIG_SENSOR */
