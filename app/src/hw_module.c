@@ -707,7 +707,7 @@ void hw_module_init(void)
         LOG_ERR("Charger device not ready.\n");
     }
 
-   ----- // Power ON display
+    // Power ON display
     regulator_disable(ldsw_disp_unit);
     k_msleep(100);
     regulator_enable(ldsw_disp_unit);

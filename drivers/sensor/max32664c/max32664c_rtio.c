@@ -2,9 +2,6 @@
  * Provides non-blocking RTIO submission and completion callback.
  */
 
-/* This file implements sensor driver RTIO helpers; only build when sensor API is enabled */
-#ifdef CONFIG_SENSOR
-
 #include <zephyr/rtio/work.h>
 #include <zephyr/drivers/sensor_clock.h>
 #include <zephyr/logging/log.h>
@@ -554,5 +551,3 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
     }
     return 0;
 }
-
-#endif /* CONFIG_SENSOR */

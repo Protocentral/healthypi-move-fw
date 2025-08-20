@@ -1,5 +1,5 @@
 /* Only build when sensor subsystem is enabled */
-#if defined(CONFIG_SENSOR)
+#ifdef CONFIG_SENSOR
 
 /*
  * MAX30208 async decoder
@@ -7,28 +7,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/drivers/sensor.h>
-#include <zephyr/logging/log.h>
+#define DT_DRV_COMPAT maxim_max30208
+
 #include "max30208.h"
+#include <zephyr/logging/log.h>
 #include <zephyr/drivers/sensor_clock.h>
 #include <zephyr/sys/byteorder.h>
 
 LOG_MODULE_REGISTER(MAX30208_DECODER, CONFIG_SENSOR_LOG_LEVEL);
 
-static int max30208_decoder_get_frame_count(const uint8_t *buffer, struct sensor_chan_spec ch,
+static int max30208_decoder_get_frame_count(const uint8_t *buffer,
+                                            enum sensor_channel channel,
+                                            size_t channel_idx,
                                             uint16_t *frame_count)
 {
     ARG_UNUSED(buffer);
-    ARG_UNUSED(ch);
+    ARG_UNUSED(channel);
+    ARG_UNUSED(channel_idx);
 
     *frame_count = 1;
     return 0;
 }
 
-static int max30208_decoder_get_size_info(struct sensor_chan_spec ch, size_t *base_size,
+static int max30208_decoder_get_size_info(enum sensor_channel channel,
+                                          size_t *base_size,
                                           size_t *frame_size)
 {
-    if (ch.chan_type != SENSOR_CHAN_AMBIENT_TEMP) {
+    if (channel != SENSOR_CHAN_AMBIENT_TEMP) {
         return -ENOTSUP;
     }
 
@@ -37,19 +42,21 @@ static int max30208_decoder_get_size_info(struct sensor_chan_spec ch, size_t *ba
     return 0;
 }
 
-static int max30208_decoder_decode(const uint8_t *buffer, struct sensor_chan_spec ch,
+static int max30208_decoder_decode(const uint8_t *buffer,
+                                   enum sensor_channel channel,
+                                   size_t channel_idx,
                                    uint32_t *fit,
                                    uint16_t max_count, void *data_out)
 {
     const struct max30208_encoded_data *edata = (const struct max30208_encoded_data *)buffer;
-    ARG_UNUSED(ch);
+    ARG_UNUSED(channel_idx);
     ARG_UNUSED(max_count);
 
     if (*fit != 0) {
         return 0;
     }
 
-    if (ch.chan_type != SENSOR_CHAN_AMBIENT_TEMP) {
+    if (channel != SENSOR_CHAN_AMBIENT_TEMP) {
         return -ENOTSUP;
     }
 

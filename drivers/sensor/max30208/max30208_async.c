@@ -5,17 +5,14 @@
  */
 
 /* Only build when sensor subsystem is enabled */
-#if defined(CONFIG_SENSOR)
+#ifdef CONFIG_SENSOR
 
-#include <zephyr/drivers/sensor.h>
+#include "max30208.h"
 #include <zephyr/rtio/work.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/drivers/sensor.h>
-#include <zephyr/drivers/i2c.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/drivers/sensor_clock.h>
 
-#include "max30208.h"
 
 LOG_MODULE_REGISTER(MAX30208_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 

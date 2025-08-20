@@ -22,11 +22,12 @@ int max32664c_get_fifo_count(const struct device *dev)
     int err = 0;
 
     /* If RTIO is not available, fall back to blocking I2C */
-    if (!ctx || !iodev) {
+    if (!ctx || !iodev)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 0);
         k_sleep(K_USEC(300));
-    max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
-    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
+        max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
+        max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         fifo_count = rd_buf[1];
         return (int)fifo_count;
@@ -37,7 +38,8 @@ int max32664c_get_fifo_count(const struct device *dev)
 
     /* Submit write SQE */
     write_sqe = rtio_sqe_acquire(ctx);
-    if (!write_sqe) {
+    if (!write_sqe)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return -ENOMEM;
     }
@@ -46,27 +48,33 @@ int max32664c_get_fifo_count(const struct device *dev)
     write_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-    if (err) {
+    if (err)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
 
     /* Wait for write completion */
     cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
-        if (cqe->result < 0) {
+    if (cqe != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
     }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        if (cqe->result < 0) {
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
     }
 
-    if (err < 0) {
+    if (err < 0)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
@@ -76,7 +84,8 @@ int max32664c_get_fifo_count(const struct device *dev)
 
     /* Submit read SQE */
     read_sqe = rtio_sqe_acquire(ctx);
-    if (!read_sqe) {
+    if (!read_sqe)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return -ENOMEM;
     }
@@ -85,21 +94,26 @@ int max32664c_get_fifo_count(const struct device *dev)
     read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-    if (err) {
+    if (err)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
 
     /* Wait for read completion */
     cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
-        if (cqe->result < 0) {
+    if (cqe != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
     }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        if (cqe->result < 0) {
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
@@ -107,7 +121,8 @@ int max32664c_get_fifo_count(const struct device *dev)
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    if (err < 0) {
+    if (err < 0)
+    {
         return err;
     }
 
@@ -267,16 +282,17 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
                     uint32_t run_steps = (uint32_t)(buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 12 + MAX32664C_SENSOR_DATA_OFFSET] << 24 | buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 13 + MAX32664C_SENSOR_DATA_OFFSET] << 16 | buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 14 + MAX32664C_SENSOR_DATA_OFFSET] << 8 | buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 15 + MAX32664C_SENSOR_DATA_OFFSET]);
 
         /* Implementation moved to max32664c_rtio.c */
-        extern int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
-                                                uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint8_t *spo2_valid_percent_complete, uint8_t *spo2_low_quality,
-                                                uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor,
-                                                uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode);
-                    *steps_run = run_steps;
-                }*/
+                extern int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
+                                                        uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint8_t *spo2_valid_percent_complete, uint8_t *spo2_low_quality,
+                                                        uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor,
+                                                        uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode);
+                *steps_run = run_steps;
             }
+            */
         }
     }
-    return 0;
+}
+return 0;
 }
 
 /* max32664c_submit and its RTIO callback have been moved to
