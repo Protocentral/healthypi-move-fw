@@ -14,6 +14,9 @@
 
 LOG_MODULE_REGISTER(MAX32664C_RTIO, CONFIG_SENSOR_LOG_LEVEL);
 
+/* Forward declare helper defined later in this file */
+int max32664c_get_fifo_count(const struct device *dev);
+
 static void max32664c_complete_result(struct rtio *ctx,
                                       const struct rtio_sqe *sqe,
                                       void *arg)
@@ -23,19 +26,25 @@ static void max32664c_complete_result(struct rtio *ctx,
     int err = 0;
 
     /* Consume available CQEs produced by the executor for this submission */
-    do {
+    do
+    {
         cqe = rtio_cqe_consume(ctx);
-        if (cqe != NULL) {
-            if (cqe->result < 0) {
+        if (cqe != NULL)
+        {
+            if (cqe->result < 0)
+            {
                 err = cqe->result;
             }
             rtio_cqe_release(ctx, cqe);
         }
     } while (cqe != NULL);
 
-    if (err) {
+    if (err)
+    {
         rtio_iodev_sqe_err(iodev_sqe, err);
-    } else {
+    }
+    else
+    {
         rtio_iodev_sqe_ok(iodev_sqe, 0);
     }
 
@@ -54,27 +63,36 @@ static void max32664c_stream_complete_cb(struct rtio *ctx,
     /* Consume and clear any CQEs */
     struct rtio_cqe *cqe;
     int err = 0;
-    do {
+    do
+    {
         cqe = rtio_cqe_consume(ctx);
-        if (cqe != NULL) {
-            if (cqe->result < 0) {
+        if (cqe != NULL)
+        {
+            if (cqe->result < 0)
+            {
                 err = cqe->result;
             }
             rtio_cqe_release(ctx, cqe);
         }
     } while (cqe != NULL);
 
-    if (err) {
+    if (err)
+    {
         rtio_iodev_sqe_err(iodev_sqe, err);
-    } else {
+    }
+    else
+    {
         rtio_iodev_sqe_ok(iodev_sqe, data->fifo_count);
     }
 
     /* Set MFIO back to high (release gate) and re-enable interrupt */
+    /* Ensure we can drive the pin high, then release it back to input so
+     * the device can assert the interrupt pin again. */
+    gpio_pin_configure_dt(&cfg->mfio_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&cfg->mfio_gpio, 1);
+    /* Leave pin direction to mode/setup code; just re-enable interrupt */
     gpio_pin_interrupt_configure_dt(&cfg->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
 }
-
 
 void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
@@ -95,15 +113,15 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
      * FIFO read will be performed from the MFIO event handler.
      */
     struct sensor_read_config *read_cfg = (struct sensor_read_config *)iodev_sqe->sqe.iodev->data;
-    if (read_cfg && read_cfg->is_streaming) {
-        /* Disable interrupt while we configure */
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_DISABLE);
-        /* Ensure pin is configured as input for interrupts */
-        gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
+    if (read_cfg && read_cfg->is_streaming)
+    {
+    /* Disable interrupt while we configure; leave pin direction to mode/setup code */
+    gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_DISABLE);
         /* Store streaming SQE and enable interrupts */
         data->streaming_sqe = iodev_sqe;
         int rc = gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
-        if (rc) {
+        if (rc)
+        {
             rtio_iodev_sqe_err(iodev_sqe, rc);
             data->streaming_sqe = NULL;
         }
@@ -111,7 +129,8 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
     }
 
     /* If RTIO not available, handle fallback in other code path */
-    if (!r || !iodev) {
+    if (!r || !iodev)
+    {
         /* Not handling here; caller should use fallback implementation in async.c */
         rtio_iodev_sqe_err(iodev_sqe, -ENOTSUP);
         return;
@@ -119,7 +138,8 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
 
     /* Acquire the buffer for RTIO to write into */
     rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_len, min_buf_len, &buf, &buf_len);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         LOG_ERR("Failed to get a read buffer of size %u bytes", min_buf_len);
         rtio_iodev_sqe_err(iodev_sqe, rc);
         return;
@@ -129,7 +149,8 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
     write_sqe = rtio_sqe_acquire(r);
     read_sqe = rtio_sqe_acquire(r);
     complete_sqe = rtio_sqe_acquire(r);
-    if (!write_sqe || !read_sqe || !complete_sqe) {
+    if (!write_sqe || !read_sqe || !complete_sqe)
+    {
         LOG_ERR("Failed to acquire RTIO SQEs");
         rtio_iodev_sqe_err(iodev_sqe, -ENOMEM);
         return;
@@ -151,7 +172,6 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
     return;
 }
 
-
 /* Streaming event handler called from MFIO gpio callback. This will be executed
  * in interrupt context via the gpio callback; it should queue RTIO work to read
  * FIFO data and complete the stored streaming iodev_sqe. The gpio interrupt is
@@ -167,7 +187,8 @@ void max32664c_stream_event_handler(const struct device *dev)
     struct rtio *r = data->r;
     struct rtio_iodev *iodev = data->iodev;
 
-    if (!streaming_sqe || !r || !iodev) {
+    if (!streaming_sqe || !r || !iodev)
+    {
         /* Nothing to do; re-enable interrupt so future events are handled */
         gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
         return;
@@ -175,14 +196,16 @@ void max32664c_stream_event_handler(const struct device *dev)
 
     /* Read FIFO count (blocking RTIO call inside helper) */
     int fifo = max32664c_get_fifo_count(dev);
-    if (fifo < 0) {
+    if (fifo < 0)
+    {
         rtio_iodev_sqe_err(streaming_sqe, fifo);
         data->streaming_sqe = NULL;
         gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
         return;
     }
 
-    if (fifo > 16) {
+    if (fifo > 16)
+    {
         fifo = 16;
     }
 
@@ -192,7 +215,8 @@ void max32664c_stream_event_handler(const struct device *dev)
     uint8_t *buf;
     uint32_t buf_len;
     int rc = rtio_sqe_rx_buf(streaming_sqe, sizeof(struct max32664c_encoded_data), (sizeof(struct max32664c_encoded_data)), &buf, &buf_len);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         rtio_iodev_sqe_err(streaming_sqe, rc);
         data->streaming_sqe = NULL;
         gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
@@ -204,7 +228,8 @@ void max32664c_stream_event_handler(const struct device *dev)
     struct rtio_sqe *read_sqe = rtio_sqe_acquire(r);
     struct rtio_sqe *cb_sqe = rtio_sqe_acquire(r);
 
-    if (!write_sqe || !read_sqe || !cb_sqe) {
+    if (!write_sqe || !read_sqe || !cb_sqe)
+    {
         rtio_iodev_sqe_err(streaming_sqe, -ENOMEM);
         data->streaming_sqe = NULL;
         gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
@@ -214,10 +239,13 @@ void max32664c_stream_event_handler(const struct device *dev)
     uint8_t cmd_wr[2] = {0x12, 0x01};
     size_t sample_len = 62; /* conservative default; decoder will parse based on op_mode */
     size_t read_len = (sample_len * fifo) + MAX32664C_SENSOR_DATA_OFFSET;
-    if (read_len > buf_len) {
+    if (read_len > buf_len)
+    {
         read_len = buf_len;
     }
 
+    /* Configure MFIO as output so we can assert (drive low) to gate I2C */
+    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
@@ -233,7 +261,8 @@ void max32664c_stream_event_handler(const struct device *dev)
 
     /* Submit all SQEs */
     rc = rtio_submit(r, 0);
-    if (rc) {
+    if (rc)
+    {
         rtio_iodev_sqe_err(streaming_sqe, rc);
         data->streaming_sqe = NULL;
         gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -244,7 +273,6 @@ void max32664c_stream_event_handler(const struct device *dev)
     /* Clear stored streaming SQE; completion handler will call rtio_iodev_sqe_ok/err */
     data->streaming_sqe = NULL;
 }
-
 
 int max32664c_get_fifo_count(const struct device *dev)
 {
@@ -261,7 +289,8 @@ int max32664c_get_fifo_count(const struct device *dev)
     int err = 0;
 
     /* If RTIO is not available, fall back to blocking I2C */
-    if (!ctx || !iodev) {
+    if (!ctx || !iodev)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 0);
         k_sleep(K_USEC(300));
         max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
@@ -276,7 +305,8 @@ int max32664c_get_fifo_count(const struct device *dev)
 
     /* Submit write SQE */
     write_sqe = rtio_sqe_acquire(ctx);
-    if (!write_sqe) {
+    if (!write_sqe)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return -ENOMEM;
     }
@@ -285,27 +315,33 @@ int max32664c_get_fifo_count(const struct device *dev)
     write_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-    if (err) {
+    if (err)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
 
     /* Wait for write completion */
     cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
-        if (cqe->result < 0) {
+    if (cqe != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
     }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        if (cqe->result < 0) {
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
     }
 
-    if (err < 0) {
+    if (err < 0)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
@@ -315,7 +351,8 @@ int max32664c_get_fifo_count(const struct device *dev)
 
     /* Submit read SQE */
     read_sqe = rtio_sqe_acquire(ctx);
-    if (!read_sqe) {
+    if (!read_sqe)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return -ENOMEM;
     }
@@ -324,36 +361,42 @@ int max32664c_get_fifo_count(const struct device *dev)
     read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
     err = rtio_submit(ctx, 0);
-    if (err) {
+    if (err)
+    {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         return err;
     }
 
     /* Wait for read completion */
     cqe = rtio_cqe_consume_block(ctx);
-    if (cqe != NULL) {
-        if (cqe->result < 0) {
+    if (cqe != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
     }
-    while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-        if (cqe->result < 0) {
+    while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+    {
+        if (cqe->result < 0)
+        {
             err = cqe->result;
         }
         rtio_cqe_release(ctx, cqe);
     }
 
+    /* Drive MFIO high to release gate; leave direction to mode/setup code */
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    if (err < 0) {
+    if (err < 0)
+    {
         return err;
     }
 
     fifo_count = rd_buf[1];
     return (int)fifo_count;
 }
-
 
 /* Converted blocking sample-fetch moved here. This function keeps the same
  * prototype as the previous helper so callers can call it directly. It will
@@ -406,19 +449,23 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
             int err = 0;
             size_t read_len = (sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET;
 
-            if (read_len > sizeof(buf)) {
+            if (read_len > sizeof(buf))
+            {
                 /* clamp to buffer size */
                 read_len = sizeof(buf);
             }
 
             /* Use RTIO if available; otherwise fall back to blocking I2C */
-            if (ctx && iodev) {
+            if (ctx && iodev)
+            {
+                gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
                 gpio_pin_set_dt(&config->mfio_gpio, 0);
                 k_sleep(K_USEC(300));
 
                 /* write command SQE */
                 write_sqe = rtio_sqe_acquire(ctx);
-                if (!write_sqe) {
+                if (!write_sqe)
+                {
                     gpio_pin_set_dt(&config->mfio_gpio, 1);
                     return -ENOMEM;
                 }
@@ -426,27 +473,33 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
                 write_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
                 err = rtio_submit(ctx, 0);
-                if (err) {
+                if (err)
+                {
                     gpio_pin_set_dt(&config->mfio_gpio, 1);
                     return err;
                 }
 
                 /* wait for write completion */
                 cqe = rtio_cqe_consume_block(ctx);
-                if (cqe != NULL) {
-                    if (cqe->result < 0) {
+                if (cqe != NULL)
+                {
+                    if (cqe->result < 0)
+                    {
                         err = cqe->result;
                     }
                     rtio_cqe_release(ctx, cqe);
                 }
-                while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-                    if (cqe->result < 0) {
+                while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+                {
+                    if (cqe->result < 0)
+                    {
                         err = cqe->result;
                     }
                     rtio_cqe_release(ctx, cqe);
                 }
 
-                if (err < 0) {
+                if (err < 0)
+                {
                     gpio_pin_set_dt(&config->mfio_gpio, 1);
                     return err;
                 }
@@ -455,7 +508,8 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
 
                 /* read SQE into local buf */
                 read_sqe = rtio_sqe_acquire(ctx);
-                if (!read_sqe) {
+                if (!read_sqe)
+                {
                     gpio_pin_set_dt(&config->mfio_gpio, 1);
                     return -ENOMEM;
                 }
@@ -463,21 +517,26 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
                 read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP;
 
                 err = rtio_submit(ctx, 0);
-                if (err) {
+                if (err)
+                {
                     gpio_pin_set_dt(&config->mfio_gpio, 1);
                     return err;
                 }
 
                 /* wait for read completion */
                 cqe = rtio_cqe_consume_block(ctx);
-                if (cqe != NULL) {
-                    if (cqe->result < 0) {
+                if (cqe != NULL)
+                {
+                    if (cqe->result < 0)
+                    {
                         err = cqe->result;
                     }
                     rtio_cqe_release(ctx, cqe);
                 }
-                while ((cqe = rtio_cqe_consume(ctx)) != NULL) {
-                    if (cqe->result < 0) {
+                while ((cqe = rtio_cqe_consume(ctx)) != NULL)
+                {
+                    if (cqe->result < 0)
+                    {
                         err = cqe->result;
                     }
                     rtio_cqe_release(ctx, cqe);
@@ -485,13 +544,17 @@ int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_sample
 
                 gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-                if (err < 0) {
+                if (err < 0)
+                {
                     return err;
                 }
 
                 /* successful RTIO read filled `buf` */
-            } else {
+            }
+            else
+            {
                 /* fallback blocking path */
+                gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
                 gpio_pin_set_dt(&config->mfio_gpio, 0);
                 k_sleep(K_USEC(300));
                 max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));

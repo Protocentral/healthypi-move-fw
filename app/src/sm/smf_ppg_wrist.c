@@ -36,6 +36,7 @@
 /* sensor definitions (sensor_read_config, sensor_stream_trigger) - only when sensors enabled */
 #ifdef CONFIG_SENSOR
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/rtio/rtio.h>
 #endif
 #include <stddef.h>
 #include <string.h>
@@ -478,3 +479,45 @@ static void ppg_wrist_ctrl_thread(void)
 
 K_THREAD_DEFINE(smf_ppg_wrist_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
 //K_THREAD_DEFINE(ppg_ctrl_thread_id, PPG_CTRL_THREAD_STACKSIZE, ppg_wrist_ctrl_thread, NULL, NULL, NULL, PPG_CTRL_THREAD_PRIORITY, 0, 0);
+
+/* RTIO consumer: waits for completion events from the sensor_stream() RTIO
+ * context so the app-side SQE completions are consumed and can be acted on.
+ */
+#ifdef CONFIG_SENSOR
+/* rtio header included above with other sensor headers */
+
+#define PPG_RTIO_CONSUMER_STACKSIZE 1024
+#define PPG_RTIO_CONSUMER_PRIORITY 6
+
+static void ppg_wrist_rtio_consumer(void)
+{
+    struct rtio_cqe *cqe;
+
+    for (;;) {
+        cqe = rtio_cqe_consume_block(&max32664c_read_rtio_poll_ctx);
+        if (!cqe) {
+            continue;
+        }
+
+        /* On success, CQE.userdata is expected to point to the RX buffer
+         * allocated by RTIO for the multishot read. Decode and process it. */
+        if (cqe->result >= 0) {
+            uint8_t *buf = (uint8_t *)cqe->userdata;
+            if (buf != NULL) {
+                /* Decode and enqueue to q_ppg_wrist_sample */
+                LOG_DBG("RTIO CQE result: %d, buf len: %d", cqe->result, (int)cqe->result);
+                sensor_ppg_wrist_decode(buf, (uint32_t)cqe->result);
+            } else {
+                LOG_WRN("RTIO CQE has no userdata buffer");
+            }
+        } else {
+            LOG_WRN("MAX32664C RTIO error: %d", cqe->result);
+        }
+
+        /* Release CQE (returns buffer to mempool) */
+        rtio_cqe_release(&max32664c_read_rtio_poll_ctx, cqe);
+    }
+}
+
+K_THREAD_DEFINE(ppg_rtio_consumer_thread_id, PPG_RTIO_CONSUMER_STACKSIZE, ppg_wrist_rtio_consumer, NULL, NULL, NULL, PPG_RTIO_CONSUMER_PRIORITY, 0, 0);
+#endif
