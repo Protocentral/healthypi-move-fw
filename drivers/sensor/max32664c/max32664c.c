@@ -167,8 +167,6 @@ static int __attribute__((used)) m_read_op_mode(const struct device *dev)
     uint8_t wr_buf[2] = {0x02, 0x00};
 
     k_sleep(K_USEC(300));
-    /* Ensure MFIO is driven by us while performing I2C operations */
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
     max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 0);
@@ -218,8 +216,6 @@ static int m_i2c_write_cmd_2(const struct device *dev, uint8_t byte1, uint8_t by
     wr_buf[0] = byte1;
     wr_buf[1] = byte2;
 
-    /* Drive MFIO low for gated I2C access */
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
@@ -248,7 +244,6 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
     wr_buf[1] = byte2;
     wr_buf[2] = byte3;
 
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
@@ -308,7 +303,6 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
     wr_buf[3] = byte4;
     wr_buf[4] = byte5;
 
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
@@ -339,13 +333,12 @@ static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t by
     wr_buf[4] = byte5;
     wr_buf[5] = byte6;
 
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
     max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(dev, rd_buf, 1);
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -435,7 +428,6 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
     max32664c_i2c_read(dev, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(500));
 
-    /* Drive MFIO high to release gate */
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
     LOG_DBG("CMD: %x %x %x | RSP: %x %x %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
@@ -494,7 +486,6 @@ static int max32664c_check_sensors(const struct device *dev)
 
 static int max32664c_set_mode_extended_algo(const struct device *dev)
 {
-    const struct max32664c_config *config = dev->config;
     LOG_DBG("MAX32664C entering extended ALGO mode...");
 
     max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
@@ -526,12 +517,6 @@ static int max32664c_set_mode_extended_algo(const struct device *dev)
     // Enable HR, SpO2 algo
     m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x02, 500);
     k_sleep(K_MSEC(500));
-
-    /* Configure MFIO as input and enable interrupt now that algorithm is running */
-#ifdef CONFIG_SENSOR_ASYNC_API
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-    gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
-#endif
 
     return 0;
 }
@@ -584,14 +569,11 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     const struct max32664c_config *config = dev->config;
     uint8_t wr_buf[2] = {0xFF, 0x03};
 
-    /* Configure MFIO as output and drive low to gate I2C access */
-    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
     if (max32664c_i2c_write(dev, wr_buf, sizeof(wr_buf)) < 0)
     {
-        /* Write failed while we were already driving MFIO; restore and return */
         gpio_pin_set_dt(&config->mfio_gpio, 1);
         LOG_ERR("i2c write failed in get_ver");
         return -EIO;
@@ -606,7 +588,6 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
         return -EIO;
     }
 
-    /* Release MFIO */
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
@@ -705,7 +686,6 @@ static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
 
 static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode mode, uint8_t algo_mode)
 {
-    const struct max32664c_config *config = dev->config;
     LOG_DBG("MAX32664C entering ALGO mode...");
 
     max32664c_stop_algo(dev);
@@ -748,12 +728,6 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // Enable HR, SpO2 algo
         m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
         // k_sleep(K_MSEC(500));
-
-        /* Configure MFIO as input and enable interrupt now that algorithm is running */
-    #ifdef CONFIG_SENSOR_ASYNC_API
-        gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
-    #endif
     }
     else if (mode == MAX32664C_OP_MODE_ALGO_AGC)
     {

@@ -1,5 +1,8 @@
-// ProtoCentral Electronics (ashwin@protocentral.com)
-// SPDX-License-Identifier: Apache-2.0
+/*
+ * Copyright (c) 2017, NXP
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #ifndef __MAX30208_H
 #define __MAX30208_H
