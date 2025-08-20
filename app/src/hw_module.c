@@ -689,8 +689,8 @@ void hw_module_init(void)
     static struct rtc_time curr_time;
 
     // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
-    //NRF_TWIM2->FREQUENCY = 0x06200000;
-    //NRF_TWIM1->FREQUENCY = 0x06200000;
+     NRF_TWIM2->FREQUENCY = 0x06200000;
+    NRF_TWIM1->FREQUENCY = 0x06200000;
 
     if (!device_is_ready(pmic))
     {
@@ -707,7 +707,7 @@ void hw_module_init(void)
         LOG_ERR("Charger device not ready.\n");
     }
 
-    // Power ON display
+   ----- // Power ON display
     regulator_disable(ldsw_disp_unit);
     k_msleep(100);
     regulator_enable(ldsw_disp_unit);
