@@ -42,6 +42,10 @@
 
 LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 
+/* Thread configuration for streaming */
+#define PPG_STREAMING_THREAD_STACK_SIZE 2048
+#define PPG_STREAMING_THREAD_PRIORITY 5
+
 #include "hw_module.h"
 #include "max32664c_sensor.h"
 #include "hpi_common_types.h"
@@ -65,7 +69,18 @@ K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
-RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
+/* Use RTIO with mempool for streaming - this is required for proper streaming support */
+/* Parameters: name, sq_sz, cq_sz, num_blks, blk_size, balign */
+/* Increased queue sizes to handle concurrent operations and prevent resource exhaustion */
+RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_poll_ctx, 4, 4, 16, 512, 8);
+
+/* Polling work item for sensor data acquisition every 100ms */
+static struct k_work_delayable ppg_poll_work;
+
+/* Forward declarations */
+static void ppg_poll_work_handler(struct k_work *work);
+static void ppg_wrist_init_polling(void);
+
 /* Use a stream iodev so the sensor framework provides mempool-backed
  * multishot RX buffers and the iodev->data already contains a
  * sensor_read_config with is_streaming == true for the driver. */
@@ -89,8 +104,11 @@ struct s_object
 static uint16_t smf_ppg_spo2_last_measured_value = 0;
 static int64_t smf_ppg_spo2_last_measured_time;
 
-/* handle to the active streaming sqe returned by sensor_stream() */
-static struct rtio_sqe *ppg_wrist_stream_handle = NULL;
+/* Atomic flag to control polling activity */
+static atomic_t streaming_active = ATOMIC_INIT(0);
+
+/* Global flag to completely disable polling during device initialization */
+static atomic_t polling_globally_disabled = ATOMIC_INIT(1);  /* Start disabled */
 
 // Local variables for measured SPO2 and status
 static uint16_t measured_spo2 = 0;
@@ -164,6 +182,9 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
     uint16_t _n_samples = edata->num_samples;
 
+    LOG_DBG("Decode: op_mode=%d, num_samples=%d, buf_len=%u", 
+            edata->chip_op_mode, _n_samples, buf_len);
+
     if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
     {
         // printk("SCD: ", edata->scd_state);
@@ -185,8 +206,9 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     }
     else if (edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AGC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
-        // printk("WR NS: %d ", _n_samples);
-        // LOG_DBG("Chip Mode: %d", edata->chip_op_mode);
+        LOG_DBG("ALGO mode: %d, samples: %d, HR: %d, SpO2: %d", 
+                edata->chip_op_mode, _n_samples, edata->hr, edata->spo2);
+        
         if (_n_samples > 8)
         {
             _n_samples = 8;
@@ -223,10 +245,10 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 ppg_sensor_sample.spo2_low_pi = edata->spo2_low_pi;
             }
 
-            // LOG_DBG("SPO2: %d | Spo2 Prog: %d | Low PI: %d | Motion: %d | State: %d", ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_valid_percent_complete,
-            //         ppg_sensor_sample.spo2_low_pi, ppg_sensor_sample.spo2_excessive_motion, ppg_sensor_sample.spo2_state);
-
-            // LOG_DBG("HR Conf: %d", ppg_sensor_sample.hr_confidence);
+            LOG_INF("PPG Data: HR=%d (conf=%d), SpO2=%d (conf=%d), samples=%d", 
+                    ppg_sensor_sample.hr, ppg_sensor_sample.hr_confidence,
+                    ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_confidence,
+                    _n_samples);
 
             /*if ((ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_OFF_SKIN) && (m_curr_scd_state != MAX32664C_SCD_STATE_OFF_SKIN))
             {
@@ -279,30 +301,165 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             {
                 k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
             }
+        } else {
+            LOG_WRN("ALGO mode but 0 samples - sensor algorithm may not be running properly");
         }
+    } else {
+        LOG_WRN("Unknown or unexpected chip operation mode: %d", edata->chip_op_mode);
     }
 }
 
-static int ppg_wrist_start_streaming(void)
+static int ppg_wrist_init_rtio(void)
 {
-    /* Request a mempool-backed multishot stream from the sensor framework.
-     * This returns a kernel SQE handle which the driver sees as an active
-     * streaming iodev SQE and from which rtio_sqe_rx_buf() will allocate
-     * per-sample RX buffers. */
-    struct rtio_sqe *handle = NULL;
-    int rc = sensor_stream(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, NULL, &handle);
-    if (rc == 0) {
-        ppg_wrist_stream_handle = handle;
+    /* Get device reference for polling */
+    const struct device *dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
+    if (!dev) {
+        LOG_ERR("Cannot get MAX32664C device");
+        return -ENODEV;
     }
-    return rc;
+    
+    LOG_DBG("RTIO context initialized for polling");
+    return 0;
 }
 
-static void ppg_wrist_stop_streaming(void)
+static int ppg_wrist_start_polling(void)
 {
-    if (ppg_wrist_stream_handle) {
-        rtio_sqe_cancel(ppg_wrist_stream_handle);
-        ppg_wrist_stream_handle = NULL;
+    LOG_DBG("Starting MAX32664C polling...");
+    atomic_set(&streaming_active, 1);
+    
+    /* Initialize the work queue if not already done */
+    ppg_wrist_init_polling();
+    
+    /* Start the first poll cycle */
+    k_work_schedule(&ppg_poll_work, K_MSEC(100));
+    
+    LOG_INF("Polling started successfully");
+    return 0;
+}
+
+static void ppg_wrist_stop_polling(void)
+{
+    atomic_set(&streaming_active, 0);
+    atomic_set(&polling_globally_disabled, 1);  /* Globally disable polling */
+    k_work_cancel_delayable(&ppg_poll_work);
+    LOG_DBG("Polling stopped and globally disabled");
+}
+
+/* Streaming thread that handles CQE consumption only - driver handles resubmission */
+/* Polling work function - polls sensor every 100ms and reads data if available */
+static void ppg_poll_work_handler(struct k_work *work)
+{
+    ARG_UNUSED(work);
+    
+    /* Global safety check - do not poll if globally disabled */
+    if (atomic_get(&polling_globally_disabled)) {
+        LOG_DBG("Polling globally disabled - skipping poll cycle");
+        /* Do not reschedule if globally disabled */
+        return;
     }
+    
+    if (!atomic_get(&streaming_active)) {
+        /* Not active, reschedule for next check */
+        k_work_schedule(&ppg_poll_work, K_MSEC(100));
+        return;
+    }
+    
+    const struct device *dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
+    if (!dev) {
+        LOG_ERR("Cannot get MAX32664C device");
+        k_work_schedule(&ppg_poll_work, K_MSEC(100));
+        return;
+    }
+    
+    /* Check if sensor has data ready */
+    uint8_t status = max32664c_read_hub_status(dev);
+    bool data_ready = (status & MAX32664C_HUB_STAT_DRDY_MASK) != 0;
+    
+    /* If status read failed (returns 0xFF or 0x00), sensor may not be ready yet */
+    if (status == 0xFF || status == 0x00) {
+        LOG_WRN("Sensor status read failed (0x%02x), device may not be ready - retrying in 1s", status);
+        k_work_schedule(&ppg_poll_work, K_SECONDS(1));  /* Retry after longer delay */
+        return;
+    }
+    
+    LOG_DBG("Poll: status=0x%02x, DRDY=%s", status, data_ready ? "YES" : "NO");
+    
+    if (data_ready) {
+        /* Check FIFO count */
+        int fifo_count = max32664c_get_fifo_count(dev);
+        
+        /* Negative value indicates I2C read error */
+        if (fifo_count < 0) {
+            LOG_WRN("FIFO count read failed (%d), I2C error - retrying in 1s", fifo_count);
+            k_work_schedule(&ppg_poll_work, K_SECONDS(1));  /* Retry after longer delay */
+            return;
+        }
+        
+        LOG_DBG("FIFO count: %d", fifo_count);
+        
+        if (fifo_count > 0) {
+            LOG_INF("Data available (FIFO=%d), reading sensor data", fifo_count);
+            
+            /* Use the device's direct read function to get the data */
+            const struct device *dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
+            if (dev && device_is_ready(dev)) {
+                /* Call the driver's sample fetch which will read and decode the FIFO */
+                int ret = sensor_sample_fetch(dev);
+                if (ret == 0) {
+                    LOG_DBG("Successfully fetched sensor data from FIFO (%d samples)", fifo_count);
+                } else {
+                    LOG_ERR("Failed to fetch sensor data: %d", ret);
+                }
+            } else {
+                LOG_ERR("Sensor device not ready");
+            }
+        } else {
+            LOG_DBG("DRDY set but FIFO empty");
+        }
+    } else {
+        LOG_DBG("No data ready");
+    }
+    
+    /* Process any pending completions from previous async operations */
+    struct rtio_cqe *cqe;
+    while ((cqe = rtio_cqe_consume(&max32664c_read_rtio_poll_ctx)) != NULL) {
+        LOG_DBG("Processing async completion with result: %d", cqe->result);
+        
+        if (cqe->result >= 0) {
+            uint8_t *buf;
+            uint32_t buf_len;
+            int rc = rtio_cqe_get_mempool_buffer(&max32664c_read_rtio_poll_ctx, cqe, &buf, &buf_len);
+            
+            if (rc == 0 && buf_len > 0) {
+                LOG_DBG("Processing async %u bytes of sensor data", buf_len);
+                sensor_ppg_wrist_decode(buf, buf_len);
+                rtio_release_buffer(&max32664c_read_rtio_poll_ctx, buf, buf_len);
+            }
+        } else {
+            LOG_ERR("Async RTIO operation failed: %d", cqe->result);
+        }
+        
+        rtio_cqe_release(&max32664c_read_rtio_poll_ctx, cqe);
+    }
+    
+    /* Schedule next poll in 100ms */
+    k_work_schedule(&ppg_poll_work, K_MSEC(100));
+}
+
+/* Initialize the polling work queue */
+static void ppg_wrist_init_polling(void)
+{
+    k_work_init_delayable(&ppg_poll_work, ppg_poll_work_handler);
+    LOG_DBG("PPG polling work initialized");
+}
+
+/* Emergency function to disable all polling during device initialization */
+void ppg_wrist_emergency_disable_polling(void)
+{
+    atomic_set(&polling_globally_disabled, 1);
+    atomic_set(&streaming_active, 0);
+    k_work_cancel_delayable(&ppg_poll_work);
+    LOG_INF("Emergency polling disable - all PPG polling stopped");
 }
 
 static void st_ppg_samp_active_entry(void *o)
@@ -310,27 +467,64 @@ static void st_ppg_samp_active_entry(void *o)
     LOG_DBG("PPG SM Active Entry");
     m_curr_state = PPG_SAMP_STATE_ACTIVE;
 
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+    LOG_INF("Setting MAX32664C to ALGO_AEC + CONT_HRM mode for polling-based data acquisition");
+    int mode_result = hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+    LOG_DBG("Mode set result: %d", mode_result);
+    
+    /* Give sensor time to switch modes and stabilize */
+    LOG_DBG("Waiting for sensor to stabilize after mode switch...");
+    k_msleep(2000);  /* Extended delay to ensure proper initialization */
 
-    /* Start streaming from the sensor so the driver can use MFIO+RTIO
-     * interrupt-driven reads instead of periodic polling. */
-    int rc = ppg_wrist_start_streaming();
-    if (rc < 0) {
-        LOG_ERR("Failed to start MAX32664C streaming: %d", rc);
+    /* Verify sensor is ready by checking status */
+    const struct device *max32664c_dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
+    if (max32664c_dev) {
+        uint8_t status = max32664c_read_hub_status(max32664c_dev);
+        LOG_DBG("Sensor hub status after mode switch: 0x%02x (DRDY=%s)", 
+                status, (status & MAX32664C_HUB_STAT_DRDY_MASK) ? "YES" : "NO");
+        
+        int fifo_count = max32664c_get_fifo_count(max32664c_dev);
+        LOG_DBG("Initial FIFO count after mode switch: %d", fifo_count);
     }
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_RAW, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
+
+    /* Initialize RTIO context for polling-based reads */
+    int rc = ppg_wrist_init_rtio();
+    if (rc < 0) {
+        LOG_ERR("Failed to initialize RTIO context: %d", rc);
+        return;
+    }
+
+    /* Initialize polling work but DO NOT start it yet - defer to run state */
+    ppg_wrist_init_polling();
+    LOG_INF("Polling infrastructure initialized - will start polling in run state");
 }
 
 static void st_ppg_samp_active_run(void *o)
 {
-    LOG_DBG("PPG SM Active Run");
-    if (k_sem_take(&sem_ppg_wrist_off_skin, K_FOREVER) == 0)
+    static int run_count = 0;
+    static bool polling_started = false;
+    
+    /* Only log every 500th run to reduce spam */
+    if (++run_count % 500 == 0) {
+        LOG_DBG("PPG SM Active Run #%d", run_count);
+    }
+    
+    /* Start polling only once, after we've been running for a while to ensure I2C is stable */
+    if (!polling_started && run_count > 50) {  /* After ~2.5 seconds (50 * 50ms) */
+        LOG_INF("Enabling global polling and starting sensor polling (run #%d)", run_count);
+        atomic_set(&polling_globally_disabled, 0);  /* Enable polling globally */
+        atomic_set(&streaming_active, 1);
+        k_work_schedule(&ppg_poll_work, K_MSEC(100));
+        polling_started = true;
+    }
+    
+    if (k_sem_take(&sem_ppg_wrist_off_skin, K_NO_WAIT) == 0)
     {
         LOG_DBG("Switching to Off Skin");
         smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
     }
+    
+    /* Add a longer delay since we don't need to process completions here anymore */
+    k_msleep(50);
 }
 
 static void st_ppg_samp_probing_entry(void *o)
@@ -340,16 +534,26 @@ static void st_ppg_samp_probing_entry(void *o)
 
     // Enter SCD mode
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    
+    /* Start polling if not already active for SCD detection - but defer to avoid I2C conflicts */
+    if (!atomic_get(&streaming_active)) {
+        LOG_INF("SCD mode set - polling will start when device is fully stable");
+        /* Don't start polling immediately - let the run state handle it */
+    }
 }
 
 static void st_ppg_samp_probing_run(void *o)
 {
     // LOG_DBG("PPG SM Probing Run");
-    if (k_sem_take(&sem_ppg_wrist_on_skin, K_FOREVER) == 0)
+    
+    if (k_sem_take(&sem_ppg_wrist_on_skin, K_NO_WAIT) == 0)
     {
         LOG_DBG("Switching to Active");
         smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
     }
+    
+    /* Add a longer delay since we don't need to process completions here anymore */
+    k_msleep(50);
 }
 
 static void st_ppg_samp_motion_detect_entry(void *o)
@@ -372,9 +576,25 @@ static void st_ppg_samp_motion_detect_run(void *o)
     }
 }
 
+static void st_ppg_samp_active_exit(void *o)
+{
+    LOG_DBG("PPG SM Active Exit");
+    /* Stop polling when leaving active state and globally disable */
+    atomic_set(&polling_globally_disabled, 1);  /* Globally disable first */
+    ppg_wrist_stop_polling();
+}
+
+static void st_ppg_samp_probing_exit(void *o)
+{
+    LOG_DBG("PPG SM Probing Exit");
+    /* Stop polling when leaving probing state and globally disable */
+    atomic_set(&polling_globally_disabled, 1);  /* Globally disable first */
+    ppg_wrist_stop_polling();
+}
+
 static const struct smf_state ppg_samp_states[] = {
-    [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(st_ppg_samp_active_entry, st_ppg_samp_active_run, NULL, NULL, NULL),
-    [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, NULL, NULL, NULL),
+    [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(st_ppg_samp_active_entry, st_ppg_samp_active_run, st_ppg_samp_active_exit, NULL, NULL),
+    [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, st_ppg_samp_probing_exit, NULL, NULL),
     [PPG_SAMP_STATE_MOTION_DETECT] = SMF_CREATE_STATE(st_ppg_samp_motion_detect_entry, st_ppg_samp_motion_detect_run, NULL, NULL, NULL),
     //[PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
 };
@@ -418,7 +638,7 @@ static void ppg_wrist_ctrl_thread(void)
         {
             // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
             LOG_DBG("Stopping PPG Sampling");
-            ppg_wrist_stop_streaming();
+            ppg_wrist_stop_polling();
 
             LOG_DBG("Starting One Shot SpO2");
 
@@ -428,7 +648,7 @@ static void ppg_wrist_ctrl_thread(void)
             k_msleep(600);
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
             k_msleep(600);
-            ppg_wrist_start_streaming();
+            LOG_INF("SpO2 mode set - polling will be managed by active state");
 
             spo2_measurement_in_progress = true;
         }
@@ -436,7 +656,7 @@ static void ppg_wrist_ctrl_thread(void)
         if (k_sem_take(&sem_stop_one_shot_spo2, K_NO_WAIT) == 0)
         {
             LOG_DBG("Stopping One Shot SpO2");
-            ppg_wrist_stop_streaming();
+            ppg_wrist_stop_polling();
             spo2_measurement_in_progress = false;
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             uint16_t m_est_spo2 = 0;
@@ -463,7 +683,7 @@ static void ppg_wrist_ctrl_thread(void)
             LOG_DBG("Switching to Continuous Sampling HR");
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
             k_msleep(600);
-            ppg_wrist_start_streaming();
+            LOG_INF("Continuous HR mode set - polling will be managed by active state");
         }
 
         k_msleep(100);

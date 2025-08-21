@@ -9,7 +9,51 @@
 #include "max32664c_sensor.h"
 #include <zephyr/drivers/sensor.h>
 
-LOG_MODULE_REGISTER(MAX32664C_RTIO, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(MAX32664C_RTIO, CONFIG_MAX32664C_LOG_LEVEL);
+
+/* Forward declarations */
+void max32664c_stream_event_handler(const struct device *dev);
+
+/* Polling work handler for DRDY status checking */
+void max32664c_poll_work_handler(struct k_work *work)
+{
+    struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+    struct max32664c_data *data = CONTAINER_OF(dwork, struct max32664c_data, poll_work);
+    const struct device *dev = data->dev;
+    static int poll_count = 0;
+
+    /* Only poll if we have an active streaming request */
+    if (!data->streaming_sqe) {
+        LOG_DBG("Poll work: no streaming SQE, stopping");
+        return;
+    }
+
+    /* Read hub status to check DRDY bit */
+    uint8_t hub_status = max32664c_read_hub_status(dev);
+    
+    /* Log every 50th poll to monitor activity */
+    if (++poll_count % 50 == 0) {
+        LOG_DBG("Poll #%d: hub_status=0x%02x, DRDY=%s", poll_count, hub_status, 
+                (hub_status & MAX32664C_HUB_STAT_DRDY_MASK) ? "YES" : "NO");
+    }
+    
+    if (hub_status & MAX32664C_HUB_STAT_DRDY_MASK) {
+        /* Record timestamp for streaming */
+        uint64_t cycles = 0;
+        if (sensor_clock_get_cycles(&cycles) == 0) {
+            data->timestamp = sensor_clock_cycles_to_ns(cycles);
+        } else {
+            data->timestamp = 0;
+        }
+
+        LOG_DBG("DRDY detected, triggering stream event handler");
+        /* DRDY bit is set, trigger stream event handler */
+        max32664c_stream_event_handler(dev);
+    } else {
+        /* No data ready, reschedule next poll */
+        k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
+    }
+}
 
 static void max32664c_complete_result(struct rtio *ctx,
                                       const struct rtio_sqe *sqe,
@@ -48,28 +92,26 @@ static void max32664c_stream_complete_cb(struct rtio *ctx,
     struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
     const struct max32664c_config *cfg = dev->config;
 
-    /* Consume and clear any CQEs */
-    struct rtio_cqe *cqe;
-    int err = 0;
-    do {
-        cqe = rtio_cqe_consume(ctx);
-        if (cqe != NULL) {
-            if (cqe->result < 0) {
-                err = cqe->result;
-            }
-            rtio_cqe_release(ctx, cqe);
-        }
-    } while (cqe != NULL);
+    LOG_DBG("Stream completion callback called: iodev_sqe=%p", (void*)iodev_sqe);
 
-    if (err) {
-        rtio_iodev_sqe_err(iodev_sqe, err);
-    } else {
-        rtio_iodev_sqe_ok(iodev_sqe, data->fifo_count);
-    }
-
-    /* Set MFIO back to high (release gate) and re-enable interrupt */
+    /* Set MFIO back to high (release gate) */
     gpio_pin_set_dt(&cfg->mfio_gpio, 1);
-    gpio_pin_interrupt_configure_dt(&cfg->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+
+    /* Do NOT consume CQEs here - let the application handle that!
+     * The driver's job is just to submit data to the RTIO context.
+     * The application's streaming thread will consume the CQEs. */
+    
+    LOG_DBG("Completing streaming SQE with %d FIFO samples", data->fifo_count);
+    /* Complete this streaming SQE - the application will see it in the CQE */
+    rtio_iodev_sqe_ok(iodev_sqe, data->fifo_count);
+
+    /* Clear the streaming SQE so a new one can be set up for the next stream request */
+    data->streaming_sqe = NULL;
+    LOG_DBG("Cleared streaming_sqe, continuing polling");
+
+    /* Continue polling - if the application starts streaming again, 
+     * it will set a new streaming_sqe */
+    k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
 }
 
 
@@ -85,25 +127,15 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
     struct rtio_iodev *iodev = data->iodev;
     struct rtio_sqe *write_sqe, *read_sqe, *complete_sqe;
 
-    const struct max32664c_config *config = dev->config;
-
     /* If this request is a streaming request (sensor_read_config->is_streaming)
      * then prepare the gpio interrupt and store the streaming SQE. The actual
      * FIFO read will be performed from the MFIO event handler.
      */
     struct sensor_read_config *read_cfg = (struct sensor_read_config *)iodev_sqe->sqe.iodev->data;
     if (read_cfg && read_cfg->is_streaming) {
-        /* Disable interrupt while we configure */
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_DISABLE);
-        /* Ensure pin is configured as input for interrupts */
-        gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-        /* Store streaming SQE and enable interrupts */
+        /* Store streaming SQE and start polling for DRDY */
         data->streaming_sqe = iodev_sqe;
-        int rc = gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
-        if (rc) {
-            rtio_iodev_sqe_err(iodev_sqe, rc);
-            data->streaming_sqe = NULL;
-        }
+        k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
         return;
     }
 
@@ -164,18 +196,32 @@ void max32664c_stream_event_handler(const struct device *dev)
     struct rtio *r = data->r;
     struct rtio_iodev *iodev = data->iodev;
 
+    LOG_DBG("Stream event handler called: streaming_sqe=%p, r=%p, iodev=%p", 
+            (void*)streaming_sqe, (void*)r, (void*)iodev);
+
     if (!streaming_sqe || !r || !iodev) {
-        /* Nothing to do; re-enable interrupt so future events are handled */
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        LOG_DBG("Missing resources - streaming_sqe=%p, r=%p, iodev=%p", 
+                (void*)streaming_sqe, (void*)r, (void*)iodev);
+        /* Nothing to do; reschedule next poll if streaming is still active */
+        if (data->streaming_sqe) {
+            k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
+        }
         return;
     }
 
     /* Read FIFO count (blocking RTIO call inside helper) */
     int fifo = max32664c_get_fifo_count(dev);
+    LOG_DBG("FIFO count: %d", fifo);
     if (fifo < 0) {
-        rtio_iodev_sqe_err(streaming_sqe, fifo);
-        data->streaming_sqe = NULL;
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        LOG_ERR("Failed to get FIFO count: %d", fifo);
+        k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
+        return;
+    }
+
+    if (fifo == 0) {
+        LOG_DBG("No data in FIFO, continue polling");
+        /* No data in FIFO, continue polling */
+        k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
         return;
     }
 
@@ -184,15 +230,20 @@ void max32664c_stream_event_handler(const struct device *dev)
     }
 
     data->fifo_count = fifo;
+    LOG_DBG("Processing %d FIFO samples", fifo);
+
+    /* For streaming, complete the current streaming SQE with data */
+    /* This will generate a completion event that the application can consume */
+    /* Then immediately reschedule for the next polling cycle */
 
     /* Acquire buffer for RTIO into the streaming SQE */
     uint8_t *buf;
     uint32_t buf_len;
     int rc = rtio_sqe_rx_buf(streaming_sqe, sizeof(struct max32664c_encoded_data), (sizeof(struct max32664c_encoded_data)), &buf, &buf_len);
+    LOG_DBG("RTIO buffer acquisition: rc=%d, buf=%p, buf_len=%u", rc, (void*)buf, buf_len);
     if (rc != 0) {
-        rtio_iodev_sqe_err(streaming_sqe, rc);
-        data->streaming_sqe = NULL;
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        LOG_ERR("Failed to get rx buffer: %d", rc);
+        k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
         return;
     }
 
@@ -201,10 +252,12 @@ void max32664c_stream_event_handler(const struct device *dev)
     struct rtio_sqe *read_sqe = rtio_sqe_acquire(r);
     struct rtio_sqe *cb_sqe = rtio_sqe_acquire(r);
 
+    LOG_DBG("RTIO SQE acquisition: write_sqe=%p, read_sqe=%p, cb_sqe=%p", 
+            (void*)write_sqe, (void*)read_sqe, (void*)cb_sqe);
+
     if (!write_sqe || !read_sqe || !cb_sqe) {
-        rtio_iodev_sqe_err(streaming_sqe, -ENOMEM);
-        data->streaming_sqe = NULL;
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        LOG_ERR("Failed to acquire RTIO SQEs");
+        k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
         return;
     }
 
@@ -215,31 +268,43 @@ void max32664c_stream_event_handler(const struct device *dev)
         read_len = buf_len;
     }
 
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
+    LOG_DBG("Read length: %zu (sample_len=%zu, fifo=%d, buf_len=%u)", 
+            read_len, sample_len, fifo, buf_len);
 
+    /* MFIO control - ensure proper timing for I2C transaction */
+    LOG_DBG("Setting MFIO low for I2C transaction");
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    /* Give the sensor time to prepare for the transaction */
+    k_sleep(K_USEC(500));  /* Increased from 300us to 500us */
+
+    /* Prepare write SQE - send read FIFO command */
     rtio_sqe_prep_tiny_write(write_sqe, iodev, RTIO_PRIO_HIGH, cmd_wr, sizeof(cmd_wr), NULL);
     write_sqe->flags |= RTIO_SQE_TRANSACTION;
 
+    /* Prepare read SQE - read the sensor data */
     rtio_sqe_prep_read(read_sqe, iodev, RTIO_PRIO_HIGH, buf, read_len, NULL);
     read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP | RTIO_IODEV_I2C_RESTART;
     read_sqe->flags |= RTIO_SQE_CHAINED;
 
-    /* Completion callback: consume cqe and finish the iodev_sqe, re-enable interrupt and free streaming state */
+    /* Completion callback: consume cqe and finish the streaming_sqe, then continue streaming */
     rtio_sqe_prep_callback(cb_sqe, max32664c_stream_complete_cb, (void *)dev, streaming_sqe);
+
+    LOG_DBG("Submitting RTIO chain (write cmd: 0x%02x 0x%02x, read %zu bytes)", 
+            cmd_wr[0], cmd_wr[1], read_len);
 
     /* Submit all SQEs */
     rc = rtio_submit(r, 0);
+    LOG_DBG("RTIO submit result: %d", rc);
     if (rc) {
-        rtio_iodev_sqe_err(streaming_sqe, rc);
-        data->streaming_sqe = NULL;
+        LOG_ERR("Failed to submit streaming RTIO: %d", rc);
         gpio_pin_set_dt(&config->mfio_gpio, 1);
-        gpio_pin_interrupt_configure_dt(&config->mfio_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+        k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
         return;
     }
 
-    /* Clear stored streaming SQE; completion handler will call rtio_iodev_sqe_ok/err */
-    data->streaming_sqe = NULL;
+    LOG_DBG("RTIO operations submitted successfully, waiting for completion");
+    /* Keep the main streaming SQE active so polling continues */
+    /* The completion callback will generate individual data completion events */
 }
 
 

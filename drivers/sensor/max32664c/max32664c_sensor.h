@@ -11,11 +11,15 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/rtio/rtio.h>
+#include <zephyr/kernel.h>
 
 #define MAX32664C_I2C_ADDRESS 0x55
 
 #define MAX32664C_HUB_STAT_DRDY_MASK 0x08
 #define MAX32664C_HUB_STAT_SCD_MASK 0x80
+
+/* Polling interval for DRDY status checking (in milliseconds) */
+#define MAX32664C_POLL_INTERVAL_MS 100
 
 #define MAX32664C_DEFAULT_CMD_DELAY 10
 
@@ -30,6 +34,10 @@
 uint8_t max32664c_read_hub_status(const struct device *dev);
 void max32664c_do_enter_bl(const struct device *dev);
 int max32664c_do_enter_app(const struct device *dev);
+int max32664c_get_fifo_count(const struct device *dev);
+
+/* Polling work handler for DRDY status checking */
+void max32664c_poll_work_handler(struct k_work *work);
 
 enum max32664c_mode
 {
@@ -123,6 +131,8 @@ struct max32664c_data
     uint16_t fifo_count;
     uint64_t timestamp;
     struct gpio_callback mfio_cb;
+    /* Polling work for DRDY status checking */
+    struct k_work_delayable poll_work;
 };
 
 // Async API types

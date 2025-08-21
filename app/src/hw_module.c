@@ -33,6 +33,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
+#include <zephyr/sys/reboot.h>
 
 #include <zephyr/dfu/mcuboot.h>
 #include <stdio.h>
@@ -167,6 +168,13 @@ K_SEM_DEFINE(sem_hpi_sys_thread_start, 0, 1);
 
 K_SEM_DEFINE(sem_disp_boot_complete, 0, 1);
 K_SEM_DEFINE(sem_crown_key_pressed, 0, 1);
+
+/* External function to disable PPG polling during device initialization */
+extern void ppg_wrist_emergency_disable_polling(void);
+
+/* Static variable to track MAX32664C initialization attempts */
+static bool max32664c_init_attempted = false;
+static bool max32664d_init_attempted = false;
 
 K_SEM_DEFINE(sem_boot_update_req, 0, 1);
 
@@ -832,6 +840,10 @@ void hw_module_init(void)
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(100));
 
+    /* Emergency disable PPG polling to prevent I2C conflicts during device initialization */
+    ppg_wrist_emergency_disable_polling();
+    LOG_INF("PPG polling disabled for safe device initialization");
+
     device_init(max32664c_dev);
     k_sleep(K_MSEC(100));
 
@@ -840,12 +852,23 @@ void hw_module_init(void)
         LOG_ERR("MAX32664C device not present!");
         max32664c_device_present = false;
         hw_add_boot_msg("MAX32664C", false, true, false, 0);
+        
+        /* Reset system on first initialization failure to recover from I2C issues */
+        if (!max32664c_init_attempted) {
+            max32664c_init_attempted = true;
+            LOG_WRN("First MAX32664C initialization failure - performing system reset for recovery");
+            k_msleep(1000);  /* Give time for log message to be sent */
+            sys_reboot(SYS_REBOOT_COLD);
+        } else {
+            LOG_ERR("MAX32664C initialization failed after reset - proceeding without device");
+        }
     }
     else
     {
         hw_add_boot_msg("MAX32664C", true, true, false, 0);
         LOG_INF("MAX32664C device present!");
         max32664c_device_present = true;
+        max32664c_init_attempted = true;  /* Mark successful initialization */
 
         struct sensor_value ver_get;
         sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_APP_VER, &ver_get);

@@ -1011,6 +1011,9 @@ static int max32664c_chip_init(const struct device *dev)
     gpio_init_callback(&data->mfio_cb, max32664c_mfio_gpio_cb, BIT(config->mfio_gpio.pin));
     gpio_add_callback(config->mfio_gpio.port, &data->mfio_cb);
     data->dev = dev;
+    
+    /* Initialize polling work queue for DRDY status checking */
+    k_work_init_delayable(&data->poll_work, max32664c_poll_work_handler);
 #endif
 
     max32664c_do_enter_app(dev);
@@ -1045,7 +1048,15 @@ static int max32664c_pm_action(const struct device *dev,
         break;
     case PM_DEVICE_ACTION_SUSPEND:
         /* Put the chip into sleep mode */
-
+#ifdef CONFIG_SENSOR_ASYNC_API
+        {
+            struct max32664c_data *data = dev->data;
+            /* Cancel any ongoing polling work */
+            k_work_cancel_delayable(&data->poll_work);
+            /* Clear streaming state */
+            data->streaming_sqe = NULL;
+        }
+#endif
         break;
     default:
         return -ENOTSUP;
