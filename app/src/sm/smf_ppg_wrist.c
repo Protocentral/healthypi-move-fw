@@ -71,8 +71,10 @@ K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
 /* Use RTIO with mempool for streaming - this is required for proper streaming support */
 /* Parameters: name, sq_sz, cq_sz, num_blks, blk_size, balign */
-/* Increased queue sizes to handle concurrent operations and prevent resource exhaustion */
-RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_poll_ctx, 4, 4, 16, 512, 8);
+/* Increased queue sizes to handle concurrent operations and prevent resource exhaustion.
+ * Increased mempool blocks and block size so large FIFO bursts can be drained without
+ * exhausting the RTIO mempool (each streaming read consumes one mempool block). */
+RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_poll_ctx, 4, 4, 32, 2048, 8);
 
 /* Polling work item for sensor data acquisition every 100ms */
 static struct k_work_delayable ppg_poll_work;
@@ -109,6 +111,27 @@ static atomic_t streaming_active = ATOMIC_INIT(0);
 
 /* Global flag to completely disable polling during device initialization */
 static atomic_t polling_globally_disabled = ATOMIC_INIT(1);  /* Start disabled */
+
+/* Track number of outstanding mempool-backed async reads to avoid exhausting the RTIO mempool */
+/* Match this to the RTIO mempool num_blks (defined below in RTIO_DEFINE_WITH_MEMPOOL) so
+ * we can consume the FIFO quickly without falsely hitting the pending limit. */
+#define MAX_PENDING_MEMPOOL_READS 32
+static atomic_t pending_mempool_reads = ATOMIC_INIT(0);
+/* Backoff state to avoid tight-loop submitting when mempool is exhausted (rc == -12) */
+static uint32_t mempool_submit_backoff_ms = 0;
+static int64_t mempool_next_submit_allowed = 0;
+/* Throttle submissions so we don't spam mempool on very fast poll cycles (ms) */
+#define MEMPOOL_MIN_SUBMIT_INTERVAL_MS 50
+static int64_t last_mempool_submit_time = 0;
+/* Estimated samples drained by one mempool-backed read. This is conservative.
+ * Driver will clamp samples based on buffer capacity; set estimate to a higher
+ * value to better calculate burst needs. */
+#define EST_SAMPLES_PER_SUBMIT 32
+/* If FIFO reaches this threshold, allow burst submissions (bypass the 50ms throttle). */
+#define FIFO_BURST_THRESHOLD (MAX_PENDING_MEMPOOL_READS * EST_SAMPLES_PER_SUBMIT)
+/* Conservative cap on how many read submissions we will attempt in a single poll
+ * to avoid instant depletion of the RTIO mempool even if MAX_PENDING_MEMPOOL_READS is high. */
+#define MAX_SUBMITS_PER_POLL 4
 
 // Local variables for measured SPO2 and status
 static uint16_t measured_spo2 = 0;
@@ -353,8 +376,7 @@ static void ppg_poll_work_handler(struct k_work *work)
     
     /* Global safety check - do not poll if globally disabled */
     if (atomic_get(&polling_globally_disabled)) {
-        LOG_DBG("Polling globally disabled - skipping poll cycle");
-        /* Do not reschedule if globally disabled */
+        /* Polling globally disabled - debug suppressed */
         return;
     }
     
@@ -382,7 +404,7 @@ static void ppg_poll_work_handler(struct k_work *work)
         return;
     }
     
-    LOG_DBG("Poll: status=0x%02x, DRDY=%s", status, data_ready ? "YES" : "NO");
+    /* Poll status log removed to reduce DRDY/poll spam */
     
     if (data_ready) {
         /* Check FIFO count */
@@ -395,45 +417,104 @@ static void ppg_poll_work_handler(struct k_work *work)
             return;
         }
         
-        LOG_DBG("FIFO count: %d", fifo_count);
+    /* FIFO count log removed to reduce DRDY/poll spam */
         
         if (fifo_count > 0) {
             LOG_INF("Data available (FIFO=%d), reading sensor data", fifo_count);
             
-            /* Use the device's direct read function to get the data */
+            /* Use RTIO mempool-based async read via the sensor iodev so the driver
+             * will perform the I/O and deliver a mempool-backed completion that
+             * the app already consumes in the CQE loop below.
+             */
             const struct device *dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
-            if (dev && device_is_ready(dev)) {
-                /* Call the driver's sample fetch which will read and decode the FIFO */
-                int ret = sensor_sample_fetch(dev);
-                if (ret == 0) {
-                    LOG_DBG("Successfully fetched sensor data from FIFO (%d samples)", fifo_count);
-                } else {
-                    LOG_ERR("Failed to fetch sensor data: %d", ret);
-                }
-            } else {
+            if (!dev || !device_is_ready(dev)) {
                 LOG_ERR("Sensor device not ready");
+            } else {
+                int pending = atomic_get(&pending_mempool_reads);
+                if (pending >= MAX_PENDING_MEMPOOL_READS) {
+                    LOG_WRN("Too many pending mempool reads (%d) - skipping submit", pending);
+                    /* If FIFO still has data but we can't submit because pending is full,
+                     * poll again sooner so completions can be processed and free mempool slots. */
+                    k_work_schedule(&ppg_poll_work, K_MSEC(10));
+                } else {
+                    int64_t now = k_uptime_get();
+                    bool burst_allowed = (fifo_count >= FIFO_BURST_THRESHOLD);
+
+                    /* Global throttle: do not submit more than once every MEMPOOL_MIN_SUBMIT_INTERVAL_MS
+                     * unless FIFO is high (burst_allowed). */
+                    if (!burst_allowed && (now - last_mempool_submit_time) < MEMPOOL_MIN_SUBMIT_INTERVAL_MS) {
+                        LOG_DBG("Submit throttled; last submit %lld ms ago", (long long)(now - last_mempool_submit_time));
+                    } else if (mempool_next_submit_allowed > now) {
+                        LOG_DBG("Mempool backoff active, skipping submit until %lld ms", (long long)mempool_next_submit_allowed);
+                    } else {
+                        /* Submit as many reads as needed / allowed up to available pending slots.
+                         * We conservatively assume each submit drains EST_SAMPLES_PER_SUBMIT samples. */
+                        int available = MAX_PENDING_MEMPOOL_READS - atomic_get(&pending_mempool_reads);
+                        /* cap submit attempts per poll to avoid aggressive depletion */
+                        int to_submit = (available < MAX_SUBMITS_PER_POLL) ? available : MAX_SUBMITS_PER_POLL;
+                        int submits = 0;
+                        for (int s = 0; s < to_submit && fifo_count > 0; s++) {
+                            int rc = sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, NULL);
+                            if (rc == 0) {
+                                /* Increment pending atomically to avoid races with CQE consumer */
+                                atomic_inc(&pending_mempool_reads);
+                                submits++;
+                                fifo_count -= EST_SAMPLES_PER_SUBMIT;
+                                /* reset backoff on any success */
+                                mempool_submit_backoff_ms = 0;
+                                mempool_next_submit_allowed = 0;
+                                last_mempool_submit_time = now;
+                                LOG_DBG("Submitted async mempool read (burst) - pending=%d", atomic_get(&pending_mempool_reads));
+                            } else if (rc == -12) {
+                                /* mempool exhausted while bursting - set backoff and stop */
+                                if (mempool_submit_backoff_ms == 0) {
+                                    mempool_submit_backoff_ms = 100;
+                                } else {
+                                    mempool_submit_backoff_ms = (mempool_submit_backoff_ms < 2000) ? (mempool_submit_backoff_ms * 2) : 2000;
+                                }
+                                mempool_next_submit_allowed = now + mempool_submit_backoff_ms;
+                                LOG_WRN("RTIO mempool exhausted during burst (rc=%d). Backing off for %u ms", rc, mempool_submit_backoff_ms);
+                                break;
+                            } else {
+                                LOG_ERR("Failed to submit async mempool read during burst: %d", rc);
+                                break;
+                            }
+                        }
+
+                        if (submits == 0) {
+                            /* Nothing submitted - schedule a quicker retry so completions can free slots */
+                            k_work_schedule(&ppg_poll_work, K_MSEC(10));
+                        } else {
+                            LOG_DBG("Burst submitted %d reads, pending now %d", submits, atomic_get(&pending_mempool_reads));
+                        }
+                    }
+                }
             }
         } else {
-            LOG_DBG("DRDY set but FIFO empty");
+            /* DRDY set but FIFO empty - debug suppressed */
         }
     } else {
-        LOG_DBG("No data ready");
+        /* No data ready - debug suppressed */
     }
     
     /* Process any pending completions from previous async operations */
     struct rtio_cqe *cqe;
     while ((cqe = rtio_cqe_consume(&max32664c_read_rtio_poll_ctx)) != NULL) {
-        LOG_DBG("Processing async completion with result: %d", cqe->result);
+        /* Processing async completion - debug suppressed */
         
-        if (cqe->result >= 0) {
+    if (cqe->result >= 0) {
             uint8_t *buf;
             uint32_t buf_len;
             int rc = rtio_cqe_get_mempool_buffer(&max32664c_read_rtio_poll_ctx, cqe, &buf, &buf_len);
             
             if (rc == 0 && buf_len > 0) {
-                LOG_DBG("Processing async %u bytes of sensor data", buf_len);
+                /* Processing async %u bytes of sensor data - debug suppressed */
                 sensor_ppg_wrist_decode(buf, buf_len);
                 rtio_release_buffer(&max32664c_read_rtio_poll_ctx, buf, buf_len);
+                /* One pending mempool-backed read consumed */
+                if (atomic_get(&pending_mempool_reads) > 0) {
+                    atomic_dec(&pending_mempool_reads);
+                }
             }
         } else {
             LOG_ERR("Async RTIO operation failed: %d", cqe->result);
@@ -503,14 +584,14 @@ static void st_ppg_samp_active_run(void *o)
     static int run_count = 0;
     static bool polling_started = false;
     
-    /* Only log every 500th run to reduce spam */
-    if (++run_count % 500 == 0) {
+    /* Emit a debug line every 10 runs while debugging to confirm state execution */
+    if (++run_count % 10 == 0) {
         LOG_DBG("PPG SM Active Run #%d", run_count);
     }
     
-    /* Start polling only once, after we've been running for a while to ensure I2C is stable */
-    if (!polling_started && run_count > 50) {  /* After ~2.5 seconds (50 * 50ms) */
-        LOG_INF("Enabling global polling and starting sensor polling (run #%d)", run_count);
+    /* Start polling immediately on first run (remove delayed start) */
+    if (!polling_started) {
+        LOG_INF("Enabling global polling and starting sensor polling");
         atomic_set(&polling_globally_disabled, 0);  /* Enable polling globally */
         atomic_set(&streaming_active, 1);
         k_work_schedule(&ppg_poll_work, K_MSEC(100));
@@ -622,8 +703,13 @@ static void smf_ppg_wrist_thread(void)
 
         if (ret)
         {
-            LOG_ERR("Error in PPG State Machine");
+            LOG_ERR("Error in PPG State Machine: %d", ret);
             break;
+        }
+
+        static int _smf_loop_hb = 0;
+        if ((++_smf_loop_hb % 5) == 0) {
+            LOG_DBG("PPG SMF loop heartbeat #%d", _smf_loop_hb);
         }
 
         k_msleep(1000);

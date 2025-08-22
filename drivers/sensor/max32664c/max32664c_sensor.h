@@ -25,6 +25,8 @@
 
 #define MAX32664C_SENSOR_DATA_OFFSET 1
 
+#define MAX32664C_ALGO_DATA_OFFSET 24
+
 #define MAX32664C_LATEST_APP_VER1 13
 #define MAX32664C_LATEST_APP_VER2 31
 
@@ -130,6 +132,9 @@ struct max32664c_data
     uint8_t int_status;
     uint16_t fifo_count;
     uint64_t timestamp;
+    /* pointer to mempool buffer used for latest streaming read */
+    uint8_t *streaming_buf;
+    uint32_t streaming_buf_len;
     struct gpio_callback mfio_cb;
     /* Polling work for DRDY status checking */
     struct k_work_delayable poll_work;

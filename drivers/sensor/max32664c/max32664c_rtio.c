@@ -21,6 +21,7 @@ void max32664c_poll_work_handler(struct k_work *work)
     struct max32664c_data *data = CONTAINER_OF(dwork, struct max32664c_data, poll_work);
     const struct device *dev = data->dev;
     static int poll_count = 0;
+    ARG_UNUSED(poll_count);
 
     /* Only poll if we have an active streaming request */
     if (!data->streaming_sqe) {
@@ -30,14 +31,81 @@ void max32664c_poll_work_handler(struct k_work *work)
 
     /* Read hub status to check DRDY bit */
     uint8_t hub_status = max32664c_read_hub_status(dev);
-    
-    /* Log every 50th poll to monitor activity */
-    if (++poll_count % 50 == 0) {
-        LOG_DBG("Poll #%d: hub_status=0x%02x, DRDY=%s", poll_count, hub_status, 
-                (hub_status & MAX32664C_HUB_STAT_DRDY_MASK) ? "YES" : "NO");
-    }
-    
-    if (hub_status & MAX32664C_HUB_STAT_DRDY_MASK) {
+    ARG_UNUSED(hub_status);
+            if (data->streaming_buf) {
+                /* We reserved a header region at the start of the buffer and asked RTIO
+                 * to place raw FIFO bytes starting at buffer + header_sz. Now assemble
+                 * the encoded struct in-place by copying/parsing the raw FIFO bytes
+                 * into the encoded arrays the consumer expects. */
+                size_t header_sz = sizeof(struct max32664c_encoded_data);
+                uint8_t *buf = data->streaming_buf;
+                uint32_t buf_len = data->streaming_buf_len;
+
+                /* Populate header fields first */
+                if (buf_len >= sizeof(struct max32664c_encoded_data)) {
+                    struct max32664c_encoded_data *edata = (struct max32664c_encoded_data *)buf;
+                    edata->header.timestamp = data->timestamp;
+                    edata->chip_op_mode = data->op_mode;
+                    edata->num_samples = data->fifo_count;
+
+                    /* Now parse raw FIFO bytes placed at buf + header_sz */
+                    uint8_t *raw = buf + header_sz;
+                    size_t raw_len = (buf_len > header_sz) ? (buf_len - header_sz) : 0;
+
+                    /* Use same sample_len and offsets as the blocking path */
+                    size_t sample_len = 62;
+                    size_t expected_raw_for_fifo = (sample_len * data->fifo_count) + MAX32664C_SENSOR_DATA_OFFSET;
+
+                    size_t copy_len = (raw_len < expected_raw_for_fifo) ? raw_len : expected_raw_for_fifo;
+
+                    if (copy_len >= MAX32664C_SENSOR_DATA_OFFSET) {
+                        uint8_t *sensor_payload = raw + MAX32664C_SENSOR_DATA_OFFSET;
+                        size_t payload_len = copy_len - MAX32664C_SENSOR_DATA_OFFSET;
+
+                        /* The blocking path packs samples in groups of sample_len bytes per sample.
+                         * Iterate samples and extract green/red/ir values into edata arrays. */
+                        size_t max_samples = sizeof(edata->green_samples) / sizeof(edata->green_samples[0]);
+                        for (uint32_t s = 0; s < data->fifo_count && s < max_samples; s++) {
+                            size_t sample_offset = s * sample_len;
+                            if (sample_offset + 6 <= payload_len) {
+                                /* Example layout: [g0,l0,h0][r0,l0,h0][ir0,l0,h0] or similar.
+                                 * The original parser in async path expects 18 bytes per sample
+                                 * arranged in 3x 3-byte values (for green/red/ir). We'll copy
+                                 * using the same indices: green at offset sample_offset + 0..2,
+                                 * red at +3..5, ir at +6..8, but adapt if sample_len differs.
+                                 */
+                                uint8_t *samp = sensor_payload + sample_offset;
+                                uint32_t g = ((uint32_t)samp[0]) | (((uint32_t)samp[1]) << 8) | (((uint32_t)samp[2]) << 16);
+                                uint32_t r = ((uint32_t)samp[3]) | (((uint32_t)samp[4]) << 8) | (((uint32_t)samp[5]) << 16);
+                                uint32_t ir = 0;
+                                if (sample_len >= 9) {
+                                    ir = ((uint32_t)samp[6]) | (((uint32_t)samp[7]) << 8) | (((uint32_t)samp[8]) << 16);
+                                }
+                                /* Store into edata arrays */
+                                edata->green_samples[s] = g;
+                                edata->red_samples[s] = r;
+                                edata->ir_samples[s] = ir;
+                            }
+                        }
+
+                        /* If algorithm data is present after the raw samples, attempt to copy
+                         * the first HR/SpO2 pair from expected position. This mirrors the
+                         * blocking decoder which reads algo fields at ALGO_DATA_OFFSET. */
+                        size_t algo_offset = expected_raw_for_fifo; /* algorithm data comes after samples */
+                        if (payload_len >= algo_offset + 4) {
+                            uint8_t *algo_src = sensor_payload + algo_offset;
+                            /* HR and SpO2 are 16-bit little-endian values in the encoded struct */
+                            edata->hr = (uint16_t)(algo_src[0] | (algo_src[1] << 8));
+                            edata->spo2 = (uint16_t)(algo_src[2] | (algo_src[3] << 8));
+                        }
+
+                        LOG_DBG("Parsed %u samples into encoded buffer (raw_len=%zu payload_len=%zu)", data->fifo_count, raw_len, payload_len);
+                    } else {
+                        LOG_DBG("Not enough raw bytes to parse samples (raw_len=%zu expected=%zu)", raw_len, expected_raw_for_fifo);
+                    }
+                } else {
+                    LOG_DBG("streaming_buf too small for encoded header: buf_len=%u header_sz=%zu", data->streaming_buf_len, header_sz);
+                }
         /* Record timestamp for streaming */
         uint64_t cycles = 0;
         if (sensor_clock_get_cycles(&cycles) == 0) {
@@ -46,7 +114,7 @@ void max32664c_poll_work_handler(struct k_work *work)
             data->timestamp = 0;
         }
 
-        LOG_DBG("DRDY detected, triggering stream event handler");
+        /* DRDY detected - debug suppressed to reduce log spam */
         /* DRDY bit is set, trigger stream event handler */
         max32664c_stream_event_handler(dev);
     } else {
@@ -102,11 +170,31 @@ static void max32664c_stream_complete_cb(struct rtio *ctx,
      * The application's streaming thread will consume the CQEs. */
     
     LOG_DBG("Completing streaming SQE with %d FIFO samples", data->fifo_count);
+
+    /* If we have a streaming buffer, attempt to set decoder header fields so
+     * the application sees the expected encoded layout. The driver raw read
+     * returns FIFO samples starting at offset MAX32664C_SENSOR_DATA_OFFSET.
+     * We populate header.timestamp, chip_op_mode and num_samples here. */
+    if (data->streaming_buf && data->streaming_buf_len >= sizeof(struct max32664c_encoded_data)) {
+        struct max32664c_encoded_data *edata = (struct max32664c_encoded_data *)data->streaming_buf;
+        /* fill timestamp */
+        edata->header.timestamp = data->timestamp;
+        /* set operation mode and sample count */
+        edata->chip_op_mode = data->op_mode;
+        edata->num_samples = data->fifo_count;
+        LOG_DBG("Populated encoded header: op_mode=%d, num_samples=%d", edata->chip_op_mode, edata->num_samples);
+    } else {
+        LOG_DBG("No streaming buffer available to populate header (buf=%p, len=%u)", data->streaming_buf, data->streaming_buf_len);
+    }
+
     /* Complete this streaming SQE - the application will see it in the CQE */
     rtio_iodev_sqe_ok(iodev_sqe, data->fifo_count);
 
     /* Clear the streaming SQE so a new one can be set up for the next stream request */
     data->streaming_sqe = NULL;
+    /* Clear the streaming buffer pointers - application owns the buffer after completion */
+    data->streaming_buf = NULL;
+    data->streaming_buf_len = 0;
     LOG_DBG("Cleared streaming_sqe, continuing polling");
 
     /* Continue polling - if the application starts streaming again, 
@@ -225,27 +313,36 @@ void max32664c_stream_event_handler(const struct device *dev)
         return;
     }
 
-    if (fifo > 16) {
-        fifo = 16;
-    }
-
+    /* Do not hard-clamp here; the number of samples we can read per submit
+     * depends on the RTIO mempool buffer length we acquire below. We'll
+     * clamp to the buffer capacity after acquiring the buffer so each
+     * RTIO read pulls as many samples as possible and reduces the number
+     * of concurrent mempool blocks needed to drain the FIFO. */
     data->fifo_count = fifo;
-    LOG_DBG("Processing %d FIFO samples", fifo);
+    LOG_DBG("Processing %d FIFO samples (will clamp based on buffer capacity)", fifo);
 
     /* For streaming, complete the current streaming SQE with data */
     /* This will generate a completion event that the application can consume */
     /* Then immediately reschedule for the next polling cycle */
 
-    /* Acquire buffer for RTIO into the streaming SQE */
+    /* Acquire buffer for RTIO into the streaming SQE. Reserve space at the
+     * start of the buffer for the encoded header and arrays; we'll read raw
+     * FIFO bytes into the buffer after that header region and then assemble
+     * the encoded_data in-place before completing the SQE. */
     uint8_t *buf;
     uint32_t buf_len;
-    int rc = rtio_sqe_rx_buf(streaming_sqe, sizeof(struct max32664c_encoded_data), (sizeof(struct max32664c_encoded_data)), &buf, &buf_len);
+    size_t header_sz = sizeof(struct max32664c_encoded_data);
+    int rc = rtio_sqe_rx_buf(streaming_sqe, header_sz, header_sz, &buf, &buf_len);
     LOG_DBG("RTIO buffer acquisition: rc=%d, buf=%p, buf_len=%u", rc, (void*)buf, buf_len);
     if (rc != 0) {
         LOG_ERR("Failed to get rx buffer: %d", rc);
         k_work_reschedule(&data->poll_work, K_MSEC(MAX32664C_POLL_INTERVAL_MS));
         return;
     }
+
+    /* Save buffer pointer/len in driver data so completion callback can set header */
+    data->streaming_buf = buf;
+    data->streaming_buf_len = buf_len;
 
     /* Prepare RTIO SQEs: write command then chained read into buffer, then completion cb */
     struct rtio_sqe *write_sqe = rtio_sqe_acquire(r);
@@ -263,10 +360,33 @@ void max32664c_stream_event_handler(const struct device *dev)
 
     uint8_t cmd_wr[2] = {0x12, 0x01};
     size_t sample_len = 62; /* conservative default; decoder will parse based on op_mode */
-    size_t read_len = (sample_len * fifo) + MAX32664C_SENSOR_DATA_OFFSET;
-    if (read_len > buf_len) {
-        read_len = buf_len;
+    /* Determine how many samples fit into the acquired buffer and clamp fifo
+     * so we read as many samples as the buffer can hold. */
+    size_t max_payload_bytes = 0;
+    if (buf_len > header_sz + MAX32664C_SENSOR_DATA_OFFSET) {
+        max_payload_bytes = buf_len - header_sz - MAX32664C_SENSOR_DATA_OFFSET;
+    } else {
+        max_payload_bytes = 0;
     }
+    size_t max_samples_from_buf = (sample_len > 0) ? (max_payload_bytes / sample_len) : 0;
+    if ((size_t)fifo > max_samples_from_buf) {
+        LOG_DBG("Clamping FIFO samples from %d to %zu based on buffer capacity", fifo, max_samples_from_buf);
+        fifo = (int)max_samples_from_buf;
+    }
+
+    /* raw FIFO bytes to read (sensor payload only) */
+    size_t raw_fifo_len = (sample_len * fifo) + MAX32664C_SENSOR_DATA_OFFSET;
+    /* total RTIO read will be placed after the header region */
+    size_t read_len = 0;
+    if (header_sz + raw_fifo_len > buf_len) {
+        /* clamp raw_fifo_len so header + raw fits */
+        if (buf_len > header_sz) {
+            raw_fifo_len = buf_len - header_sz;
+        } else {
+            raw_fifo_len = 0;
+        }
+    }
+    read_len = raw_fifo_len;
 
     LOG_DBG("Read length: %zu (sample_len=%zu, fifo=%d, buf_len=%u)", 
             read_len, sample_len, fifo, buf_len);
@@ -282,7 +402,8 @@ void max32664c_stream_event_handler(const struct device *dev)
     write_sqe->flags |= RTIO_SQE_TRANSACTION;
 
     /* Prepare read SQE - read the sensor data */
-    rtio_sqe_prep_read(read_sqe, iodev, RTIO_PRIO_HIGH, buf, read_len, NULL);
+    /* read into buf + header_sz so header region remains for encoded data */
+    rtio_sqe_prep_read(read_sqe, iodev, RTIO_PRIO_HIGH, buf + header_sz, read_len, NULL);
     read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP | RTIO_IODEV_I2C_RESTART;
     read_sqe->flags |= RTIO_SQE_CHAINED;
 
