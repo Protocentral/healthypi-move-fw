@@ -39,9 +39,13 @@ int max32664c_i2c_write(const struct device *dev, const uint8_t *buf, size_t len
     struct rtio_cqe *cqe;
     int err = 0;
 
-    /* If RTIO is not available, fall back to blocking I2C */
-    if (!ctx || !iodev)
-    {
+    /* If RTIO is not available or RTIO I2C isn't ready, fall back to blocking I2C */
+#if defined(CONFIG_I2C_RTIO)
+    bool rtio_i2c_ready = (ctx && iodev && i2c_is_ready_iodev(iodev));
+#else
+    bool rtio_i2c_ready = false;
+#endif
+    if (!rtio_i2c_ready) {
         return i2c_write_dt(&config->i2c, buf, len);
     }
 
@@ -88,9 +92,13 @@ int max32664c_i2c_read(const struct device *dev, uint8_t *buf, size_t len)
     struct rtio_cqe *cqe;
     int err = 0;
 
-    /* If RTIO not available, fall back to blocking I2C */
-    if (!ctx || !iodev)
-    {
+    /* If RTIO is not available or RTIO I2C isn't ready, fall back to blocking I2C */
+#if defined(CONFIG_I2C_RTIO)
+    bool rtio_i2c_ready = (ctx && iodev && i2c_is_ready_iodev(iodev));
+#else
+    bool rtio_i2c_ready = false;
+#endif
+    if (!rtio_i2c_ready) {
         return i2c_read_dt(&config->i2c, buf, len);
     }
 

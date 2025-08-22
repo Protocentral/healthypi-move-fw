@@ -59,7 +59,8 @@ K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
-RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 1, 1);
+/* Increase RTIO queue depth to accommodate multi-op I2C transactions per sensor_read */
+RTIO_DEFINE(max32664c_read_rtio_poll_ctx, 8, 8);
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
 
 ZBUS_CHAN_DECLARE(spo2_chan);
@@ -273,12 +274,13 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
 void work_sample_handler(struct k_work *work)
 {
-    uint8_t wrist_buf[512];
+    /* Buffer must be at least sizeof(max32664c_encoded_data) for RTIO path */
+    uint8_t wrist_buf[sizeof(struct max32664c_encoded_data)];
     int ret;
     ret = sensor_read(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, wrist_buf, sizeof(wrist_buf));
     if (ret < 0)
     {
-        LOG_ERR("Error reading sensor data");
+        LOG_ERR("Error reading sensor data: %d", ret);
         return;
     }
     sensor_ppg_wrist_decode(wrist_buf, sizeof(wrist_buf));
@@ -375,7 +377,7 @@ static void smf_ppg_wrist_thread(void)
 
     smf_set_initial(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
 
-    //k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+    k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
 
     LOG_INF("PPG State Machine Thread starting");
     for (;;)
@@ -458,5 +460,5 @@ static void ppg_wrist_ctrl_thread(void)
 #define SMF_PPG_THREAD_STACKSIZE 4096
 #define SMF_PPG_THREAD_PRIORITY 5
 
-//K_THREAD_DEFINE(smf_ppg_wrist_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
+K_THREAD_DEFINE(smf_ppg_wrist_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
 //K_THREAD_DEFINE(ppg_ctrl_thread_id, PPG_CTRL_THREAD_STACKSIZE, ppg_wrist_ctrl_thread, NULL, NULL, NULL, PPG_CTRL_THREAD_PRIORITY, 0, 0);

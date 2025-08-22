@@ -7,92 +7,81 @@
 
 #include <zephyr/rtio/work.h>
 #include <zephyr/drivers/sensor_clock.h>
+#include <string.h>
 #include <zephyr/logging/log.h>
 
 #include "max32664c_sensor.h"
 
 LOG_MODULE_REGISTER(MAX32664C_RTIO, CONFIG_SENSOR_LOG_LEVEL);
 
-static void max32664c_complete_result(struct rtio *ctx,
-                                      const struct rtio_sqe *sqe,
-                                      void *arg)
-{
-    struct rtio_iodev_sqe *iodev_sqe = (struct rtio_iodev_sqe *)sqe->userdata;
-    struct rtio_cqe *cqe;
-    int err = 0;
-
-    /* Consume available CQEs produced by the executor for this submission */
-    do {
-        cqe = rtio_cqe_consume(ctx);
-        if (cqe != NULL) {
-            if (cqe->result < 0) {
-                err = cqe->result;
-            }
-            rtio_cqe_release(ctx, cqe);
-        }
-    } while (cqe != NULL);
-
-    if (err) {
-        rtio_iodev_sqe_err(iodev_sqe, err);
-    } else {
-        rtio_iodev_sqe_ok(iodev_sqe, 0);
-    }
-
-    LOG_DBG("One-shot RTIO fetch completed (err=%d)", err);
-}
-
+#include <zephyr/kernel.h>
 
 void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
-    struct max32664c_data *data = dev->data;
     uint32_t min_buf_len = sizeof(struct max32664c_encoded_data);
-    int rc;
     uint8_t *buf;
     uint32_t buf_len;
 
-    struct rtio *r = data->r;
-    struct rtio_iodev *iodev = data->iodev;
-    struct rtio_sqe *write_sqe, *read_sqe, *complete_sqe;
-
-    /* If RTIO not available, handle fallback in other code path */
-    if (!r || !iodev) {
-        /* Not handling here; caller should use fallback implementation in async.c */
-        rtio_iodev_sqe_err(iodev_sqe, -ENOTSUP);
-        return;
-    }
-
-    /* Acquire the buffer for RTIO to write into */
-    rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_len, min_buf_len, &buf, &buf_len);
+    int rc = rtio_sqe_rx_buf(iodev_sqe, min_buf_len, min_buf_len, &buf, &buf_len);
     if (rc != 0) {
-        LOG_ERR("Failed to get a read buffer of size %u bytes", min_buf_len);
+        LOG_ERR("rx_buf too small for encoded frame (need %u)", min_buf_len);
         rtio_iodev_sqe_err(iodev_sqe, rc);
         return;
     }
 
-    /* Prepare SQEs: write command then chained read into buf, then completion callback */
-    write_sqe = rtio_sqe_acquire(r);
-    read_sqe = rtio_sqe_acquire(r);
-    complete_sqe = rtio_sqe_acquire(r);
-    if (!write_sqe || !read_sqe || !complete_sqe) {
-        LOG_ERR("Failed to acquire RTIO SQEs");
-        rtio_iodev_sqe_err(iodev_sqe, -ENOMEM);
-        return;
+    /* Use existing helper to fetch and parse a frame, then encode into buffer */
+    uint32_t green[16] = {0}, ir[16] = {0}, red[16] = {0};
+    uint32_t num_samples = 0;
+    uint16_t spo2 = 0, hr = 0, rtor = 0;
+    uint8_t spo2_conf = 0, spo2_vpc = 0, spo2_lq = 0, spo2_motion = 0, spo2_low_pi = 0, spo2_state = 0;
+    uint8_t hr_conf = 0, rtor_conf = 0, scd_state = 0, activity_class = 0, chip_op_mode = 0;
+    uint32_t steps_run = 0, steps_walk = 0;
+
+    rc = max32664c_async_sample_fetch(dev, green, ir, red,
+                                      &num_samples, &spo2, &spo2_conf, &spo2_vpc, &spo2_lq,
+                                      &spo2_motion, &spo2_low_pi, &spo2_state, &hr, &hr_conf, &rtor,
+                                      &rtor_conf, &scd_state, &activity_class, &steps_run, &steps_walk, &chip_op_mode);
+
+    struct max32664c_encoded_data *edata = (struct max32664c_encoded_data *)buf;
+    memset(edata, 0, sizeof(*edata));
+    edata->header.timestamp = (uint64_t)k_uptime_get();
+    edata->chip_op_mode = chip_op_mode;
+    edata->num_samples = num_samples;
+
+    /* Clamp copies to struct capacity (32) */
+    uint32_t copy_n = num_samples;
+    if (copy_n > 32) {
+        copy_n = 32;
+    }
+    for (uint32_t i = 0; i < copy_n; i++) {
+        edata->green_samples[i] = green[i];
+        edata->red_samples[i] = red[i];
+        edata->ir_samples[i] = ir[i];
     }
 
-    uint8_t cmd_wr[2] = {0x12, 0x01}; /* FIFO/data read command */
+    edata->hr = hr;
+    edata->hr_confidence = hr_conf;
+    edata->spo2 = spo2;
+    edata->spo2_confidence = spo2_conf;
+    edata->spo2_valid_percent_complete = spo2_vpc;
+    edata->spo2_low_quality = spo2_lq;
+    edata->spo2_excessive_motion = spo2_motion;
+    edata->spo2_low_pi = spo2_low_pi;
+    edata->spo2_state = spo2_state;
+    edata->rtor = rtor;
+    edata->rtor_confidence = rtor_conf;
+    edata->scd_state = scd_state;
+    edata->activity_class = activity_class;
+    edata->steps_run = steps_run;
+    edata->steps_walk = steps_walk;
 
-    rtio_sqe_prep_tiny_write(write_sqe, iodev, RTIO_PRIO_HIGH, cmd_wr, sizeof(cmd_wr), NULL);
-    write_sqe->flags |= RTIO_SQE_TRANSACTION;
-
-    rtio_sqe_prep_read(read_sqe, iodev, RTIO_PRIO_HIGH, buf, buf_len, NULL);
-    read_sqe->iodev_flags |= RTIO_IODEV_I2C_STOP | RTIO_IODEV_I2C_RESTART;
-    read_sqe->flags |= RTIO_SQE_CHAINED;
-
-    rtio_sqe_prep_callback_no_cqe(complete_sqe, max32664c_complete_result, (void *)dev, iodev_sqe);
-
-    rtio_submit(r, 0);
-
-    return;
+    if (rc < 0) {
+        /* Even on error, we provide an encoded header so callers can decide; also signal error */
+        LOG_DBG("async_sample_fetch failed: %d", rc);
+        rtio_iodev_sqe_err(iodev_sqe, rc);
+    } else {
+        rtio_iodev_sqe_ok(iodev_sqe, 0);
+    }
 }
 
 

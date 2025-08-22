@@ -14,8 +14,8 @@ LOG_MODULE_REGISTER(MAX32664C_DECODER, CONFIG_SENSOR_LOG_LEVEL);
 #define DT_DRV_COMPAT maxim_max32664c
 
 static int max32664c_decoder_get_frame_count(const uint8_t *buffer,
-											struct sensor_chan_spec chan_spec,
-											uint16_t *frame_count)
+											 struct sensor_chan_spec chan_spec,
+											 uint16_t *frame_count)
 {
 	ARG_UNUSED(buffer);
 	ARG_UNUSED(chan_spec);
@@ -26,11 +26,16 @@ static int max32664c_decoder_get_frame_count(const uint8_t *buffer,
 }
 
 static int max32664c_decoder_get_size_info(struct sensor_chan_spec chan_spec,
-										  size_t *base_size,
-										  size_t *frame_size)
+										   size_t *base_size,
+										   size_t *frame_size)
 {
 	switch (chan_spec.chan_type)
 	{
+	case SENSOR_CHAN_VOLTAGE:
+		/* We encode one frame of max32664c_encoded_data at a time */
+		*base_size = sizeof(struct max32664c_encoded_data);
+		*frame_size = sizeof(struct max32664c_encoded_data);
+		return 0;
 	case SENSOR_CHAN_MAGN_X:
 	case SENSOR_CHAN_MAGN_Y:
 	case SENSOR_CHAN_MAGN_Z:
@@ -44,9 +49,9 @@ static int max32664c_decoder_get_size_info(struct sensor_chan_spec chan_spec,
 }
 
 static int max32664c_decoder_decode(const uint8_t *buffer,
-								   struct sensor_chan_spec chan_spec,
-								   uint32_t *fit,
-								   uint16_t max_count, void *data_out)
+									struct sensor_chan_spec chan_spec,
+									uint32_t *fit,
+									uint16_t max_count, void *data_out)
 {
 	const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buffer;
 	const struct max32664c_decoder_header *header = &edata->header;
@@ -55,13 +60,13 @@ static int max32664c_decoder_decode(const uint8_t *buffer,
 	ARG_UNUSED(max_count);
 	ARG_UNUSED(data_out);
 
-	if (*fit != 0) {
+	if (*fit != 0)
+	{
 		return 0;
 	}
 
 	return 0;
 }
-
 
 SENSOR_DECODER_API_DT_DEFINE() = {
 	.get_frame_count = max32664c_decoder_get_frame_count,
