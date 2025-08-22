@@ -871,8 +871,6 @@ static void hpi_disp_update_screens(void)
 
 void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
-    LOG_DBG("Loading screen %d", m_screen);
-
     if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_func_table) && screen_func_table[m_screen].draw != NULL)
     {
         g_screen = m_screen;
@@ -970,10 +968,14 @@ static void st_display_active_run(void *o)
 
     if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
     {
-        LOG_DBG("Change Screen: %d", scr_to_change);
-        if (screen_func_table[g_screen].draw)
+        if (g_screen >= 0 && g_screen < ARRAY_SIZE(screen_func_table) && screen_func_table[g_screen].draw)
         {
+            LOG_DBG("Change Screen -> %d", g_screen);
             screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
+        }
+        else
+        {
+            LOG_ERR("Change Screen invalid index: %d", g_screen);
         }
         lv_disp_trig_activity(NULL);
     }
