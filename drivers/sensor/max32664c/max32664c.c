@@ -25,6 +25,12 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 
 #define MAX32664C_FW_BIN_INCLUDE 0
 
+/* Algorithm interrupt threshold values (used for ALGO modes) */
+#define MAX32664C_INT_THRESH_ALGO 0x04
+
+/* Default report period (report period value written to hub) */
+#define MAX32664C_REPORT_PERIOD_DEFAULT 0x03    // 1=40 ms
+
 #include <zephyr/rtio/rtio.h>
 
 /* RTIO-based I2C wrappers that submit and wait for completion. These use
@@ -497,7 +503,7 @@ static int max32664c_set_mode_extended_algo(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD_DEFAULT, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set continuous mode
     m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
@@ -635,7 +641,7 @@ static int max32664c_set_mode_scd(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, 100);
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD_DEFAULT, 100);
 
     // Enable AFE
     m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
@@ -696,10 +702,10 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, 200);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESH_ALGO, 200);
 
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD_DEFAULT, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set Algorithm mode
     m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, algo_mode, MAX32664C_DEFAULT_CMD_DELAY);

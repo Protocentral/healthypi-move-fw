@@ -51,6 +51,13 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
 #include "ui/move_ui.h"
+#include "sm/hpi_ppg_wrist.h"
+
+/* Local compile-time flag to enable driver->app forwarding wrapper. This is a
+ * file-local flag (not Kconfig). Default: enabled. */
+#ifndef APP_PPG_WRIST_FORWARD
+#define APP_PPG_WRIST_FORWARD 1
+#endif
 
 #define PPG_WRIST_SAMPLING_INTERVAL_MS 40
 #define HPI_OFFSKIN_THRESHOLD_S 5
@@ -69,12 +76,14 @@ K_SEM_DEFINE(sem_spo2_cancel, 0, 1);
 
 K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 
-/* Use RTIO with mempool for streaming - this is required for proper streaming support */
-/* Parameters: name, sq_sz, cq_sz, num_blks, blk_size, balign */
-/* Increased queue sizes to handle concurrent operations and prevent resource exhaustion.
- * Increased mempool blocks and block size so large FIFO bursts can be drained without
- * exhausting the RTIO mempool (each streaming read consumes one mempool block). */
-RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_poll_ctx, 4, 4, 32, 2048, 8);
+/* The driver provides a per-instance RTIO context (e.g. `max32664c_rtio_0`) which
+ * the application consumes for streaming CQEs. We rely on the driver's RTIO
+ * instance instead of defining a separate local mempool here. */
+
+/* The driver defines a per-instance RTIO context (max32664c_rtio_0). The
+ * application must consume CQEs from the same RTIO context the driver
+ * submits into. Declare it extern so we can use it here. */
+extern struct rtio max32664c_rtio_0;
 
 /* Polling work item for sensor data acquisition every 100ms */
 static struct k_work_delayable ppg_poll_work;
@@ -117,21 +126,13 @@ static atomic_t polling_globally_disabled = ATOMIC_INIT(1);  /* Start disabled *
  * we can consume the FIFO quickly without falsely hitting the pending limit. */
 #define MAX_PENDING_MEMPOOL_READS 32
 static atomic_t pending_mempool_reads = ATOMIC_INIT(0);
-/* Backoff state to avoid tight-loop submitting when mempool is exhausted (rc == -12) */
-static uint32_t mempool_submit_backoff_ms = 0;
-static int64_t mempool_next_submit_allowed = 0;
-/* Throttle submissions so we don't spam mempool on very fast poll cycles (ms) */
-#define MEMPOOL_MIN_SUBMIT_INTERVAL_MS 50
-static int64_t last_mempool_submit_time = 0;
-/* Estimated samples drained by one mempool-backed read. This is conservative.
- * Driver will clamp samples based on buffer capacity; set estimate to a higher
- * value to better calculate burst needs. */
-#define EST_SAMPLES_PER_SUBMIT 32
-/* If FIFO reaches this threshold, allow burst submissions (bypass the 50ms throttle). */
-#define FIFO_BURST_THRESHOLD (MAX_PENDING_MEMPOOL_READS * EST_SAMPLES_PER_SUBMIT)
-/* Conservative cap on how many read submissions we will attempt in a single poll
- * to avoid instant depletion of the RTIO mempool even if MAX_PENDING_MEMPOOL_READS is high. */
-#define MAX_SUBMITS_PER_POLL 4
+/* Count how many times the driver-forwarding application handler was invoked */
+static atomic_t app_ppg_handler_calls = ATOMIC_INIT(0);
+/* Poll handler telemetry */
+static atomic_t poll_handler_calls = ATOMIC_INIT(0);
+static int64_t poll_telemetry_last_ms = 0;
+/* Adaptive backoff state for RTIO mempool exhaustion handling */
+/* (no adaptive backoff) */
 
 // Local variables for measured SPO2 and status
 static uint16_t measured_spo2 = 0;
@@ -148,7 +149,7 @@ static enum max32664c_scd_states m_curr_scd_state;
 // Externs
 extern struct k_sem sem_ppg_wrist_sm_start;
 
-void work_off_skin_wait_handler(struct k_work *work)
+static void work_off_skin_wait_handler(struct k_work *work)
 {
     if (m_curr_scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
     {
@@ -159,7 +160,7 @@ void work_off_skin_wait_handler(struct k_work *work)
 }
 K_WORK_DELAYABLE_DEFINE(work_off_skin, work_off_skin_wait_handler);
 
-void work_on_skin_wait_handler(struct k_work *work)
+static void work_on_skin_wait_handler(struct k_work *work)
 {
     if (m_curr_scd_state == MAX32664C_SCD_STATE_ON_SKIN)
     {
@@ -181,22 +182,6 @@ static void set_measured_spo2(uint16_t spo2_value, enum spo2_meas_state status)
     }
 }
 
-static int get_measured_spo2(uint16_t *spo2_value, enum spo2_meas_state *status)
-{
-    if (spo2_value == NULL || status == NULL) {
-        return -EINVAL;
-    }
-    
-    if (k_mutex_lock(&mutex_measured_spo2, K_MSEC(100)) == 0) {
-        *spo2_value = measured_spo2;
-        *status = measured_spo2_status;
-        k_mutex_unlock(&mutex_measured_spo2);
-        return 0;
-    } else {
-        LOG_WRN("Failed to acquire mutex for getting measured SPO2");
-        return -EBUSY;
-    }
-}
 
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 {
@@ -273,11 +258,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                     ppg_sensor_sample.spo2, ppg_sensor_sample.spo2_confidence,
                     _n_samples);
 
-            /*if ((ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_OFF_SKIN) && (m_curr_scd_state != MAX32664C_SCD_STATE_OFF_SKIN))
-            {
-                LOG_DBG("OFF SKIN");
-                k_work_schedule(&work_off_skin, K_SECONDS(HPI_OFFSKIN_THRESHOLD_S));
-            }*/
+            
 
             if (ppg_sensor_sample.scd_state != MAX32664C_SCD_STATE_ON_SKIN && (m_curr_scd_state == MAX32664C_SCD_STATE_ON_SKIN))
             {
@@ -332,33 +313,37 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     }
 }
 
-static int ppg_wrist_init_rtio(void)
+/* Application-facing handler called by the driver when a streaming buffer
+ * is populated and ready for decoding. This function is intended to be
+ * called from the driver's completion path when forwarding is enabled via
+ * CONFIG_APP_PPG_WRIST_FORWARD. It will call the existing decode
+ * implementation and then release the mempool buffer. */
+void hpi_ppg_wrist_handle_stream_buffer(uint8_t *buf, uint32_t buf_len)
 {
-    /* Get device reference for polling */
-    const struct device *dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
-    if (!dev) {
-        LOG_ERR("Cannot get MAX32664C device");
-        return -ENODEV;
+    if (buf == NULL || buf_len == 0) {
+        return;
     }
-    
-    LOG_DBG("RTIO context initialized for polling");
-    return 0;
+    /* Record that the driver forwarded a buffer to the app handler */
+    atomic_inc(&app_ppg_handler_calls);
+    LOG_INF("Driver->app PPG stream buffer handler invoked (count=%ld)", (long)atomic_get(&app_ppg_handler_calls));
+    /* Mark buffer as forwarded to prevent the CQE consumer from decoding it
+     * again. We use the high bit of the timestamp as an in-buffer flag. */
+    if (buf_len >= sizeof(struct max32664c_encoded_data)) {
+        struct max32664c_encoded_data *edata = (struct max32664c_encoded_data *)buf;
+        const uint64_t FORWARDED_FLAG = (1ULL << 63);
+        edata->header.timestamp |= FORWARDED_FLAG;
+    }
+
+    /* Decode buffer contents. Do NOT release the mempool buffer here; leave
+     * release and pending counter bookkeeping to the CQE consumer so ownership
+     * is handled in a single place and double-release is avoided. */
+    sensor_ppg_wrist_decode(buf, buf_len);
 }
 
-static int ppg_wrist_start_polling(void)
-{
-    LOG_DBG("Starting MAX32664C polling...");
-    atomic_set(&streaming_active, 1);
-    
-    /* Initialize the work queue if not already done */
-    ppg_wrist_init_polling();
-    
-    /* Start the first poll cycle */
-    k_work_schedule(&ppg_poll_work, K_MSEC(100));
-    
-    LOG_INF("Polling started successfully");
-    return 0;
-}
+
+/* ppg_wrist_start_polling removed - polling is controlled by state machine and
+ * explicit start/stop helpers. Use ppg_wrist_init_polling() and set
+ * `streaming_active`/`polling_globally_disabled` as needed. */
 
 static void ppg_wrist_stop_polling(void)
 {
@@ -373,145 +358,80 @@ static void ppg_wrist_stop_polling(void)
 static void ppg_poll_work_handler(struct k_work *work)
 {
     ARG_UNUSED(work);
-    
-    /* Global safety check - do not poll if globally disabled */
-    if (atomic_get(&polling_globally_disabled)) {
-        /* Polling globally disabled - debug suppressed */
-        return;
+    /* Telemetry: increment call count and emit summary once per second */
+    atomic_inc(&poll_handler_calls);
+    int64_t now_ms = k_uptime_get();
+    if ((now_ms - poll_telemetry_last_ms) >= 1000) {
+    poll_telemetry_last_ms = now_ms;
+    int pending = atomic_get(&pending_mempool_reads);
+    int app_calls = atomic_get(&app_ppg_handler_calls);
+    int poll_calls = atomic_get(&poll_handler_calls);
+    int available = MAX_PENDING_MEMPOOL_READS - pending;
+    LOG_INF("PPG poll telemetry: pending=%d available=%d app_handler_calls=%d poll_calls=%d",
+        pending, available, app_calls, poll_calls);
     }
     
-    if (!atomic_get(&streaming_active)) {
-        /* Not active, reschedule for next check */
-        k_work_schedule(&ppg_poll_work, K_MSEC(100));
+    /* Global safety check - do not poll if globally disabled or streaming not active */
+    if (atomic_get(&polling_globally_disabled) || !atomic_get(&streaming_active)) {
         return;
     }
-    
+
     const struct device *dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
-    if (!dev) {
-        LOG_ERR("Cannot get MAX32664C device");
+    if (!dev || !device_is_ready(dev)) {
+        LOG_ERR("MAX32664C device not ready");
         k_work_schedule(&ppg_poll_work, K_MSEC(100));
         return;
     }
-    
-    /* Check if sensor has data ready */
+
+    /* Check DRDY via hub status */
     uint8_t status = max32664c_read_hub_status(dev);
-    bool data_ready = (status & MAX32664C_HUB_STAT_DRDY_MASK) != 0;
-    
-    /* If status read failed (returns 0xFF or 0x00), sensor may not be ready yet */
     if (status == 0xFF || status == 0x00) {
-        LOG_WRN("Sensor status read failed (0x%02x), device may not be ready - retrying in 1s", status);
-        k_work_schedule(&ppg_poll_work, K_SECONDS(1));  /* Retry after longer delay */
+        /* Sensor not ready yet; try again later */
+        k_work_schedule(&ppg_poll_work, K_SECONDS(1));
         return;
     }
-    
-    /* Poll status log removed to reduce DRDY/poll spam */
-    
-    if (data_ready) {
-        /* Check FIFO count */
-        int fifo_count = max32664c_get_fifo_count(dev);
-        
-        /* Negative value indicates I2C read error */
-        if (fifo_count < 0) {
-            LOG_WRN("FIFO count read failed (%d), I2C error - retrying in 1s", fifo_count);
-            k_work_schedule(&ppg_poll_work, K_SECONDS(1));  /* Retry after longer delay */
-            return;
-        }
-        
-    /* FIFO count log removed to reduce DRDY/poll spam */
-        
-        if (fifo_count > 0) {
-            LOG_INF("Data available (FIFO=%d), reading sensor data", fifo_count);
-            
-            /* Use RTIO mempool-based async read via the sensor iodev so the driver
-             * will perform the I/O and deliver a mempool-backed completion that
-             * the app already consumes in the CQE loop below.
-             */
-            const struct device *dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
-            if (!dev || !device_is_ready(dev)) {
-                LOG_ERR("Sensor device not ready");
-            } else {
-                int pending = atomic_get(&pending_mempool_reads);
-                if (pending >= MAX_PENDING_MEMPOOL_READS) {
-                    LOG_WRN("Too many pending mempool reads (%d) - skipping submit", pending);
-                    /* If FIFO still has data but we can't submit because pending is full,
-                     * poll again sooner so completions can be processed and free mempool slots. */
-                    k_work_schedule(&ppg_poll_work, K_MSEC(10));
-                } else {
-                    int64_t now = k_uptime_get();
-                    bool burst_allowed = (fifo_count >= FIFO_BURST_THRESHOLD);
 
-                    /* Global throttle: do not submit more than once every MEMPOOL_MIN_SUBMIT_INTERVAL_MS
-                     * unless FIFO is high (burst_allowed). */
-                    if (!burst_allowed && (now - last_mempool_submit_time) < MEMPOOL_MIN_SUBMIT_INTERVAL_MS) {
-                        LOG_DBG("Submit throttled; last submit %lld ms ago", (long long)(now - last_mempool_submit_time));
-                    } else if (mempool_next_submit_allowed > now) {
-                        LOG_DBG("Mempool backoff active, skipping submit until %lld ms", (long long)mempool_next_submit_allowed);
-                    } else {
-                        /* Submit as many reads as needed / allowed up to available pending slots.
-                         * We conservatively assume each submit drains EST_SAMPLES_PER_SUBMIT samples. */
-                        int available = MAX_PENDING_MEMPOOL_READS - atomic_get(&pending_mempool_reads);
-                        /* cap submit attempts per poll to avoid aggressive depletion */
-                        int to_submit = (available < MAX_SUBMITS_PER_POLL) ? available : MAX_SUBMITS_PER_POLL;
-                        int submits = 0;
-                        for (int s = 0; s < to_submit && fifo_count > 0; s++) {
-                            int rc = sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_poll_ctx, NULL);
-                            if (rc == 0) {
-                                /* Increment pending atomically to avoid races with CQE consumer */
-                                atomic_inc(&pending_mempool_reads);
-                                submits++;
-                                fifo_count -= EST_SAMPLES_PER_SUBMIT;
-                                /* reset backoff on any success */
-                                mempool_submit_backoff_ms = 0;
-                                mempool_next_submit_allowed = 0;
-                                last_mempool_submit_time = now;
-                                LOG_DBG("Submitted async mempool read (burst) - pending=%d", atomic_get(&pending_mempool_reads));
-                            } else if (rc == -12) {
-                                /* mempool exhausted while bursting - set backoff and stop */
-                                if (mempool_submit_backoff_ms == 0) {
-                                    mempool_submit_backoff_ms = 100;
-                                } else {
-                                    mempool_submit_backoff_ms = (mempool_submit_backoff_ms < 2000) ? (mempool_submit_backoff_ms * 2) : 2000;
-                                }
-                                mempool_next_submit_allowed = now + mempool_submit_backoff_ms;
-                                LOG_WRN("RTIO mempool exhausted during burst (rc=%d). Backing off for %u ms", rc, mempool_submit_backoff_ms);
-                                break;
-                            } else {
-                                LOG_ERR("Failed to submit async mempool read during burst: %d", rc);
-                                break;
-                            }
-                        }
-
-                        if (submits == 0) {
-                            /* Nothing submitted - schedule a quicker retry so completions can free slots */
-                            k_work_schedule(&ppg_poll_work, K_MSEC(10));
-                        } else {
-                            LOG_DBG("Burst submitted %d reads, pending now %d", submits, atomic_get(&pending_mempool_reads));
-                        }
-                    }
-                }
-            }
-        } else {
-            /* DRDY set but FIFO empty - debug suppressed */
-        }
-    } else {
-        /* No data ready - debug suppressed */
+    if (!(status & MAX32664C_HUB_STAT_DRDY_MASK)) {
+        /* No data ready; reschedule and exit */
+        k_work_schedule(&ppg_poll_work, K_MSEC(100));
+        return;
     }
-    
-    /* Process any pending completions from previous async operations */
+
+    /* DRDY set - read FIFO count */
+    int fifo_count = max32664c_get_fifo_count(dev);
+    if (fifo_count <= 0) {
+        /* Nothing to read or error */
+        k_work_schedule(&ppg_poll_work, K_MSEC(50));
+        return;
+    }
+
+    /* First, process any pending completions from previous async operations so
+     * the pending counter is up-to-date before deciding to submit a new read.
+     */
     struct rtio_cqe *cqe;
-    while ((cqe = rtio_cqe_consume(&max32664c_read_rtio_poll_ctx)) != NULL) {
-        /* Processing async completion - debug suppressed */
-        
-    if (cqe->result >= 0) {
+    while ((cqe = rtio_cqe_consume(&max32664c_rtio_0)) != NULL) {
+        if (cqe->result >= 0) {
             uint8_t *buf;
             uint32_t buf_len;
-            int rc = rtio_cqe_get_mempool_buffer(&max32664c_read_rtio_poll_ctx, cqe, &buf, &buf_len);
-            
+            int rc = rtio_cqe_get_mempool_buffer(&max32664c_rtio_0, cqe, &buf, &buf_len);
+
             if (rc == 0 && buf_len > 0) {
-                /* Processing async %u bytes of sensor data - debug suppressed */
-                sensor_ppg_wrist_decode(buf, buf_len);
-                rtio_release_buffer(&max32664c_read_rtio_poll_ctx, buf, buf_len);
-                /* One pending mempool-backed read consumed */
+                bool already_forwarded = false;
+                if (buf_len >= sizeof(struct max32664c_encoded_data)) {
+                    const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
+                    const uint64_t FORWARDED_FLAG = (1ULL << 63);
+                    if (edata->header.timestamp & FORWARDED_FLAG) {
+                        already_forwarded = true;
+                    }
+                }
+
+                if (!already_forwarded) {
+                    sensor_ppg_wrist_decode(buf, buf_len);
+                } else {
+                    LOG_DBG("Skipping decode for driver-forwarded buffer");
+                }
+
+        rtio_release_buffer(&max32664c_rtio_0, buf, buf_len);
                 if (atomic_get(&pending_mempool_reads) > 0) {
                     atomic_dec(&pending_mempool_reads);
                 }
@@ -519,10 +439,32 @@ static void ppg_poll_work_handler(struct k_work *work)
         } else {
             LOG_ERR("Async RTIO operation failed: %d", cqe->result);
         }
-        
-        rtio_cqe_release(&max32664c_read_rtio_poll_ctx, cqe);
+
+    rtio_cqe_release(&max32664c_rtio_0, cqe);
     }
-    
+
+    /* Enforce single outstanding mempool-backed read: if one is already
+     * outstanding, defer submission so completions can free buffers and be
+     * processed in the next poll handler run. */
+    if (atomic_get(&pending_mempool_reads) > 0) {
+        k_work_schedule(&ppg_poll_work, K_MSEC(20));
+        return;
+    }
+
+    /* Attempt a single mempool-backed async read; on ENOMEM schedule a short retry. */
+    int rc = sensor_read_async_mempool(&max32664c_iodev, &max32664c_rtio_0, NULL);
+    if (rc == 0) {
+        atomic_inc(&pending_mempool_reads);
+        LOG_DBG("Submitted single mempool read (fifo=%d) pending=%ld", fifo_count, (long)atomic_get(&pending_mempool_reads));
+    } else if (rc == -12) {
+        /* mempool exhausted - try again shortly */
+        LOG_WRN("RTIO mempool exhausted during submit (rc=%d)", rc);
+        k_work_schedule(&ppg_poll_work, K_MSEC(20));
+    } else {
+        LOG_ERR("sensor_read_async_mempool failed: %d", rc);
+        k_work_schedule(&ppg_poll_work, K_MSEC(50));
+    }
+
     /* Schedule next poll in 100ms */
     k_work_schedule(&ppg_poll_work, K_MSEC(100));
 }
@@ -548,35 +490,32 @@ static void st_ppg_samp_active_entry(void *o)
     LOG_DBG("PPG SM Active Entry");
     m_curr_state = PPG_SAMP_STATE_ACTIVE;
 
-    LOG_INF("Setting MAX32664C to ALGO_AEC + CONT_HRM mode for polling-based data acquisition");
+    /* Initialize sensor into continuous HR algorithm mode.
+     * The driver exposes a single helper `hw_max32664c_set_op_mode()` which
+     * performs the required MAX32664C command sequence (output mode, thresholds,
+     * report rate, continuous mode and enabling algorithm/AEC). Call that helper
+     * to configure the chip into ALGO_AEC / CONT_HRM mode.
+     */
+    LOG_INF("Configuring MAX32664C for Continuous HRM (ALGO_AEC + CONT_HRM)");
     int mode_result = hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-    LOG_DBG("Mode set result: %d", mode_result);
-    
-    /* Give sensor time to switch modes and stabilize */
-    LOG_DBG("Waiting for sensor to stabilize after mode switch...");
-    k_msleep(2000);  /* Extended delay to ensure proper initialization */
-
-    /* Verify sensor is ready by checking status */
-    const struct device *max32664c_dev = DEVICE_DT_GET(DT_ALIAS(max32664c));
-    if (max32664c_dev) {
-        uint8_t status = max32664c_read_hub_status(max32664c_dev);
-        LOG_DBG("Sensor hub status after mode switch: 0x%02x (DRDY=%s)", 
-                status, (status & MAX32664C_HUB_STAT_DRDY_MASK) ? "YES" : "NO");
-        
-        int fifo_count = max32664c_get_fifo_count(max32664c_dev);
-        LOG_DBG("Initial FIFO count after mode switch: %d", fifo_count);
+    if (mode_result < 0) {
+        LOG_ERR("Failed to set MAX32664C op mode: %d", mode_result);
+    } else {
+        LOG_DBG("MAX32664C op mode set successfully");
     }
 
-    /* Initialize RTIO context for polling-based reads */
-    int rc = ppg_wrist_init_rtio();
-    if (rc < 0) {
-        LOG_ERR("Failed to initialize RTIO context: %d", rc);
-        return;
-    }
+    /* Give the sensor time to apply configuration and stabilize. Keep this
+     * short but long enough for the driver to complete internal command
+     * sequences. */
+    k_msleep(500);
 
-    /* Initialize polling work but DO NOT start it yet - defer to run state */
+    /* Initialize local polling work (CQE consumer) and enable streaming. The
+     * module uses the driver's RTIO streaming path: the application must
+     * submit one mempool-backed streaming read (via sensor_read_async_mempool)
+     * and then resubmit after each completion to keep streaming continuous.
+     */
     ppg_wrist_init_polling();
-    LOG_INF("Polling infrastructure initialized - will start polling in run state");
+    LOG_DBG("PPG polling initialized");
 }
 
 static void st_ppg_samp_active_run(void *o)
@@ -716,71 +655,7 @@ static void smf_ppg_wrist_thread(void)
     }
 }
 
-static void ppg_wrist_ctrl_thread(void)
-{
-    for (;;)
-    {
-        if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
-        {
-            // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
-            LOG_DBG("Stopping PPG Sampling");
-            ppg_wrist_stop_polling();
-
-            LOG_DBG("Starting One Shot SpO2");
-
-            hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, SPO2_SOURCE_PPG_WR, 0, 0);
-
-            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
-            k_msleep(600);
-            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
-            k_msleep(600);
-            LOG_INF("SpO2 mode set - polling will be managed by active state");
-
-            spo2_measurement_in_progress = true;
-        }
-
-        if (k_sem_take(&sem_stop_one_shot_spo2, K_NO_WAIT) == 0)
-        {
-            LOG_DBG("Stopping One Shot SpO2");
-            ppg_wrist_stop_polling();
-            spo2_measurement_in_progress = false;
-            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
-            uint16_t m_est_spo2 = 0;
-            enum spo2_meas_state m_est_spo2_status = SPO2_MEAS_UNK;
-            get_measured_spo2(&m_est_spo2, &m_est_spo2_status);
-            if (m_est_spo2_status == SPO2_MEAS_SUCCESS)
-            {
-                LOG_DBG("SPO2 Measurement Successful: %d", m_est_spo2);
-                 hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
-            }
-            else if (m_est_spo2_status == SPO2_MEAS_TIMEOUT)
-            {
-                LOG_DBG("SPO2 Measurement Timeout");
-                 hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
-            }
-            else
-            {
-                LOG_DBG("SPO2 Measurement Unknown Status");
-            }
-           
-
-            k_msleep(1000);
-
-            LOG_DBG("Switching to Continuous Sampling HR");
-            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-            k_msleep(600);
-            LOG_INF("Continuous HR mode set - polling will be managed by active state");
-        }
-
-        k_msleep(100);
-    }
-}
-
-#define PPG_CTRL_THREAD_STACKSIZE 1024
-#define PPG_CTRL_THREAD_PRIORITY 5
-
 #define SMF_PPG_THREAD_STACKSIZE 4096
 #define SMF_PPG_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(smf_ppg_wrist_thread_id, SMF_PPG_THREAD_STACKSIZE, smf_ppg_wrist_thread, NULL, NULL, NULL, SMF_PPG_THREAD_PRIORITY, 0, 1000);
-//K_THREAD_DEFINE(ppg_ctrl_thread_id, PPG_CTRL_THREAD_STACKSIZE, ppg_wrist_ctrl_thread, NULL, NULL, NULL, PPG_CTRL_THREAD_PRIORITY, 0, 0);

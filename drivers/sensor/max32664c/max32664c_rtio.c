@@ -11,6 +11,14 @@
 
 LOG_MODULE_REGISTER(MAX32664C_RTIO, CONFIG_MAX32664C_LOG_LEVEL);
 
+/* Local compile-time flag to enable forwarding populated RTIO streaming
+ * buffers directly into the application decoder. This is intentionally a
+ * file-local preprocessor flag (not a Kconfig symbol) so builds can toggle
+ * it by editing this file or setting a compiler -D. Default: enabled. */
+#ifndef APP_PPG_WRIST_FORWARD
+#define APP_PPG_WRIST_FORWARD 1
+#endif
+
 /* Forward declarations */
 void max32664c_stream_event_handler(const struct device *dev);
 
@@ -186,6 +194,19 @@ static void max32664c_stream_complete_cb(struct rtio *ctx,
     } else {
         LOG_DBG("No streaming buffer available to populate header (buf=%p, len=%u)", data->streaming_buf, data->streaming_buf_len);
     }
+
+    /* If an application-level handler exists, forward the populated buffer
+     * directly for immediate decoding. This lets the driver hand ownership
+     * of the mempool buffer to the app decoder before the driver clears
+     * its pointers (the app will call rtio_release_buffer when done).
+     * The symbol is weakly linked via a header so the app can provide the
+     * implementation. */
+#if APP_PPG_WRIST_FORWARD
+    extern void hpi_ppg_wrist_handle_stream_buffer(uint8_t *buf, uint32_t buf_len);
+    if (data->streaming_buf && data->streaming_buf_len > 0) {
+        hpi_ppg_wrist_handle_stream_buffer(data->streaming_buf, data->streaming_buf_len);
+    }
+#endif
 
     /* Complete this streaming SQE - the application will see it in the CQE */
     rtio_iodev_sqe_ok(iodev_sqe, data->fifo_count);
