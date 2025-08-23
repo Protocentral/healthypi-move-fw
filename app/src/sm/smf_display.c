@@ -189,6 +189,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
     [SCR_SPL_SPO2_COMPLETE] = {draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete},
     [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
+    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, NULL},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
 
@@ -780,6 +781,21 @@ static void hpi_disp_update_screens(void)
             }
             last_temp_trend_refresh = k_uptime_get_32();
         }
+        break;
+    case SCR_GSR:
+#if defined(CONFIG_HPI_GSR_SCREEN)
+        if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
+        {
+            uint16_t gsr_value = 0;
+            int64_t gsr_last_update = 0;
+            if (hpi_sys_get_last_gsr_update(&gsr_value, &gsr_last_update) == 0 && gsr_value > 0)
+            {
+                // Use integer-only function for flash optimization
+                hpi_gsr_disp_update_gsr_int(gsr_value, gsr_last_update);
+            }
+            last_temp_trend_refresh = k_uptime_get_32();
+        }
+#endif
         break;
     case SCR_HR:
         if (m_disp_hr > 0)

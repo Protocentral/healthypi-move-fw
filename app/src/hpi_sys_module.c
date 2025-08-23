@@ -120,6 +120,9 @@ static struct hpi_last_update_time_t g_hpi_last_update = {
 
     .steps_last_update_ts = 0,
     .steps_last_value = 0,
+
+    .gsr_last_update_ts = 0,
+    .gsr_last_value = 0,
 };
 
 K_MUTEX_DEFINE(mutex_hpi_last_update_time);
@@ -424,6 +427,9 @@ static int hpi_sys_load_update_time(void)
 
     g_hpi_last_update.steps_last_update_ts = m_hpi_last_update_time.steps_last_update_ts;
     g_hpi_last_update.steps_last_value = m_hpi_last_update_time.steps_last_value;
+
+    g_hpi_last_update.gsr_last_update_ts = m_hpi_last_update_time.gsr_last_update_ts;
+    g_hpi_last_update.gsr_last_value = m_hpi_last_update_time.gsr_last_value;
     k_mutex_unlock(&mutex_hpi_last_update_time);
 
     return ret;
@@ -507,6 +513,23 @@ int hpi_sys_get_last_temp_update(uint16_t *temp_last_value_x100, int64_t *temp_l
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     *temp_last_update_ts = g_hpi_last_update.temp_last_update_ts;
     *temp_last_value_x100 = g_hpi_last_update.temp_last_value;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+    return 0;
+}
+
+void hpi_sys_set_last_gsr_update(uint16_t gsr_last_value, int64_t gsr_last_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.gsr_last_value = gsr_last_value;
+    g_hpi_last_update.gsr_last_update_ts = gsr_last_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+}
+
+int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    *gsr_last_value = g_hpi_last_update.gsr_last_value;
+    *gsr_last_update_ts = g_hpi_last_update.gsr_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
     return 0;
 }

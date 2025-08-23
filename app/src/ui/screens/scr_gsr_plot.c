@@ -1,0 +1,97 @@
+/*
+ * HealthyPi Move GSR Plot Screen
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <lvgl.h>
+#include "ui/move_ui.h"
+
+LOG_MODULE_REGISTER(hpi_disp_scr_gsr_plot, LOG_LEVEL_ERR);
+
+// GUI
+static lv_obj_t *scr_gsr_plot;
+static lv_obj_t *chart_gsr_trend;
+static lv_chart_series_t *ser_gsr_trend;
+static lv_obj_t *btn_stop;
+
+// Styles extern
+extern lv_style_t style_scr_black;
+
+// Local state
+static bool plot_ready = false;
+
+void hpi_gsr_set_measurement_active(bool active);
+
+static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_CLICKED)
+    {
+        // Stop measurement and go back to main GSR screen
+        hpi_gsr_set_measurement_active(false);
+        hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+    }
+}
+
+void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+{
+    LV_UNUSED(arg1); LV_UNUSED(arg2); LV_UNUSED(arg3); LV_UNUSED(arg4);
+
+    scr_gsr_plot = lv_obj_create(NULL);
+    lv_obj_add_style(scr_gsr_plot, &style_scr_black, 0);
+    lv_obj_clear_flag(scr_gsr_plot, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Container
+    lv_obj_t *cont_col = lv_obj_create(scr_gsr_plot);
+    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
+    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_style(cont_col, &style_scr_black, 0);
+    lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Chart
+    chart_gsr_trend = lv_chart_create(cont_col);
+    lv_obj_set_size(chart_gsr_trend, 270, 140);
+    lv_chart_set_point_count(chart_gsr_trend, 60);
+    lv_chart_set_update_mode(chart_gsr_trend, LV_CHART_UPDATE_MODE_CIRCULAR);
+    lv_chart_set_div_line_count(chart_gsr_trend, 0, 0);
+    lv_obj_set_style_bg_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(chart_gsr_trend, 1, LV_PART_MAIN);
+    lv_chart_set_type(chart_gsr_trend, LV_CHART_TYPE_LINE);
+    ser_gsr_trend = lv_chart_add_series(chart_gsr_trend, lv_color_hex(0x00FF88), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_set_style_line_width(chart_gsr_trend, 2, LV_PART_ITEMS);
+    lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 1000);
+
+    // Stop button
+    btn_stop = lv_btn_create(cont_col);
+    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_obj_set_height(btn_stop, 60);
+    lv_obj_t *label_btn = lv_label_create(btn_stop);
+    lv_label_set_text(label_btn, "Stop");
+    lv_obj_center(label_btn);
+
+    plot_ready = true;
+
+    hpi_disp_set_curr_screen(SCR_SPL_PLOT_GSR);
+    hpi_show_screen(scr_gsr_plot, m_scroll_dir);
+}
+
+void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100)
+{
+    if (!plot_ready || !chart_gsr_trend || !ser_gsr_trend) return;
+    // Light autoscale around incoming values
+    static uint16_t min_v = 65535, max_v = 0;
+    if (gsr_value_x100 < min_v) min_v = gsr_value_x100;
+    if (gsr_value_x100 > max_v) max_v = gsr_value_x100;
+    int y_min = (min_v > 50) ? (min_v - 50) : 0;
+    int y_max = max_v + 50;
+    if (y_max - y_min < 200) { int c = (y_min + y_max)/2; y_min = c - 100; y_max = c + 100; }
+    lv_chart_set_range(chart_gsr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+
+    lv_chart_set_next_value(chart_gsr_trend, ser_gsr_trend, gsr_value_x100);
+    lv_chart_refresh(chart_gsr_trend);
+}

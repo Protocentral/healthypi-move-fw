@@ -91,6 +91,7 @@ enum hpi_disp_screens
     SCR_ECG,
     SCR_TEMP,
     SCR_BPT,
+    SCR_GSR,
 
     SCR_LIST_END,
     // Should not go here
@@ -126,6 +127,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_COMPLETE,
     SCR_SPL_SPO2_TIMEOUT,
     SCR_SPL_HR_SCR2,
+    SCR_SPL_PLOT_GSR,
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -157,6 +159,29 @@ LV_IMG_DECLARE(img_timer_48);
 LV_IMG_DECLARE(ecg_70);
 LV_IMG_DECLARE(bp_70);
 //LV_IMG_DECLARE(icon_spo2_30x35);
+
+#if defined(CONFIG_HPI_GSR_SCREEN)
+// GSR screens and helpers
+void draw_scr_gsr(enum scroll_dir m_scroll_dir);
+void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_update);
+void hpi_gsr_process_bioz_sample(int32_t bioz_sample);
+// Special GSR plot screen
+void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+// Plot update helper called from sensor path
+void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
+// Control measurement state across screens
+void hpi_gsr_set_measurement_active(bool active);
+#else
+// Stubs when GSR is disabled
+static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
+static inline void hpi_gsr_disp_update_gsr_int(uint16_t a, int64_t b) { ARG_UNUSED(a); ARG_UNUSED(b); }
+static inline void hpi_gsr_process_bioz_sample(int32_t s) { ARG_UNUSED(s); }
+static inline void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
+}
+static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
+static inline void hpi_gsr_set_measurement_active(bool active) { ARG_UNUSED(active); }
+#endif
 LV_IMG_DECLARE(img_heart_70);
 LV_IMG_DECLARE(img_temp_100);
 LV_IMG_DECLARE(icon_spo2_100);
@@ -342,6 +367,11 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
 void draw_scr_spl_plot_ecg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 void draw_scr_temp(enum scroll_dir m_scroll_dir);
+
+// GSR Screen functions
+void draw_scr_gsr(enum scroll_dir m_scroll_dir);
+void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_update);
+void hpi_gsr_process_bioz_sample(int32_t bioz_sample);
 
 void hpi_disp_home_update_batt_level(int batt_level, bool charging);
 void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
