@@ -17,8 +17,8 @@ int max32664c_get_fifo_count(const struct device *dev)
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -53,9 +53,9 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            max32664c_i2c_read(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
             k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -101,9 +101,9 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            max32664c_i2c_read(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
             k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -146,9 +146,9 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            max32664c_i2c_read(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
             k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -222,9 +222,9 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+            max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
 
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
+            max32664c_i2c_read(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
             k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -309,7 +309,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
     return 0;
 }
 
-int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
     uint32_t min_buf_len = sizeof(struct max32664c_encoded_data);
     int rc;
@@ -325,7 +325,7 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         LOG_ERR("Failed to get a read buffer of size %u bytes", min_buf_len);
         rtio_iodev_sqe_err(iodev_sqe, rc);
-        return rc;
+        return;
     }
 
     if (data->op_mode == MAX32664C_OP_MODE_ALGO_AGC || data->op_mode == MAX32664C_OP_MODE_ALGO_AEC ||
@@ -333,7 +333,7 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples,
+    rc = max32664c_async_sample_fetch(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples,
                                           &m_edata->num_samples, &m_edata->spo2, &m_edata->spo2_confidence, &m_edata->spo2_valid_percent_complete,
                                           &m_edata->spo2_low_quality, &m_edata->spo2_excessive_motion, &m_edata->spo2_low_pi, &m_edata->spo2_state,
                                           &m_edata->hr, &m_edata->hr_confidence, &m_edata->rtor,&m_edata->rtor_confidence, &m_edata->scd_state, 
@@ -343,19 +343,19 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch_raw(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples, &m_edata->num_samples, &m_edata->chip_op_mode);
+    rc = max32664c_async_sample_fetch_raw(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples, &m_edata->num_samples, &m_edata->chip_op_mode);
     }
     else if (data->op_mode == MAX32664C_OP_MODE_SCD)
     {
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch_scd(dev, &m_edata->chip_op_mode, &m_edata->scd_state);
+    rc = max32664c_async_sample_fetch_scd(dev, &m_edata->chip_op_mode, &m_edata->scd_state);
     }
     else if (data->op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
     {
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode);
+    rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode);
     }
     else if (data->op_mode == MAX32664C_OP_MODE_IDLE)
     {
@@ -369,12 +369,10 @@ int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
     if (rc != 0)
     {
-        // LOG_ERR("Failed to fetch samples");
         rtio_iodev_sqe_err(iodev_sqe, rc);
-        return rc;
+        return;
     }
 
     rtio_iodev_sqe_ok(iodev_sqe, 0);
-
-    return 0;
+    return;
 }

@@ -817,6 +817,8 @@ void hw_module_init(void)
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(100));
+    /* Path of the one-shot reboot-attempt marker stored in LFS */
+    const char *max32664c_reboot_marker = "/lfs/sys/max32664c_reboot_attempt";
 
     device_init(max32664c_dev);
     k_sleep(K_MSEC(100));
@@ -824,8 +826,33 @@ void hw_module_init(void)
     if (!device_is_ready(max32664c_dev))
     {
         LOG_ERR("MAX32664C device not present!");
-        max32664c_device_present = false;
-        hw_add_boot_msg("MAX32664C", false, true, false, 0);
+
+        /* Check if we've already attempted a reboot previously by checking the marker file */
+        int rc = fs_check_file_exists(max32664c_reboot_marker);
+        if (rc == 0)
+        {
+            /* Marker exists -> this is the second boot after an attempted reboot.
+             * Clear the marker and proceed without rebooting again. */
+            LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
+            uint8_t dummy[1] = {0};
+            /* remove the marker by writing zero-length (unlink) via helper */
+            fs_write_buffer_to_file((char *)max32664c_reboot_marker, dummy, 0);
+
+            max32664c_device_present = false;
+            hw_add_boot_msg("MAX32664C", false, true, false, 0);
+        }
+        else
+        {
+            /* No marker -> first failure. Create marker and reboot once to try clearing the bus */
+            LOG_INF("MAX32664C probe failed; creating reboot marker and rebooting to recover I2C bus");
+            uint8_t marker_data[1] = {1};
+            fs_write_buffer_to_file((char *)max32664c_reboot_marker, marker_data, sizeof(marker_data));
+
+            /* Give logs a moment to flush */
+            k_sleep(K_MSEC(100));
+            sys_reboot(SYS_REBOOT_COLD);
+            /* sys_reboot does not return */
+        }
     }
     else
     {

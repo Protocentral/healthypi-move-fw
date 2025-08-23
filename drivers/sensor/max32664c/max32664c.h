@@ -149,5 +149,9 @@ struct max32664c_encoded_data
 	uint32_t steps_walk;
 };
 
-int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664c_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
+
+/* I2C wrapper helpers so driver can centralize I2C calls */
+int max32664c_i2c_write(const struct i2c_dt_spec *i2c, const void *buf, size_t len);
+int max32664c_i2c_read(const struct i2c_dt_spec *i2c, void *buf, size_t len);
