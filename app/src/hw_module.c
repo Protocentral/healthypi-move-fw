@@ -824,25 +824,55 @@ void hw_module_init(void)
         {
             /* Marker exists -> this is the second boot after an attempted reboot.
              * Clear the marker and proceed without rebooting again. */
-            LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
-            uint8_t dummy[1] = {0};
-            /* remove the marker by writing zero-length (unlink) via helper */
-            fs_write_buffer_to_file((char *)max32664c_reboot_marker, dummy, 0);
+                LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
+                /* Try to remove the marker file using fs_unlink which reliably deletes the file. */
+                int unlink_rc = fs_unlink(max32664c_reboot_marker);
+                if (unlink_rc == 0)
+                {
+                    LOG_DBG("Reboot marker removed: %s", max32664c_reboot_marker);
+                }
+                else
+                {
+                    LOG_DBG("Failed to remove reboot marker (rc=%d). Attempting fallback truncate.", unlink_rc);
+                    /* Fallback: try truncating/overwriting with zero-length - some helpers may not unlink */
+                    /* Attempt to truncate/overwrite marker as a fallback. The helper returns void, so verify by checking existence. */
+                    fs_write_buffer_to_file((char *)max32664c_reboot_marker, NULL, 0);
+                    int exist_after_trunc = fs_check_file_exists(max32664c_reboot_marker);
+                    if (exist_after_trunc != 0)
+                    {
+                        LOG_DBG("Fallback truncate appears to have removed the marker");
+                    }
+                    else
+                    {
+                        LOG_WRN("Fallback truncate did not remove the marker; file may persist");
+                    }
+                }
 
-            max32664c_device_present = false;
-            hw_add_boot_msg("MAX32664C", false, true, false, 0);
+                max32664c_device_present = false;
+                hw_add_boot_msg("MAX32664C", false, true, false, 0);
         }
         else
         {
             /* No marker -> first failure. Create marker and reboot once to try clearing the bus */
             LOG_INF("MAX32664C probe failed; creating reboot marker and rebooting to recover I2C bus");
             uint8_t marker_data[1] = {1};
+            /* Create a reboot marker to avoid infinite reboot loops. The write helper doesn't return a status, so verify by checking file existence. */
             fs_write_buffer_to_file((char *)max32664c_reboot_marker, marker_data, sizeof(marker_data));
-
-            /* Give logs a moment to flush */
-            k_sleep(K_MSEC(100));
-            sys_reboot(SYS_REBOOT_COLD);
-            /* sys_reboot does not return */
+            int exists = fs_check_file_exists(max32664c_reboot_marker);
+            if (exists != 0)
+            {
+                LOG_ERR("Failed to create reboot marker '%s' (rc=%d) - will not reboot to avoid loop", max32664c_reboot_marker, exists);
+                /* Mark device absent and continue boot without forcing a reboot */
+                max32664c_device_present = false;
+                hw_add_boot_msg("MAX32664C", false, true, false, 0);
+            }
+            else
+            {
+                /* Give logs a moment to flush */
+                k_sleep(K_MSEC(100));
+                sys_reboot(SYS_REBOOT_COLD);
+                /* sys_reboot does not return */
+            }
         }
     }
     else
