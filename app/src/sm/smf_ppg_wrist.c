@@ -42,7 +42,7 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "hpi_sys.h"
 #include "ui/move_ui.h"
 
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 120
 #define HPI_OFFSKIN_THRESHOLD_S 5
 #define HPI_PROBE_DURATION_S 15
 
