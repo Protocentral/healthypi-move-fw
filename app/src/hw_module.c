@@ -1012,6 +1012,10 @@ void hw_module_init(void)
         hw_add_boot_msg("MAX30208", true, true, false, 0);
     }
 
+    hw_add_boot_msg("Boot complete !!", true, false, false, 0);
+
+    k_sleep(K_MSEC(400));
+
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
     // Read and publish time during initialization

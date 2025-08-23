@@ -79,7 +79,7 @@ void draw_scr_boot(void)
 
     // Scrollable container for boot messages
     scroll_container = lv_obj_create(main_container);
-    lv_obj_set_size(scroll_container, LV_PCT(80), 250);
+    lv_obj_set_size(scroll_container, LV_PCT(80), 240);
     lv_obj_set_style_bg_color(scroll_container, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scroll_container, LV_OPA_20, LV_PART_MAIN);
     lv_obj_set_style_border_color(scroll_container, lv_color_white(), LV_PART_MAIN);
