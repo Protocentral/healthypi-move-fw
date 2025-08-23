@@ -845,8 +845,10 @@ static int max32664c_chip_init(const struct device *dev)
     }
     else
     {
-        LOG_ERR("MAX32664C not responding on first probe - rebooting to clear I2C bus");
-        sys_reboot(SYS_REBOOT_COLD);
+    LOG_ERR("MAX32664C not responding on first probe");
+    /* Return error and let the application decide whether to reboot or continue.
+     * The application implements a one-shot reboot-attempt marker in LFS. */
+    return -ENODEV;
     }
 
     max32664c_check_sensors(dev);
