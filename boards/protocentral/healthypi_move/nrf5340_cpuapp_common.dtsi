@@ -352,8 +352,13 @@
 		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
 		//rtor-enabled;
 		//ecg-enabled;
-		//bioz-enabled;
+		bioz-enabled;
 		ecg-gain = <0>; 
+		bioz-gain = <1>; // 20 V/V gain for GSR measurement
+		bioz_cgmag = <2>; // 16 uA excitation current for good GSR sensitivity
+		bioz_dlpf = <1>; // Digital low pass filter
+		bioz_dhpf = <1>; // Digital high pass filter 
+		bioz_ahpf = <2>; // Analog high pass filter
 		//ecg-invert;
 		ecg-dcloff-enable;
 		ecg-dcloff-current = <1>; // 5 nA

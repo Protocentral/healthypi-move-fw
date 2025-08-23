@@ -4,4 +4,17 @@
 # Application-specific Kconfig options
 
 rsource "src/max32664_updater/Kconfig"
+ 
+menu "HealthyPi Move application options"
+
+config HPI_GSR_SCREEN
+		bool "Enable GSR screen"
+		default y
+		help
+			Enable the Galvanic Skin Response (GSR) UI screens and related code.
+			Disable to save flash/RAM and remove GSR UI. When disabled, GSR
+			source files are excluded and runtime hooks become no-ops.
+
+endmenu
+
 source "Kconfig.zephyr"

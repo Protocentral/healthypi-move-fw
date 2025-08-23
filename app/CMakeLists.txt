@@ -23,7 +23,13 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/screens/*.c
                         src/ui/hp_ui_common.c
                         src/sm/*.c)  
-                        
+
+# Exclude GSR sources if the screen is disabled
+if(NOT CONFIG_HPI_GSR_SCREEN)
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr\\.c$")
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr_plot\\.c$")
+endif()
+
 target_sources(app PRIVATE ${app_sources})
 
 if(CONFIG_MAX32664_UPDATER)
