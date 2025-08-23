@@ -825,27 +825,33 @@ void hw_module_init(void)
             /* Marker exists -> this is the second boot after an attempted reboot.
              * Clear the marker and proceed without rebooting again. */
                 LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
-                /* Try to remove the marker file using fs_unlink which reliably deletes the file. */
-                int unlink_rc = fs_unlink(max32664c_reboot_marker);
-                if (unlink_rc == 0)
+                /* Try to remove the marker file using fs_unlink; retry a few times if it fails. */
+                int unlink_rc = -1;
+                const int max_unlink_retries = 3;
+                for (int i = 0; i < max_unlink_retries; i++)
                 {
-                    LOG_DBG("Reboot marker removed: %s", max32664c_reboot_marker);
-                }
-                else
-                {
-                    LOG_DBG("Failed to remove reboot marker (rc=%d). Attempting fallback truncate.", unlink_rc);
-                    /* Fallback: try truncating/overwriting with zero-length - some helpers may not unlink */
-                    /* Attempt to truncate/overwrite marker as a fallback. The helper returns void, so verify by checking existence. */
-                    fs_write_buffer_to_file((char *)max32664c_reboot_marker, NULL, 0);
-                    int exist_after_trunc = fs_check_file_exists(max32664c_reboot_marker);
-                    if (exist_after_trunc != 0)
+                    unlink_rc = fs_unlink(max32664c_reboot_marker);
+                    if (unlink_rc == 0)
                     {
-                        LOG_DBG("Fallback truncate appears to have removed the marker");
+                        LOG_DBG("Reboot marker removed on attempt %d: %s", i + 1, max32664c_reboot_marker);
+                        break;
                     }
                     else
                     {
-                        LOG_WRN("Fallback truncate did not remove the marker; file may persist");
+                        LOG_DBG("Attempt %d: unlink returned %d, retrying...", i + 1, unlink_rc);
+                        k_sleep(K_MSEC(50));
                     }
+                }
+
+                /* Final verification: check whether the file still exists. */
+                int exists_after_unlink = fs_check_file_exists(max32664c_reboot_marker);
+                if (exists_after_unlink == 0)
+                {
+                    LOG_WRN("Reboot marker still present after unlink attempts: %s", max32664c_reboot_marker);
+                }
+                else
+                {
+                    LOG_DBG("Reboot marker cleared: %s", max32664c_reboot_marker);
                 }
 
                 max32664c_device_present = false;
@@ -853,25 +859,20 @@ void hw_module_init(void)
         }
         else
         {
-            /* No marker -> first failure. Create marker and reboot once to try clearing the bus */
             LOG_INF("MAX32664C probe failed; creating reboot marker and rebooting to recover I2C bus");
             uint8_t marker_data[1] = {1};
-            /* Create a reboot marker to avoid infinite reboot loops. The write helper doesn't return a status, so verify by checking file existence. */
             fs_write_buffer_to_file((char *)max32664c_reboot_marker, marker_data, sizeof(marker_data));
             int exists = fs_check_file_exists(max32664c_reboot_marker);
             if (exists != 0)
             {
                 LOG_ERR("Failed to create reboot marker '%s' (rc=%d) - will not reboot to avoid loop", max32664c_reboot_marker, exists);
-                /* Mark device absent and continue boot without forcing a reboot */
                 max32664c_device_present = false;
                 hw_add_boot_msg("MAX32664C", false, true, false, 0);
             }
             else
             {
-                /* Give logs a moment to flush */
                 k_sleep(K_MSEC(100));
                 sys_reboot(SYS_REBOOT_COLD);
-                /* sys_reboot does not return */
             }
         }
     }
