@@ -8,6 +8,10 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
 
+#ifdef CONFIG_SENSOR_ASYNC_API
+#include <zephyr/rtio/rtio.h>
+#endif
+
 #define MAX32664C_I2C_ADDRESS 0x55
 
 #define MAX32664C_HUB_STAT_DRDY_MASK 0x08
@@ -155,3 +159,25 @@ int max32664c_get_decoder(const struct device *dev, const struct sensor_decoder_
 /* I2C wrapper helpers so driver can centralize I2C calls */
 int max32664c_i2c_write(const struct i2c_dt_spec *i2c, const void *buf, size_t len);
 int max32664c_i2c_read(const struct i2c_dt_spec *i2c, void *buf, size_t len);
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+/* RTIO-based I2C wrapper functions for async operations
+ * These functions provide RTIO support for I2C operations in the MAX32664C driver.
+ * Currently implemented as fallback to synchronous I2C operations.
+ * 
+ * @param r: RTIO context (currently unused in fallback implementation)
+ * @param iodev: RTIO I/O device containing I2C device tree spec
+ * @param buf: Buffer for read/write data
+ * @param len: Length of data to read/write
+ * @return 0 on success, negative error code on failure
+ */
+int max32664c_i2c_rtio_write(struct rtio *r, struct rtio_iodev *iodev, const void *buf, size_t len);
+int max32664c_i2c_rtio_read(struct rtio *r, struct rtio_iodev *iodev, void *buf, size_t len);
+#endif
+
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+/* Register RTIO context and iodev to allow synchronous wrappers to
+ * forward operations through RTIO when MAX32664C_USE_RTIO_IMPL is set.
+ */
+void max32664c_register_rtio_context(struct rtio *r, struct rtio_iodev *iodev);
+#endif

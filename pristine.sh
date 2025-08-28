@@ -1,0 +1,1 @@
+west build --build-dir app/build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DBOARD_ROOT=.

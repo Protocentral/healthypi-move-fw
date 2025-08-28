@@ -12,6 +12,11 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/sys/reboot.h>
 #include <nrfx.h>
+#include <errno.h>
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+#include <zephyr/rtio/rtio.h>
+#endif
 
 #include "max32664c.h"
 
@@ -32,14 +37,125 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 #define MAX32664C_REPORT_PERIOD 0x04
 
 /* I2C wrapper implementations - centralize error handling or logging here */
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+/* RTIO-based I2C implementation functions 
+ * 
+ * These functions provide RTIO support for async I2C operations.
+ * Currently implemented as fallback to synchronous I2C operations since
+ * the Zephyr RTIO I2C API is still evolving.
+ * 
+ * Future implementations could utilize true RTIO I2C operations when
+ * the API becomes stable and available.
+ */
+static int max32664c_i2c_rtio_write_impl(struct rtio *r, struct rtio_iodev *iodev, const void *buf, size_t len)
+{
+    /* RTIO-only implementation: prepare a write SQE, copy it into the RTIO
+     * context, submit and block for the completion, then return the result
+     * (0 on success or negative errno on failure). This keeps the wrapper
+     * synchronous while using RTIO internals.
+     */
+    int rc;
+    struct rtio_sqe sqe;
+    struct rtio_cqe cqe;
+
+    rtio_sqe_prep_write(&sqe, iodev, 0, (const uint8_t *)buf, (uint32_t)len, NULL);
+
+    rc = rtio_sqe_copy_in(r, &sqe, 1);
+    if (rc < 0) {
+        return rc;
+    }
+
+    rc = rtio_submit(r, 1);
+    if (rc < 0) {
+        return rc;
+    }
+
+    /* Wait for completion and copy out one CQE */
+    rc = rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER);
+    if (rc != 1) {
+        return -EIO;
+    }
+
+    /* Extract result and release the CQE */
+    rc = cqe.result;
+    rtio_cqe_release(r, &cqe);
+
+    return rc;
+}
+
+static int max32664c_i2c_rtio_read_impl(struct rtio *r, struct rtio_iodev *iodev, void *buf, size_t len)
+{
+    /* RTIO-only implementation: prepare a read SQE, copy it into the RTIO
+     * context, submit and block for the completion, then return the result
+     */
+    int rc;
+    struct rtio_sqe sqe;
+    struct rtio_cqe cqe;
+
+    rtio_sqe_prep_read(&sqe, iodev, 0, (uint8_t *)buf, (uint32_t)len, NULL);
+
+    rc = rtio_sqe_copy_in(r, &sqe, 1);
+    if (rc < 0) {
+        return rc;
+    }
+
+    rc = rtio_submit(r, 1);
+    if (rc < 0) {
+        return rc;
+    }
+
+    /* Wait for completion */
+    rc = rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER);
+    if (rc != 1) {
+        return -EIO;
+    }
+
+    rc = cqe.result;
+    rtio_cqe_release(r, &cqe);
+
+    return rc;
+}
+#endif /* CONFIG_SENSOR_ASYNC_API */
+
+/* Optional: allow selecting RTIO-backed synchronous I2C implementation
+ * at compile-time. When MAX32664C_USE_RTIO_IMPL is defined (and
+ * CONFIG_SENSOR_ASYNC_API is enabled), the regular synchronous
+ * max32664c_i2c_write/_read functions will bridge into the RTIO
+ * implementation using a registered RTIO context + iodev. Register
+ * the RTIO context with max32664c_register_rtio_context().
+ */
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+static struct rtio *max32664c_rtio_ctx = NULL;
+static struct rtio_iodev *max32664c_rtio_iodev = NULL;
+
+void max32664c_register_rtio_context(struct rtio *r, struct rtio_iodev *iodev)
+{
+    max32664c_rtio_ctx = r;
+    max32664c_rtio_iodev = iodev;
+}
+#endif
+
 static int max32664c_i2c_write_impl(const struct i2c_dt_spec *i2c, const void *buf, size_t len)
 {
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+    if (max32664c_rtio_ctx && max32664c_rtio_iodev) {
+        return max32664c_i2c_rtio_write_impl(max32664c_rtio_ctx, max32664c_rtio_iodev, buf, len);
+    }
+#else
     return i2c_write_dt(i2c, buf, len);
+#endif
 }
 
 static int max32664c_i2c_read_impl(const struct i2c_dt_spec *i2c, void *buf, size_t len)
 {
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+    if (max32664c_rtio_ctx && max32664c_rtio_iodev) {
+        return max32664c_i2c_rtio_read_impl(max32664c_rtio_ctx, max32664c_rtio_iodev, buf, len);
+    }
+#else
     return i2c_read_dt(i2c, buf, len);
+#endif
 }
 
 /* Public wrappers used by this driver */
@@ -52,6 +168,18 @@ int max32664c_i2c_read(const struct i2c_dt_spec *i2c, void *buf, size_t len)
 {
     return max32664c_i2c_read_impl(i2c, buf, len);
 }
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+int max32664c_i2c_rtio_write(struct rtio *r, struct rtio_iodev *iodev, const void *buf, size_t len)
+{
+    return max32664c_i2c_rtio_write_impl(r, iodev, buf, len);
+}
+
+int max32664c_i2c_rtio_read(struct rtio *r, struct rtio_iodev *iodev, void *buf, size_t len)
+{
+    return max32664c_i2c_rtio_read_impl(r, iodev, buf, len);
+}
+#endif /* CONFIG_SENSOR_ASYNC_API */
 
 static int m_read_op_mode(const struct device *dev)
 {
