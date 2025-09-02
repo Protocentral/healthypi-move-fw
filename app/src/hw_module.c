@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -26,7 +26,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -145,63 +144,68 @@ static float last_battery_voltage = 4.2f; // Store last known battery voltage
 
 /**
  * @brief Scan I2C2 bus for available devices
- * 
+ *
  * This function scans the I2C2 bus from address 0x08 to 0x77 to detect
  * which devices are present. Used for debugging purposes during initialization.
- * 
+ *
  * @note This function should only be called during initialization/debugging
  * as it can temporarily block the I2C bus while scanning.
  */
 static void i2c2_bus_scan_debug(void)
 {
     LOG_INF("=== I2C2 Bus Scan Debug ===");
-    
-    if (!device_is_ready(i2c2_dev)) {
+
+    if (!device_is_ready(i2c2_dev))
+    {
         LOG_ERR("I2C2 device not ready for scanning");
         return;
     }
-    
+
     int devices_found = 0;
     uint8_t dummy_data = 0;
-    
+
     // Scan addresses from 0x08 to 0x77 (avoid reserved addresses)
-    for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
+    for (uint8_t addr = 0x08; addr <= 0x77; addr++)
+    {
         // Try to read 1 byte from the device
         int ret = i2c_read(i2c2_dev, &dummy_data, 1, addr);
-        
-        if (ret == 0) {
+
+        if (ret == 0)
+        {
             LOG_INF("I2C device found at address 0x%02X", addr);
             devices_found++;
-            
+
             // Add specific device identification for known addresses
-            switch (addr) {
-                case 0x50:
-                    LOG_INF("  -> Expected: MAX30208 temperature sensor");
-                    break;
-                case 0x55:
-                    LOG_INF("  -> Expected: MAX32664C bio-sensor hub");
-                    break;
-                default:
-                    LOG_INF("  -> Unknown device");
-                    break;
+            switch (addr)
+            {
+            case 0x50:
+                LOG_INF("  -> Expected: MAX30208 temperature sensor");
+                break;
+            case 0x55:
+                LOG_INF("  -> Expected: MAX32664C bio-sensor hub");
+                break;
+            default:
+                LOG_INF("  -> Unknown device");
+                break;
             }
         }
-        
+
         // Small delay between scans to be gentle on the bus
         k_usleep(100);
     }
-    
+
     LOG_INF("I2C2 scan complete. Found %d device(s)", devices_found);
-    
-    if (devices_found == 0) {
+
+    if (devices_found == 0)
+    {
         LOG_WRN("No I2C devices found on bus 2. Check connections and power.");
     }
-    
+
     LOG_INF("=== End I2C2 Bus Scan ===");
 }
 
 // USB CDC UART
-#define RING_BUF_SIZE 512  // Reduced from 1024 to 512 bytes
+#define RING_BUF_SIZE 512 // Reduced from 1024 to 512 bytes
 uint8_t ring_buffer[RING_BUF_SIZE];
 struct ring_buf ringbuf_usb_cdc;
 static bool rx_throttled;
@@ -533,8 +537,8 @@ int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uin
     tte = nrf_fuel_gauge_tte_get();
     ttf = nrf_fuel_gauge_ttf_get();
 
-    //LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
-    //        (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
+    // LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
+    //         (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
 
     *batt_level = (uint8_t)soc;
     *batt_charging = chg_status;
@@ -711,7 +715,8 @@ static bool hw_check_msbl_file_exists(const char *file_path)
 {
     struct fs_dirent entry;
     int ret = fs_stat(file_path, &entry);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         LOG_ERR("MSBL file not found: %s (error: %d)", file_path, ret);
         return false;
     }
@@ -729,7 +734,7 @@ void hw_module_init(void)
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
     // Debug: Scan I2C2 bus for available devices before initialization
-    //i2c2_bus_scan_debug();
+    // i2c2_bus_scan_debug();
 
     if (!device_is_ready(pmic))
     {
@@ -786,8 +791,8 @@ void hw_module_init(void)
         char batt_msg[32];
         // Convert voltage to millivolts to avoid floating point in snprintf
         int voltage_mv = (int)(boot_batt_voltage * 1000);
-        snprintf(batt_msg, sizeof(batt_msg), "Battery: %d.%02d V (%d%%)", 
-                voltage_mv / 1000, (voltage_mv % 1000) / 10, boot_batt_level);
+        snprintf(batt_msg, sizeof(batt_msg), "Battery: %d.%02d V (%d%%)",
+                 voltage_mv / 1000, (voltage_mv % 1000) / 10, boot_batt_level);
 
         // Check if battery voltage is critically low
         if (boot_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE && !boot_batt_charging)
@@ -870,7 +875,7 @@ void hw_module_init(void)
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(100));
-    
+
     /* Path of the one-shot reboot-attempt marker stored in LFS */
     const char *max32664c_reboot_marker = "/lfs/sys/max32664c_reboot_attempt";
 
@@ -887,38 +892,38 @@ void hw_module_init(void)
         {
             /* Marker exists -> this is the second boot after an attempted reboot.
              * Clear the marker and proceed without rebooting again. */
-                LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
-                /* Try to remove the marker file using fs_unlink; retry a few times if it fails. */
-                int unlink_rc = -1;
-                const int max_unlink_retries = 3;
-                for (int i = 0; i < max_unlink_retries; i++)
+            LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
+            /* Try to remove the marker file using fs_unlink; retry a few times if it fails. */
+            int unlink_rc = -1;
+            const int max_unlink_retries = 3;
+            for (int i = 0; i < max_unlink_retries; i++)
+            {
+                unlink_rc = fs_unlink(max32664c_reboot_marker);
+                if (unlink_rc == 0)
                 {
-                    unlink_rc = fs_unlink(max32664c_reboot_marker);
-                    if (unlink_rc == 0)
-                    {
-                        LOG_DBG("Reboot marker removed on attempt %d: %s", i + 1, max32664c_reboot_marker);
-                        break;
-                    }
-                    else
-                    {
-                        LOG_DBG("Attempt %d: unlink returned %d, retrying...", i + 1, unlink_rc);
-                        k_sleep(K_MSEC(50));
-                    }
-                }
-
-                /* Final verification: check whether the file still exists. */
-                int exists_after_unlink = fs_check_file_exists(max32664c_reboot_marker);
-                if (exists_after_unlink == 0)
-                {
-                    LOG_WRN("Reboot marker still present after unlink attempts: %s", max32664c_reboot_marker);
+                    LOG_DBG("Reboot marker removed on attempt %d: %s", i + 1, max32664c_reboot_marker);
+                    break;
                 }
                 else
                 {
-                    LOG_DBG("Reboot marker cleared: %s", max32664c_reboot_marker);
+                    LOG_DBG("Attempt %d: unlink returned %d, retrying...", i + 1, unlink_rc);
+                    k_sleep(K_MSEC(50));
                 }
+            }
 
-                max32664c_device_present = false;
-                hw_add_boot_msg("MAX32664C", false, true, false, 0);
+            /* Final verification: check whether the file still exists. */
+            int exists_after_unlink = fs_check_file_exists(max32664c_reboot_marker);
+            if (exists_after_unlink == 0)
+            {
+                LOG_WRN("Reboot marker still present after unlink attempts: %s", max32664c_reboot_marker);
+            }
+            else
+            {
+                LOG_DBG("Reboot marker cleared: %s", max32664c_reboot_marker);
+            }
+
+            max32664c_device_present = false;
+            hw_add_boot_msg("MAX32664C", false, true, false, 0);
         }
         else
         {
@@ -978,7 +983,7 @@ void hw_module_init(void)
         }
 
         bool update_required_c = false;
-        
+
 #ifdef FORCE_MAX32664C_UPDATE_FOR_TESTING
         // Force update for testing purposes (compile-time)
         update_required_c = true;
@@ -1037,7 +1042,7 @@ void hw_module_init(void)
         hw_add_boot_msg(ver_msg, true, false, false, 0);
 
         bool update_required = false;
-        
+
 #ifdef FORCE_MAX32664D_UPDATE_FOR_TESTING
         // Force update for testing purposes (compile-time)
         update_required = true;
@@ -1127,7 +1132,6 @@ void hw_module_init(void)
 
     // npm_fuel_gauge_update(charger, vbus_connected);
 
-
     // Initialize user settings (load from file)
     ret = hpi_user_settings_init();
     if (ret < 0)
@@ -1207,8 +1211,8 @@ void hw_thread(void)
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
         // Check for low battery conditions (voltage-based)
-        if(1)
-        //if (!sys_batt_charging)
+        if (1)
+        // if (!sys_batt_charging)
         { // Only check cutoff when not charging
             if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
             {
