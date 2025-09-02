@@ -86,7 +86,7 @@ static void settings_load_defaults(void)
     current_settings.raise_to_wake = DEFAULT_RAISE_TO_WAKE;
     current_settings.button_sounds = DEFAULT_BUTTON_SOUNDS;
 
-    LOG_INF("Default settings loaded:");
+    /*LOG_INF("Default settings loaded:");
     LOG_INF("  Height: %d cm", current_settings.height);
     LOG_INF("  Weight: %d kg", current_settings.weight);
     LOG_INF("  Hand worn: %s", current_settings.hand_worn ? "Right" : "Left");
@@ -94,6 +94,7 @@ static void settings_load_defaults(void)
     LOG_INF("  Temperature unit: %s", current_settings.temp_unit ? "Fahrenheit" : "Celsius");
     LOG_INF("  Auto sleep: %s", current_settings.auto_sleep_enabled ? "Enabled" : "Disabled");
     LOG_INF("  Sleep timeout: %d seconds", current_settings.sleep_timeout);
+    */
 }
 
 static int settings_read_from_file(void)

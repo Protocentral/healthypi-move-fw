@@ -33,6 +33,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
+#include <zephyr/drivers/i2c.h>
 
 #include <zephyr/dfu/mcuboot.h>
 #include <stdio.h>
@@ -123,6 +124,7 @@ static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
 const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); // DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
+const struct device *i2c2_dev = DEVICE_DT_GET(DT_NODELABEL(i2c2));
 
 // LED Power DC/DC Enable
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
@@ -140,6 +142,63 @@ static bool critical_battery_notified = false;
 static uint32_t low_battery_last_update = 0;
 static uint8_t last_battery_level = 100;  // Store last known battery level
 static float last_battery_voltage = 4.2f; // Store last known battery voltage
+
+/**
+ * @brief Scan I2C2 bus for available devices
+ * 
+ * This function scans the I2C2 bus from address 0x08 to 0x77 to detect
+ * which devices are present. Used for debugging purposes during initialization.
+ * 
+ * @note This function should only be called during initialization/debugging
+ * as it can temporarily block the I2C bus while scanning.
+ */
+static void i2c2_bus_scan_debug(void)
+{
+    LOG_INF("=== I2C2 Bus Scan Debug ===");
+    
+    if (!device_is_ready(i2c2_dev)) {
+        LOG_ERR("I2C2 device not ready for scanning");
+        return;
+    }
+    
+    int devices_found = 0;
+    uint8_t dummy_data = 0;
+    
+    // Scan addresses from 0x08 to 0x77 (avoid reserved addresses)
+    for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
+        // Try to read 1 byte from the device
+        int ret = i2c_read(i2c2_dev, &dummy_data, 1, addr);
+        
+        if (ret == 0) {
+            LOG_INF("I2C device found at address 0x%02X", addr);
+            devices_found++;
+            
+            // Add specific device identification for known addresses
+            switch (addr) {
+                case 0x50:
+                    LOG_INF("  -> Expected: MAX30208 temperature sensor");
+                    break;
+                case 0x55:
+                    LOG_INF("  -> Expected: MAX32664C bio-sensor hub");
+                    break;
+                default:
+                    LOG_INF("  -> Unknown device");
+                    break;
+            }
+        }
+        
+        // Small delay between scans to be gentle on the bus
+        k_usleep(100);
+    }
+    
+    LOG_INF("I2C2 scan complete. Found %d device(s)", devices_found);
+    
+    if (devices_found == 0) {
+        LOG_WRN("No I2C devices found on bus 2. Check connections and power.");
+    }
+    
+    LOG_INF("=== End I2C2 Bus Scan ===");
+}
 
 // USB CDC UART
 #define RING_BUF_SIZE 512  // Reduced from 1024 to 512 bytes
@@ -669,6 +728,9 @@ void hw_module_init(void)
     NRF_TWIM2->FREQUENCY = 0x06200000;
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
+    // Debug: Scan I2C2 bus for available devices before initialization
+    //i2c2_bus_scan_debug();
+
     if (!device_is_ready(pmic))
     {
         LOG_ERR("PMIC device not ready");
@@ -808,6 +870,7 @@ void hw_module_init(void)
 
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(100));
+    
     /* Path of the one-shot reboot-attempt marker stored in LFS */
     const char *max32664c_reboot_marker = "/lfs/sys/max32664c_reboot_attempt";
 
