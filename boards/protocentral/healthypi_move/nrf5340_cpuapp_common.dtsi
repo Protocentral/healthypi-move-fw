@@ -269,7 +269,14 @@
 		zephyr,deferred-init;
 	};
 
-	max30208: max30208@52 {
+	max30208a50: max30208a50@50 {
+		compatible = "maxim,max30208";
+		status = "okay";
+		reg = <0x50>;
+		zephyr,deferred-init;
+	};
+
+	max30208a52: max30208a52@52 {
 		compatible = "maxim,max30208";
 		status = "okay";
 		reg = <0x52>;

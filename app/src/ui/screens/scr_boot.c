@@ -93,6 +93,7 @@ void draw_scr_boot(void)
     label_boot_messages = lv_label_create(scroll_container);
     lv_label_set_text(label_boot_messages, "");
     lv_obj_set_width(label_boot_messages, LV_PCT(100));
+    lv_obj_set_height(label_boot_messages, LV_SIZE_CONTENT);
     lv_label_set_long_mode(label_boot_messages, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_color(label_boot_messages, lv_color_white(), LV_PART_MAIN);
     lv_obj_align(label_boot_messages, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -131,8 +132,15 @@ void scr_boot_add_status(char *dev_label, bool status, bool show_status)
 
     lv_label_set_text(label_boot_messages, full_text);
 
+    // Refresh the label to ensure proper sizing
+    lv_obj_refresh_style(label_boot_messages, LV_PART_ANY, LV_STYLE_PROP_ANY);
+    lv_obj_update_layout(scroll_container);
+    
+    // Force LVGL to process tasks and then scroll
+    lv_task_handler();
+    
     // Auto-scroll to bottom to show latest message
-    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_ON);
+    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_OFF);
 }
 
 void scr_boot_add_final(bool status)
@@ -158,6 +166,13 @@ void scr_boot_add_final(bool status)
 
     lv_label_set_text(label_boot_messages, full_text);
 
+    // Refresh the label to ensure proper sizing
+    lv_obj_refresh_style(label_boot_messages, LV_PART_ANY, LV_STYLE_PROP_ANY);
+    lv_obj_update_layout(scroll_container);
+    
+    // Force LVGL to process tasks and then scroll
+    lv_task_handler();
+    
     // Auto-scroll to bottom to show final message
-    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_ON);
+    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_OFF);
 }

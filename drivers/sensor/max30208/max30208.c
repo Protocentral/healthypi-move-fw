@@ -38,7 +38,7 @@ static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t 
 {
 	const struct max30208_config *config = dev->config;
 
-	struct i2c_msg m_msgs[2];
+	/*struct i2c_msg m_msgs[2];
 	uint8_t reg_buf[1] = {reg};
 
 	m_msgs[0].buf = reg_buf;
@@ -53,10 +53,17 @@ static uint8_t max30208_read_reg(const struct device *dev, uint8_t reg, uint8_t 
 	if (ret < 0)
 	{
 		LOG_ERR("Failed to read register: %d", ret);
-	}
+	}*/
+
+	uint8_t wr_buf[1] = {reg};
+	int ret = 0;
+
+	ret = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	k_sleep(K_MSEC(10));
+	ret = i2c_read_dt(&config->i2c, read_buf, read_len);
 
 	// printk("Read register: %x\n", read_buf[0]);
-	return 0;
+	return ret;
 }
 
 static int max30208_write_reg(const struct device *dev, uint8_t reg, uint8_t val)
@@ -70,7 +77,7 @@ static int max30208_write_reg(const struct device *dev, uint8_t reg, uint8_t val
 	return 0;
 }
 
-static int max30208_get_chip_id(const struct device *dev, uint8_t* id)
+static int max30208_get_chip_id(const struct device *dev, uint8_t *id)
 {
 	uint8_t read_buf[1] = {0};
 
@@ -166,7 +173,7 @@ static int max30208_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	if(chip_id[0] != MAX30208_CHIP_ID)
+	if (chip_id[0] != MAX30208_CHIP_ID)
 	{
 		LOG_ERR("Invalid chip id: %x", chip_id[0]);
 		return -ENODEV;
