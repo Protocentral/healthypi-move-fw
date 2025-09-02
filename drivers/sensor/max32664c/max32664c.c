@@ -39,12 +39,12 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 /* I2C wrapper implementations - centralize error handling or logging here */
 
 #ifdef CONFIG_SENSOR_ASYNC_API
-/* RTIO-based I2C implementation functions 
- * 
+/* RTIO-based I2C implementation functions
+ *
  * These functions provide RTIO support for async I2C operations.
  * Currently implemented as fallback to synchronous I2C operations since
  * the Zephyr RTIO I2C API is still evolving.
- * 
+ *
  * Future implementations could utilize true RTIO I2C operations when
  * the API becomes stable and available.
  */
@@ -62,18 +62,21 @@ static int max32664c_i2c_rtio_write_impl(struct rtio *r, struct rtio_iodev *iode
     rtio_sqe_prep_write(&sqe, iodev, 0, (const uint8_t *)buf, (uint32_t)len, NULL);
 
     rc = rtio_sqe_copy_in(r, &sqe, 1);
-    if (rc < 0) {
+    if (rc < 0)
+    {
         return rc;
     }
 
     rc = rtio_submit(r, 1);
-    if (rc < 0) {
+    if (rc < 0)
+    {
         return rc;
     }
 
     /* Wait for completion and copy out one CQE */
     rc = rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER);
-    if (rc != 1) {
+    if (rc != 1)
+    {
         return -EIO;
     }
 
@@ -96,18 +99,21 @@ static int max32664c_i2c_rtio_read_impl(struct rtio *r, struct rtio_iodev *iodev
     rtio_sqe_prep_read(&sqe, iodev, 0, (uint8_t *)buf, (uint32_t)len, NULL);
 
     rc = rtio_sqe_copy_in(r, &sqe, 1);
-    if (rc < 0) {
+    if (rc < 0)
+    {
         return rc;
     }
 
     rc = rtio_submit(r, 1);
-    if (rc < 0) {
+    if (rc < 0)
+    {
         return rc;
     }
 
     /* Wait for completion */
     rc = rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER);
-    if (rc != 1) {
+    if (rc != 1)
+    {
         return -EIO;
     }
 
@@ -139,7 +145,8 @@ void max32664c_register_rtio_context(struct rtio *r, struct rtio_iodev *iodev)
 static int max32664c_i2c_write_impl(const struct i2c_dt_spec *i2c, const void *buf, size_t len)
 {
 #if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
-    if (max32664c_rtio_ctx && max32664c_rtio_iodev) {
+    if (max32664c_rtio_ctx && max32664c_rtio_iodev)
+    {
         return max32664c_i2c_rtio_write_impl(max32664c_rtio_ctx, max32664c_rtio_iodev, buf, len);
     }
 #else
@@ -150,7 +157,8 @@ static int max32664c_i2c_write_impl(const struct i2c_dt_spec *i2c, const void *b
 static int max32664c_i2c_read_impl(const struct i2c_dt_spec *i2c, void *buf, size_t len)
 {
 #if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
-    if (max32664c_rtio_ctx && max32664c_rtio_iodev) {
+    if (max32664c_rtio_ctx && max32664c_rtio_iodev)
+    {
         return max32664c_i2c_rtio_read_impl(max32664c_rtio_ctx, max32664c_rtio_iodev, buf, len);
     }
 #else
@@ -958,13 +966,7 @@ static int max32664c_chip_init(const struct device *dev)
 
     max32664c_do_enter_app(dev);
 
-    /* Try to probe the hub. If it fails, attempt up to two local sensor resets
-     * and re-probes (Option A). If still not found, log status and continue
-     * boot without rebooting the whole system.
-     */
     bool hub_found = false;
-    const int max_local_reset_attempts = 2;
-    int attempt = 0;
 
     if (max32664c_get_ver(dev, data->hub_ver) == 0)
     {
@@ -973,10 +975,8 @@ static int max32664c_chip_init(const struct device *dev)
     }
     else
     {
-    LOG_ERR("MAX32664C not responding on first probe");
-    /* Return error and let the application decide whether to reboot or continue.
-     * The application implements a one-shot reboot-attempt marker in LFS. */
-    return -ENODEV;
+        LOG_ERR("MAX32664C not responding");
+        return -ENODEV;
     }
 
     max32664c_check_sensors(dev);
