@@ -30,8 +30,8 @@
 		group1 {
 			psels = <NRF_PSEL(TWIM_SDA, 0, 24)>,
 					<NRF_PSEL(TWIM_SCL, 0, 25)>;
-			//bias-pull-up;
-			//nordic,drive-mode = <NRF_DRIVE_S0D1>;//<NRF_DRIVE_H0H1>;
+			bias-pull-up;
+			nordic,drive-mode = <NRF_DRIVE_S0D1>;//<NRF_DRIVE_H0H1>;
 
 		};
 	};
@@ -41,8 +41,8 @@
 			psels = <NRF_PSEL(TWIM_SDA, 0, 24)>,
 					<NRF_PSEL(TWIM_SCL, 0, 25)>;
 			low-power-enable;
-			//bias-pull-up;
-			//nordic,drive-mode = <NRF_DRIVE_S0D1>;//<NRF_DRIVE_H0H1>;// <NRF_DRIVE_S0D1>;
+			bias-pull-up;
+			nordic,drive-mode = <NRF_DRIVE_S0D1>;//<NRF_DRIVE_H0H1>;// <NRF_DRIVE_S0D1>;
 
 		};
 	};

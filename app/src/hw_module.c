@@ -103,7 +103,8 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 char curr_string[40];
 
 // Peripheral Device Pointers
-static const struct device *max30208_dev = DEVICE_DT_GET_ANY(maxim_max30208);
+static const struct device *max30208a50_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a50));
+static const struct device *max30208a52_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a52));
 
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
@@ -580,8 +581,8 @@ double read_temp_f(void)
 {
     struct sensor_value temp_sample;
 
-    sensor_sample_fetch(max30208_dev);
-    sensor_channel_get(max30208_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
+    sensor_sample_fetch(max30208a50_dev);
+    sensor_channel_get(max30208a50_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
     // last_read_temp_value = temp_sample.val1;
     double temp_c = (double)temp_sample.val1 * 0.005;
     double temp_f = (temp_c * 1.8) + 32.0;
@@ -734,7 +735,7 @@ void hw_module_init(void)
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
     // Debug: Scan I2C2 bus for available devices before initialization
-    // i2c2_bus_scan_debug();
+    //i2c2_bus_scan_debug();
 
     if (!device_is_ready(pmic))
     {
@@ -1097,18 +1098,33 @@ void hw_module_init(void)
 
     // setup_pmic_callbacks();
 
-    device_init(max30208_dev);
+    device_init(max30208a50_dev);
     k_sleep(K_MSEC(100));
 
-    if (!device_is_ready(max30208_dev))
+    if (!device_is_ready(max30208a50_dev))
     {
-        LOG_ERR("MAX30208 device not found!");
-        hw_add_boot_msg("MAX30208", false, true, false, 0);
+        LOG_ERR("MAX30208A50 device not found!");
+        hw_add_boot_msg("MAX30208 @50", false, true, false, 0);        
     }
     else
     {
-        LOG_INF("MAX30208 device found!");
-        hw_add_boot_msg("MAX30208", true, true, false, 0);
+        LOG_INF("MAX30208A50 device found!");
+        hw_add_boot_msg("MAX30208A50 @50", true, true, false, 0);
+    }
+
+    device_init(max30208a52_dev);
+    k_sleep(K_MSEC(100));
+
+    if (!device_is_ready(max30208a52_dev))
+    {
+        LOG_ERR("MAX30208A52 device not found!");
+        hw_add_boot_msg("MAX30208 @52", false, true, false, 0);
+    }
+    else
+    {
+        max30208a50_dev = max30208a52_dev; // Use the device with address 0x52
+        LOG_INF("MAX30208A52 device found!");
+        hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
     }
 
     hw_add_boot_msg("Boot complete !!", true, false, false, 0);
