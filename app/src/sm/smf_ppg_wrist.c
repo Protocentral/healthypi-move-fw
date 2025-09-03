@@ -592,15 +592,14 @@ static void smf_ppg_wrist_thread(void)
     for (;;)
     {
         ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
-        LOG_ERR("CRITICAL: smf_run_state returned, m_curr_state=%d", m_curr_state);
-
+        
         if (ret)
         {
             LOG_ERR("Error in PPG State Machine");
             break;
         }
 
-        k_msleep(1000);
+        k_msleep(500);
     }
 }
 

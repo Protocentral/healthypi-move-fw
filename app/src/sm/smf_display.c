@@ -1027,26 +1027,13 @@ static void st_display_sleep_entry(void *o)
 
 static void st_display_sleep_run(void *o)
 {
-    int inactivity_time = lv_disp_get_inactive_time(NULL);
-    // LOG_DBG("Inactivity Time: %d", inactivity_time);
-    
-    uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
-    
-    if (sleep_timeout_ms == UINT32_MAX || inactivity_time < sleep_timeout_ms)
+    if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
-        // hpi_display_sleep_on();
+        LOG_DBG("Crown key pressed in sleep state");
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
-    else
-    {
-        // If we are in sleep state, we can still process some events
-        // For example, if the user presses the crown button
-        if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
-        {
-            LOG_DBG("Crown key pressed in sleep state");
-            smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
-        }
-    }
+    
+    // TODO: Add other wake-up triggers here if needed (touch events, etc.)
 }
 
 static void st_display_sleep_exit(void *o)
@@ -1067,6 +1054,9 @@ static void st_display_sleep_exit(void *o)
 
     // Clear the saved state after successful restoration
     hpi_disp_clear_saved_state();
+    
+    // Trigger LVGL activity to reset the inactivity timer
+    lv_disp_trig_activity(NULL);
 }
 
 static void st_display_on_entry(void *o)
