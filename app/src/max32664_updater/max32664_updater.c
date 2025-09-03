@@ -37,9 +37,9 @@
 
 #include "max32664_updater.h"
 
-LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_ERR);
+LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_DBG);
 
-#define MAX32664C_DEFAULT_CMD_DELAY 10
+#define MAX32664C_DEFAULT_CMD_DELAY 30
 
 #define MAX32664C_FW_UPDATE_WRITE_SIZE 8208 // Page size 8192 + 16 bytes for CRC
 #define MAX32664C_FW_UPDATE_START_ADDR 0x4C
@@ -80,7 +80,7 @@ static int m_read_bl_ver(const struct device *dev)
 	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	// BL Version read successfully
+	LOG_DBG("BL Version: %x.%x.%x\n", rd_buf[1], rd_buf[2], rd_buf[3]);
 	return 0;
 }
 
@@ -126,7 +126,7 @@ static int m_write_set_num_pages(const struct device *dev, uint8_t num_pages)
 	wr_buf[3] = num_pages;
 
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+	k_sleep(K_MSEC(100));
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
 	LOG_DBG("Write Num Pages RSP: %x", rd_buf[0]);
@@ -526,6 +526,7 @@ static int max32664_load_fw(const struct device *dev, const char *fw_file_path, 
 	}
 
 	m_read_mcu_id(dev);
+	k_sleep(K_MSEC(100));
 
 	int set_pages_ret = m_write_set_num_pages(dev, msbl_num_pages);
 	if (set_pages_ret != 0x00) {
@@ -634,7 +635,7 @@ static int m_read_op_mode(const struct device *dev)
 	k_sleep(K_MSEC(45));
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	// LOG_INF("Op mode = %x\n", rd_buf[1]);
+	LOG_DBG("Op mode = %x\n", rd_buf[1]);
 
 	return rd_buf[1];
 }

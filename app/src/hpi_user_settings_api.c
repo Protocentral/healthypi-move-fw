@@ -35,7 +35,7 @@ LOG_MODULE_REGISTER(hpi_user_settings_api, LOG_LEVEL_INF);
 
 int hpi_user_settings_init(void)
 {
-    return hpi_settings_persistence_init();
+    return hpi_settings_store_init();
 }
 
 uint16_t hpi_user_settings_get_height(void)

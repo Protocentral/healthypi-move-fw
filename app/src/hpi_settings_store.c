@@ -28,13 +28,13 @@
  */
 
 
-#include "hpi_settings_persistence.h"
+#include "hpi_settings_store.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/fs/fs.h>
 #include <string.h>
 #include <stdint.h>
 
-LOG_MODULE_REGISTER(hpi_settings_persistence, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(hpi_settings_store, LOG_LEVEL_DBG);
 
 // Settings file path
 #define SETTINGS_FILE_PATH "/lfs/user_settings.bin"
@@ -246,7 +246,7 @@ close_file:
     return rc;
 }
 
-int hpi_settings_persistence_init(void)
+int hpi_settings_store_init(void)
 {
     int rc;
 
@@ -270,7 +270,7 @@ int hpi_settings_persistence_init(void)
     }
 
     settings_initialized = true;
-    LOG_INF("Settings persistence initialized successfully");
+    LOG_INF("Settings store initialized successfully");
 
     return 0;
 }
