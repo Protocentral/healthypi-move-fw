@@ -698,7 +698,7 @@ static int max32664c_set_mode_wake_on_motion(const struct device *dev)
     // Command: AA 44 04 01 00
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
-    LOG_INF("Wake-on-motion configured: WUFC=0x%02x (0.2s), ATH=0x%02x (0.5g)", 
+    LOG_INF("Wake-on-motion configured: WUFC=0x%02x (0.4s), ATH=0x%02x (1.5g)", 
             MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
     return 0;
 }

@@ -26,10 +26,10 @@
 #define MAX32664C_ACC_ID 0x1B
 
 // Motion detection parameters according to datasheet
-// WUFC: Time in seconds × 25 (0.2s × 25 = 5)  
-#define MAX32664C_MOTION_WUFC 0x05
-// ATH: Threshold in g × 16 (0.5g × 16 = 8)
-#define MAX32664C_MOTION_ATH 0x08
+// WUFC: Time in seconds × 25 (0.4s × 25 = 10) - increased filter time to reduce noise  
+#define MAX32664C_MOTION_WUFC 0x14
+// ATH: Threshold in g × 16 (1.5g × 16 = 24) - increased threshold for actual wrist motion
+#define MAX32664C_MOTION_ATH 0x20
 
 uint8_t max32664c_read_hub_status(const struct device *dev);
 void max32664c_do_enter_bl(const struct device *dev);
