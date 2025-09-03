@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthyPi Move - PPG Wrist State Machine</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+        
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .diagram-container {
+            padding: 40px;
+            background: #f8f9fa;
+        }
+        
+        .state-machine {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .state {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .state:hover {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+        
+        .state-rect {
+            stroke-width: 2;
+            rx: 8;
+            ry: 8;
+        }
+        
+        .active-state {
+            fill: #28a745;
+            stroke: #1e7e34;
+        }
+        
+        .probing-state {
+            fill: #ffc107;
+            stroke: #d39e00;
+        }
+        
+        .motion-state {
+            fill: #17a2b8;
+            stroke: #117a8b;
+        }
+        
+        .off-skin-state {
+            fill: #dc3545;
+            stroke: #c82333;
+            opacity: 0.6;
+        }
+        
+        .start-state {
+            fill: #6c757d;
+            stroke: #495057;
+        }
+        
+        .state-text {
+            fill: white;
+            font-weight: bold;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+        
+        .state-title {
+            font-size: 14px;
+        }
+        
+        .state-details {
+            font-size: 10px;
+            opacity: 0.9;
+        }
+        
+        .transition {
+            stroke: #6c757d;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        
+        .transition-label {
+            font-size: 11px;
+            fill: #495057;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            background: white;
+        }
+        
+        .transition-bg {
+            fill: white;
+            stroke: white;
+            stroke-width: 3;
+            opacity: 0.8;
+        }
+        
+        .legend {
+            margin-top: 30px;
+            padding: 25px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .legend h3 {
+            margin: 0 0 20px 0;
+            color: #2c3e50;
+            font-size: 1.3em;
+        }
+        
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .legend-item {
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        
+        .legend-active {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        
+        .legend-probing {
+            background: #fff3cd;
+            border-color: #ffc107;
+        }
+        
+        .legend-motion {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+        }
+        
+        .legend-off-skin {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+        
+        .legend-item h4 {
+            margin: 0 0 8px 0;
+            color: #2c3e50;
+        }
+        
+        .legend-item ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+        
+        .legend-item li {
+            margin: 4px 0;
+            color: #495057;
+        }
+        
+        .info-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 20px;
+            display: none;
+            z-index: 1000;
+        }
+        
+        .info-panel h4 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #6c757d;
+        }
+        
+        .close-btn:hover {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>PPG Wrist State Machine</h1>
+            <p>HealthyPi Move - Photoplethysmography Sensor Management</p>
+        </div>
+        
+        <div class="diagram-container">
+            <svg class="state-machine" viewBox="0 0 1000 600">
+                <!-- Define arrow marker -->
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#6c757d" />
+                    </marker>
+                </defs>
+                
+                <!-- Start State -->
+                <g class="state" onclick="showStateInfo('start')">
+                    <circle cx="80" cy="100" r="25" class="state-rect start-state"/>
+                    <text x="80" y="100" class="state-text state-title">START</text>
+                </g>
+                
+                <!-- ACTIVE State -->
+                <g class="state" onclick="showStateInfo('active')">
+                    <rect x="200" y="50" width="180" height="100" class="state-rect active-state"/>
+                    <text x="290" y="80" class="state-text state-title">ACTIVE</text>
+                    <text x="290" y="95" class="state-text state-details">PPG Sampling</text>
+                    <text x="290" y="107" class="state-text state-details">AEC + HRM Mode</text>
+                    <text x="290" y="119" class="state-text state-details">120ms intervals</text>
+                    <text x="290" y="131" class="state-text state-details">Skin monitoring</text>
+                </g>
+                
+                <!-- PROBING State -->
+                <g class="state" onclick="showStateInfo('probing')">
+                    <rect x="500" y="50" width="180" height="100" class="state-rect probing-state"/>
+                    <text x="590" y="80" class="state-text state-title">PROBING</text>
+                    <text x="590" y="95" class="state-text state-details">Skin Detection</text>
+                    <text x="590" y="107" class="state-text state-details">SCD Mode</text>
+                    <text x="590" y="119" class="state-text state-details">15s duration</text>
+                    <text x="590" y="131" class="state-text state-details">Contact sensing</text>
+                </g>
+                
+                <!-- MOTION_DETECT State -->
+                <g class="state" onclick="showStateInfo('motion')">
+                    <rect x="200" y="300" width="180" height="100" class="state-rect motion-state"/>
+                    <text x="290" y="330" class="state-text state-title">MOTION DETECT</text>
+                    <text x="290" y="345" class="state-text state-details">Low Power</text>
+                    <text x="290" y="357" class="state-text state-details">Wake-on-Motion</text>
+                    <text x="290" y="369" class="state-text state-details">Motion sensing</text>
+                    <text x="290" y="381" class="state-text state-details">Sleep mode</text>
+                </g>
+                
+                <!-- OFF_SKIN State (Now Active) -->
+                <g class="state" onclick="showStateInfo('off_skin')">
+                    <rect x="500" y="300" width="180" height="100" class="state-rect off-skin-state" style="opacity: 1;"/>
+                    <text x="590" y="330" class="state-text state-title">OFF SKIN</text>
+                    <text x="590" y="345" class="state-text state-details">Power Saving</text>
+                    <text x="590" y="357" class="state-text state-details">Wake-on-Motion</text>
+                    <text x="590" y="369" class="state-text state-details">10s threshold</text>
+                    <text x="590" y="381" class="state-text state-details">No PPG sampling</text>
+                </g>
+                
+                <!-- Transitions -->
+                <!-- Start to Active -->
+                <path d="M 105 100 L 195 100" class="transition"/>
+                <rect x="135" y="88" width="45" height="24" class="transition-bg"/>
+                <text x="157" y="100" class="transition-label">System Start</text>
+                
+                <!-- Active to Probing (back transition) -->
+                <path d="M 500 90 Q 450 50 380 90" class="transition"/>
+                <rect x="420" y="63" width="60" height="12" class="transition-bg"/>
+                <text x="450" y="69" class="transition-label">on_skin detected</text>
+                
+                <!-- Probing to Active -->
+                <path d="M 380 110 Q 450 130 500 110" class="transition"/>
+                <rect x="420" y="115" width="60" height="12" class="transition-bg"/>
+                <text x="450" y="121" class="transition-label">skin_contact</text>
+                
+                <!-- Active to Motion Detect -->
+                <path d="M 290 150 L 290 295" class="transition" stroke-dasharray="5,5" opacity="0.6"/>
+                <rect x="240" y="210" width="100" height="24" class="transition-bg"/>
+                <text x="290" y="222" class="transition-label" opacity="0.6">(Legacy: bypassed)</text>
+                
+                <!-- Motion Detect to Probing -->
+                <path d="M 380 350 Q 450 280 500 350" class="transition"/>
+                <rect x="420" y="303" width="60" height="24" class="transition-bg"/>
+                <text x="450" y="312" class="transition-label">motion detected</text>
+                <text x="450" y="324" class="transition-label">(+1s delay)</text>
+                
+                <!-- Active to Off Skin -->
+                <path d="M 380 100 Q 440 200 500 350" class="transition"/>
+                <rect x="420" y="215" width="60" height="24" class="transition-bg"/>
+                <text x="450" y="224" class="transition-label">off_skin detected</text>
+                <text x="450" y="236" class="transition-label">(10s delay)</text>
+                
+                <!-- Off Skin to Probing -->
+                <path d="M 500 350 Q 400 280 380 110" class="transition"/>
+                <rect x="420" y="303" width="60" height="24" class="transition-bg"/>
+                <text x="450" y="312" class="transition-label">motion detected</text>
+                <text x="450" y="324" class="transition-label">(+1s delay)</text>
+            </svg>
+        </div>
+        
+        <div class="legend">
+            <h3>State Machine Legend</h3>
+            <div class="legend-grid">
+                <div class="legend-item legend-active">
+                    <h4>🟢 ACTIVE State</h4>
+                    <ul>
+                        <li>Normal PPG data collection</li>
+                        <li>Algorithm: AEC + Continuous HRM</li>
+                        <li>Sampling: 120ms intervals</li>
+                        <li>Monitoring skin contact continuously</li>
+                        <li>Data queued for processing</li>
+                    </ul>
+                </div>
+                
+                <div class="legend-item legend-probing">
+                    <h4>🟡 PROBING State</h4>
+                    <ul>
+                        <li>Skin contact detection mode</li>
+                        <li>Algorithm: SCD (Skin Contact Detection)</li>
+                        <li>Duration: 15 second probe period</li>
+                        <li>Determines if device is properly worn</li>
+                        <li>Transitions to ACTIVE when contact found</li>
+                    </ul>
+                </div>
+                
+                <div class="legend-item legend-motion">
+                    <h4>🔵 MOTION DETECT State</h4>
+                    <ul>
+                        <li>Low power motion detection</li>
+                        <li>Algorithm: Wake-on-Motion mode</li>
+                        <li>Waits for user movement</li>
+                        <li>Minimizes power consumption</li>
+                        <li>1 second delay before state change</li>
+                    </ul>
+                </div>
+                
+                <div class="legend-item legend-off-skin">
+                    <h4>🔴 OFF SKIN State</h4>
+                    <ul>
+                        <li>Activated after 10 seconds off-skin detection</li>
+                        <li>Maximum power saving mode</li>
+                        <li>PPG sampling completely stopped</li>
+                        <li>Wake-on-Motion for user movement detection</li>
+                        <li>Transitions to PROBING when motion detected</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Info Panel -->
+    <div id="infoPanel" class="info-panel">
+        <button class="close-btn" onclick="hideStateInfo()">×</button>
+        <h4 id="infoTitle">State Information</h4>
+        <div id="infoContent"></div>
+    </div>
+    
+    <script>
+        const stateInfo = {
+            start: {
+                title: "System Start",
+                content: `
+                    <p><strong>Initial State:</strong> System initialization point</p>
+                    <p><strong>Action:</strong> Automatically transitions to ACTIVE state when PPG system starts</p>
+                    <p><strong>Hardware:</strong> MAX32664C device presence check</p>
+                    <p><strong>Timer:</strong> Starts 120ms sampling timer</p>
+                `
+            },
+            active: {
+                title: "ACTIVE - Normal Operation",
+                content: `
+                    <p><strong>Hardware Mode:</strong> MAX32664C_OP_MODE_ALGO_AEC</p>
+                    <p><strong>Algorithm:</strong> MAX32664C_ALGO_MODE_CONT_HRM</p>
+                    <p><strong>Sampling Rate:</strong> 120ms intervals</p>
+                    <p><strong>Function:</strong> Continuous PPG data collection and processing</p>
+                    <p><strong>Monitoring:</strong> Skin contact state (SCD) monitoring</p>
+                    <p><strong>Data Flow:</strong> PPG samples queued for processing</p>
+                    <p><strong>Exit Condition:</strong> sem_ppg_wrist_off_skin signal</p>
+                `
+            },
+            probing: {
+                title: "PROBING - Skin Detection",
+                content: `
+                    <p><strong>Hardware Mode:</strong> MAX32664C_OP_MODE_SCD</p>
+                    <p><strong>Algorithm:</strong> MAX32664C_ALGO_MODE_CONT_HRM</p>
+                    <p><strong>Duration:</strong> 15 second probe period</p>
+                    <p><strong>Function:</strong> Skin contact detection</p>
+                    <p><strong>Purpose:</strong> Determine if device is properly worn</p>
+                    <p><strong>Trigger:</strong> work_on_skin handler with 15s delay</p>
+                    <p><strong>Exit Condition:</strong> sem_ppg_wrist_on_skin signal</p>
+                `
+            },
+            motion: {
+                title: "MOTION DETECT - Low Power",
+                content: `
+                    <p><strong>Hardware Mode:</strong> MAX32664C_OP_MODE_WAKE_ON_MOTION</p>
+                    <p><strong>Algorithm:</strong> MAX32664C_ALGO_MODE_NONE</p>
+                    <p><strong>Power State:</strong> Low power consumption</p>
+                    <p><strong>Function:</strong> Wait for user movement</p>
+                    <p><strong>Counter:</strong> sig_wake_on_motion_count reset</p>
+                    <p><strong>Delay:</strong> 1 second delay before transition</p>
+                    <p><strong>Exit Condition:</strong> sem_ppg_wrist_motion_detected signal</p>
+                `
+            },
+            off_skin: {
+                title: "OFF SKIN - Power Saving Mode",
+                content: `
+                    <p><strong>Trigger:</strong> 10 seconds of continuous off-skin detection</p>
+                    <p><strong>Hardware Mode:</strong> MAX32664C_OP_MODE_WAKE_ON_MOTION</p>
+                    <p><strong>Algorithm:</strong> MAX32664C_ALGO_MODE_NONE</p>
+                    <p><strong>Power State:</strong> Maximum power saving - PPG sampling stopped</p>
+                    <p><strong>Function:</strong> Wait for user movement to resume operation</p>
+                    <p><strong>Monitoring:</strong> Motion detection only</p>
+                    <p><strong>Exit Condition:</strong> sem_ppg_wrist_motion_detected signal</p>
+                    <p><strong>Recovery:</strong> 1 second delay then transition to PROBING</p>
+                    <p><strong>Timer:</strong> PPG sampling timer stopped for power saving</p>
+                `
+            }
+        };
+        
+        function showStateInfo(state) {
+            const panel = document.getElementById('infoPanel');
+            const title = document.getElementById('infoTitle');
+            const content = document.getElementById('infoContent');
+            
+            if (stateInfo[state]) {
+                title.textContent = stateInfo[state].title;
+                content.innerHTML = stateInfo[state].content;
+                panel.style.display = 'block';
+            }
+        }
+        
+        function hideStateInfo() {
+            document.getElementById('infoPanel').style.display = 'none';
+        }
+        
+        // Close info panel when clicking outside
+        document.addEventListener('click', function(event) {
+            const panel = document.getElementById('infoPanel');
+            const isClickInside = panel.contains(event.target) || event.target.closest('.state');
+            
+            if (!isClickInside && panel.style.display === 'block') {
+                hideStateInfo();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -75,14 +75,15 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
     return 0;
 }
 
-static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode)
+int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
 
     uint8_t wr_buf[2] = {0x12, 0x01};
     static uint8_t buf[2048];
-    static int sample_len = 1;
+    int sample_len = 7; // 1 byte op mode + 6 bytes accel data
+    bool motion_detected = false;
 
     uint8_t hub_stat = max32664c_read_hub_status(dev);
     if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK)
@@ -96,8 +97,7 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
 
         if (fifo_count > 0)
         {
-            sample_len = 1;
-            *chip_op_mode = data->op_mode;
+            *chip_op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
 
             gpio_pin_set_dt(&config->mfio_gpio, 0);
             k_sleep(K_USEC(300));
@@ -107,12 +107,43 @@ static int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev,
             k_sleep(K_USEC(300));
             gpio_pin_set_dt(&config->mfio_gpio, 1);
 
+            LOG_INF("Wake-on-motion: %d samples in FIFO", fifo_count);
+            
             for (int i = 0; i < fifo_count; i++)
             {
                 uint8_t algo_op_mode = (uint8_t)buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
-                LOG_INF("Algo Op Mode: %d", algo_op_mode);
+                
+                // Extract accelerometer data 
+                int16_t accel_x = (int16_t)((buf[(sample_len * i) + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8) | 
+                                           buf[(sample_len * i) + 2 + MAX32664C_SENSOR_DATA_OFFSET]);
+                int16_t accel_y = (int16_t)((buf[(sample_len * i) + 3 + MAX32664C_SENSOR_DATA_OFFSET] << 8) | 
+                                           buf[(sample_len * i) + 4 + MAX32664C_SENSOR_DATA_OFFSET]);
+                int16_t accel_z = (int16_t)((buf[(sample_len * i) + 5 + MAX32664C_SENSOR_DATA_OFFSET] << 8) | 
+                                           buf[(sample_len * i) + 6 + MAX32664C_SENSOR_DATA_OFFSET]);
+                
+                // Check if this represents significant motion
+                // Use magnitude threshold for motion detection
+                int32_t magnitude = (int32_t)accel_x * accel_x + (int32_t)accel_y * accel_y + (int32_t)accel_z * accel_z;
+                if (magnitude > 1000) { // Threshold for motion detection (adjustable)
+                    LOG_INF("MOTION DETECTED: X=%d, Y=%d, Z=%d, magnitude=%d", accel_x, accel_y, accel_z, magnitude);
+                    motion_detected = true;
+                }
+                
+                LOG_DBG("Motion poll: mode=%d, accel=[%d,%d,%d], mag=%d", algo_op_mode, accel_x, accel_y, accel_z, magnitude);
             }
         }
+        else 
+        {
+            // Even if no FIFO data, still set the chip mode for polling
+            *chip_op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
+            LOG_DBG("Wake-on-motion: No FIFO data, continuing to poll");
+        }
+    }
+    else 
+    {
+        // No data ready, but still set mode for continuous polling
+        *chip_op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
+        LOG_DBG("Wake-on-motion: No data ready, continuing to poll");
     }
     return 0;
 }

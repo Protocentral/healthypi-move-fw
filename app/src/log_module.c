@@ -130,8 +130,8 @@ static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_s
     
     CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND), "open", fname);
     CHECK_FS_OP(fs_write(&file, data, data_size), "write", fname);
+    CHECK_FS_OP(fs_sync(&file), "sync", fname);  // Sync before close
     CHECK_FS_OP(fs_close(&file), "close", fname);
-    CHECK_FS_OP(fs_sync(&file), "sync", fname);
     
     return 0;
 }

@@ -603,7 +603,7 @@ void hw_module_init(void)
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
     // Debug: Scan I2C2 bus for available devices before initialization
-    //i2c2_bus_scan_debug();
+    // i2c2_bus_scan_debug();
 
     if (!device_is_ready(pmic))
     {
@@ -884,7 +884,7 @@ void hw_module_init(void)
             }
         }
 
-        //k_sem_give(&sem_ppg_wrist_sm_start);
+        k_sem_give(&sem_ppg_wrist_sm_start);
     }
 
     device_init(max32664d_dev);
@@ -972,7 +972,7 @@ void hw_module_init(void)
     if (!device_is_ready(max30208a50_dev))
     {
         LOG_ERR("MAX30208A50 device not found!");
-        hw_add_boot_msg("MAX30208 @50", false, true, false, 0);        
+        hw_add_boot_msg("MAX30208 @50", false, true, false, 0);
     }
     else
     {

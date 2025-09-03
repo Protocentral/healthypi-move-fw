@@ -672,36 +672,50 @@ static int max32664c_set_mode_scd(const struct device *dev)
 
 static int max32664c_set_mode_wake_on_motion(const struct device *dev)
 {
-    LOG_DBG("MAX32664C entering wake on motion mode...");
+    LOG_DBG("MAX32664C entering wake on motion mode per datasheet...");
 
-    // Stop Algorithm
+    // Step 1: Stop existing operations
+    // Stop Algorithm first
     m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
+    
+    // Disable accelerometer if running
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Set motion detection threshold
-    m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, 0x03, 0x04);
+    // Step 2: Configure Wake-Up on Motion
+    // Command: AA 46 04 00 01 [WUFC] [ATH]
+    // WUFC=0x05 (0.2s), ATH=0x08 (0.5g threshold)
+    m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
 
-    // Set output mode accel only
+    // Step 3: Set Output Mode to accelerometer-only
+    // Command: AA 10 00 01
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Set report rate
+    // Step 4: Set Report Rate - one report per sensor sample
+    // Command: AA 10 02 01
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Enable Accel
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 30);
+    // Step 5: Enable Accelerometer in motion detection mode
+    // Command: AA 44 04 01 00
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
+    LOG_INF("Wake-on-motion configured: WUFC=0x%02x (0.2s), ATH=0x%02x (0.5g)", 
+            MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
     return 0;
 }
 
 static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
 {
-    LOG_DBG("MAX32664C exiting wake on motion mode...");
+    LOG_DBG("MAX32664C exiting wake on motion mode per datasheet...");
 
-    // Disable Accel
-    m_i2c_write_cmd_3(dev, 0x44, 0x04, 0x00, 30);
-
-    // Exit wake on motion mode
+    // Step 1: Disable Wake-Up on Motion configuration
+    // Command: AA 46 04 00 00 FF FF (disable motion detection)
     m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x00, 0xFF, 0xFF);
 
+    // Step 2: Disable Accelerometer 
+    // Command: AA 44 04 00 00
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
+
+    LOG_DBG("Wake-on-motion mode disabled");
     return 0;
 }
 
@@ -1007,6 +1021,40 @@ static int max32664c_pm_action(const struct device *dev,
     return ret;
 }
 #endif /* CONFIG_PM_DEVICE */
+
+int max32664c_test_motion_detection(const struct device *dev)
+{
+    LOG_INF("Testing MAX32664C motion detection...");
+    
+    struct max32664c_data *data = dev->data;
+    uint8_t original_mode = data->op_mode;
+    
+    // Set wake-on-motion mode
+    max32664c_set_mode_wake_on_motion(dev);
+    data->op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
+    
+    LOG_INF("Motion detection active - move the device now!");
+    LOG_INF("Monitoring for 10 seconds...");
+    
+    // Monitor motion for 10 seconds
+    for (int i = 0; i < 100; i++) {
+        uint8_t hub_stat = max32664c_read_hub_status(dev);
+        if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK) {
+            LOG_INF("Motion event detected! Hub status: 0x%02x", hub_stat);
+            
+            // Trigger the async fetch to decode motion data
+            uint8_t chip_op_mode;
+            max32664c_async_sample_fetch_wake_on_motion(dev, &chip_op_mode);
+        }
+        k_msleep(100);
+    }
+    
+    // Restore original mode
+    data->op_mode = original_mode;
+    LOG_INF("Motion detection test complete");
+    
+    return 0;
+}
 
 #define MAX32664C_DEFINE(inst)                                      \
     static struct max32664c_data max32664c_data_##inst;             \
