@@ -598,8 +598,18 @@ static void st_display_boot_run(void *o)
 
     if (k_sem_take(&sem_boot_update_req, K_NO_WAIT) == 0)
     {
-        const char msg[] = "MAX32664D \n FW Update Required";
-        memcpy(s->title, msg, sizeof(msg));
+        // Get the current device type to show the correct title
+        enum max32664_updater_device_type device_type = max32664_get_current_update_device_type();
+        const char *msg;
+        
+        if (device_type == MAX32664_UPDATER_DEV_TYPE_MAX32664C) {
+            msg = "MAX32664C \n FW Update Required";
+        } else {
+            msg = "MAX32664D \n FW Update Required";
+        }
+        
+        // Copy the appropriate message
+        strcpy(s->title, msg);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SCR_PROGRESS]);
     }
 
@@ -945,6 +955,10 @@ static void st_display_active_run(void *o)
         else if (hpi_disp_get_curr_screen() == SCR_SPL_PULLDOWN)
         {
             hpi_disp_settings_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+        }
+        else if (hpi_disp_get_curr_screen() == SCR_SPL_LOW_BATTERY)
+        {
+            hpi_disp_low_battery_update(m_disp_batt_level, m_disp_batt_charging);
         }
         last_batt_refresh = k_uptime_get_32();
     }

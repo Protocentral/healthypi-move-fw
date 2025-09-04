@@ -54,7 +54,6 @@ static int64_t ref_time;
 // Low battery state tracking
 static bool low_battery_screen_active = false;
 static bool critical_battery_notified = false;
-static uint32_t low_battery_last_update = 0;
 static uint8_t last_battery_level = 100;  // Store last known battery level
 static float last_battery_voltage = 4.2f; // Store last known battery voltage
 
@@ -271,7 +270,9 @@ void battery_monitor_conditions(uint8_t sys_batt_level, bool sys_batt_charging, 
             if (low_battery_screen_active)
             {
                 LOG_INF("Battery voltage recovered (%.2f V) - dismissing low battery screen", (double)sys_batt_voltage);
-                // Return to home screen
+                // Cleanup low battery screen UI references
+                hpi_disp_low_battery_cleanup();
+                // Return to home screen and reset low battery screen state
                 hpi_load_screen(SCR_HOME, SCROLL_NONE);
             }
             low_battery_screen_active = false;
@@ -282,15 +283,9 @@ void battery_monitor_conditions(uint8_t sys_batt_level, bool sys_batt_charging, 
 
 void battery_update_low_battery_screen(uint8_t sys_batt_level, bool sys_batt_charging, float sys_batt_voltage)
 {
-    // Update low battery screen if it's currently active and status changed
-    if (low_battery_screen_active)
-    {
-        // Only refresh every 5 seconds to avoid excessive updates
-        if (k_uptime_get_32() - low_battery_last_update > 5000)
-        {
-            // Refresh the low battery screen to show updated charging status and voltage
-            hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
-            low_battery_last_update = k_uptime_get_32();
-        }
-    }
+    // The display state machine now handles updates via hpi_disp_low_battery_update()
+    // This function is kept for backward compatibility but no longer does screen recreation
+    (void)sys_batt_level;
+    (void)sys_batt_charging;
+    (void)sys_batt_voltage;
 }

@@ -45,3 +45,4 @@ enum max32664_updater_status
 
 void max32664_updater_start(const struct device *dev, enum max32664_updater_device_type type);
 void max32664_set_progress_callback(void (*callback)(int progress, int status));
+enum max32664_updater_device_type max32664_get_current_update_device_type(void);

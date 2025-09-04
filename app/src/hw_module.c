@@ -603,7 +603,7 @@ void hw_module_init(void)
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
     // Debug: Scan I2C2 bus for available devices before initialization
-    // i2c2_bus_scan_debug();
+    //i2c2_bus_scan_debug();
 
     if (!device_is_ready(pmic))
     {

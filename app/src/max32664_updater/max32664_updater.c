@@ -56,6 +56,9 @@ LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_DBG);
 #define SHARED_BUFFER_SIZE 1026
 static uint8_t shared_rw_buffer[SHARED_BUFFER_SIZE]; // Reusable buffer for I2C operations and file reading
 
+// Track the current device type being updated
+static enum max32664_updater_device_type current_update_device_type = MAX32664_UPDATER_DEV_TYPE_MAX32664C;
+
 static int m_read_op_mode(const struct device *dev);
 
 struct max32664_config
@@ -644,6 +647,9 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 {
 	const struct max32664_config *config = dev->config;
 
+	// Store the current device type for display purposes
+	current_update_device_type = type;
+
 	LOG_INF("MAX32664 updater start: type %d", type);
 	
 	// Initial progress update
@@ -721,4 +727,9 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 	}
 	
 	LOG_INF("%s firmware update completed successfully", device_name);
+}
+
+enum max32664_updater_device_type max32664_get_current_update_device_type(void)
+{
+	return current_update_device_type;
 }
