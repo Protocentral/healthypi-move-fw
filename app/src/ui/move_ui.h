@@ -375,9 +375,6 @@ void hpi_gsr_process_bioz_sample(int32_t bioz_sample);
 
 void hpi_disp_home_update_batt_level(int batt_level, bool charging);
 void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
-void hpi_disp_low_battery_update(uint8_t battery_level, bool is_charging);
-void hpi_disp_low_battery_cleanup(void);
-void hpi_disp_low_battery_cleanup(void);
 
 void hpi_temp_disp_update_temp_f(double temp_f, int64_t temp_f_last_update);
 
