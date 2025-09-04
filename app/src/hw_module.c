@@ -74,6 +74,7 @@
 #include "display_sh8601.h"
 
 #include "hw_module.h"
+#include "battery_module.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
@@ -85,11 +86,8 @@
 
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 
-// Battery cutoff thresholds - voltage based (typical Li-ion voltages)
-// These values can be adjusted based on the specific battery characteristics
-#define HPI_BATTERY_CRITICAL_VOLTAGE 3.3f // Show critical low battery screen (V)
-#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f // Auto shutdown level (V) - prevents over-discharge
-#define HPI_BATTERY_RECOVERY_VOLTAGE 3.5f // Recovery threshold when charging (V) - allows hysteresis
+// Re-define battery constants for backward compatibility
+#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f
 
 // Force update option for testing MAX32664 updater logic
 // Uncomment the line(s) below to force updates regardless of version
@@ -134,14 +132,6 @@ volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 
 static volatile bool vbus_connected;
-static int64_t ref_time;
-
-// Low battery state tracking
-static bool low_battery_screen_active = false;
-static bool critical_battery_notified = false;
-static uint32_t low_battery_last_update = 0;
-static uint8_t last_battery_level = 100;  // Store last known battery level
-static float last_battery_voltage = 4.2f; // Store last known battery voltage
 
 /**
  * @brief Scan I2C2 bus for available devices
@@ -233,13 +223,6 @@ ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
 
-static const struct battery_model battery_model = {
-#include "battery_profile_200.inc"
-};
-
-static float max_charge_current;
-static float term_charge_current;
-
 static uint16_t today_total_steps = 0;
 K_MUTEX_DEFINE(mutex_today_steps);
 
@@ -286,31 +269,30 @@ void today_init_steps(uint16_t steps)
     k_mutex_unlock(&mutex_today_steps);
 }
 
-// Low battery management functions
+// Backward compatibility wrapper functions for battery management
 bool hw_is_low_battery(void)
 {
-    return low_battery_screen_active;
+    return battery_is_low();
 }
 
 bool hw_is_critical_battery(void)
 {
-    return (last_battery_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE);
+    return battery_is_critical();
 }
 
 void hw_reset_low_battery_state(void)
 {
-    low_battery_screen_active = false;
-    critical_battery_notified = false;
+    battery_reset_low_state();
 }
 
 uint8_t hw_get_current_battery_level(void)
 {
-    return last_battery_level;
+    return battery_get_level();
 }
 
 float hw_get_current_battery_voltage(void)
 {
-    return last_battery_voltage;
+    return battery_get_voltage();
 }
 
 static void today_reset_steps(void)
@@ -432,120 +414,6 @@ static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_
     }
 }
 #endif
-
-static int npm_read_sensors(const struct device *charger,
-                            float *voltage, float *current, float *temp, int32_t *chg_status)
-{
-    struct sensor_value value;
-    int ret;
-
-    ret = sensor_sample_fetch(charger);
-    if (ret < 0)
-    {
-        return ret;
-    }
-
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_VOLTAGE, &value);
-    *voltage = (float)value.val1 + ((float)value.val2 / 1000000);
-
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_TEMP, &value);
-    *temp = (float)value.val1 + ((float)value.val2 / 1000000);
-
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_AVG_CURRENT, &value);
-    *current = (float)value.val1 + ((float)value.val2 / 1000000);
-
-    sensor_channel_get(charger, SENSOR_CHAN_NPM13XX_CHARGER_STATUS, &value);
-    *chg_status = value.val1;
-
-    return 0;
-}
-
-int npm_fuel_gauge_init(const struct device *charger)
-{
-    struct sensor_value value;
-    struct nrf_fuel_gauge_init_parameters parameters = {
-        .model = &battery_model,
-        .opt_params = NULL,
-    };
-    int32_t chg_status;
-    int ret;
-
-    LOG_DBG("nRF Fuel Gauge version: %s", nrf_fuel_gauge_version);
-
-    ret = npm_read_sensors(charger, &parameters.v0, &parameters.i0, &parameters.t0, &chg_status);
-    if (ret < 0)
-    {
-        return ret;
-    }
-
-    /* Store charge nominal and termination current, needed for ttf calculation */
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_DESIRED_CHARGING_CURRENT, &value);
-    max_charge_current = (float)value.val1 + ((float)value.val2 / 1000000);
-    term_charge_current = max_charge_current / 10.f;
-
-    nrf_fuel_gauge_init(&parameters, NULL);
-
-    ref_time = k_uptime_get();
-
-    return 0;
-}
-
-int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uint8_t *batt_level, bool *batt_charging, float *batt_voltage)
-{
-    static int32_t chg_status_prev;
-    float voltage;
-    float current;
-    float temp;
-    float soc;
-    float tte;
-    float ttf;
-    float delta;
-    int32_t chg_status;
-    bool cc_charging;
-    int ret;
-
-    ret = npm_read_sensors(charger, &voltage, &current, &temp, &chg_status);
-    if (ret < 0)
-    {
-        printk("Error: Could not read from charger device\n");
-        return ret;
-    }
-
-    ret = nrf_fuel_gauge_ext_state_update(
-        vbus_connected ? NRF_FUEL_GAUGE_EXT_STATE_INFO_VBUS_CONNECTED
-                       : NRF_FUEL_GAUGE_EXT_STATE_INFO_VBUS_DISCONNECTED,
-        NULL);
-    if (ret < 0)
-    {
-        printk("Error: Could not inform of state\n");
-        return ret;
-    }
-
-    /*if (chg_status != chg_status_prev) {
-        chg_status_prev = chg_status;
-
-        ret = charge_status_inform(chg_status);
-        if (ret < 0) {
-            printk("Error: Could not inform of charge status\n");
-            return ret;
-        }
-    }*/
-
-    delta = (float)k_uptime_delta(&ref_time) / 1000.f;
-
-    /* Process fuel gauge data with nRF Connect SDK 3.0.2 API */
-    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, NULL);
-    tte = nrf_fuel_gauge_tte_get();
-    ttf = nrf_fuel_gauge_ttf_get();
-
-    // LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
-    //         (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
-
-    *batt_level = (uint8_t)soc;
-    *batt_charging = chg_status;
-    *batt_voltage = voltage; // Return the battery voltage
-    return 0;
-}
 
 #if 0 // USB init function - not currently used
 static int usb_init()
@@ -771,7 +639,7 @@ void hw_module_init(void)
     k_sem_take(&sem_disp_ready, K_FOREVER);
 
     hw_enable_pmic_callback();
-    if (npm_fuel_gauge_init(charger) < 0)
+    if (battery_fuel_gauge_init(charger) < 0)
     {
         LOG_ERR("Could not initialise fuel gauge.\n");
         hw_add_boot_msg("PMIC", true, true, false, 0);
@@ -787,7 +655,7 @@ void hw_module_init(void)
     bool boot_batt_charging = false;
     float boot_batt_voltage = 0.0f;
 
-    if (npm_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
+    if (battery_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
     {
         char batt_msg[32];
         // Convert voltage to millivolts to avoid floating point in snprintf
@@ -1104,7 +972,7 @@ void hw_module_init(void)
     if (!device_is_ready(max30208a50_dev))
     {
         LOG_ERR("MAX30208A50 device not found!");
-        hw_add_boot_msg("MAX30208 @50", false, true, false, 0);        
+        hw_add_boot_msg("MAX30208 @50", false, true, false, 0);
     }
     else
     {
@@ -1216,9 +1084,7 @@ void hw_thread(void)
     for (;;)
     {
         // Read and publish battery level
-        npm_fuel_gauge_update(charger, vbus_connected, &sys_batt_level, &sys_batt_charging, &sys_batt_voltage);
-        last_battery_level = sys_batt_level;     // Store for external access
-        last_battery_voltage = sys_batt_voltage; // Store voltage for external access
+        battery_fuel_gauge_update(charger, vbus_connected, &sys_batt_level, &sys_batt_charging, &sys_batt_voltage);
 
         struct hpi_batt_status_t batt_s = {
             .batt_level = (uint8_t)sys_batt_level,
@@ -1226,56 +1092,11 @@ void hw_thread(void)
         };
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
-        // Check for low battery conditions (voltage-based)
-        if (1)
-        // if (!sys_batt_charging)
-        { // Only check cutoff when not charging
-            if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
-            {
-                // Critical battery voltage - immediately shutdown
-                LOG_ERR("Critical battery voltage (%.2f V) - shutting down", (double)sys_batt_voltage);
-                k_msleep(1000); // Give time for log message
-                hpi_hw_pmic_off();
-            }
-            else if (sys_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !low_battery_screen_active)
-            {
-                // Show low battery warning screen
-                LOG_WRN("Low battery voltage (%.2f V) - showing warning screen", (double)sys_batt_voltage);
-                low_battery_screen_active = true;
-                critical_battery_notified = true;
+        // Check for low battery conditions using the battery module
+        battery_monitor_conditions(sys_batt_level, sys_batt_charging, sys_batt_voltage);
 
-                // Load the low battery screen with battery level and voltage as arguments
-                // Pass voltage as arg3 (multiply by 100 to preserve 2 decimal places in uint32_t)
-                hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
-            }
-        }
-        else
-        {
-            // Reset flags when charging and voltage recovers
-            if (sys_batt_voltage > HPI_BATTERY_RECOVERY_VOLTAGE)
-            {
-                if (low_battery_screen_active)
-                {
-                    LOG_INF("Battery voltage recovered (%.2f V) - dismissing low battery screen", (double)sys_batt_voltage);
-                    // Return to home screen
-                    hpi_load_screen(SCR_HOME, SCROLL_NONE);
-                }
-                low_battery_screen_active = false;
-                critical_battery_notified = false;
-            }
-        }
-
-        // Update low battery screen if it's currently active and status changed
-        if (low_battery_screen_active)
-        {
-            // Only refresh every 5 seconds to avoid excessive updates
-            if (k_uptime_get_32() - low_battery_last_update > 5000)
-            {
-                // Refresh the low battery screen to show updated charging status and voltage
-                hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
-                low_battery_last_update = k_uptime_get_32();
-            }
-        }
+        // Update low battery screen if currently active
+        battery_update_low_battery_screen(sys_batt_level, sys_batt_charging, sys_batt_voltage);
 
         // Sync time with RTC if needed
         if (hpi_sys_sync_time_if_needed() < 0)

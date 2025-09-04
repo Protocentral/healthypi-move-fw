@@ -31,7 +31,7 @@
 #ifndef HPI_USER_SETTINGS_API_H
 #define HPI_USER_SETTINGS_API_H
 
-#include "hpi_settings_persistence.h"
+#include "hpi_settings_store.h"
 
 /**
  * @brief Public API for accessing user settings from other modules

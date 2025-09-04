@@ -25,10 +25,22 @@
 #define MAX32664C_AFE_ID 0x25
 #define MAX32664C_ACC_ID 0x1B
 
+// Motion detection parameters according to datasheet
+// WUFC: Time in seconds × 25 (0.4s × 25 = 10) - increased filter time to reduce noise  
+#define MAX32664C_MOTION_WUFC 0x14
+// ATH: Threshold in g × 16 (1.5g × 16 = 24) - increased threshold for actual wrist motion
+#define MAX32664C_MOTION_ATH 0x20
+
 uint8_t max32664c_read_hub_status(const struct device *dev);
 void max32664c_do_enter_bl(const struct device *dev);
 //int m_read_op_mode(const struct device *dev);
 int max32664c_do_enter_app(const struct device *dev);
+
+// Motion detection test function
+int max32664c_test_motion_detection(const struct device *dev);
+
+// Motion detection data fetch function
+int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode);
 
 enum max32664c_mode
 {

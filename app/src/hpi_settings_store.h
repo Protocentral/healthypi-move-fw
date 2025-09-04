@@ -28,8 +28,8 @@
  */
 
 
-#ifndef HPI_SETTINGS_PERSISTENCE_H
-#define HPI_SETTINGS_PERSISTENCE_H
+#ifndef HPI_SETTINGS_STORE_H
+#define HPI_SETTINGS_STORE_H
 
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>
@@ -78,7 +78,7 @@ struct hpi_user_settings {
  * @brief Initialize the settings subsystem
  * @return 0 on success, negative error code on failure
  */
-int hpi_settings_persistence_init(void);
+int hpi_settings_store_init(void);
 
 /**
  * @brief Load all settings from persistent storage
@@ -122,4 +122,4 @@ const struct hpi_user_settings *hpi_settings_get_current(void);
  */
 int hpi_settings_update_and_save(const struct hpi_user_settings *settings);
 
-#endif /* HPI_SETTINGS_PERSISTENCE_H */
+#endif /* HPI_SETTINGS_STORE_H */

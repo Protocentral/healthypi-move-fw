@@ -37,9 +37,9 @@
 
 #include "max32664_updater.h"
 
-LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_ERR);
+LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_DBG);
 
-#define MAX32664C_DEFAULT_CMD_DELAY 10
+#define MAX32664C_DEFAULT_CMD_DELAY 30
 
 #define MAX32664C_FW_UPDATE_WRITE_SIZE 8208 // Page size 8192 + 16 bytes for CRC
 #define MAX32664C_FW_UPDATE_START_ADDR 0x4C
@@ -55,6 +55,9 @@ LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_ERR);
 // SAFETY: This buffer is only used in single-threaded context during firmware updates
 #define SHARED_BUFFER_SIZE 1026
 static uint8_t shared_rw_buffer[SHARED_BUFFER_SIZE]; // Reusable buffer for I2C operations and file reading
+
+// Track the current device type being updated
+static enum max32664_updater_device_type current_update_device_type = MAX32664_UPDATER_DEV_TYPE_MAX32664C;
 
 static int m_read_op_mode(const struct device *dev);
 
@@ -80,7 +83,7 @@ static int m_read_bl_ver(const struct device *dev)
 	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	// BL Version read successfully
+	LOG_DBG("BL Version: %x.%x.%x\n", rd_buf[1], rd_buf[2], rd_buf[3]);
 	return 0;
 }
 
@@ -126,7 +129,7 @@ static int m_write_set_num_pages(const struct device *dev, uint8_t num_pages)
 	wr_buf[3] = num_pages;
 
 	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+	k_sleep(K_MSEC(100));
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
 	LOG_DBG("Write Num Pages RSP: %x", rd_buf[0]);
@@ -526,6 +529,7 @@ static int max32664_load_fw(const struct device *dev, const char *fw_file_path, 
 	}
 
 	m_read_mcu_id(dev);
+	k_sleep(K_MSEC(100));
 
 	int set_pages_ret = m_write_set_num_pages(dev, msbl_num_pages);
 	if (set_pages_ret != 0x00) {
@@ -634,7 +638,7 @@ static int m_read_op_mode(const struct device *dev)
 	k_sleep(K_MSEC(45));
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	// LOG_INF("Op mode = %x\n", rd_buf[1]);
+	LOG_DBG("Op mode = %x\n", rd_buf[1]);
 
 	return rd_buf[1];
 }
@@ -642,6 +646,9 @@ static int m_read_op_mode(const struct device *dev)
 void max32664_updater_start(const struct device *dev, enum max32664_updater_device_type type)
 {
 	const struct max32664_config *config = dev->config;
+
+	// Store the current device type for display purposes
+	current_update_device_type = type;
 
 	LOG_INF("MAX32664 updater start: type %d", type);
 	
@@ -720,4 +727,9 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 	}
 	
 	LOG_INF("%s firmware update completed successfully", device_name);
+}
+
+enum max32664_updater_device_type max32664_get_current_update_device_type(void)
+{
+	return current_update_device_type;
 }

@@ -102,18 +102,6 @@
 	};
 };
 
-/* 
-/ {
-	lvgl_pointer_input: lvgl_pointer {
-		compatible = "zephyr,lvgl-pointer-input";
-		input = <&chsc5816>;
-		//invert-y;
-		swap-xy;
-		//invert-x;
-	};
-};
-*/
-
 &vregmain {
 	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
 };
@@ -179,9 +167,9 @@
 
 			// BUCK2 is 1.8V, used to power all sensors - except Finger Sensor
 			npm_pmic_buck2: BUCK2 {
-				regulator-min-microvolt = <1900000>;
-				regulator-max-microvolt = <1900000>;
-				regulator-initial-mode = <NPM13XX_BUCK_MODE_AUTO>;
+				regulator-min-microvolt = <2000000>;
+				regulator-max-microvolt = <2000000>;
+				regulator-initial-mode = <NPM13XX_BUCK_MODE_PWM>;
 			};
 
 			// LDO1 input is 3V, used as LDSW to control Display Power
@@ -255,10 +243,10 @@
 	status = "okay";
 	pinctrl-0 = <&i2c2_default>;
 	pinctrl-1 = <&i2c2_sleep>;
-	clock-frequency = <I2C_BITRATE_STANDARD>;
+	clock-frequency = <I2C_BITRATE_FAST>;
 	pinctrl-names = "default", "sleep";
-	//zephyr,concat-buf-size = <8250>;
-	//zephyr,flash-buf-max-size = <8250>;
+	zephyr,concat-buf-size = <8250>;
+	zephyr,flash-buf-max-size = <8250>;
 
 	max32664c: max32664c@55 {
 		compatible = "maxim,max32664c";
@@ -332,17 +320,6 @@
 	};
 };
 
-
-/*&uart1 {
-	compatible = "nordic,nrf-uarte";
-	current-speed = <115200>;
-	pinctrl-0 = <&uart1_default>;
-	pinctrl-1 = <&uart1_sleep>;
-	pinctrl-names = "default", "sleep";
-};
- */
-
-
 &spi3 {
 	compatible = "nordic,nrf-spim";
 	status = "okay";
@@ -394,10 +371,8 @@
 		width = <390>;
 		height = <390>;
 		pixel-format = <0>;
-		//display-inversion;
 		rotation = <0>;
 		status = "okay";
-		//zephyr,deferred-init;
 	};
 };
 

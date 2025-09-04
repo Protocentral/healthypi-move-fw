@@ -39,7 +39,7 @@ LOG_MODULE_REGISTER(scr_device_user_settings, LOG_LEVEL_INF);
 
 #include "ui/move_ui.h"
 #include "hw_module.h"
-#include "hpi_settings_persistence.h"
+#include "hpi_settings_store.h"
 #include "sm/smf_ecg_bioz.h"
 
 lv_obj_t *scr_device_user_settings;
@@ -209,9 +209,9 @@ void hpi_update_setting_labels(void)
 void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     // Initialize settings persistence if needed
-    int rc = hpi_settings_persistence_init();
+    int rc = hpi_settings_store_init();
     if (rc) {
-        LOG_ERR("Failed to initialize settings persistence: %d", rc);
+        LOG_ERR("Failed to initialize settings store: %d", rc);
     }
     
     // Load current settings
