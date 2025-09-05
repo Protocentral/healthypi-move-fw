@@ -1,7 +1,30 @@
 /*
- * (c) 2024 Protocentral Electronics
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
  *
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #define DT_DRV_COMPAT maxim_max32664c
@@ -30,31 +53,15 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 #define DEFAULT_SPO2_B -34.659664
 #define DEFAULT_SPO2_C 112.68987
 
-#define MAX32664C_FW_BIN_INCLUDE 0
-
 #define MAX32664C_INT_THRESHOLD 0x04
-#define MAX32664C_INT_THRESHOLD_EXT 0x04
-#define MAX32664C_REPORT_PERIOD 0x04
+#define MAX32664C_REPORT_PERIOD 0x01
 
 /* I2C wrapper implementations - centralize error handling or logging here */
 
 #ifdef CONFIG_SENSOR_ASYNC_API
-/* RTIO-based I2C implementation functions
- *
- * These functions provide RTIO support for async I2C operations.
- * Currently implemented as fallback to synchronous I2C operations since
- * the Zephyr RTIO I2C API is still evolving.
- *
- * Future implementations could utilize true RTIO I2C operations when
- * the API becomes stable and available.
- */
+
 static int max32664c_i2c_rtio_write_impl(struct rtio *r, struct rtio_iodev *iodev, const void *buf, size_t len)
 {
-    /* RTIO-only implementation: prepare a write SQE, copy it into the RTIO
-     * context, submit and block for the completion, then return the result
-     * (0 on success or negative errno on failure). This keeps the wrapper
-     * synchronous while using RTIO internals.
-     */
     int rc;
     struct rtio_sqe sqe;
     struct rtio_cqe cqe;
@@ -124,13 +131,6 @@ static int max32664c_i2c_rtio_read_impl(struct rtio *r, struct rtio_iodev *iodev
 }
 #endif /* CONFIG_SENSOR_ASYNC_API */
 
-/* Optional: allow selecting RTIO-backed synchronous I2C implementation
- * at compile-time. When MAX32664C_USE_RTIO_IMPL is defined (and
- * CONFIG_SENSOR_ASYNC_API is enabled), the regular synchronous
- * max32664c_i2c_write/_read functions will bridge into the RTIO
- * implementation using a registered RTIO context + iodev. Register
- * the RTIO context with max32664c_register_rtio_context().
- */
 #if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
 static struct rtio *max32664c_rtio_ctx = NULL;
 static struct rtio_iodev *max32664c_rtio_iodev = NULL;
@@ -233,7 +233,18 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    LOG_DBG("Hub status bytes: %02x %02x", rd_buf[0], rd_buf[1]);
+
+    /* Check for overflow and error bits and log at INFO/ERR as appropriate */
+    if (rd_buf[1] & 0x10) {
+        LOG_WRN("Hub FIFO output overflow detected (FifoOutOvrInt)");
+    }
+    if (rd_buf[1] & 0x20) {
+        LOG_WRN("Hub FIFO input overflow detected (FifoInOverInt)");
+    }
+    if (rd_buf[1] & 0x01) {
+        LOG_ERR("Hub reported sensor comm error (Err0)");
+    }
 
     return rd_buf[1];
 }
@@ -525,7 +536,7 @@ static int max32664c_set_mode_extended_algo(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold (extended ALGO value)
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD_EXT, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set report period
     m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, MAX32664C_DEFAULT_CMD_DELAY);
@@ -642,8 +653,6 @@ static int max32664c_set_mode_scd(const struct device *dev)
 
     max32664c_stop_algo(dev);
 
-    // max32664c_check_sensors(dev);
-
     // max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
     // Set LED for SCD
@@ -674,28 +683,16 @@ static int max32664c_set_mode_wake_on_motion(const struct device *dev)
 {
     LOG_DBG("MAX32664C entering wake on motion mode per datasheet...");
 
-    // Step 1: Stop existing operations
-    // Stop Algorithm first
     m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-    
-    // Disable accelerometer if running
+
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Step 2: Configure Wake-Up on Motion
-    // Command: AA 46 04 00 01 [WUFC] [ATH]
-    // WUFC=0x05 (0.2s), ATH=0x08 (0.5g threshold)
     m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
 
-    // Step 3: Set Output Mode to accelerometer-only
-    // Command: AA 10 00 01
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Step 4: Set Report Rate - one report per sensor sample
-    // Command: AA 10 02 01
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Step 5: Enable Accelerometer in motion detection mode
-    // Command: AA 44 04 01 00
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
     LOG_INF("Wake-on-motion configured: WUFC=0x%02x (0.4s), ATH=0x%02x (1.5g)", 
@@ -900,8 +897,6 @@ static int max32664c_attr_set(const struct device *dev,
 
 static int max32664c_check_app_present(const struct device *dev)
 {
-    // LOG_DBG("Checking MAX32664C app present...");
-
     struct max32664c_data *data = dev->data;
 
     if (data->hub_ver[1] == 0x08 && data->hub_ver[2] == 0x00 && data->hub_ver[3] == 0x00)

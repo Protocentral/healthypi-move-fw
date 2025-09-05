@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -27,7 +27,6 @@
  * SOFTWARE.
  */
 
-
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
@@ -43,17 +42,17 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "ui/move_ui.h"
 
 // State machine parameters
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 120
-#define PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS 80  
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 160
+#define PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS 160
 
 // Timing parameters
-#define OFFSKIN_THRESHOLD_S 20              // Duration for SCD "off-skin" before switching to Probing
-#define PROBE_ENABLE_WAIT_S 20              // Duration of probing to monitor SCD state  
-#define PROBE_DISABLE_WAIT_BASE_S 1         // Base sleep duration between probing attempts
-#define PROBE_DISABLE_WAIT_MAX_S 8          // Maximum sleep duration (incremental)
-#define MAX_PROBE_ATTEMPTS 3                // Number of probe attempts before going to off-skin
-#define MOTION_DETECTION_POLLING_S 5        // Polling interval for motion detection in off-skin state
-#define OFFSKIN_TIMEOUT_MINUTES 10          // Timeout in Off-Skin state before transitioning to Probing
+#define OFFSKIN_THRESHOLD_S 20       // Duration for SCD "off-skin" before switching to Probing
+#define PROBE_ENABLE_WAIT_S 20       // Duration of probing to monitor SCD state
+#define PROBE_DISABLE_WAIT_BASE_S 1  // Base sleep duration between probing attempts
+#define PROBE_DISABLE_WAIT_MAX_S 8   // Maximum sleep duration (incremental)
+#define MAX_PROBE_ATTEMPTS 3         // Number of probe attempts before going to off-skin
+#define MOTION_DETECTION_POLLING_S 5 // Polling interval for motion detection in off-skin state
+#define OFFSKIN_TIMEOUT_MINUTES 10   // Timeout in Off-Skin state before transitioning to Probing
 
 // SCD state definitions
 #define SCD_STATE_UNDETECTED 0
@@ -62,7 +61,7 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #define SCD_STATE_ON_SKIN 3
 
 // Legacy definitions for compatibility
-#define HPI_OFFSKIN_THRESHOLD_S OFFSKIN_THRESHOLD_S  
+#define HPI_OFFSKIN_THRESHOLD_S OFFSKIN_THRESHOLD_S
 #define HPI_PROBE_DURATION_S PROBE_ENABLE_WAIT_S
 
 static const struct smf_state ppg_samp_states[];
@@ -78,6 +77,7 @@ static bool probing_algorithm_enabled = false;
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_motion_detected, 0, 1);
+K_SEM_DEFINE(sem_ppg_wrist_motion_fifo, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_probe_timeout, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_offskin_timeout, 0, 1);
 
@@ -126,7 +126,8 @@ extern struct k_sem sem_ppg_wrist_sm_start;
 // Work handlers
 void work_off_skin_threshold_handler(struct k_work *work)
 {
-    if (off_skin_timer_active) {
+    if (off_skin_timer_active)
+    {
         LOG_INF("Off-skin threshold reached after %d seconds - transitioning to PROBING state", OFFSKIN_THRESHOLD_S);
         off_skin_timer_active = false;
         k_sem_give(&sem_ppg_wrist_off_skin);
@@ -158,27 +159,34 @@ K_WORK_DELAYABLE_DEFINE(work_offskin_timeout, work_offskin_timeout_handler);
 
 static void set_measured_spo2(uint16_t spo2_value, enum spo2_meas_state status)
 {
-    if (k_mutex_lock(&mutex_measured_spo2, K_MSEC(100)) == 0) {
+    if (k_mutex_lock(&mutex_measured_spo2, K_MSEC(100)) == 0)
+    {
         measured_spo2 = spo2_value;
         measured_spo2_status = status;
         k_mutex_unlock(&mutex_measured_spo2);
-    } else {
+    }
+    else
+    {
         LOG_WRN("Failed to acquire mutex for setting measured SPO2");
     }
 }
 
 static int get_measured_spo2(uint16_t *spo2_value, enum spo2_meas_state *status)
 {
-    if (spo2_value == NULL || status == NULL) {
+    if (spo2_value == NULL || status == NULL)
+    {
         return -EINVAL;
     }
-    
-    if (k_mutex_lock(&mutex_measured_spo2, K_MSEC(100)) == 0) {
+
+    if (k_mutex_lock(&mutex_measured_spo2, K_MSEC(100)) == 0)
+    {
         *spo2_value = measured_spo2;
         *status = measured_spo2_status;
         k_mutex_unlock(&mutex_measured_spo2);
         return 0;
-    } else {
+    }
+    else
+    {
         LOG_WRN("Failed to acquire mutex for getting measured SPO2");
         return -EBUSY;
     }
@@ -194,21 +202,23 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
     {
         m_curr_scd_state = edata->scd_state;
-        
+
         if (edata->scd_state == SCD_STATE_ON_SKIN)
         {
             // Cancel off-skin timer if active
-            if (off_skin_timer_active) {
+            if (off_skin_timer_active)
+            {
                 off_skin_timer_active = false;
                 k_work_cancel_delayable(&work_off_skin_threshold);
             }
-            
+
             k_sem_give(&sem_ppg_wrist_on_skin);
         }
         else if (edata->scd_state == SCD_STATE_OFF_SKIN)
         {
             // Start off-skin timer if in ACTIVE state and not already started
-            if (!off_skin_timer_active && m_curr_state == PPG_SAMP_STATE_ACTIVE) {
+            if (!off_skin_timer_active && m_curr_state == PPG_SAMP_STATE_ACTIVE)
+            {
                 off_skin_timer_active = true;
                 off_skin_start_time = k_uptime_get();
                 k_work_schedule(&work_off_skin_threshold, K_SECONDS(OFFSKIN_THRESHOLD_S));
@@ -218,10 +228,13 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     }
     else if (edata->chip_op_mode == MAX32664C_OP_MODE_WAKE_ON_MOTION)
     {
-        // Only process motion if we're in OFF_SKIN state
-        if (m_curr_state == PPG_SAMP_STATE_OFF_SKIN)
+        if (m_curr_state == PPG_SAMP_STATE_OFF_SKIN || m_curr_state == PPG_SAMP_STATE_MOTION_DETECT)
         {
-            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
+            if (edata->num_samples > 0)
+            {
+                k_sem_give(&sem_ppg_wrist_motion_fifo);
+            }
+            /* Also notify generic motion detected semaphore for compatibility */
             k_sem_give(&sem_ppg_wrist_motion_detected);
         }
         return;
@@ -266,19 +279,24 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             // Update current SCD state for general tracking
             m_curr_scd_state = ppg_sensor_sample.scd_state;
-            
+
             // Process SCD state changes for power optimization in ACTIVE state
-            if (m_curr_state == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC) {
-                if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN) {
+            if (m_curr_state == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC)
+            {
+                if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
+                {
                     // Reset off-skin timer if back on skin
-                    if (off_skin_timer_active) {
+                    if (off_skin_timer_active)
+                    {
                         off_skin_timer_active = false;
                         k_work_cancel_delayable(&work_off_skin_threshold);
                     }
                 }
-                else if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_OFF_SKIN) {
+                else if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_OFF_SKIN)
+                {
                     // Start off-skin timer if not already started
-                    if (!off_skin_timer_active) {
+                    if (!off_skin_timer_active)
+                    {
                         off_skin_timer_active = true;
                         off_skin_start_time = k_uptime_get();
                         k_work_schedule(&work_off_skin_threshold, K_SECONDS(OFFSKIN_THRESHOLD_S));
@@ -328,29 +346,32 @@ static void sensor_rtio_completion_handler(struct k_work *work)
     uint8_t *buf;
     uint32_t buf_len;
     int rc;
-    
+
     // Process all available completion events
-    while ((cqe = rtio_cqe_consume(&max32664c_read_rtio_async_ctx)) != NULL) {
-        if (cqe->result < 0) {
+    while ((cqe = rtio_cqe_consume(&max32664c_read_rtio_async_ctx)) != NULL)
+    {
+        if (cqe->result < 0)
+        {
             LOG_ERR("Async sensor read failed: %d", cqe->result);
             rtio_cqe_release(&max32664c_read_rtio_async_ctx, cqe);
             continue;
         }
-        
+
         // Get the buffer from the mempool
         rc = rtio_cqe_get_mempool_buffer(&max32664c_read_rtio_async_ctx, cqe, &buf, &buf_len);
-        if (rc != 0) {
+        if (rc != 0)
+        {
             LOG_ERR("Failed to get mempool buffer: %d", rc);
             rtio_cqe_release(&max32664c_read_rtio_async_ctx, cqe);
             continue;
         }
-        
+
         // Process the sensor data
         sensor_ppg_wrist_decode(buf, buf_len);
-        
+
         // Release the buffer back to the mempool
         rtio_release_buffer(&max32664c_read_rtio_async_ctx, buf, buf_len);
-        
+
         // Release the completion queue entry
         rtio_cqe_release(&max32664c_read_rtio_async_ctx, cqe);
     }
@@ -362,17 +383,18 @@ K_WORK_DEFINE(sensor_rtio_completion_work, sensor_rtio_completion_handler);
 static void sensor_read_work_handler(struct k_work *work)
 {
     int ret;
-    
+
     // Process any pending completions first
     k_work_submit(&sensor_rtio_completion_work);
-    
+
     // Start async sensor read with mempool
     ret = sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_async_ctx, &max32664c_iodev);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         LOG_ERR("Failed to start async sensor read: %d", ret);
         return;
     }
-    
+
     // The read is now in progress - completion will be handled by the RTIO completion work
 }
 
@@ -397,7 +419,7 @@ K_TIMER_DEFINE(tmr_ppg_wrist_sampling, ppg_wrist_sampling_handler, NULL);
 static void ppg_samp_state_active_entry(void *obj)
 {
     m_curr_state = PPG_SAMP_STATE_ACTIVE;
-    
+
     // Reset power optimization variables
     off_skin_timer_active = false;
     current_probe_attempt = 0;
@@ -413,26 +435,27 @@ static void ppg_samp_state_active_entry(void *obj)
     // Ensure wake-on-motion is disabled when entering active state
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
     k_msleep(50); // Allow time for mode change
-    
+
     // Enable normal algorithm operation
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-    
+
     // Use faster sampling rate in active mode for responsive detection
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS));
-    
+
     hpi_sys_set_device_on_skin(true);
 }
 
 static void st_ppg_samp_active_run(void *o)
 {
-    while (true) {
+    while (true)
+    {
         // Check for off-skin detection to trigger transition to probing
         if (k_sem_take(&sem_ppg_wrist_off_skin, K_NO_WAIT) == 0)
         {
             smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
             return; // Exit when transitioning to new state
         }
-        
+
         // Yield to other threads
         k_msleep(10);
     }
@@ -449,59 +472,65 @@ static void st_ppg_samp_probing_entry(void *o)
 
     // Reset flags and counters
     probing_algorithm_enabled = true;
-    
+
     // Ensure wake-on-motion is disabled when entering probing state
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
     k_msleep(50); // Allow time for mode change
-    
+
     // Enable SCD mode to check for skin contact
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
-    
+
     // Use normal sampling rate for probing
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
-    
+
     // Start probe enable timer
     k_work_schedule(&work_probe_enable, K_SECONDS(PROBE_ENABLE_WAIT_S));
 }
 
 static void st_ppg_samp_probing_run(void *o)
 {
-    while (true) {
+    while (true)
+    {
         // Check for on-skin detection during probing
         if (k_sem_take(&sem_ppg_wrist_on_skin, K_NO_WAIT) == 0)
         {
             smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
             return; // Exit when transitioning to new state
         }
-        
+
         // Check for probe timeout
         if (k_sem_take(&sem_ppg_wrist_probe_timeout, K_NO_WAIT) == 0)
         {
             current_probe_attempt++;
-            
-            if (current_probe_attempt >= MAX_PROBE_ATTEMPTS) {
+
+            if (current_probe_attempt >= MAX_PROBE_ATTEMPTS)
+            {
                 m_curr_state = PPG_SAMP_STATE_OFF_SKIN;
                 smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
                 return; // Exit when transitioning to new state
-            } else {
-                
+            }
+            else
+            {
+
                 // Disable algorithm for power saving
                 probing_algorithm_enabled = false;
                 hw_max32664c_stop_algo();
-                
+
                 // Schedule next probe attempt with incremental sleep duration
                 k_work_schedule(&work_probe_sleep, K_SECONDS(current_probe_sleep_duration));
-                
+
                 // Increase sleep duration for next attempt (up to maximum)
-                if (current_probe_sleep_duration < PROBE_DISABLE_WAIT_MAX_S) {
+                if (current_probe_sleep_duration < PROBE_DISABLE_WAIT_MAX_S)
+                {
                     current_probe_sleep_duration *= 2;
-                    if (current_probe_sleep_duration > PROBE_DISABLE_WAIT_MAX_S) {
+                    if (current_probe_sleep_duration > PROBE_DISABLE_WAIT_MAX_S)
+                    {
                         current_probe_sleep_duration = PROBE_DISABLE_WAIT_MAX_S;
                     }
                 }
             }
         }
-        
+
         // Yield to other threads
         k_msleep(10);
     }
@@ -511,65 +540,107 @@ static void st_ppg_samp_probing_run(void *o)
 static void st_ppg_samp_off_skin_entry(void *o)
 {
     m_curr_state = PPG_SAMP_STATE_OFF_SKIN;
-    
+
     // Cancel any leftover timers from previous states
     k_work_cancel_delayable(&work_off_skin_threshold);
     k_work_cancel_delayable(&work_probe_enable);
     k_work_cancel_delayable(&work_probe_sleep);
-    
+
     // Reset variables for off-skin state
     probing_algorithm_enabled = false;
     current_probe_attempt = 0;
     current_probe_sleep_duration = PROBE_DISABLE_WAIT_BASE_S;
-    
+
     // Stop all algorithms for maximum power savings
     hw_max32664c_stop_algo();
-    
+
     // Configure accelerometer for wake-up on motion (as per datasheet)
     // Command: AA 46 04 00 01 [WUFC] [ATH]
     // WUFC: 0x05 (0.2 seconds), ATH: 0x08 (0.5g)
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
-    
+
     // Force state variable to OFF_SKIN after setting wake-on-motion
     m_curr_state = PPG_SAMP_STATE_OFF_SKIN;
 
     // Use motion detection polling interval for power savings
     k_timer_start(&tmr_ppg_wrist_sampling, K_SECONDS(MOTION_DETECTION_POLLING_S), K_SECONDS(MOTION_DETECTION_POLLING_S));
-    
+
     // Start off-skin timeout (10 minutes)
     k_work_schedule(&work_offskin_timeout, K_MINUTES(OFFSKIN_TIMEOUT_MINUTES));
-    
+
     hpi_sys_set_device_on_skin(false);
 }
 
 static void st_ppg_samp_off_skin_run(void *o)
 {
-    while (true) {
+    while (true)
+    {
         // Check for motion detection
         if (k_sem_take(&sem_ppg_wrist_motion_detected, K_NO_WAIT) == 0)
         {
+            // Transition to motion detect state to poll FIFO before fully waking
             k_work_cancel_delayable(&work_offskin_timeout);
-            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_MOTION_DETECT]);
             return; // Exit when transitioning to new state
         }
-        
+
         // Check for off-skin timeout (transition back to probing)
         if (k_sem_take(&sem_ppg_wrist_offskin_timeout, K_NO_WAIT) == 0)
         {
             smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
             return; // Exit when transitioning to new state
         }
-        
+
         // Yield to other threads
         k_msleep(10);
     }
 }
 
-// State machine with three states: ACTIVE, PROBING, OFF_SKIN
+// MOTION_DETECT STATE - Poll FIFO after wake-on-motion to confirm motion and safely exit wake mode
+static void st_ppg_samp_motion_detect_entry(void *o)
+{
+    m_curr_state = PPG_SAMP_STATE_MOTION_DETECT;
+
+    // Shorter polling for FIFO contents
+    k_timer_start(&tmr_ppg_wrist_sampling, K_SECONDS(1), K_SECONDS(1));
+}
+
+static void st_ppg_samp_motion_detect_run(void *o)
+{
+    const int max_checks = 5;
+    int checks = 0;
+
+    while (true)
+    {
+        // Wait briefly for FIFO samples reported by the driver
+        if (k_sem_take(&sem_ppg_wrist_motion_fifo, K_SECONDS(1)) == 0)
+        {
+            // We have accel samples in the hub FIFO - now disable wake-on-motion and restart algorithms
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
+            k_msleep(50);
+            // Move to ACTIVE state where algorithms will be re-enabled
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+            return;
+        }
+
+        checks++;
+        if (checks >= max_checks)
+        {
+            // No FIFO samples observed - return to OFF_SKIN and re-arm wake-on-motion
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_OFF_SKIN]);
+            return;
+        }
+
+        k_msleep(10);
+    }
+}
+
+// State machine with four states: ACTIVE, PROBING, OFF_SKIN, MOTION_DETECT
 static const struct smf_state ppg_samp_states[] = {
     [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(ppg_samp_state_active_entry, st_ppg_samp_active_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
+    [PPG_SAMP_STATE_MOTION_DETECT] = SMF_CREATE_STATE(st_ppg_samp_motion_detect_entry, st_ppg_samp_motion_detect_run, NULL, NULL, NULL),
 };
 
 static void smf_ppg_wrist_thread(void)
@@ -592,7 +663,7 @@ static void smf_ppg_wrist_thread(void)
     for (;;)
     {
         ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
-        
+
         if (ret)
         {
             LOG_ERR("Error in PPG State Machine");
@@ -638,18 +709,17 @@ static void ppg_wrist_ctrl_thread(void)
             if (m_est_spo2_status == SPO2_MEAS_SUCCESS)
             {
                 LOG_DBG("SPO2 Measurement Successful: %d", m_est_spo2);
-                 hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
+                hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
             }
             else if (m_est_spo2_status == SPO2_MEAS_TIMEOUT)
             {
                 LOG_DBG("SPO2 Measurement Timeout");
-                 hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
+                hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
             }
             else
             {
                 LOG_DBG("SPO2 Measurement Unknown Status");
             }
-           
 
             k_msleep(1000);
 
