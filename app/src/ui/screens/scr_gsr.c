@@ -211,7 +211,7 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_gsr_last_update, LV_TEXT_ALIGN_CENTER, 0);
 
     // Measure button
-    btn_gsr_measure = lv_btn_create(cont_col);
+    btn_gsr_measure = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_gsr_measure, scr_gsr_measure_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_gsr_measure, 80);
 

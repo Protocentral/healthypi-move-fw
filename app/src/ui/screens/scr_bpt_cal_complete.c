@@ -91,7 +91,7 @@ void draw_scr_bpt_cal_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_label_set_text(label_info2, "You can now measure your BP from the same screen. Calibration data is valid for 1 month.");
     lv_obj_set_style_text_align(label_info2, LV_TEXT_ALIGN_CENTER, 0);
 
-    btn_bpt_measure = lv_btn_create(cont_col);
+    btn_bpt_measure = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_btn_measure_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_bpt_measure, 85);
 

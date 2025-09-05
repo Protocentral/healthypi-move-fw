@@ -109,7 +109,7 @@ static void hpi_show_shutdown_mbox(void)
     lv_obj_set_flex_align(btn_cont, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     /* Create Yes button */
-    lv_obj_t *btn_yes = lv_btn_create(btn_cont);
+    lv_obj_t *btn_yes = hpi_btn_create(btn_cont);
     lv_obj_set_size(btn_yes, 114, 57);
     lv_obj_add_event_cb(btn_yes, btn_shutdown_yes_cb, LV_EVENT_CLICKED, NULL);
 
@@ -118,7 +118,7 @@ static void hpi_show_shutdown_mbox(void)
     lv_obj_center(label_yes);
 
     /* Create No button */
-    lv_obj_t *btn_no = lv_btn_create(btn_cont);
+    lv_obj_t *btn_no = hpi_btn_create(btn_cont);
     lv_obj_set_size(btn_no, 114, 57);
     lv_obj_add_event_cb(btn_no, btn_shutdown_no_cb, LV_EVENT_CLICKED, NULL);
 
@@ -191,7 +191,7 @@ void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_flex_align(cont_buttons, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_add_style(cont_buttons, &style_scr_black, 0);
 
-    lv_obj_t *btn_device_user_settings = lv_btn_create(cont_buttons);
+    lv_obj_t *btn_device_user_settings = hpi_btn_create(cont_buttons);
     lv_obj_set_size(btn_device_user_settings, LV_PCT(48), LV_SIZE_CONTENT);
     lv_obj_add_event_cb(btn_device_user_settings, btn_device_user_settings_event_cb, LV_EVENT_ALL, NULL);
 
@@ -200,7 +200,7 @@ void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_height(btn_device_user_settings, 60);
     lv_obj_center(lbl_btn_device_user_settings);
 
-    lv_obj_t *btn_shutdown = lv_btn_create(cont_buttons);
+    lv_obj_t *btn_shutdown = hpi_btn_create(cont_buttons);
     lv_obj_set_size(btn_shutdown, LV_PCT(48), LV_SIZE_CONTENT);
     lv_obj_add_event_cb(btn_shutdown, btn_shutdown_event_cb, LV_EVENT_ALL, NULL);
 

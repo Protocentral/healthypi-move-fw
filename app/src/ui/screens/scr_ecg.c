@@ -134,7 +134,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_ecg_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_ecg_last_update_time, LV_TEXT_ALIGN_CENTER, 0);
 
-    btn_ecg_measure = lv_btn_create(cont_col);
+    btn_ecg_measure = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_ecg_measure, scr_ecg_start_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_ecg_measure, 80);
 

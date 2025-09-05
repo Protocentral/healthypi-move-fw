@@ -269,7 +269,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_style(lbl_height, &style_lbl_white_14, 0);
     lv_obj_set_pos(lbl_height, label_x, y_pos + 18);
     
-    btn_user_height = lv_btn_create(cont_main);
+    btn_user_height = hpi_btn_create(cont_main);
     lv_obj_set_size(btn_user_height, 140, 55);
     lv_obj_set_pos(btn_user_height, button_x - 10, y_pos);
     lv_obj_add_event_cb(btn_user_height, btn_height_event_cb, LV_EVENT_ALL, NULL);
@@ -286,7 +286,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_style(lbl_weight, &style_lbl_white_14, 0);
     lv_obj_set_pos(lbl_weight, label_x, y_pos + 18);
     
-    btn_user_weight = lv_btn_create(cont_main);
+    btn_user_weight = hpi_btn_create(cont_main);
     lv_obj_set_size(btn_user_weight, 140, 55);
     lv_obj_set_pos(btn_user_weight, button_x - 10, y_pos);
     lv_obj_add_event_cb(btn_user_weight, btn_weight_event_cb, LV_EVENT_ALL, NULL);
@@ -303,7 +303,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_style(lbl_hand_worn, &style_lbl_white_14, 0);
     lv_obj_set_pos(lbl_hand_worn, label_x, y_pos + 18);
     
-    btn_hand_worn = lv_btn_create(cont_main);
+    btn_hand_worn = hpi_btn_create(cont_main);
     lv_obj_set_size(btn_hand_worn, 140, 55);
     lv_obj_set_pos(btn_hand_worn, button_x - 10, y_pos);
     lv_obj_add_event_cb(btn_hand_worn, btn_hand_worn_event_cb, LV_EVENT_ALL, NULL);
@@ -320,7 +320,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_style(lbl_time_format, &style_lbl_white_14, 0);
     lv_obj_set_pos(lbl_time_format, label_x, y_pos + 18);
     
-    btn_time_format = lv_btn_create(cont_main);
+    btn_time_format = hpi_btn_create(cont_main);
     lv_obj_set_size(btn_time_format, 120, 55);
     lv_obj_set_pos(btn_time_format, button_x, y_pos);
     lv_obj_add_event_cb(btn_time_format, btn_time_format_event_cb, LV_EVENT_ALL, NULL);
@@ -337,7 +337,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_style(lbl_temp_unit, &style_lbl_white_14, 0);
     lv_obj_set_pos(lbl_temp_unit, label_x, y_pos + 18);
     
-    btn_temp_unit = lv_btn_create(cont_main);
+    btn_temp_unit = hpi_btn_create(cont_main);
     lv_obj_set_size(btn_temp_unit, 120, 55);
     lv_obj_set_pos(btn_temp_unit, button_x, y_pos);
     lv_obj_add_event_cb(btn_temp_unit, btn_temp_unit_event_cb, LV_EVENT_ALL, NULL);
@@ -370,7 +370,7 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_add_style(lbl_sleep_timeout, &style_lbl_white_14, 0);
     lv_obj_set_pos(lbl_sleep_timeout, label_x, y_pos + 18);
     
-    btn_sleep_timeout = lv_btn_create(cont_main);
+    btn_sleep_timeout = hpi_btn_create(cont_main);
     lv_obj_set_size(btn_sleep_timeout, 140, 55);
     lv_obj_set_pos(btn_sleep_timeout, button_x - 10, y_pos);
     lv_obj_add_event_cb(btn_sleep_timeout, btn_sleep_timeout_event_cb, LV_EVENT_ALL, NULL);

@@ -67,7 +67,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 1000);
 
     // Stop button
-    btn_stop = lv_btn_create(cont_col);
+    btn_stop = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_stop, 60);
     lv_obj_t *label_btn = lv_label_create(btn_stop);

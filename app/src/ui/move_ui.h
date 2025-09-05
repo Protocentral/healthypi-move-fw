@@ -201,6 +201,8 @@ LV_FONT_DECLARE(ui_font_number_big);
 
 /******** UI Function Prototypes ********/
 void display_init_styles(void);
+void hpi_ui_styles_init(void);
+lv_obj_t *hpi_btn_create(lv_obj_t *parent);
 
 // Boot Screen functions
 void draw_scr_splash(void);

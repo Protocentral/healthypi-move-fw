@@ -137,7 +137,7 @@ static void hpi_disp_ppg_settings_open(void)
     lv_slider_set_value(slider_speed, 80, LV_ANIM_OFF);
     */
 
-    btn_settings_close = lv_btn_create(content);
+    btn_settings_close = hpi_btn_create(content);
     lv_obj_add_event_cb(btn_settings_close, btn_close_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_align(btn_settings_close, LV_ALIGN_CENTER, 0, -20);
     lv_obj_set_height(btn_settings_close, 80);

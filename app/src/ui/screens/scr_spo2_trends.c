@@ -191,7 +191,7 @@ void draw_scr_spo2_trends(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_label_set_text(label_btn_spo2_settings, LV_SYMBOL_SETTINGS " Settings");
     lv_obj_center(label_btn_spo2_settings);*/
 
-    lv_obj_t *btn_spo2_live = lv_btn_create(cont_col);
+    lv_obj_t *btn_spo2_live = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_spo2_live, scr_spo2_btn_live_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_spo2_live, 80);
 

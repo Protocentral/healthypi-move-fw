@@ -84,6 +84,8 @@
 
 #include <max32664_updater.h>
 
+#include <lvgl.h>
+
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 
 // Re-define battery constants for backward compatibility

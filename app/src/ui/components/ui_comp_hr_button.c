@@ -54,7 +54,7 @@ static void scr_home_hr_btn_handler(lv_event_t *e)
 
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent)
 {
-    btn_hr_disp = lv_btn_create(comp_parent);
+    btn_hr_disp = hpi_btn_create(comp_parent);
     lv_obj_set_width(btn_hr_disp, 110);
     lv_obj_set_height(btn_hr_disp, 110);
     lv_obj_set_x(btn_hr_disp, 0);

@@ -178,7 +178,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_bpt_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_bpt_last_update_time, LV_TEXT_ALIGN_CENTER, 0);
 
-    lv_obj_t *btn_bpt_measure = lv_btn_create(cont_col);
+    lv_obj_t *btn_bpt_measure = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_measure_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_bpt_measure, 80);
 
