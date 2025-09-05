@@ -216,21 +216,42 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
+    uint32_t *data_ppg = ppg_sensor_sample.raw_green;
+
+    /* Simple DC removal: EMA baseline and plot residual centered to avoid LVGL coord wrap. */
+    static float baseline_ema = 0.0f;
+    static bool baseline_init = false;
+    const float alpha = 0.005f; /* small alpha for slow baseline tracking */
 
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
-        if (data_ppg[i] < y_min_ppg)
-        {
-            y_min_ppg = data_ppg[i];
+        int32_t scaled = (int32_t)(data_ppg[i] >> 8); /* divide by 256 */
+
+        if (!baseline_init) {
+            baseline_ema = (float)scaled;
+            baseline_init = true;
         }
 
-        if (data_ppg[i] > y_max_ppg)
+        float residual = (float)scaled - baseline_ema;
+        baseline_ema = baseline_ema * (1.0f - alpha) + ((float)scaled * alpha);
+
+        /* Center residual to positive range for plotting */
+        int32_t plot_val = (int32_t)(residual) + 2048; /* center offset */
+
+    /* Diagnostic logging removed */
+        float fplot = (float)plot_val;
+
+        if (fplot < y_min_ppg)
         {
-            y_max_ppg = data_ppg[i];
+            y_min_ppg = fplot;
         }
 
-        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
+        if (fplot > y_max_ppg)
+        {
+            y_max_ppg = fplot;
+        }
+
+        lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
 
         hpi_ppg_disp_add_samples(1);
 
