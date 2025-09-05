@@ -161,7 +161,10 @@ void display_init_styles(void)
     lv_style_set_border_width(&style_btn_black, 0);
     lv_style_set_text_color(&style_btn_black, lv_color_white());
     lv_style_set_radius(&style_btn_black, 6);
-    lv_style_set_pad_all(&style_btn_black, 8);
+    /* internal padding for better touch target and readable label */
+    lv_style_set_pad_all(&style_btn_black, 12);
+    /* external margin so buttons have breathing room from other objects */
+    lv_style_set_margin_all(&style_btn_black, 6);
     /* Orange outline to make the button stand out */
     lv_style_set_outline_width(&style_btn_black, 3);
     lv_style_set_outline_color(&style_btn_black, lv_color_hex(0xFF9900));
@@ -176,6 +179,9 @@ void display_init_styles(void)
     lv_style_set_outline_width(&style_btn_black_pressed, 2);
     lv_style_set_outline_color(&style_btn_black_pressed, lv_color_hex(0xFF9900));
     lv_style_set_outline_opa(&style_btn_black_pressed, LV_OPA_COVER);
+    /* keep same internal padding and external margin on pressed state */
+    lv_style_set_pad_all(&style_btn_black_pressed, 12);
+    lv_style_set_margin_all(&style_btn_black_pressed, 6);
 
     lv_style_init(&style_bg_blue);
     lv_style_set_radius(&style_bg_blue, 15);

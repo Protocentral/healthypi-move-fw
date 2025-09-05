@@ -739,6 +739,14 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
         hpi_disp_spo2_plot_wrist_ppg(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
     }
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
+    {
+        /* Forward samples to the raw PPG screen plotting function */
+        lv_disp_trig_activity(NULL);
+        hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
+        /* Update the HR label on raw PPG screen if available */
+        hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
+    }
 }
 
 static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)

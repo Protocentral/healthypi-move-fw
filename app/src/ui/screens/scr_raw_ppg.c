@@ -171,15 +171,10 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 5);
 
     chart_ppg = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_ppg, 380, 130);
+    /* Match SpO2 measure chart styling */
+    lv_obj_set_size(chart_ppg, 390, 140);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
-    // LVGL 9: Chart point styling changed - commented out
-
-    // lv_obj_set_style_width(...);
-    // LVGL 9: Chart point styling changed - commented out
-
-    // lv_obj_set_style_height(...);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ppg, PPG_RAW_WINDOW_SIZE);
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
@@ -187,7 +182,7 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
 
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_ppg, 5, LV_PART_ITEMS);
+    lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
 
     // Draw BPM container
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
