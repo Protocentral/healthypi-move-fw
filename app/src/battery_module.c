@@ -1,9 +1,10 @@
 /*
  * HealthyPi Move - Battery Management Module
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
+ * Copyright (c) 2023 Nordic Semiconductor ASA
  *
  * Author: Ashwin Whitchurch, Protocentral Electronics
  * Contact: ashwin@protocentral.com
@@ -92,27 +93,36 @@ static int npm_read_sensors(const struct device *charger,
  */
 static int charge_status_inform(int32_t chg_status)
 {
-	union nrf_fuel_gauge_ext_state_info_data state_info;
+    union nrf_fuel_gauge_ext_state_info_data state_info;
 
-	if (chg_status & NPM1300_CHG_STATUS_COMPLETE_MASK) {
-		printk("Charge complete\n");
-		state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_COMPLETE;
-	} else if (chg_status & NPM1300_CHG_STATUS_TRICKLE_MASK) {
-		printk("Trickle charging\n");
-		state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_TRICKLE;
-	} else if (chg_status & NPM1300_CHG_STATUS_CC_MASK) {
-		printk("Constant current charging\n");
-		state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_CC;
-	} else if (chg_status & NPM1300_CHG_STATUS_CV_MASK) {
-		printk("Constant voltage charging\n");
-		state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_CV;
-	} else {
-		printk("Charger idle\n");
-		state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_IDLE;
-	}
+    if (chg_status & NPM1300_CHG_STATUS_COMPLETE_MASK)
+    {
+        LOG_DBG("Charge complete");
+        state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_COMPLETE;
+    }
+    else if (chg_status & NPM1300_CHG_STATUS_TRICKLE_MASK)
+    {
+        LOG_DBG("Trickle charging");
+        state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_TRICKLE;
+    }
+    else if (chg_status & NPM1300_CHG_STATUS_CC_MASK)
+    {
+        LOG_DBG("Constant current charging");
+        state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_CC;
+    }
+    else if (chg_status & NPM1300_CHG_STATUS_CV_MASK)
+    {
+        LOG_DBG("Constant voltage charging");
+        state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_CV;
+    }
+    else
+    {
+        LOG_DBG("Charger idle");
+        state_info.charge_state = NRF_FUEL_GAUGE_CHARGE_STATE_IDLE;
+    }
 
-	return nrf_fuel_gauge_ext_state_update(NRF_FUEL_GAUGE_EXT_STATE_INFO_CHARGE_STATE_CHANGE,
-					       &state_info);
+    return nrf_fuel_gauge_ext_state_update(NRF_FUEL_GAUGE_EXT_STATE_INFO_CHARGE_STATE_CHANGE,
+                                           &state_info);
 }
 
 int battery_fuel_gauge_init(const struct device *charger)
@@ -121,9 +131,13 @@ int battery_fuel_gauge_init(const struct device *charger)
     struct nrf_fuel_gauge_init_parameters parameters = {
         .model = &battery_model,
         .opt_params = NULL,
+        .state = NULL,
     };
+
     int32_t chg_status;
     int ret;
+    float max_charge_current;
+	float term_charge_current;
 
     LOG_DBG("Initializing nRF Fuel Gauge");
 
@@ -132,23 +146,55 @@ int battery_fuel_gauge_init(const struct device *charger)
     {
         return ret;
     }
+    /* Zephyr sensor API convention for Gauge current is negative=discharging,
+	 * while nrf_fuel_gauge lib expects the opposite negative=charging
+	 */
+	parameters.i0 = -parameters.i0;
 
     /* Store charge nominal and termination current, needed for ttf calculation */
     sensor_channel_get(charger, SENSOR_CHAN_GAUGE_DESIRED_CHARGING_CURRENT, &value);
     max_charge_current = (float)value.val1 + ((float)value.val2 / 1000000);
     term_charge_current = max_charge_current / 10.f;
 
-    nrf_fuel_gauge_init(&parameters, NULL);
+    ret = nrf_fuel_gauge_init(&parameters, NULL);
+    if (ret < 0)
+    {
+        LOG_DBG("Fuel gauge init error: %d", ret);
+        return ret;
+    }
+
+    ret = nrf_fuel_gauge_ext_state_update(NRF_FUEL_GAUGE_EXT_STATE_INFO_CHARGE_CURRENT_LIMIT,
+					      &(union nrf_fuel_gauge_ext_state_info_data){
+						      .charge_current_limit = max_charge_current});
+	if (ret < 0) {
+		printk("Error: Could not set fuel gauge state\n");
+		return ret;
+	}
+
+	ret = nrf_fuel_gauge_ext_state_update(NRF_FUEL_GAUGE_EXT_STATE_INFO_TERM_CURRENT,
+					      &(union nrf_fuel_gauge_ext_state_info_data){
+						      .charge_term_current = term_charge_current});
+	if (ret < 0) {
+		printk("Error: Could not set fuel gauge state\n");
+		return ret;
+	}
+
+    ret = charge_status_inform(chg_status);
+	if (ret < 0) {
+		printk("Error: Could not set fuel gauge state\n");
+		return ret;
+	}
 
     ref_time = k_uptime_get();
 
     return 0;
 }
 
-int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected, 
+int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
                               uint8_t *batt_level, bool *batt_charging, float *batt_voltage)
 {
     static int32_t chg_status_prev;
+    
     float voltage;
     float current;
     float temp;
@@ -176,11 +222,13 @@ int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
         return ret;
     }
 
-    if (chg_status != chg_status_prev) {
+    if (chg_status != chg_status_prev)
+    {
         chg_status_prev = chg_status;
 
         ret = charge_status_inform(chg_status);
-        if (ret < 0) {
+        if (ret < 0)
+        {
             printk("Error: Could not inform of charge status\n");
             return ret;
         }
@@ -193,18 +241,18 @@ int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
     tte = nrf_fuel_gauge_tte_get();
     ttf = nrf_fuel_gauge_ttf_get();
 
-    //LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
-    //         (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
+    // LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
+    //          (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
 
     // Update return values
     *batt_level = (uint8_t)soc;
     *batt_charging = chg_status;
     *batt_voltage = voltage; // Return the battery voltage
-    
+
     // Update internal state for external access
     last_battery_level = *batt_level;
     last_battery_voltage = *batt_voltage;
-    
+
     return 0;
 }
 

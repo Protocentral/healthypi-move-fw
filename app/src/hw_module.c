@@ -518,13 +518,13 @@ static void pmic_event_callback(const struct device *dev, struct gpio_callback *
 {
     if (pins & BIT(NPM13XX_EVENT_VBUS_DETECTED))
     {
-        printk("Vbus connected\n");
+        LOG_DBG("Vbus connected");
         vbus_connected = true;
     }
 
     if (pins & BIT(NPM13XX_EVENT_VBUS_REMOVED))
     {
-        printk("Vbus removed\n");
+        LOG_DBG("Vbus removed");
         vbus_connected = false;
     }
 }
@@ -598,6 +598,11 @@ void hw_module_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
+    // Check battery voltage during boot
+    uint8_t boot_batt_level = 0;
+    bool boot_batt_charging = false;
+    float boot_batt_voltage = 0.0f;
+
     // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
     NRF_TWIM2->FREQUENCY = 0x06200000;
     NRF_TWIM1->FREQUENCY = 0x06200000;
@@ -620,6 +625,17 @@ void hw_module_init(void)
         LOG_ERR("Charger device not ready.\n");
     }
 
+    if (battery_fuel_gauge_init(charger) < 0)
+    {
+        LOG_ERR("Could not initialise fuel gauge.\n");
+        hw_add_boot_msg("PMIC", true, true, false, 0);
+    }
+    else
+    {
+        hw_add_boot_msg("PMIC", true, true, false, 0);
+        hw_enable_pmic_callback();
+    }
+
     // Power ON display
     regulator_disable(ldsw_disp_unit);
     k_msleep(100);
@@ -637,23 +653,6 @@ void hw_module_init(void)
 
     // Wait for display system to be initialized and ready
     k_sem_take(&sem_disp_ready, K_FOREVER);
-
-    hw_enable_pmic_callback();
-    if (battery_fuel_gauge_init(charger) < 0)
-    {
-        LOG_ERR("Could not initialise fuel gauge.\n");
-        hw_add_boot_msg("PMIC", true, true, false, 0);
-    }
-    else
-    {
-        hw_add_boot_msg("PMIC", true, true, false, 0);
-        hw_enable_pmic_callback();
-    }
-
-    // Check battery voltage during boot
-    uint8_t boot_batt_level = 0;
-    bool boot_batt_charging = false;
-    float boot_batt_voltage = 0.0f;
 
     if (battery_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
     {
