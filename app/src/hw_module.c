@@ -603,7 +603,7 @@ void hw_module_init(void)
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
     // Debug: Scan I2C2 bus for available devices before initialization
-    //i2c2_bus_scan_debug();
+    // i2c2_bus_scan_debug();
 
     if (!device_is_ready(pmic))
     {
@@ -973,26 +973,26 @@ void hw_module_init(void)
     {
         LOG_ERR("MAX30208A50 device not found!");
         hw_add_boot_msg("MAX30208 @50", false, true, false, 0);
+
+        device_init(max30208a52_dev);
+        k_sleep(K_MSEC(100));
+
+        if (!device_is_ready(max30208a52_dev))
+        {
+            LOG_ERR("MAX30208A52 device not found!");
+            hw_add_boot_msg("MAX30208 @52", false, true, false, 0);
+        }
+        else
+        {
+            max30208a50_dev = max30208a52_dev; // Use the device with address 0x52
+            LOG_INF("MAX30208A52 device found!");
+            hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
+        }
     }
     else
     {
         LOG_INF("MAX30208A50 device found!");
         hw_add_boot_msg("MAX30208A50 @50", true, true, false, 0);
-    }
-
-    device_init(max30208a52_dev);
-    k_sleep(K_MSEC(100));
-
-    if (!device_is_ready(max30208a52_dev))
-    {
-        LOG_ERR("MAX30208A52 device not found!");
-        hw_add_boot_msg("MAX30208 @52", false, true, false, 0);
-    }
-    else
-    {
-        max30208a50_dev = max30208a52_dev; // Use the device with address 0x52
-        LOG_INF("MAX30208A52 device found!");
-        hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
     }
 
     hw_add_boot_msg("Boot complete !!", true, false, false, 0);
