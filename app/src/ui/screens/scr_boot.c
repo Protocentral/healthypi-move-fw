@@ -102,7 +102,7 @@ void draw_scr_boot(void)
     hpi_show_screen(scr_boot, SCROLL_RIGHT);
 }
 
-void scr_boot_add_status(char *dev_label, bool status, bool show_status)
+void scr_boot_add_status(const char *dev_label, bool status, bool show_status)
 {
     char buf[64];
     if (show_status)

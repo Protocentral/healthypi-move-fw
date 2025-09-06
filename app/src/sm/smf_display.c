@@ -176,7 +176,7 @@ K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Array of function pointers for screen drawing functions
 static const screen_func_table_entry_t screen_func_table[] = {
-    [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, NULL},
+    [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, gesture_down_scr_spl_raw_ppg},
     [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
     [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},

@@ -207,13 +207,13 @@ lv_obj_t *hpi_btn_create(lv_obj_t *parent);
 // Boot Screen functions
 void draw_scr_splash(void);
 void draw_scr_boot(void);
-void scr_boot_add_status(char *dev_label, bool status, bool show_status);
+void scr_boot_add_status(const char *dev_label, bool status, bool show_status);
 void scr_boot_add_final(bool status);
 
 // Progress Screen functions
-void draw_scr_progress(char *title, char *message);
-void hpi_disp_scr_update_progress(int progress, char *status);
-void hpi_disp_scr_show_error(char *error_message);
+void draw_scr_progress(const char *title, const char *message);
+void hpi_disp_scr_update_progress(int progress, const char *status);
+void hpi_disp_scr_show_error(const char *error_message);
 void hpi_disp_scr_reset_progress(void);
 void hpi_disp_scr_debug_status(void);
 
@@ -290,6 +290,14 @@ void gesture_down_scr_bpt_cal_required(void);
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);
+
+/* Shared autoscale helper for PPG/LVGL charts.
+ * chart: LVGL chart object
+ * y_min_ppg, y_max_ppg: pointers to tracked min/max values
+ * gx: pointer to sample counter used to decide when to rescale
+ * disp_window_size: window size constant used to determine threshold
+ */
+void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *y_max_ppg, float *gx, int disp_window_size);
 
 // EDA screen functions
 void draw_scr_pre(enum scroll_dir m_scroll_dir);

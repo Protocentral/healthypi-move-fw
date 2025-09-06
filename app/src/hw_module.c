@@ -1064,14 +1064,17 @@ static uint32_t acc_get_steps(void)
     return (uint32_t)steps.val1;
 }
 
+uint8_t sys_batt_level = 0;
+bool sys_batt_charging = false;
+ float sys_batt_voltage = 4.2f; 
+
 void hw_thread(void)
 {
     uint32_t _steps = 0;
     double _temp_f = 0.0;
 
-    uint8_t sys_batt_level = 0;
-    bool sys_batt_charging = false;
-    float sys_batt_voltage = 4.2f; // Add voltage tracking
+   
+   
 
     // Variables for tracking daily reset
     static int last_day = -1;
