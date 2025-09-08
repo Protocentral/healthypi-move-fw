@@ -125,7 +125,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
         lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     }
 
-    btn_spo2_proceed = lv_btn_create(cont_col);
+    btn_spo2_proceed = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_spo2_proceed, scr_spo2_btn_proceed_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_spo2_proceed, 85);
 

@@ -51,6 +51,9 @@ LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 
 // LVGL Styles
 static lv_style_t style_btn;
+/* Black button styles (global) */
+static lv_style_t style_btn_black;
+static lv_style_t style_btn_black_pressed;
 
 // Global LVGL Styles
 lv_style_t style_tiny;
@@ -151,6 +154,35 @@ void display_init_styles(void)
     lv_style_set_border_width(&style_scr_black, 0);
     lv_style_set_bg_color(&style_scr_black, lv_color_black());
 
+    /* Initialize global black button styles */
+    lv_style_init(&style_btn_black);
+    lv_style_set_bg_color(&style_btn_black, lv_color_black());
+    lv_style_set_bg_opa(&style_btn_black, LV_OPA_COVER);
+    lv_style_set_border_width(&style_btn_black, 0);
+    lv_style_set_text_color(&style_btn_black, lv_color_white());
+    lv_style_set_radius(&style_btn_black, 6);
+    /* internal padding for better touch target and readable label */
+    lv_style_set_pad_all(&style_btn_black, 12);
+    /* external margin so buttons have breathing room from other objects */
+    lv_style_set_margin_all(&style_btn_black, 6);
+    /* Orange outline to make the button stand out */
+    lv_style_set_outline_width(&style_btn_black, 3);
+    lv_style_set_outline_color(&style_btn_black, lv_color_hex(0xFF9900));
+    lv_style_set_outline_opa(&style_btn_black, LV_OPA_COVER);
+    lv_style_set_outline_pad(&style_btn_black, 2);
+
+    lv_style_init(&style_btn_black_pressed);
+    lv_style_set_bg_color(&style_btn_black_pressed, lv_color_hex(0x222222));
+    lv_style_set_bg_opa(&style_btn_black_pressed, LV_OPA_COVER);
+    lv_style_set_text_color(&style_btn_black_pressed, lv_color_white());
+    /* Keep pressed state outlined as well (slightly thinner) */
+    lv_style_set_outline_width(&style_btn_black_pressed, 2);
+    lv_style_set_outline_color(&style_btn_black_pressed, lv_color_hex(0xFF9900));
+    lv_style_set_outline_opa(&style_btn_black_pressed, LV_OPA_COVER);
+    /* keep same internal padding and external margin on pressed state */
+    lv_style_set_pad_all(&style_btn_black_pressed, 12);
+    lv_style_set_margin_all(&style_btn_black_pressed, 6);
+
     lv_style_init(&style_bg_blue);
     lv_style_set_radius(&style_bg_blue, 15);
     lv_style_set_bg_opa(&style_bg_blue, LV_OPA_COVER);
@@ -214,6 +246,18 @@ void hpi_disp_set_brightness(uint8_t brightness_percent)
     uint8_t brightness = (uint8_t)((brightness_percent * 255) / 100);
     display_set_brightness(display_dev, brightness);
     hpi_disp_curr_brightness = brightness_percent;
+}
+
+/* Helper to create a pre-styled black button */
+lv_obj_t *hpi_btn_create(lv_obj_t *parent)
+{
+    lv_obj_t *btn = lv_btn_create(parent);
+    if (!btn) {
+        return NULL;
+    }
+    lv_obj_add_style(btn, &style_btn_black, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_style(btn, &style_btn_black_pressed, LV_PART_MAIN | LV_STATE_PRESSED);
+    return btn;
 }
 
 uint8_t hpi_disp_get_brightness(void)

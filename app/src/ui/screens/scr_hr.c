@@ -62,6 +62,9 @@ extern lv_style_t style_bg_red;
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_green;
 
+/* Prototype for Raw PPG button event handler */
+static void scr_hr_btn_raw_event_handler(lv_event_t *e);
+
 void draw_scr_hr(enum scroll_dir m_scroll_dir)
 {
     scr_hr = lv_obj_create(NULL);
@@ -124,6 +127,14 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hr_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_hr_last_update_time, LV_TEXT_ALIGN_CENTER, 0);  
 
+    /* Raw PPG button - opens the raw PPG special screen */
+    lv_obj_t *btn_raw_ppg = hpi_btn_create(cont_col);
+    lv_obj_set_height(btn_raw_ppg, 60);
+    lv_obj_t *label_btn_raw = lv_label_create(btn_raw_ppg);
+    lv_label_set_text(label_btn_raw, LV_SYMBOL_PLAY " Raw PPG");
+    lv_obj_center(label_btn_raw);
+    lv_obj_add_event_cb(btn_raw_ppg, scr_hr_btn_raw_event_handler, LV_EVENT_ALL, NULL);
+
     hpi_disp_set_curr_screen(SCR_HR);
     hpi_show_screen(scr_hr, m_scroll_dir);
 }
@@ -145,4 +156,15 @@ void hpi_disp_hr_update_hr(uint16_t hr, int64_t last_update_ts)
     char last_meas_str[25];
     hpi_helper_get_relative_time_str(last_update_ts, last_meas_str, sizeof(last_meas_str));
     lv_label_set_text(label_hr_last_update_time, last_meas_str);
+}
+
+/* Event handler to open Raw PPG special screen */
+static void scr_hr_btn_raw_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        hpi_load_scr_spl(SCR_SPL_RAW_PPG, SCROLL_UP, (uint8_t)SCR_HR, 0, 0, 0);
+    }
 }

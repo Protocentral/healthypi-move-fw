@@ -52,7 +52,7 @@ static void scr_home_steps_btn_handler(lv_event_t *e)
 lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 {
     lv_obj_t *cui_buttonround;
-    cui_buttonround = lv_btn_create(comp_parent);
+    cui_buttonround = hpi_btn_create(comp_parent);
     lv_obj_set_width(cui_buttonround, 110);
     lv_obj_set_height(cui_buttonround, 110);
     lv_obj_set_x(cui_buttonround, 0);

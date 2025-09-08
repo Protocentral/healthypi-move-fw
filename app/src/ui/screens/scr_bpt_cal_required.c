@@ -85,7 +85,7 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     label_bpt_cal_required = lv_label_create(cont_col);
     lv_label_set_text(label_bpt_cal_required, "Calibration is required before taking BPT measurements. You can perform the process through the Healthy Move Mobiel App.");
 
-    btn_ok = lv_btn_create(cont_col);
+    btn_ok = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_ok, scr_btn_ok_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_ok, 85);
 

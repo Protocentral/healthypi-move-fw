@@ -59,7 +59,7 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
-void draw_scr_progress(char *title, char *message)
+void draw_scr_progress(const char *title, const char *message)
 {
     scr_progress = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_progress, LV_OBJ_FLAG_SCROLLABLE); /// Flags
@@ -109,7 +109,7 @@ void draw_scr_progress(char *title, char *message)
     hpi_show_screen(scr_progress, SCROLL_NONE);
 }
 
-void hpi_disp_scr_update_progress(int progress, char *status)
+void hpi_disp_scr_update_progress(int progress, const char *status)
 {
     if (label_progress == NULL)
         return;
@@ -160,7 +160,7 @@ void hpi_disp_scr_update_progress(int progress, char *status)
     }
 }
 
-void hpi_disp_scr_show_error(char *error_message)
+void hpi_disp_scr_show_error(const char *error_message)
 {
     if (label_error_msg == NULL || label_subtitle == NULL)
         return;

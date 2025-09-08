@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -27,7 +27,6 @@
  * SOFTWARE.
  */
 
-
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -36,8 +35,11 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include <math.h>
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2_measure, LOG_LEVEL_DBG);
+
+#define PPG_RAW_WINDOW_SIZE 128
 
 static lv_obj_t *scr_spo2_scr_measure;
 
@@ -115,20 +117,24 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 
     // LVGL 9: Chart point styling changed - commented out
 
-
     // lv_obj_set_style_width(...);
     // LVGL 9: Chart point styling changed - commented out
 
     // lv_obj_set_style_height(...);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
 
+    /* Use consistent buffering/point-count choices as raw PPG screen for better visual parity
+     * - FI source keeps the wider BPT window
+     * - Wrist PPG uses the raw PPG window for snappier updates
+     */
     if (spo2_source == SPO2_SOURCE_PPG_FI)
     {
         lv_chart_set_point_count(chart_ppg, BPT_DISP_WINDOW_SIZE * 2);
     }
     else if (spo2_source == SPO2_SOURCE_PPG_WR)
     {
-        lv_chart_set_point_count(chart_ppg, SPO2_DISP_WINDOW_SIZE_WR);
+        /* match raw PPG window size for wrist plotting */
+        lv_chart_set_point_count(chart_ppg, PPG_RAW_WINDOW_SIZE);
     }
 
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
@@ -166,15 +172,7 @@ static void hpi_ppg_disp_add_samples(int num_samples)
 
 static void hpi_ppg_disp_do_set_scale(int disp_window_size)
 {
-    if (gx >= (disp_window_size / 4))
-    {
-
-        lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
-
-        gx = 0;
-        y_max_ppg = -900000;
-        y_min_ppg = 900000;
-    }
+    hpi_ppg_disp_do_set_scale_shared(chart_ppg, &y_min_ppg, &y_max_ppg, &gx, disp_window_size);
 }
 
 void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int spo2, int hr)
@@ -192,7 +190,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     else if (state == SPO2_MEAS_SUCCESS)
     {
         lv_label_set_text(label_spo2_status, "Complete");
-        //hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
+        // hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
     }
     else if (state == SPO2_MEAS_TIMEOUT)
     {
@@ -203,15 +201,6 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     {
         lv_label_set_text(label_spo2_status, "Starting...");
     }
-
-    /*if (hr == 0)
-    {
-        lv_label_set_text(label_hr, "--");
-    }
-    else
-    {
-        lv_label_set_text_fmt(label_hr, "%d", hr);
-    }*/
 }
 
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
@@ -223,47 +212,60 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     static bool baseline_init = false;
     const float alpha = 0.005f; /* small alpha for slow baseline tracking */
 
-    for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
+    /* Cache locals to reduce repeated global accesses */
+    int num = ppg_sensor_sample.ppg_num_samples;
+    float local_ymin = y_min_ppg;
+    float local_ymax = y_max_ppg;
+    float local_base = baseline_ema;
+    int local_spo2_source = spo2_source;
+
+    for (int i = 0; i < num; i++)
     {
         int32_t scaled = (int32_t)(data_ppg[i] >> 8); /* divide by 256 */
 
-        if (!baseline_init) {
-            baseline_ema = (float)scaled;
+        if (!baseline_init)
+        {
+            local_base = (float)scaled;
             baseline_init = true;
         }
 
-        float residual = (float)scaled - baseline_ema;
-        baseline_ema = baseline_ema * (1.0f - alpha) + ((float)scaled * alpha);
+        float residual = (float)scaled - local_base;
+        local_base = local_base * (1.0f - alpha) + ((float)scaled * alpha);
 
         /* Center residual to positive range for plotting */
         int32_t plot_val = (int32_t)(residual) + 2048; /* center offset */
 
-    /* Diagnostic logging removed */
         float fplot = (float)plot_val;
 
-        if (fplot < y_min_ppg)
+        if (fplot < local_ymin)
         {
-            y_min_ppg = fplot;
+            local_ymin = fplot;
         }
 
-        if (fplot > y_max_ppg)
+        if (fplot > local_ymax)
         {
-            y_max_ppg = fplot;
+            local_ymax = fplot;
         }
 
         lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
 
         hpi_ppg_disp_add_samples(1);
 
-        if (spo2_source == SPO2_SOURCE_PPG_WR)
+        /* Use raw PPG window size for wrist plotting autoscale to match raw screen */
+        if (local_spo2_source == SPO2_SOURCE_PPG_WR)
         {
-            hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_WR);
+            hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
         }
         else
         {
             hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_FI);
         }
     }
+
+    /* write back cached locals */
+    y_min_ppg = local_ymin;
+    y_max_ppg = local_ymax;
+    baseline_ema = local_base;
 }
 
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)

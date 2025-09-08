@@ -176,7 +176,7 @@ K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Array of function pointers for screen drawing functions
 static const screen_func_table_entry_t screen_func_table[] = {
-    [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, NULL},
+    [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, gesture_down_scr_spl_raw_ppg},
     [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
     [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},
@@ -738,6 +738,14 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
         lv_disp_trig_activity(NULL);
         hpi_disp_spo2_plot_wrist_ppg(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
+    }
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
+    {
+        /* Forward samples to the raw PPG screen plotting function */
+        lv_disp_trig_activity(NULL);
+        hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
+        /* Update the HR label on raw PPG screen if available */
+        hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
     }
 }
 

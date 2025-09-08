@@ -199,7 +199,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     lv_label_set_text(lbl_gap1, " ");
     lv_obj_align_to(lbl_gap1, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
 
-    lv_obj_t *btn_hr_live = lv_btn_create(cont_col);
+    lv_obj_t *btn_hr_live = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_hr_live, scr_hr_btn_live_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_hr_live, 80);
 
