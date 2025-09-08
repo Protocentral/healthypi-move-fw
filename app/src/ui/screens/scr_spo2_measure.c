@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -26,7 +26,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -118,7 +117,6 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 
     // LVGL 9: Chart point styling changed - commented out
 
-
     // lv_obj_set_style_width(...);
     // LVGL 9: Chart point styling changed - commented out
 
@@ -192,7 +190,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     else if (state == SPO2_MEAS_SUCCESS)
     {
         lv_label_set_text(label_spo2_status, "Complete");
-        //hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
+        // hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
     }
     else if (state == SPO2_MEAS_TIMEOUT)
     {
@@ -203,15 +201,6 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     {
         lv_label_set_text(label_spo2_status, "Starting...");
     }
-
-    /*if (hr == 0)
-    {
-        lv_label_set_text(label_hr, "--");
-    }
-    else
-    {
-        lv_label_set_text_fmt(label_hr, "%d", hr);
-    }*/
 }
 
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
@@ -234,7 +223,8 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     {
         int32_t scaled = (int32_t)(data_ppg[i] >> 8); /* divide by 256 */
 
-        if (!baseline_init) {
+        if (!baseline_init)
+        {
             local_base = (float)scaled;
             baseline_init = true;
         }
@@ -284,7 +274,7 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
-    float data_ppg_i = (float)(data_ppg[i] * 1.000); // * 0.100);
+        float data_ppg_i = (float)(data_ppg[i] * 1.000); // * 0.100);
 
         if (data_ppg_i == 0)
         {
