@@ -221,7 +221,7 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 
     for (int i = 0; i < num; i++)
     {
-        int32_t scaled = (int32_t)(data_ppg[i] >> 8); /* divide by 256 */
+        int32_t scaled = (int32_t)(data_ppg[i] >> 4); /* divide by 256 */
 
         if (!baseline_init)
         {
