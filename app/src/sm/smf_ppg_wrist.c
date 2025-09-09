@@ -99,6 +99,7 @@ enum ppg_fi_sm_state
     PPG_SAMP_STATE_PROBING,
     PPG_SAMP_STATE_OFF_SKIN,
     PPG_SAMP_STATE_MOTION_DETECT,
+    PPG_SAMP_STATE_ONE_SHOT_SPO2,
 };
 
 struct s_object
@@ -635,12 +636,46 @@ static void st_ppg_samp_motion_detect_run(void *o)
     }
 }
 
+// ONE_SHOT_SPO2 STATE - Pause the HR SM and wait for the one-shot SPO2 to complete
+static void st_ppg_samp_one_shot_entry(void *o)
+{
+    m_curr_state = PPG_SAMP_STATE_ONE_SHOT_SPO2;
+
+    /* Cancel leftover timers/work from other states to keep SM quiescent */
+    k_work_cancel_delayable(&work_off_skin_threshold);
+    k_work_cancel_delayable(&work_probe_enable);
+    k_work_cancel_delayable(&work_probe_sleep);
+    k_work_cancel_delayable(&work_offskin_timeout);
+
+    /* Ensure device is considered on-skin for UI/power logic during one-shot */
+    hpi_sys_set_device_on_skin(true);
+
+    /* The control thread configures the MAX32664C for one-shot mode and
+     * starts the sampling timer; this state simply keeps the SMF from
+     * performing its normal ACTIVE behaviour until the measurement ends.
+     */
+}
+
+static void st_ppg_samp_one_shot_run(void *o)
+{
+    /* Remain quiescent in this state until the control thread finishes the
+     * one-shot SPO2 procedure and explicitly transitions the SMF back to
+     * ACTIVE. The control thread uses the existing sem_stop_one_shot_spo2
+     * semaphore to detect measurement completion and perform cleanup.
+     */
+    while (true)
+    {
+        k_msleep(100);
+    }
+}
+
 // State machine with four states: ACTIVE, PROBING, OFF_SKIN, MOTION_DETECT
 static const struct smf_state ppg_samp_states[] = {
     [PPG_SAMP_STATE_ACTIVE] = SMF_CREATE_STATE(ppg_samp_state_active_entry, st_ppg_samp_active_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_PROBING] = SMF_CREATE_STATE(st_ppg_samp_probing_entry, st_ppg_samp_probing_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_OFF_SKIN] = SMF_CREATE_STATE(st_ppg_samp_off_skin_entry, st_ppg_samp_off_skin_run, NULL, NULL, NULL),
     [PPG_SAMP_STATE_MOTION_DETECT] = SMF_CREATE_STATE(st_ppg_samp_motion_detect_entry, st_ppg_samp_motion_detect_run, NULL, NULL, NULL),
+    [PPG_SAMP_STATE_ONE_SHOT_SPO2] = SMF_CREATE_STATE(st_ppg_samp_one_shot_entry, st_ppg_samp_one_shot_run, NULL, NULL, NULL),
 };
 
 static void smf_ppg_wrist_thread(void)
@@ -680,29 +715,46 @@ static void ppg_wrist_ctrl_thread(void)
     {
         if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
         {
-            // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
-            LOG_DBG("Stopping PPG Sampling");
+            /* Transition the PPG SMF into the ONE_SHOT_SPO2 state so the
+             * continuous HR state machine is effectively paused while the
+             * one-shot SpO2 measurement runs. The actual sensor mode setup
+             * remains the same: stop algos, configure one-shot SPO2 and
+             * start sampling timer.
+             */
+            LOG_DBG("Transitioning PPG SM to ONE_SHOT_SPO2");
+
+            /* Stop any ongoing sampling to prepare for one-shot */
             k_timer_stop(&tmr_ppg_wrist_sampling);
 
-            LOG_DBG("Starting One Shot SpO2");
-
+            /* Update UI */
             hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_UP, (uint8_t)SCR_SPO2, SPO2_SOURCE_PPG_WR, 0, 0);
 
+            /* Configure sensor for one-shot SpO2 */
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             k_msleep(600);
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
             k_msleep(600);
+
+            /* Start sampling for one-shot */
             k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
 
+            /* Mark measurement in progress and move SMF into ONE_SHOT state */
             spo2_measurement_in_progress = true;
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ONE_SHOT_SPO2]);
         }
 
         if (k_sem_take(&sem_stop_one_shot_spo2, K_NO_WAIT) == 0)
         {
-            LOG_DBG("Stopping One Shot SpO2");
+            LOG_DBG("One Shot SpO2 complete - cleaning up and returning PPG SM to ACTIVE");
+
+            /* Stop one-shot sampling */
             k_timer_stop(&tmr_ppg_wrist_sampling);
             spo2_measurement_in_progress = false;
+
+            /* Put sensor into safe stopped state */
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+
+            /* Read measured value and show appropriate UI */
             uint16_t m_est_spo2 = 0;
             enum spo2_meas_state m_est_spo2_status = SPO2_MEAS_UNK;
             get_measured_spo2(&m_est_spo2, &m_est_spo2_status);
@@ -723,10 +775,14 @@ static void ppg_wrist_ctrl_thread(void)
 
             k_msleep(1000);
 
+            /* Restore continuous HR monitoring */
             LOG_DBG("Switching to Continuous Sampling HR");
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
             k_msleep(600);
             k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+
+            /* Transition SMF back to ACTIVE */
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
         }
 
         k_msleep(100);
