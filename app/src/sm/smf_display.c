@@ -189,6 +189,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
     [SCR_SPL_SPO2_COMPLETE] = {draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete},
     [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
+    [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
     [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, NULL},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
@@ -997,7 +998,8 @@ static void st_display_active_run(void *o)
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
-            k_sem_give(&sem_stop_one_shot_spo2);
+            /* User cancelled measurement via crown: signal explicit cancel semaphore */
+            k_sem_give(&sem_spo2_cancel);
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
         else

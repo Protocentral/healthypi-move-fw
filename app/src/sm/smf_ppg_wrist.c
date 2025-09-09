@@ -785,6 +785,33 @@ static void ppg_wrist_ctrl_thread(void)
             smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
         }
 
+        /* Handle explicit cancellation of a running one-shot measurement */
+        if (k_sem_take(&sem_spo2_cancel, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("One Shot SpO2 cancelled by user/UI - cleaning up and returning PPG SM to ACTIVE");
+
+            /* Stop sampling and mark as cancelled */
+            k_timer_stop(&tmr_ppg_wrist_sampling);
+            spo2_measurement_in_progress = false;
+            set_measured_spo2(0, SPO2_MEAS_CANCELLED);
+
+            /* Put sensor into safe stopped state */
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+
+            /* Show cancelled UI (reuse timeout/unknown handlers) */
+            hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_SPO2, 0, 0, 0);
+
+            k_msleep(500);
+
+            /* Restore continuous HR monitoring */
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+            k_msleep(600);
+            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+
+            /* Transition back to ACTIVE */
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+        }
+
         k_msleep(100);
     }
 }
