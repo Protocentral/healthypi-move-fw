@@ -32,6 +32,7 @@
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
+#include <errno.h>
 
 LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 
@@ -152,10 +153,10 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    // printk("FNS: %d ", edata->num_samples);
-    if (_n_samples > 16)
+    // Cap to the FI PPG points per sample (driver may return up to 32)
+    if (_n_samples > BPT_PPG_POINTS_PER_SAMPLE)
     {
-        _n_samples = 16;
+        _n_samples = BPT_PPG_POINTS_PER_SAMPLE;
     }
 
     if (_n_samples > 0)
@@ -252,12 +253,24 @@ void work_fi_sample_handler(struct k_work *work)
     uint8_t data_buf[384];
 
     int ret = 0;
+    static int consecutive_timeouts = 0;
     ret = sensor_read(&max32664d_iodev, &max32664d_read_rtio_poll_ctx, data_buf, sizeof(data_buf));
     if (ret < 0)
     {
-        LOG_ERR("Error reading sensor data");
+        if (ret == -ETIMEDOUT) {
+            consecutive_timeouts++;
+            LOG_WRN("Sensor read timed out (%d). consecutive_timeouts=%d", ret, consecutive_timeouts);
+            if (consecutive_timeouts >= 3) {
+                LOG_ERR("Multiple consecutive sensor timeouts, stopping sampling");
+                k_sem_give(&sem_stop_fi_sampling);
+                consecutive_timeouts = 0;
+            }
+        } else {
+            LOG_ERR("Error reading sensor data: %d", ret);
+        }
         return;
     }
+    consecutive_timeouts = 0;
     sensor_ppg_finger_decode(data_buf, sizeof(data_buf), sens_decode_ppg_fi_op_mode);
 }
 K_WORK_DEFINE(work_fi_sample, work_fi_sample_handler);
