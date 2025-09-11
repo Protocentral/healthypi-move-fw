@@ -184,3 +184,38 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 
     return 0;
 }
+
+/*
+ * Cancel any running estimation/algorithm and power the sensor down.
+ * This stops the algorithm via the existing attribute handler and then
+ * places the chip into a safe powered-down state by toggling reset/mfio.
+ */
+int max32664d_cancel(const struct device *dev)
+{
+    const struct max32664d_config *config = dev->config;
+    struct max32664d_data *data = dev->data;
+    struct sensor_value stop_val;
+
+    LOG_INF("max32664d_cancel: stopping algorithm and powering down sensor");
+
+    /* Request the driver to stop estimation/algorithm */
+    stop_val.val1 = MAX32664D_ATTR_STOP_EST;
+    sensor_attr_set(dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_STOP_EST, &stop_val);
+
+    /* Give the chip a little time to stop */
+    k_msleep(50);
+
+    /* Drive MFIO low and reset the device to ensure AFE is disabled */
+    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+
+    gpio_pin_set_dt(&config->reset_gpio, 0);
+    k_msleep(10);
+
+    /* Leave reset asserted to keep chip inactive */
+    LOG_DBG("max32664d_cancel: MFIO low and RESET asserted");
+
+    data->op_mode = MAX32664D_OP_MODE_IDLE;
+
+    return 0;
+}

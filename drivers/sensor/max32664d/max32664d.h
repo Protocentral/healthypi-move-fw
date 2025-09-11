@@ -179,3 +179,6 @@ int max32664d_load_bpt_cal_vector(const struct device *dev, uint8_t *m_bpt_cal_v
 int max32664d_set_bpt_cal_vector(const struct device *dev, uint8_t m_bpt_cal_index, uint8_t m_bpt_cal_vector[CAL_VECTOR_SIZE]);
 int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
+
+/* Stop any running estimation/algorithm and power the sensor down. */
+int max32664d_cancel(const struct device *dev);

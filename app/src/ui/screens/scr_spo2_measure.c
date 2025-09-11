@@ -69,6 +69,8 @@ extern lv_style_t style_bg_red;
 
 static int spo2_source = 0;
 
+extern struct k_sem sem_fi_spo2_est_cancel;
+
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     int parent_screen = arg1; // Parent screen passed from the previous screen
@@ -318,6 +320,11 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 
 void gesture_down_scr_spo2_measure(void)
 {
-    // Handle gesture down on SpO2 measure screen
+    // If finger-based measurement, signal cancel to the finger SM
+    if (spo2_source == SPO2_SOURCE_PPG_FI) {
+        k_sem_give(&sem_fi_spo2_est_cancel);
+    }
+
+    // Navigate back to selection screen
     hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_DOWN, 0, 0, 0, 0);
 }

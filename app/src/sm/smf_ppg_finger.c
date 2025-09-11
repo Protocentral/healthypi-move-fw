@@ -397,6 +397,14 @@ static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf, uint8_t l_cal_
 
 void hpi_bpt_abort(void)
 {
+    /* Stop sampling first */
+    k_sem_give(&sem_stop_fi_sampling);
+
+    /* Ask the sensor driver to stop algorithms and power down */
+    /* Use the attribute-based stop (driver handles algorithm stop) */
+    hpi_bpt_stop();
+
+    /* Ensure state machine goes to IDLE */
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
@@ -693,11 +701,22 @@ static void st_ppg_fi_spo2_est_entry(void *o)
 static void st_ppg_fi_spo2_est_run(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Running");
+    /* Check for completion */
     if (k_sem_take(&sem_spo2_est_complete, K_NO_WAIT) == 0)
     {
         k_sem_give(&sem_stop_fi_sampling); // Stop the sampling
         k_sleep(K_MSEC(1000));             // Wait for the sampling to stop
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST_DONE]);
+        return;
+    }
+
+    /* Honor user cancel during active measurement */
+    if (k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("SpO2 Estimation Cancelled (during measurement)");
+        /* Use application abort helper to stop sampling, stop algorithm and go IDLE */
+        hpi_bpt_abort();
+        return;
     }
 }
 
