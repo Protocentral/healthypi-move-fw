@@ -69,6 +69,8 @@ extern lv_style_t style_bg_red;
 
 static int spo2_source = 0;
 
+extern struct k_sem sem_fi_spo2_est_cancel;
+
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     int parent_screen = arg1; // Parent screen passed from the previous screen
@@ -272,26 +274,44 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
     uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
+    /* Simple DC removal for FI source similar to wrist plotting to reduce baseline wander */
+    static float fi_baseline_ema = 0.0f;
+    static bool fi_baseline_init = false;
+    const float alpha_fi = 0.01f; /* slightly faster baseline tracking for finger */
+
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
-        float data_ppg_i = (float)(data_ppg[i] * 1.000); // * 0.100);
+        float data_ppg_i = (float)(data_ppg[i]);
 
-        if (data_ppg_i == 0)
+        /* Guard against zero/invalid samples from driver */
+        if (data_ppg_i == 0.0f)
         {
-            return;
+            continue; /* skip this sample instead of aborting the whole batch */
         }
 
-        if (data_ppg_i < y_min_ppg)
+        if (!fi_baseline_init)
         {
-            y_min_ppg = data_ppg_i;
+            fi_baseline_ema = data_ppg_i;
+            fi_baseline_init = true;
         }
 
-        if (data_ppg_i > y_max_ppg)
+        float residual = data_ppg_i - fi_baseline_ema;
+        fi_baseline_ema = fi_baseline_ema * (1.0f - alpha_fi) + (data_ppg_i * alpha_fi);
+
+        /* Center residual to positive range for LVGL plotting */
+        int32_t plot_val = (int32_t)(residual) + 2048;
+
+        if ((float)plot_val < y_min_ppg)
         {
-            y_max_ppg = data_ppg_i;
+            y_min_ppg = (float)plot_val;
         }
 
-        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg_i);
+        if ((float)plot_val > y_max_ppg)
+        {
+            y_max_ppg = (float)plot_val;
+        }
+
+        lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
 
         hpi_ppg_disp_add_samples(1);
         hpi_ppg_disp_do_set_scale(BPT_DISP_WINDOW_SIZE * 2);
@@ -300,6 +320,11 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 
 void gesture_down_scr_spo2_measure(void)
 {
-    // Handle gesture down on SpO2 measure screen
+    // If finger-based measurement, signal cancel to the finger SM
+    if (spo2_source == SPO2_SOURCE_PPG_FI) {
+        k_sem_give(&sem_fi_spo2_est_cancel);
+    }
+
+    // Navigate back to selection screen
     hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_DOWN, 0, 0, 0, 0);
 }

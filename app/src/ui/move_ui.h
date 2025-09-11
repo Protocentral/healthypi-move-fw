@@ -126,6 +126,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_MEASURE,
     SCR_SPL_SPO2_COMPLETE,
     SCR_SPL_SPO2_TIMEOUT,
+    SCR_SPL_SPO2_CANCELLED,
     SCR_SPL_HR_SCR2,
     SCR_SPL_PLOT_GSR,
 
@@ -253,6 +254,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 void hpi_disp_spo2_update_hr(int hr);
 void draw_scr_spl_spo2_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_spl_spo2_cancelled(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spl_low_battery(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
@@ -278,6 +280,7 @@ void gesture_down_scr_spo2_scr2(void);
 void gesture_down_scr_spo2_measure(void);
 void gesture_down_scr_spl_spo2_complete(void);
 void gesture_down_scr_spl_spo2_timeout(void);
+void gesture_down_scr_spl_spo2_cancelled(void);
 void gesture_down_scr_spl_low_battery(void);
 void gesture_down_scr_spo2_select(void);
 void gesture_down_scr_bpt_cal_progress(void);
