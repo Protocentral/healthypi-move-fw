@@ -118,7 +118,7 @@ const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv))
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
 static const struct device *ldsw_disp_unit = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
-static const struct device *ldsw_sens_1_8 = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
+static const struct device *dev_ldsw_fi_sens = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
@@ -572,14 +572,14 @@ static int hw_enable_pmic_callback(void)
     return 0;
 }
 
-void hpi_hw_ldsw2_on(void)
+void hpi_hw_fi_sensor_on(void)
 {
-    regulator_enable(ldsw_sens_1_8);
+    regulator_enable(dev_ldsw_fi_sens);
 }
 
-void hpi_hw_ldsw2_off(void)
+void hpi_hw_fi_sensor_off(void)
 {
-    regulator_disable(ldsw_sens_1_8);
+    regulator_disable(dev_ldsw_fi_sens);
 }
 
 static bool hw_check_msbl_file_exists(const char *file_path)
@@ -644,10 +644,10 @@ void hw_module_init(void)
     regulator_enable(ldsw_disp_unit);
     k_msleep(500);
 
-    // Reset all sensors before starting
-    regulator_disable(ldsw_sens_1_8);
+    // Reset all sensors before starting (use wrapper for FI sensor)
+    hpi_hw_fi_sensor_off();
     k_msleep(100);
-    regulator_enable(ldsw_sens_1_8);
+    hpi_hw_fi_sensor_on();
     k_msleep(100);
 
     // Signal to start display state machine
@@ -896,6 +896,8 @@ void hw_module_init(void)
         LOG_ERR("MAX32664D device not present!");
         max32664d_device_present = false;
         hw_add_boot_msg("MAX32664D", false, true, false, 0);
+        /* Ensure FI sensor is powered off after failed detection */
+        hpi_hw_fi_sensor_off();
     }
     else
     {
@@ -945,6 +947,8 @@ void hw_module_init(void)
         }
 
         k_sem_give(&sem_ppg_finger_sm_start);
+        /* Power down FI sensor after successful boot-time detection/self-test */
+        hpi_hw_fi_sensor_off();
     }
 
     // Confirm MCUBoot image if not already confirmed by app
