@@ -139,6 +139,13 @@ struct max32664c_encoded_data
 
 	uint32_t num_samples;
 
+	/*
+	 * Encoded sample arrays contain LED ADC values normalized to 20-bit
+	 * right-aligned integers. The sensor FIFO provides 24-bit MSB-first
+	 * bytes; driver assembly packs these then right-shifts by 4 bits
+	 * (i.e. assembled_24bit >> 4) so the higher layers receive canonical
+	 * 20-bit values that match the datasheet ADC resolution.
+	 */
 	uint32_t green_samples[32];
 	uint32_t red_samples[32];
 	uint32_t ir_samples[32];

@@ -414,7 +414,7 @@ void disp_spl_screen_event(lv_event_t *e)
 void draw_bg(lv_obj_t *parent)
 {
     lv_obj_t *logo_bg = lv_img_create(parent);
-    lv_img_set_src(logo_bg, &bck_heart_200);
+    lv_img_set_src(logo_bg, &bck_heart_2_200);
     lv_obj_set_width(logo_bg, LV_SIZE_CONTENT);  /// 1
     lv_obj_set_height(logo_bg, LV_SIZE_CONTENT); /// 1
     lv_obj_set_align(logo_bg, LV_ALIGN_CENTER);

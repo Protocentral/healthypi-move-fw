@@ -37,6 +37,9 @@
 #include "ui/move_ui.h"
 #include <math.h>
 
+/* Enable verbose plotting debug to trace values. Comment out to reduce log spam. */
+#undef SPO2_PLOT_DEBUG
+
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2_measure, LOG_LEVEL_DBG);
 
 #define PPG_RAW_WINDOW_SIZE 128
@@ -143,6 +146,9 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
 
+    /* Set a sensible default Y range to keep waveform visible until autoscale runs */
+    lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, 2048 - 128, 2048 + 128);
+
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
 
@@ -223,7 +229,8 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 
     for (int i = 0; i < num; i++)
     {
-        int32_t scaled = (int32_t)(data_ppg[i] >> 4); /* divide by 256 */
+    /* Driver now provides normalized samples; use value directly. */
+    int32_t scaled = (int32_t)(data_ppg[i]);
 
         if (!baseline_init)
         {
@@ -239,27 +246,24 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 
         float fplot = (float)plot_val;
 
-        if (fplot < local_ymin)
-        {
-            local_ymin = fplot;
-        }
-
-        if (fplot > local_ymax)
-        {
-            local_ymax = fplot;
-        }
+        /* Update local extrema then write sample to chart so autoscale sees newest values */
+        if (fplot < local_ymin) local_ymin = fplot;
+        if (fplot > local_ymax) local_ymax = fplot;
 
         lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
 
+        /* Commit extrema to globals used by the shared autoscale helper */
+        y_min_ppg = local_ymin;
+        y_max_ppg = local_ymax;
+
+        /* Advance sample counter used by autoscaler and call helper */
         hpi_ppg_disp_add_samples(1);
 
-        /* Use raw PPG window size for wrist plotting autoscale to match raw screen */
-        if (local_spo2_source == SPO2_SOURCE_PPG_WR)
-        {
+    (void)0;
+
+        if (local_spo2_source == SPO2_SOURCE_PPG_WR) {
             hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
-        }
-        else
-        {
+        } else {
             hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_FI);
         }
     }

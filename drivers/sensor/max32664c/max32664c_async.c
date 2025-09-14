@@ -235,20 +235,20 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
                 uint32_t led_green = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_green |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_green |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 2 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                green_samples[i] = led_green;
+                /* Normalize assembled 24-bit value down by 4 bits to provide canonical scale to UI */
+                green_samples[i] = (led_green >> 4);
 
                 uint32_t led_ir = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 3 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_ir |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_ir |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 5 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                ir_samples[i] = led_ir;
+                /* Normalize assembled 24-bit value down by 4 bits to provide canonical scale to UI */
+                ir_samples[i] = (led_ir >> 4);
 
                 uint32_t led_red = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 6 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_red |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 7 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_red |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 8 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                red_samples[i] = led_red;
+                /* Normalize assembled 24-bit value down by 4 bits to provide canonical scale to UI */
+                red_samples[i] = (led_red >> 4);
             }
         }
     }
@@ -301,25 +301,29 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
             /* Read FIFO into shared buffer */
             max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count);
 
+            /*
+             * Datasheet note: the MAX32664 provides LED samples as 24-bit MSB-first
+             * bytes in the FIFO. The ADC effective resolution is 20 bits; here
+             * assemble the 24-bit words and right-shift by 4 bits so upper layers
+             * receive 20-bit right-aligned integers matching the datasheet.
+             */
             for (int i = 0; i < fifo_count; i++)
             {
                 uint32_t led_green = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_green |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_green |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 2 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                green_samples[i] = led_green;
+                /* normalize to datasheet 20-bit resolution */
+                green_samples[i] = (led_green >> 4);
 
                 uint32_t led_ir = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 3 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_ir |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_ir |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 5 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                ir_samples[i] = led_ir;
+                ir_samples[i] = (led_ir >> 4);
 
                 uint32_t led_red = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 6 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_red |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 7 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_red |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 8 + MAX32664C_SENSOR_DATA_OFFSET];
-
-                red_samples[i] = led_red;
+                red_samples[i] = (led_red >> 4);
 
                 uint16_t hr_val = (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 hr_val |= (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 2 + MAX32664C_SENSOR_DATA_OFFSET];

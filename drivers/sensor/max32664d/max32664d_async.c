@@ -100,19 +100,27 @@ static int max32664_async_sample_fetch(const struct device *dev,
         return rc;
     }
 
-    for (int i = 0; i < fifo_count; i++)
-    {
-        uint32_t led_ir = (uint32_t)buf[(sample_len * i) + MAX32664D_SENSOR_DATA_OFFSET] << 16;
-        led_ir |= (uint32_t)buf[(sample_len * i) + 1 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-        led_ir |= (uint32_t)buf[(sample_len * i) + 2 + MAX32664D_SENSOR_DATA_OFFSET];
 
-        ir_samples[i] = led_ir;
+        /*
+         * Datasheet note: the MAX32664 provides LED samples as 24-bit MSB-first
+         * bytes in the FIFO. The ADC effective resolution is 20 bits; to produce
+         * canonical values for consumers we assemble the 24-bit word and
+         * right-align it by 4 bits (assembled_24 >> 4) so the resulting
+         * integers correspond to the datasheet's 20-bit ADC range.
+         */
+        for (int i = 0; i < fifo_count; i++)
+        {
+            uint32_t led_ir = (uint32_t)buf[(sample_len * i) + MAX32664D_SENSOR_DATA_OFFSET] << 16;
+            led_ir |= (uint32_t)buf[(sample_len * i) + 1 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+            led_ir |= (uint32_t)buf[(sample_len * i) + 2 + MAX32664D_SENSOR_DATA_OFFSET];
+            /* Normalize assembled 24-bit IR value down by 4 bits to provide canonical scale to UI */
+            ir_samples[i] = (led_ir >> 4);
 
-        uint32_t led_red = (uint32_t)buf[(sample_len * i) + 3 + MAX32664D_SENSOR_DATA_OFFSET] << 16;
-        led_red |= (uint32_t)buf[(sample_len * i) + 4 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-        led_red |= (uint32_t)buf[(sample_len * i) + 5 + MAX32664D_SENSOR_DATA_OFFSET];
-
-        red_samples[i] = led_red;
+            uint32_t led_red = (uint32_t)buf[(sample_len * i) + 3 + MAX32664D_SENSOR_DATA_OFFSET] << 16;
+            led_red |= (uint32_t)buf[(sample_len * i) + 4 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+            led_red |= (uint32_t)buf[(sample_len * i) + 5 + MAX32664D_SENSOR_DATA_OFFSET];
+            /* Normalize assembled 24-bit Red value down by 4 bits to provide canonical scale to UI */
+            red_samples[i] = (led_red >> 4);
 
         /* bytes 7..12 are ignored in current layout */
 
