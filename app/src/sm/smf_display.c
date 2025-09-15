@@ -500,22 +500,6 @@ extern struct k_sem sem_spo2_cancel;
 
 extern struct k_sem sem_bpt_sensor_found;
 
-// User Profile settings
-
-uint16_t m_user_height = 170; // Example height in m, adjust as needed
-uint16_t m_user_weight = 70;  // Example weight in kg, adjust as needed
-static double m_user_met = 3.5;      // Example MET value based speed = 1.34 m/s , adjust as needed
-
-static uint16_t hpi_get_kcals_from_steps(uint16_t steps)
-{
-    // KCals = time * MET * 3.5 * weight / (200*60)
-
-    double _m_time = (((m_user_height / 100.000) * 0.414 * steps) / 4800.000) * 60.000; // Assuming speed of 4.8 km/h
-    double _m_kcals = (_m_time * m_user_met * 3.500 * m_user_weight) / 200;
-    /// LOG_DBG("Calc Kcals %f", _m_kcals, steps);
-    return (uint16_t)_m_kcals;
-}
-
 static void st_display_init_entry(void *o)
 {
     LOG_DBG("Display SM Init Entry");
