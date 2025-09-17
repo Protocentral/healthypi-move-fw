@@ -19,6 +19,7 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/components/*.c
                         src/ui/images/*.c
                         src/ui/fonts/*.c
+                        src/ui/fonts/lvgl/*.c
                         src/ui/screens/*.c
                         src/ui/screens/*.c
                         src/ui/hp_ui_common.c

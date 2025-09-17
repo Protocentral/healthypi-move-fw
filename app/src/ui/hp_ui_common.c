@@ -49,11 +49,31 @@
 
 LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 
+// Modern AMOLED-optimized color palette
+#define COLOR_SURFACE_DARK    0x1C1C1E
+#define COLOR_SURFACE_MEDIUM  0x2C2C2E
+#define COLOR_SURFACE_LIGHT   0x3C3C3E
+#define COLOR_PRIMARY_BLUE    0x007AFF
+#define COLOR_SUCCESS_GREEN   0x34C759
+#define COLOR_WARNING_AMBER   0xFF9500
+#define COLOR_CRITICAL_RED    0xFF3B30
+#define COLOR_TEXT_SECONDARY  0xE5E5E7
+
 // LVGL Styles
 static lv_style_t style_btn;
 /* Black button styles (global) */
 static lv_style_t style_btn_black;
 static lv_style_t style_btn_black_pressed;
+
+/* Modern button styles */
+static lv_style_t style_btn_primary;
+static lv_style_t style_btn_primary_pressed;
+static lv_style_t style_btn_secondary;
+static lv_style_t style_btn_icon;
+
+/* Modern arc styles - made global for external access */
+lv_style_t style_health_arc;
+lv_style_t style_health_arc_bg;
 
 // Global LVGL Styles
 lv_style_t style_tiny;
@@ -69,6 +89,16 @@ lv_style_t style_scr_container;
 lv_style_t style_lbl_white_14;
 lv_style_t style_lbl_white_medium;
 lv_style_t style_white_large_numeric;
+
+/* Modern typography styles - made global for external access */
+lv_style_t style_headline;
+lv_style_t style_body_large;
+lv_style_t style_body_medium;
+lv_style_t style_caption;
+/* Additional specialized styles */
+lv_style_t style_numeric_large;  // For large numeric displays (time, main values)
+lv_style_t style_numeric_medium; // For medium numeric displays  
+lv_style_t style_status_small;   // For small status text
 
 lv_style_t style_bg_blue;
 lv_style_t style_bg_red;
@@ -117,11 +147,11 @@ void display_init_styles(void)
     // Label White Small
     lv_style_init(&style_white_small);
     lv_style_set_text_color(&style_white_small, lv_color_white());
-    lv_style_set_text_font(&style_white_small, &lv_font_montserrat_24);
+    lv_style_set_text_font(&style_white_small, &jetbrains_mono_regular_24);
 
     lv_style_init(&style_white_medium);
     lv_style_set_text_color(&style_white_medium, lv_color_white());
-    lv_style_set_text_font(&style_white_medium, &lv_font_montserrat_24);
+    lv_style_set_text_font(&style_white_medium, &jetbrains_mono_regular_24);
 
     lv_style_init(&style_white_large_numeric);
     lv_style_set_text_color(&style_white_large_numeric, lv_color_white());
@@ -130,17 +160,17 @@ void display_init_styles(void)
     // Label Red
     lv_style_init(&style_red_medium);
     lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_red_medium, &lv_font_montserrat_24);
+    lv_style_set_text_font(&style_red_medium, &jetbrains_mono_regular_24);
 
     // Label White 14
     lv_style_init(&style_lbl_white_14);
     lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_14, &lv_font_montserrat_24);
+    lv_style_set_text_font(&style_lbl_white_14, &jetbrains_mono_regular_24);
 
     // Label Black
     lv_style_init(&style_lbl_white_medium);
     lv_style_set_text_color(&style_lbl_white_medium, lv_color_black());
-    lv_style_set_text_font(&style_lbl_white_medium, &lv_font_montserrat_24);
+    lv_style_set_text_font(&style_lbl_white_medium, &jetbrains_mono_regular_24);
 
     // Container for scrollable screen layout
     lv_style_init(&style_scr_container);
@@ -231,6 +261,102 @@ void display_init_styles(void)
     grad_purple.stops[1].frac = 255;
     lv_style_set_bg_grad(&style_bg_purple, &grad_purple);
 
+    /* Initialize modern primary button styles */
+    lv_style_init(&style_btn_primary);
+    lv_style_set_bg_color(&style_btn_primary, lv_color_hex(COLOR_SURFACE_MEDIUM));
+    lv_style_set_bg_opa(&style_btn_primary, LV_OPA_COVER);
+    lv_style_set_border_width(&style_btn_primary, 1);
+    lv_style_set_border_color(&style_btn_primary, lv_color_hex(COLOR_PRIMARY_BLUE));
+    lv_style_set_border_opa(&style_btn_primary, LV_OPA_COVER);
+    lv_style_set_radius(&style_btn_primary, 24);
+    lv_style_set_text_color(&style_btn_primary, lv_color_white());
+    lv_style_set_pad_all(&style_btn_primary, 16);
+    lv_style_set_margin_all(&style_btn_primary, 8);
+    /* Subtle shadow for depth */
+    lv_style_set_shadow_width(&style_btn_primary, 8);
+    lv_style_set_shadow_color(&style_btn_primary, lv_color_hex(COLOR_PRIMARY_BLUE));
+    lv_style_set_shadow_opa(&style_btn_primary, LV_OPA_20);
+    lv_style_set_shadow_spread(&style_btn_primary, 0);
+    lv_style_set_shadow_ofs_x(&style_btn_primary, 0);
+    lv_style_set_shadow_ofs_y(&style_btn_primary, 2);
+
+    lv_style_init(&style_btn_primary_pressed);
+    lv_style_set_bg_color(&style_btn_primary_pressed, lv_color_hex(COLOR_SURFACE_DARK));
+    lv_style_set_bg_opa(&style_btn_primary_pressed, LV_OPA_COVER);
+    lv_style_set_border_width(&style_btn_primary_pressed, 2);
+    lv_style_set_border_color(&style_btn_primary_pressed, lv_color_hex(COLOR_PRIMARY_BLUE));
+    lv_style_set_text_color(&style_btn_primary_pressed, lv_color_white());
+    lv_style_set_shadow_width(&style_btn_primary_pressed, 4);
+    lv_style_set_shadow_opa(&style_btn_primary_pressed, LV_OPA_40);
+
+    /* Initialize modern secondary button styles */
+    lv_style_init(&style_btn_secondary);
+    lv_style_set_bg_opa(&style_btn_secondary, LV_OPA_10);
+    lv_style_set_bg_color(&style_btn_secondary, lv_color_white());
+    lv_style_set_border_width(&style_btn_secondary, 1);
+    lv_style_set_border_color(&style_btn_secondary, lv_color_hex(COLOR_SURFACE_LIGHT));
+    lv_style_set_border_opa(&style_btn_secondary, LV_OPA_COVER);
+    lv_style_set_radius(&style_btn_secondary, 20);
+    lv_style_set_text_color(&style_btn_secondary, lv_color_white());
+    lv_style_set_pad_all(&style_btn_secondary, 12);
+    lv_style_set_margin_all(&style_btn_secondary, 6);
+
+    /* Initialize icon button styles */
+    lv_style_init(&style_btn_icon);
+    lv_style_set_bg_color(&style_btn_icon, lv_color_hex(COLOR_SURFACE_MEDIUM));
+    lv_style_set_bg_opa(&style_btn_icon, LV_OPA_COVER);
+    lv_style_set_radius(&style_btn_icon, 28); /* 56px diameter / 2 */
+    lv_style_set_border_width(&style_btn_icon, 0);
+    lv_style_set_pad_all(&style_btn_icon, 16);
+    lv_style_set_shadow_width(&style_btn_icon, 6);
+    lv_style_set_shadow_color(&style_btn_icon, lv_color_black());
+    lv_style_set_shadow_opa(&style_btn_icon, LV_OPA_30);
+
+    /* Initialize modern arc styles */
+    lv_style_init(&style_health_arc);
+    lv_style_set_arc_width(&style_health_arc, 6);
+    lv_style_set_arc_rounded(&style_health_arc, true);
+    lv_style_set_arc_color(&style_health_arc, lv_color_hex(COLOR_PRIMARY_BLUE));
+
+    lv_style_init(&style_health_arc_bg);
+    lv_style_set_arc_width(&style_health_arc_bg, 6);
+    lv_style_set_arc_rounded(&style_health_arc_bg, true);
+    lv_style_set_arc_color(&style_health_arc_bg, lv_color_hex(COLOR_SURFACE_LIGHT));
+    lv_style_set_arc_opa(&style_health_arc_bg, LV_OPA_50);
+
+    /* Initialize modern typography styles */
+    lv_style_init(&style_headline);
+    lv_style_set_text_color(&style_headline, lv_color_white());
+    lv_style_set_text_font(&style_headline, &inter_semibold_18); /* Headlines use Inter SemiBold */
+
+    lv_style_init(&style_body_large);
+    lv_style_set_text_color(&style_body_large, lv_color_white());
+    lv_style_set_text_font(&style_body_large, &inter_semibold_18); /* Metric values use Inter SemiBold */
+
+    lv_style_init(&style_body_medium);
+    lv_style_set_text_color(&style_body_medium, lv_color_white());
+    lv_style_set_text_font(&style_body_medium, &inter_regular_16); /* Standard body text */
+
+    lv_style_init(&style_caption);
+    lv_style_set_text_color(&style_caption, lv_color_hex(COLOR_TEXT_SECONDARY));
+    lv_style_set_text_font(&style_caption, &inter_regular_14); /* Small labels and captions */
+
+    /* Additional specialized styles for specific use cases */
+    // Style for numeric displays (time, sensor values)
+    lv_style_init(&style_numeric_large);
+    lv_style_set_text_color(&style_numeric_large, lv_color_white());
+    lv_style_set_text_font(&style_numeric_large, &jetbrains_mono_regular_24); /* Large monospace numbers */
+    
+    // Style for numeric displays (smaller values)
+    lv_style_init(&style_numeric_medium);
+    lv_style_set_text_color(&style_numeric_medium, lv_color_white());
+    lv_style_set_text_font(&style_numeric_medium, &jetbrains_mono_regular_16); /* Medium monospace numbers */
+
+    // Style for small status text
+    lv_style_init(&style_status_small);
+    lv_style_set_text_color(&style_status_small, lv_color_hex(COLOR_TEXT_SECONDARY));
+    lv_style_set_text_font(&style_status_small, &inter_regular_12); /* Smallest text for status */
+
     //lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
@@ -257,6 +383,41 @@ lv_obj_t *hpi_btn_create(lv_obj_t *parent)
     }
     lv_obj_add_style(btn, &style_btn_black, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_style(btn, &style_btn_black_pressed, LV_PART_MAIN | LV_STATE_PRESSED);
+    return btn;
+}
+
+/* Helper to create a modern primary button */
+lv_obj_t *hpi_btn_create_primary(lv_obj_t *parent)
+{
+    lv_obj_t *btn = lv_btn_create(parent);
+    if (!btn) {
+        return NULL;
+    }
+    lv_obj_add_style(btn, &style_btn_primary, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_style(btn, &style_btn_primary_pressed, LV_PART_MAIN | LV_STATE_PRESSED);
+    return btn;
+}
+
+/* Helper to create a modern secondary button */
+lv_obj_t *hpi_btn_create_secondary(lv_obj_t *parent)
+{
+    lv_obj_t *btn = lv_btn_create(parent);
+    if (!btn) {
+        return NULL;
+    }
+    lv_obj_add_style(btn, &style_btn_secondary, LV_PART_MAIN | LV_STATE_DEFAULT);
+    return btn;
+}
+
+/* Helper to create a modern icon button */
+lv_obj_t *hpi_btn_create_icon(lv_obj_t *parent)
+{
+    lv_obj_t *btn = lv_btn_create(parent);
+    if (!btn) {
+        return NULL;
+    }
+    lv_obj_add_style(btn, &style_btn_icon, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_size(btn, 56, 56); /* Fixed size for icon buttons */
     return btn;
 }
 

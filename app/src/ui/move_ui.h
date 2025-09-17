@@ -44,6 +44,16 @@
 #define DISP_SLEEP_TIME_MS 10000
 #define DISPLAY_DEFAULT_BRIGHTNESS 50
 
+// Modern AMOLED-optimized color palette
+#define COLOR_SURFACE_DARK    0x1C1C1E
+#define COLOR_SURFACE_MEDIUM  0x2C2C2E
+#define COLOR_SURFACE_LIGHT   0x3C3C3E
+#define COLOR_PRIMARY_BLUE    0x007AFF
+#define COLOR_SUCCESS_GREEN   0x34C759
+#define COLOR_WARNING_AMBER   0xFF9500
+#define COLOR_CRITICAL_RED    0xFF3B30
+#define COLOR_TEXT_SECONDARY  0xE5E5E7
+
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 256 // To be verified
 #define HRV_DISP_WINDOW_SIZE 128
@@ -199,11 +209,38 @@ LV_IMG_DECLARE(low_batt_100);
 LV_FONT_DECLARE(oxanium_90);
 LV_FONT_DECLARE(ui_font_number_big);
 
+/* Modern Google Fonts for AMOLED Display */
+// Core System Fonts
+LV_FONT_DECLARE(inter_regular_16);        // General UI text
+LV_FONT_DECLARE(inter_semibold_18);       // Metric values (HR, steps, SpO2)
+LV_FONT_DECLARE(jetbrains_mono_regular_16); // Time display, sensor readings
+// Additional Sizes
+LV_FONT_DECLARE(inter_regular_14);        // Secondary text, labels  
+LV_FONT_DECLARE(inter_regular_12);        // Small text, captions
+LV_FONT_DECLARE(jetbrains_mono_regular_24); // Large time display
+
+/* Modern style declarations */
+extern lv_style_t style_health_arc;
+extern lv_style_t style_health_arc_bg;
+extern lv_style_t style_headline;
+extern lv_style_t style_body_large;
+extern lv_style_t style_body_medium;
+extern lv_style_t style_caption;
+/* Additional specialized styles */
+extern lv_style_t style_numeric_large;  // For large numeric displays (time, main values)
+extern lv_style_t style_numeric_medium; // For medium numeric displays
+extern lv_style_t style_status_small;   // For small status text
+
 
 /******** UI Function Prototypes ********/
 void display_init_styles(void);
 void hpi_ui_styles_init(void);
 lv_obj_t *hpi_btn_create(lv_obj_t *parent);
+
+/* Modern button creation helpers */
+lv_obj_t *hpi_btn_create_primary(lv_obj_t *parent);
+lv_obj_t *hpi_btn_create_secondary(lv_obj_t *parent);
+lv_obj_t *hpi_btn_create_icon(lv_obj_t *parent);
 
 // Boot Screen functions
 void draw_scr_splash(void);

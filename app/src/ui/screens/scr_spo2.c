@@ -135,8 +135,8 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_spo2_last_update_time, last_meas_str);
     lv_obj_set_style_text_align(label_spo2_last_update_time, LV_TEXT_ALIGN_CENTER, 0);
 
-    btn_spo2_measure = hpi_btn_create(cont_col);
-    lv_obj_set_height(btn_spo2_measure, 75);
+    btn_spo2_measure = hpi_btn_create_primary(cont_col);
+    lv_obj_set_height(btn_spo2_measure, 56); // Modern height for better proportions
 
     lv_obj_t *label_measure = lv_label_create(btn_spo2_measure);
     lv_label_set_text(label_measure, LV_SYMBOL_PLAY " Measure");
