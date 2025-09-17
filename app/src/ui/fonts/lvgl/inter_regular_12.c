@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 12 px
  * Bpp: 4
- * Opts: --no-compress --font ../ttf/Inter-Regular.ttf --size 12 --range 0x20-0x7F --format lvgl --bpp 4 -o inter_regular_12.c --lv-font-name inter_regular_12
+ * Opts: --no-compress --font ttf/Inter-Regular.ttf --size 12 --bpp 4 --range 0x20-0x7F --format lvgl --lv-include lvgl.h --lv-font-name inter_regular_12 --output lvgl/inter_regular_12.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

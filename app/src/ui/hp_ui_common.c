@@ -81,13 +81,11 @@ lv_style_t style_scr_black;
 lv_style_t style_red_medium;
 lv_style_t style_lbl_red_small;
 
-lv_style_t style_white_small;
 lv_style_t style_white_medium;
 
 lv_style_t style_scr_container;
 
 lv_style_t style_lbl_white_14;
-lv_style_t style_lbl_white_medium;
 lv_style_t style_white_large_numeric;
 
 /* Modern typography styles - made global for external access */
@@ -122,15 +120,6 @@ extern const struct device *display_dev;
 
 extern struct k_sem sem_stop_one_shot_spo2;
 
-/*Will be called when the styles of the base theme are already added to add new styles*/
-static void new_theme_apply_cb(lv_theme_t *th, lv_obj_t *obj)
-{
-    LV_UNUSED(th);
-
-    
-    //lv_style_set_bg_color(&style_scr_black, lv_color_black());
-}
-
 void display_init_styles(void)
 {
     /*Initialize the styles*/
@@ -144,14 +133,9 @@ void display_init_styles(void)
     lv_style_set_text_color(&style_tiny, lv_color_white());
     lv_style_set_text_font(&style_tiny, &lv_font_montserrat_20);
 
-    // Label White Small
-    lv_style_init(&style_white_small);
-    lv_style_set_text_color(&style_white_small, lv_color_white());
-    lv_style_set_text_font(&style_white_small, &jetbrains_mono_regular_24);
-
     lv_style_init(&style_white_medium);
     lv_style_set_text_color(&style_white_medium, lv_color_white());
-    lv_style_set_text_font(&style_white_medium, &jetbrains_mono_regular_24);
+    lv_style_set_text_font(&style_white_medium, &inter_semibold_24);
 
     lv_style_init(&style_white_large_numeric);
     lv_style_set_text_color(&style_white_large_numeric, lv_color_white());
@@ -160,17 +144,12 @@ void display_init_styles(void)
     // Label Red
     lv_style_init(&style_red_medium);
     lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_red_medium, &jetbrains_mono_regular_24);
+    lv_style_set_text_font(&style_red_medium, &inter_semibold_24);
 
     // Label White 14
     lv_style_init(&style_lbl_white_14);
     lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_14, &jetbrains_mono_regular_24);
-
-    // Label Black
-    lv_style_init(&style_lbl_white_medium);
-    lv_style_set_text_color(&style_lbl_white_medium, lv_color_black());
-    lv_style_set_text_font(&style_lbl_white_medium, &jetbrains_mono_regular_24);
+    lv_style_set_text_font(&style_lbl_white_14, &inter_semibold_24);
 
     // Container for scrollable screen layout
     lv_style_init(&style_scr_container);
@@ -335,22 +314,11 @@ void display_init_styles(void)
 
     lv_style_init(&style_body_medium);
     lv_style_set_text_color(&style_body_medium, lv_color_white());
-    lv_style_set_text_font(&style_body_medium, &inter_regular_16); /* Standard body text */
+    lv_style_set_text_font(&style_body_medium, &inter_semibold_24); /* Standard body text */
 
     lv_style_init(&style_caption);
     lv_style_set_text_color(&style_caption, lv_color_hex(COLOR_TEXT_SECONDARY));
     lv_style_set_text_font(&style_caption, &inter_regular_14); /* Small labels and captions */
-
-    /* Additional specialized styles for specific use cases */
-    // Style for numeric displays (time, sensor values)
-    lv_style_init(&style_numeric_large);
-    lv_style_set_text_color(&style_numeric_large, lv_color_white());
-    lv_style_set_text_font(&style_numeric_large, &jetbrains_mono_regular_24); /* Large monospace numbers */
-    
-    // Style for numeric displays (smaller values)
-    lv_style_init(&style_numeric_medium);
-    lv_style_set_text_color(&style_numeric_medium, lv_color_white());
-    lv_style_set_text_font(&style_numeric_medium, &jetbrains_mono_regular_16); /* Medium monospace numbers */
 
     // Style for small status text
     lv_style_init(&style_status_small);

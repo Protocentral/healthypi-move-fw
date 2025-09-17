@@ -137,7 +137,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_today_steps, "0");
     lv_obj_align_to(label_today_steps, img_steps, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
     lv_obj_set_style_text_color(label_today_steps, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label_today_steps, &jetbrains_mono_regular_24, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label_today_steps, &inter_semibold_24, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(label_today_steps, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
     
     lv_obj_t *lbl_title_steps = lv_label_create(today_group);

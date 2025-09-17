@@ -219,6 +219,7 @@ static void home_screen_gesture_handler(lv_event_t *e)
 
 // Externs
 extern lv_style_t style_lbl_white_14;
+extern lv_style_t style_body_medium;
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
@@ -252,19 +253,19 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_remove_style(arc_steps, NULL, LV_PART_KNOB); // Remove knob
     lv_obj_clear_flag(arc_steps, LV_OBJ_FLAG_CLICKABLE); // Make non-interactive
 
-    // Steps icon - positioned above the value with proper spacing
+    // Steps icon - positioned at the geometric center of the left arc (225°)
     lv_obj_t *img_steps = lv_img_create(scr_home);
     lv_img_set_src(img_steps, &img_steps_48);
-    lv_obj_align(img_steps, LV_ALIGN_CENTER, -85, 65);  // Icon higher up for better spacing
+    lv_obj_align(img_steps, LV_ALIGN_CENTER, -85, -85);  // Closer to center at 225° angle
     lv_obj_set_style_img_recolor(img_steps, lv_color_hex(COLOR_WARNING_AMBER), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_steps, LV_OPA_COVER, LV_PART_MAIN);
 
-    // Steps value label - positioned to match left arc (6-9 o'clock) - center at 225°
+    // Steps value label - positioned below icon at arc center
     label_steps_value = lv_label_create(scr_home);
-    lv_obj_align(label_steps_value, LV_ALIGN_CENTER, -85, 105);  // Text lower for better gap
+    lv_obj_align(label_steps_value, LV_ALIGN_CENTER, -85, -50);  // Below icon, closer to center
     lv_label_set_text(label_steps_value, "2.5k"); // Show test value to make it visible
     lv_obj_set_style_text_color(label_steps_value, lv_color_hex(COLOR_WARNING_AMBER), LV_PART_MAIN);
-    lv_obj_add_style(label_steps_value, &style_body_large, LV_PART_MAIN);
+    lv_obj_add_style(label_steps_value, &style_body_medium, LV_PART_MAIN);  // Use 24px font style for better readability
     lv_obj_set_style_text_align(label_steps_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Heart rate arc (right arc, 1:30-4 o'clock position with gap)
@@ -283,19 +284,19 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_remove_style(arc_hr, NULL, LV_PART_KNOB); // Remove knob
     lv_obj_clear_flag(arc_hr, LV_OBJ_FLAG_CLICKABLE); // Make non-interactive
 
-    // Heart rate icon - positioned above the value with proper spacing
+    // Heart rate icon - positioned at the geometric center of the right arc (45°)
     lv_obj_t *img_hr = lv_img_create(scr_home);
     lv_img_set_src(img_hr, &img_heart_35);  // Use smaller 35px heart icon instead of 48px
-    lv_obj_align(img_hr, LV_ALIGN_CENTER, 85, -105);  // Icon higher up for better spacing
+    lv_obj_align(img_hr, LV_ALIGN_CENTER, 85, 85);  // Closer to center at 45° angle
     lv_obj_set_style_img_recolor(img_hr, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hr, LV_OPA_COVER, LV_PART_MAIN);
 
-    // Heart rate value label - positioned to match right arc (12-3 o'clock) - center at 45°
+    // Heart rate value label - positioned below icon at arc center
     label_hr_value = lv_label_create(scr_home);
-    lv_obj_align(label_hr_value, LV_ALIGN_CENTER, 85, -65);  // Text lower for better gap
+    lv_obj_align(label_hr_value, LV_ALIGN_CENTER, 85, 120);  // Below icon, closer to center
     lv_label_set_text(label_hr_value, "75"); // Show test value to make it visible
     lv_obj_set_style_text_color(label_hr_value, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
-    lv_obj_add_style(label_hr_value, &style_body_large, LV_PART_MAIN);
+    lv_obj_add_style(label_hr_value, &style_body_medium, LV_PART_MAIN);  // Use 24px font style for better readability
     lv_obj_set_style_text_align(label_hr_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Keep legacy button variables for compatibility
@@ -347,20 +348,20 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     ui_home_label_hour = lv_label_create(scr_home);
     lv_obj_set_width(ui_home_label_hour, LV_SIZE_CONTENT);
     lv_obj_set_height(ui_home_label_hour, LV_SIZE_CONTENT);
-    lv_obj_align(ui_home_label_hour, LV_ALIGN_CENTER, 0, -20);  // Slightly above center
+    lv_obj_align(ui_home_label_hour, LV_ALIGN_CENTER, 0, 10);  // Moved down to avoid overlap with steps text
     lv_label_set_text(ui_home_label_hour, "00:00");
     lv_obj_set_style_text_color(ui_home_label_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_home_label_hour, &ui_font_number_big, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_home_label_hour, &inter_semibold_80_time, LV_PART_MAIN | LV_STATE_DEFAULT);  // Large minimalist Inter 80px font
     lv_obj_set_style_text_align(ui_home_label_hour, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // AM/PM indicator - positioned carefully within circular bounds
     ui_home_label_ampm = lv_label_create(scr_home);
-    lv_obj_align(ui_home_label_ampm, LV_ALIGN_CENTER, 0, 25);  // Below time, centered
+    lv_obj_align(ui_home_label_ampm, LV_ALIGN_CENTER, 0, 45);  // Closer to time, reduced spacing
     lv_label_set_text(ui_home_label_ampm, "");
     lv_obj_set_style_text_color(ui_home_label_ampm, lv_color_hex(0x999999), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_ampm, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_home_label_ampm, &jetbrains_mono_regular_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // JetBrains Mono for better readability
+    lv_obj_add_style(ui_home_label_ampm, &style_body_medium, LV_PART_MAIN);  // Use consistent style
     lv_obj_set_style_text_align(ui_home_label_ampm, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // Hidden minutes label for compatibility
@@ -372,15 +373,15 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_set_width(ui_home_label_date, LV_SIZE_CONTENT);
     lv_obj_set_height(ui_home_label_date, LV_SIZE_CONTENT);
     lv_label_set_text(ui_home_label_date, "-- --- ----");
-    lv_obj_align(ui_home_label_date, LV_ALIGN_CENTER, 0, 60);  // Below AM/PM, well within circle
+    lv_obj_align(ui_home_label_date, LV_ALIGN_CENTER, 0, 70);  // Closer to AM/PM, reduced spacing
     lv_obj_set_style_text_color(ui_home_label_date, lv_color_hex(0xBBBBBB), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_date, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_home_label_date, &jetbrains_mono_regular_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // JetBrains Mono for better readability
+    lv_obj_add_style(ui_home_label_date, &style_body_medium, LV_PART_MAIN);  // Use consistent style
     lv_obj_set_style_text_align(ui_home_label_date, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // Battery indicator - positioned at 12 o'clock within circular bounds
     label_batt_level_val = lv_label_create(scr_home);
-    lv_label_set_text(label_batt_level_val, "85%");
+    lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " 85%");  // Battery symbol with percentage
     lv_obj_align(label_batt_level_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
     lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(label_batt_level_val, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
@@ -478,15 +479,32 @@ void hpi_disp_home_update_batt_level(int batt_level, bool charging)
         batt_level = 0;
     }
 
-    // Minimalist battery display - just percentage with subtle charging indicator
+    // Battery display with LVGL built-in symbols based on level and charging status
+    const char* battery_symbol;
+    
     if (charging) {
-        lv_label_set_text_fmt(label_batt_level_val, "%d%%↗", batt_level);
+        battery_symbol = LV_SYMBOL_CHARGE; // Lightning bolt for charging
     } else {
-        lv_label_set_text_fmt(label_batt_level_val, "%d%%", batt_level);
+        // Different battery symbols based on charge level using LVGL built-in symbols
+        if (batt_level >= 90) {
+            battery_symbol = LV_SYMBOL_BATTERY_FULL; // Full battery (90-100%)
+        } else if (batt_level >= 65) {
+            battery_symbol = LV_SYMBOL_BATTERY_3;    // 3/4 battery (65-89%)
+        } else if (batt_level >= 35) {
+            battery_symbol = LV_SYMBOL_BATTERY_2;    // 2/4 battery (35-64%)
+        } else if (batt_level >= 15) {
+            battery_symbol = LV_SYMBOL_BATTERY_1;    // 1/4 battery (15-34%)
+        } else {
+            battery_symbol = LV_SYMBOL_BATTERY_EMPTY; // Empty battery (0-14%)
+        }
     }
     
+    lv_label_set_text_fmt(label_batt_level_val, "%s %d%%", battery_symbol, batt_level);
+    
     // Color coding for battery levels - brighter colors for AMOLED visibility
-    if (batt_level <= 15) {
+    if (charging) {
+        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0x66FF66), LV_PART_MAIN);  // Bright green when charging
+    } else if (batt_level <= 15) {
         lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFF6666), LV_PART_MAIN);  // Brighter red
     } else if (batt_level <= 30) {
         lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFBB66), LV_PART_MAIN);  // Brighter orange

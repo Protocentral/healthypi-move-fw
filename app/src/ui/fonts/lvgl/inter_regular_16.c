@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 16 px
  * Bpp: 4
- * Opts: --no-compress --font ../ttf/Inter-Regular.ttf --size 16 --range 0x20-0x7F --format lvgl --bpp 4 -o inter_regular_16.c --lv-font-name inter_regular_16
+ * Opts: --no-compress --font /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/ttf/Inter-Regular.ttf --size 16 --range 0x20-0x7F --format lvgl --bpp 4 --lv-font-name inter_regular_16 --output /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/lvgl/inter_regular_16.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

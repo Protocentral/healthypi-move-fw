@@ -3,17 +3,18 @@
 ## ✅ Successfully Downloaded & Converted
 
 ### **Fonts Available:**
-- ✅ **Inter Regular**: 12px, 14px, 16px
+- ✅ **Inter Regular**: 12px, 14px, 16px, 24px
 - ✅ **Inter SemiBold**: 18px  
 - ✅ **JetBrains Mono Regular**: 16px, 24px
 
-### **Total Memory Usage:** ~217KB
+### **Total Memory Usage:** ~272KB
 - inter_regular_12: 27KB
 - inter_regular_14: 32KB  
 - inter_regular_16: 35KB
+- inter_regular_24: 55KB
 - inter_semibold_18: 40KB
 - jetbrains_mono_regular_16: 34KB
-- jetbrains_mono_regular_24: 49KB
+- inter_semibold_24: 49KB
 
 ---
 
@@ -28,13 +29,13 @@ lv_obj_set_style_text_font(my_label, &inter_regular_16, LV_PART_MAIN);
 lv_obj_set_style_text_font(hr_value, &inter_semibold_18, LV_PART_MAIN);
 
 // Set font for time display
-lv_obj_set_style_text_font(time_label, &jetbrains_mono_regular_24, LV_PART_MAIN);
+lv_obj_set_style_text_font(time_label, &inter_semibold_24, LV_PART_MAIN);
 ```
 
 ### **Recommended Usage:**
 ```c
 // Home Screen
-time_display     → jetbrains_mono_regular_24
+time_display     → inter_semibold_24
 hr_steps_values  → inter_semibold_18
 labels_status    → inter_regular_14
 small_captions   → inter_regular_12
@@ -73,7 +74,7 @@ void init_modern_font_styles(void) {
     
     // Modern time style
     lv_style_init(&style_time_modern);
-    lv_style_set_text_font(&style_time_modern, &jetbrains_mono_regular_24);
+    lv_style_set_text_font(&style_time_modern, &inter_semibold_24);
     lv_style_set_text_color(&style_time_modern, lv_color_white());
     
     // Modern body style
@@ -107,7 +108,7 @@ app/src/ui/fonts/
 │   ├── inter_regular_16.c
 │   ├── inter_semibold_18.c
 │   ├── jetbrains_mono_regular_16.c
-│   └── jetbrains_mono_regular_24.c
+│   └── inter_semibold_24.c
 ├── convert_fonts.sh         # Conversion script
 ├── font_declarations.h      # Usage guide
 └── lv_font_conv/           # Font converter tool

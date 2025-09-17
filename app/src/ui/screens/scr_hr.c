@@ -54,7 +54,7 @@ extern lv_style_t style_scr_container;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
-extern lv_style_t style_white_small;
+extern lv_style_t style_white_medium;
 extern lv_style_t style_tiny;
 
 extern lv_style_t style_scr_black;
@@ -80,7 +80,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
-    lv_obj_add_style(label_signal, &style_white_small, 0);
+    lv_obj_add_style(label_signal, &style_white_medium, 0);
 
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);

@@ -211,13 +211,15 @@ LV_FONT_DECLARE(ui_font_number_big);
 
 /* Modern Google Fonts for AMOLED Display */
 // Core System Fonts
-LV_FONT_DECLARE(inter_regular_16);        // General UI text
+LV_FONT_DECLARE(inter_semibold_24);       // General UI text (upgraded to semibold for better readability)
 LV_FONT_DECLARE(inter_semibold_18);       // Metric values (HR, steps, SpO2)
-LV_FONT_DECLARE(jetbrains_mono_regular_16); // Time display, sensor readings
+LV_FONT_DECLARE(inter_semibold_80_time);  // Large minimalist time display (80px, digits only)
+//LV_FONT_DECLARE(jetbrains_mono_regular_16); // Time display, sensor readings
 // Additional Sizes
 LV_FONT_DECLARE(inter_regular_14);        // Secondary text, labels  
 LV_FONT_DECLARE(inter_regular_12);        // Small text, captions
-LV_FONT_DECLARE(jetbrains_mono_regular_24); // Large time display
+LV_FONT_DECLARE(inter_regular_16);        // Secondary size for specific contexts
+LV_FONT_DECLARE(inter_semibold_24); // Large time display
 
 /* Modern style declarations */
 extern lv_style_t style_health_arc;

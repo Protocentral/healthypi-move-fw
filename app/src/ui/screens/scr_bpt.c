@@ -49,7 +49,7 @@ extern lv_style_t style_scr_black;
 extern lv_style_t style_scr_container;
 extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
-extern lv_style_t style_white_small;
+extern lv_style_t style_white_medium;
 extern lv_style_t style_red_medium;
 
 static void scr_bpt_measure_handler(lv_event_t *e)
@@ -136,7 +136,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *label_bpt_sys_unit = lv_label_create(cont_col_sys);
     lv_label_set_text(label_bpt_sys_unit, "mmHg");
-    lv_obj_add_style(label_bpt_sys_unit, &style_white_small, 0);
+    lv_obj_add_style(label_bpt_sys_unit, &style_white_medium, 0);
     lv_obj_set_style_text_align(label_bpt_sys_unit, LV_TEXT_ALIGN_CENTER, 0);
 
     // Separator
@@ -168,7 +168,7 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
 
     lv_obj_t *label_bpt_dia_unit = lv_label_create(cont_col_dia);
     lv_label_set_text(label_bpt_dia_unit, "mmHg");
-    lv_obj_add_style(label_bpt_dia_unit, &style_white_small, 0);
+    lv_obj_add_style(label_bpt_dia_unit, &style_white_medium, 0);
     lv_obj_set_style_text_align(label_bpt_dia_unit, LV_TEXT_ALIGN_CENTER, 0);
 
     char last_meas_str[74];
