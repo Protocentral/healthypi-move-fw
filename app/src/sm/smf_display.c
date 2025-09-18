@@ -477,6 +477,7 @@ static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
 extern lv_obj_t *scr_bpt;
+extern lv_obj_t *scr_today;
 
 extern struct k_sem sem_disp_smf_start;
 
@@ -873,8 +874,13 @@ static void hpi_disp_update_screens(void)
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {
-            hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
-            last_today_trend_refresh = k_uptime_get_32();
+            // Only update if the screen has been properly initialized
+            // This prevents crashes during sleep/wake transitions
+            if (scr_today != NULL)
+            {
+                hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
+                last_today_trend_refresh = k_uptime_get_32();
+            }
         }
         break;
     case SCR_SPL_PULLDOWN:

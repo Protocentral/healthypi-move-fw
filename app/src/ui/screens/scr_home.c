@@ -220,6 +220,7 @@ static void home_screen_gesture_handler(lv_event_t *e)
 // Externs
 extern lv_style_t style_lbl_white_14;
 extern lv_style_t style_body_medium;
+extern lv_style_t style_numeric_large;
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
@@ -352,7 +353,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_label_set_text(ui_home_label_hour, "00:00");
     lv_obj_set_style_text_color(ui_home_label_hour, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_home_label_hour, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_home_label_hour, &inter_semibold_80_time, LV_PART_MAIN | LV_STATE_DEFAULT);  // Large minimalist Inter 80px font
+    lv_obj_add_style(ui_home_label_hour, &style_numeric_large, LV_PART_MAIN | LV_STATE_DEFAULT);  // Large numeric style for time display
     lv_obj_set_style_text_align(ui_home_label_hour, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // AM/PM indicator - positioned carefully within circular bounds

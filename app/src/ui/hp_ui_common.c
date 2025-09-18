@@ -93,9 +93,10 @@ lv_style_t style_headline;
 lv_style_t style_body_large;
 lv_style_t style_body_medium;
 lv_style_t style_caption;
+
 /* Additional specialized styles */
 lv_style_t style_numeric_large;  // For large numeric displays (time, main values)
-lv_style_t style_numeric_medium; // For medium numeric displays  
+lv_style_t style_numeric_medium; // For medium numeric displays
 lv_style_t style_status_small;   // For small status text
 
 lv_style_t style_bg_blue;
@@ -319,6 +320,15 @@ void display_init_styles(void)
     lv_style_init(&style_caption);
     lv_style_set_text_color(&style_caption, lv_color_hex(COLOR_TEXT_SECONDARY));
     lv_style_set_text_font(&style_caption, &inter_regular_14); /* Small labels and captions */
+
+    /* Initialize numeric display styles */
+    lv_style_init(&style_numeric_large);
+    lv_style_set_text_color(&style_numeric_large, lv_color_white());
+    lv_style_set_text_font(&style_numeric_large, &inter_semibold_80_time); /* Large numeric displays (time, hero values) */
+
+    lv_style_init(&style_numeric_medium);
+    lv_style_set_text_color(&style_numeric_medium, lv_color_white());
+    lv_style_set_text_font(&style_numeric_medium, &inter_semibold_24); /* Medium numeric displays */
 
     // Style for small status text
     lv_style_init(&style_status_small);
