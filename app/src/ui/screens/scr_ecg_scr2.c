@@ -40,6 +40,7 @@ LOG_MODULE_REGISTER(scr_ecg_scr2, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "hw_module.h"
+#include "hpi_sys.h"
 
 static lv_obj_t *scr_ecg_scr2;
 // static lv_obj_t *btn_ecg_cancel;  // Commented out - not used
@@ -49,6 +50,7 @@ static lv_obj_t *label_ecg_hr;
 static lv_obj_t *label_timer;
 static lv_obj_t *label_ecg_lead_off;
 static lv_obj_t *label_info;
+static lv_obj_t *arc_ecg_zone;  // Progress arc for measurement duration
 
 static bool chart_ecg_update = true;
 static float y_max_ecg = -10000;
@@ -59,11 +61,8 @@ static float y_min_ecg = 10000;
 static float gx = 0;
 
 // Performance optimization variables - LVGL 9.2 optimized
-static bool prev_lead_off_status = true;
 static uint32_t sample_counter = 0;
 static const uint32_t RANGE_UPDATE_INTERVAL = 128; // Update range every 64 samples - Less frequent for better performance
-static uint32_t display_update_counter = 0;
-static const uint32_t DISPLAY_UPDATE_INTERVAL = 3; // Reduced display updates for performance
 
 // High-performance batch processing buffer - aligned for LVGL 9.2
 static int32_t batch_data[32] __attribute__((aligned(4))); // Batch buffer for efficiency
@@ -89,6 +88,7 @@ extern lv_style_t style_bg_red;
 extern struct k_sem sem_ecg_cancel;
 
 // Commented out - unused function
+                  
 /*
 static void btn_ecg_cancel_handler(lv_event_t *e)
 {
@@ -104,61 +104,82 @@ static void btn_ecg_cancel_handler(lv_event_t *e)
 void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_ecg_scr2 = lv_obj_create(NULL);
-    lv_obj_add_style(scr_ecg_scr2, &style_scr_black, 0);
+    // AMOLED OPTIMIZATION: Pure black background for power efficiency
+    lv_obj_set_style_bg_color(scr_ecg_scr2, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_ecg_scr2, LV_OBJ_FLAG_SCROLLABLE);
-    // draw_scr_common(scr_ecg_scr2);
 
-    /*Create a container with COLUMN flex direction*/
-    lv_obj_t *cont_col = lv_obj_create(scr_ecg_scr2);
-    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
-    lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
-    lv_obj_add_style(cont_col, &style_scr_black, 0);
-    // lv_obj_add_style(cont_col, &style_bg_red, 0);
+    // CIRCULAR AMOLED-OPTIMIZED ECG MEASUREMENT SCREEN
+    // Display center: (195, 195), Usable radius: ~185px
+    // Orange/amber theme for ECG measurement consistency
 
-    // Draw countdown timer container
-    lv_obj_t *cont_timer = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_timer, lv_pct(100), LV_SIZE_CONTENT);
+    // Get ECG/HR data
+    uint16_t hr = 0;
+    int64_t hr_last_update = 0;
+    if (hpi_sys_get_last_hr_update(&hr, &hr_last_update) != 0) {
+        hr = 0;
+        hr_last_update = 0;
+    }
+
+    // OUTER RING: ECG Timer Countdown Arc (Radius 170-185px) - Orange theme for measurement
+    arc_ecg_zone = lv_arc_create(scr_ecg_scr2);
+    lv_obj_set_size(arc_ecg_zone, 370, 370);  // 185px radius
+    lv_obj_center(arc_ecg_zone);
+    lv_arc_set_range(arc_ecg_zone, 0, 30);  // Timer range: 0-30 seconds
+    
+    // Background arc: Full 270° track (gray)
+    lv_arc_set_bg_angles(arc_ecg_zone, 135, 45);  // Full background arc
+    lv_arc_set_value(arc_ecg_zone, 30);  // Start at full (30 seconds), will countdown to 0
+    
+    // Style the progress arc - orange theme for ECG measurement
+    lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
+    lv_obj_set_style_arc_width(arc_ecg_zone, 8, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0xFF8C00), LV_PART_INDICATOR);  // Orange progress
+    lv_obj_set_style_arc_width(arc_ecg_zone, 6, LV_PART_INDICATOR);
+    lv_obj_remove_style(arc_ecg_zone, NULL, LV_PART_KNOB);  // Remove knob
+    lv_obj_clear_flag(arc_ecg_zone, LV_OBJ_FLAG_CLICKABLE);
+
+    // Screen title - properly positioned to avoid arc overlap
+    lv_obj_t *label_title = lv_label_create(scr_ecg_scr2);
+    lv_label_set_text(label_title, "ECG Measurement");
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Centered at top, clear of arc
+    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+
+    // MID-UPPER RING: Timer container with icon (following design pattern)
+    lv_obj_t *cont_timer = lv_obj_create(scr_ecg_scr2);
+    lv_obj_set_size(cont_timer, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_timer, LV_ALIGN_TOP_MID, 0, 85);
+    lv_obj_set_style_bg_opa(cont_timer, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_timer, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_timer, 0, LV_PART_MAIN);
     lv_obj_set_flex_flow(cont_timer, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_timer, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_timer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(cont_timer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Draw Countdown Timer
+    // Timer Icon
     LV_IMG_DECLARE(timer_32);
     lv_obj_t *img_timer = lv_img_create(cont_timer);
     lv_img_set_src(img_timer, &timer_32);
+    lv_obj_set_style_img_recolor(img_timer, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange theme
+    lv_obj_set_style_img_recolor_opa(img_timer, LV_OPA_COVER, LV_PART_MAIN);
 
+    // Timer value
     label_timer = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer, "00");
-    lv_obj_add_style(label_timer, &style_white_medium, 0);
-    lv_obj_t *label_timer_sub = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer_sub, " secs");
-    lv_obj_add_style(label_timer_sub, &style_white_medium, 0);
+    lv_label_set_text(label_timer, "30");
+    lv_obj_add_style(label_timer, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_timer, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_timer, 8, LV_PART_MAIN);
 
-    /*label_info = lv_label_create(cont_col);
-    lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Touch the bezel to start");
-    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_info, &style_white_medium, 0);*/
+    // Timer unit
+    lv_obj_t *label_timer_unit = lv_label_create(cont_timer);
+    lv_label_set_text(label_timer_unit, "s");
+    lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange accent
 
-    /*btn_ecg_cancel = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_ecg_cancel, btn_ecg_cancel_handler, LV_EVENT_ALL, NULL);
-    // lv_obj_set_height(btn_ecg_cancel, 85);
-
-    lv_obj_t *label_btn = lv_label_create(btn_ecg_cancel);
-    lv_label_set_text(label_btn, LV_SYMBOL_CLOSE);
-    lv_obj_center(label_btn);*/
-
-    // Create ECG Chart following LVGL 9.2 best practices
-    chart_ecg = lv_chart_create(cont_col);
-    
-    // Set chart dimensions - optimized for round display
-    lv_obj_set_size(chart_ecg, 390, 140);
+    // CENTRAL ZONE: ECG Chart (positioned in center area)
+    chart_ecg = lv_chart_create(scr_ecg_scr2);
+    lv_obj_set_size(chart_ecg, 340, 100);  // Smaller chart for circular design
+    lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -10);  // Centered position
     
     // Configure chart type and fundamental properties
     lv_chart_set_type(chart_ecg, LV_CHART_TYPE_LINE);
@@ -168,25 +189,25 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     // Set Y-axis range for ECG data - start with reasonable defaults
     lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -5000, 5000);
     
-    // Disable division lines for clean ECG display (LVGL 9 recommendation for performance)
+    // Disable division lines for clean ECG display
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
     
-    // Configure main chart background (LV_PART_MAIN styling)
+    // Configure main chart background (transparent for AMOLED)
     lv_obj_set_style_bg_opa(chart_ecg, LV_OPA_TRANSP, LV_PART_MAIN);  // Transparent background
     lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);        // No border
     lv_obj_set_style_outline_width(chart_ecg, 0, LV_PART_MAIN);       // No outline
     lv_obj_set_style_pad_all(chart_ecg, 5, LV_PART_MAIN);             // Minimal padding
     
     // Create series for ECG data
-    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
+    ser_ecg = lv_chart_add_series(chart_ecg, lv_color_hex(0xFF8C00), LV_CHART_AXIS_PRIMARY_Y);
     
-    // Configure line series styling (LV_PART_ITEMS) - LVGL 9.2 way
-    lv_obj_set_style_line_width(chart_ecg, 3, LV_PART_ITEMS);         // Line width
-    lv_obj_set_style_line_color(chart_ecg, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_ITEMS);
+    // Configure line series styling - orange theme
+    lv_obj_set_style_line_width(chart_ecg, 3, LV_PART_ITEMS);         // Increased line width for better visibility
+    lv_obj_set_style_line_color(chart_ecg, lv_color_hex(0xFF8C00), LV_PART_ITEMS);
     lv_obj_set_style_line_opa(chart_ecg, LV_OPA_COVER, LV_PART_ITEMS); // Full opacity for medical clarity
     lv_obj_set_style_line_rounded(chart_ecg, false, LV_PART_ITEMS);   // Sharp lines for precision
     
-    // Disable points completely (LV_PART_INDICATOR) - LVGL 9.2 standard approach
+    // Disable points completely
     lv_obj_set_style_width(chart_ecg, 0, LV_PART_INDICATOR);          // No point width
     lv_obj_set_style_height(chart_ecg, 0, LV_PART_INDICATOR);         // No point height
     lv_obj_set_style_bg_opa(chart_ecg, LV_OPA_TRANSP, LV_PART_INDICATOR); // Transparent points
@@ -197,36 +218,55 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_SCROLLABLE);            // Disable scrolling
     lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_CLICK_FOCUSABLE);       // No focus events
     
-    // Position chart with proper alignment
-    lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
-    
-    // Initialize chart with baseline values using LVGL 9.2 recommended method
+    // Initialize chart with baseline values
     lv_chart_set_all_value(chart_ecg, ser_ecg, 0);
     
-    // Initialize performance optimization system
-    ecg_chart_reset_performance_counters();
-    ecg_chart_enable_performance_mode(true);  // Start in high-performance mode    // Draw Lead off label
-    label_ecg_lead_off = lv_label_create(cont_col);
-    lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(label_ecg_lead_off, 300);
-    lv_label_set_text(label_ecg_lead_off, "--");
-    lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, 0);
-
-    // Draw BPM container
-    lv_obj_t *cont_hr = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
+    // HR Container below chart (following design pattern)
+    lv_obj_t *cont_hr = lv_obj_create(scr_ecg_scr2);
+    lv_obj_set_size(cont_hr, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_hr, LV_ALIGN_CENTER, 0, 75);  // Below chart
+    lv_obj_set_style_bg_opa(cont_hr, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_hr, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_hr, 0, LV_PART_MAIN);
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_hr, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
+    // Heart Icon
     lv_obj_t *img_heart = lv_img_create(cont_hr);
     lv_img_set_src(img_heart, &img_heart_35);
+    lv_obj_set_style_img_recolor(img_heart, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    lv_obj_set_style_img_recolor_opa(img_heart, LV_OPA_COVER, LV_PART_MAIN);
 
+    // HR Value
     label_ecg_hr = lv_label_create(cont_hr);
-    lv_label_set_text(label_ecg_hr, "00");
-    lv_obj_add_style(label_ecg_hr, &style_white_medium, 0);
-    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_sub, " bpm");
+    if (hr == 0) {
+        lv_label_set_text(label_ecg_hr, "--");
+    } else {
+        lv_label_set_text_fmt(label_ecg_hr, "%d", hr);
+    }
+    lv_obj_add_style(label_ecg_hr, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_ecg_hr, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_ecg_hr, 8, LV_PART_MAIN);
+
+    // HR Unit
+    lv_obj_t *label_hr_unit = lv_label_create(cont_hr);
+    lv_label_set_text(label_hr_unit, "BPM");
+    lv_obj_add_style(label_hr_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_hr_unit, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+
+    // Lead off status label (positioned at bottom)
+    label_ecg_lead_off = lv_label_create(scr_ecg_scr2);
+    lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_ecg_lead_off, 300);
+    lv_label_set_text(label_ecg_lead_off, "Touch electrodes to start");
+    lv_obj_align(label_ecg_lead_off, LV_ALIGN_BOTTOM_MID, 0, -30);
+    lv_obj_add_style(label_ecg_lead_off, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_ecg_lead_off, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+
+    // Initialize performance optimization system
+    ecg_chart_reset_performance_counters();
+    ecg_chart_enable_performance_mode(true);  // Start in high-performance mode
 
     hpi_disp_set_curr_screen(SCR_SPL_ECG_SCR2);
     hpi_show_screen(scr_ecg_scr2, m_scroll_dir);
@@ -252,7 +292,6 @@ static void ecg_chart_enable_performance_mode(bool enable)
 static void ecg_chart_reset_performance_counters(void)
 {
     sample_counter = 0;
-    display_update_counter = 0;
     batch_count = 0;
     // Initialize for proper range detection
     y_max_ecg = -10000;
@@ -330,6 +369,14 @@ void hpi_ecg_disp_update_timer(int time_left)
         }
         
         lv_label_set_text(label_timer, time_buf);
+        
+        // Update the progress arc to show progress towards completion
+        if (arc_ecg_zone != NULL) {
+            // Show progress: empty at start (30s), full at end (0s)
+            int arc_value = (time_left < 0) ? 30 : ((time_left > 30) ? 0 : (30 - time_left));
+            lv_arc_set_value(arc_ecg_zone, arc_value);
+        }
+        
         last_time = time_left;
     }
 }

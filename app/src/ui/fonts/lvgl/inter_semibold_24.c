@@ -1,11 +1,10 @@
 /*******************************************************************************
  * Size: 24 px
  * Bpp: 4
- * Opts: --no-compress --font /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/ttf/Inter-SemiBold.ttf --size 24 --bpp 4 --range 0x20-0x7F --format lvgl --lv-font-name inter_semibold_24 --output /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/lvgl/inter_semibold_24.c
+ * Opts: --no-compress --font /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/ttf/Inter-SemiBold.ttf --size 24 --bpp 4 --range 0x20-0x7F,0xB0 --format lvgl --lv-font-name inter_semibold_24 --output /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/lvgl/inter_semibold_24.c
  ******************************************************************************/
 
-#include "lvgl.h"
-
+#include <lvgl.h>
 
 #ifndef INTER_SEMIBOLD_24
 #define INTER_SEMIBOLD_24 1
@@ -1393,7 +1392,14 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
     0xff, 0xff, 0xf9, 0x0, 0x6f, 0xf3, 0xd, 0xff,
     0xac, 0xff, 0xd9, 0xff, 0xf0, 0xf, 0xf8, 0x0,
     0x8f, 0xff, 0xff, 0x80, 0x9, 0x93, 0x0, 0x4,
-    0xcf, 0xe7, 0x0
+    0xcf, 0xe7, 0x0,
+
+    /* U+00B0 "°" */
+    0x0, 0x6d, 0xfd, 0x70, 0x0, 0xaf, 0xff, 0xff,
+    0xa0, 0x4f, 0xf7, 0x27, 0xff, 0x48, 0xfb, 0x0,
+    0xa, 0xf8, 0x8f, 0xb0, 0x0, 0xaf, 0x84, 0xff,
+    0x72, 0x7f, 0xf4, 0xa, 0xff, 0xff, 0xfa, 0x0,
+    0x7, 0xdf, 0xd7, 0x0
 };
 
 
@@ -1497,7 +1503,8 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 8929, .adv_w = 175, .box_w = 9, .box_h = 22, .ofs_x = 1, .ofs_y = -3},
     {.bitmap_index = 9028, .adv_w = 138, .box_w = 4, .box_h = 28, .ofs_x = 2, .ofs_y = -6},
     {.bitmap_index = 9084, .adv_w = 175, .box_w = 9, .box_h = 22, .ofs_x = 1, .ofs_y = -3},
-    {.bitmap_index = 9183, .adv_w = 258, .box_w = 14, .box_h = 5, .ofs_x = 1, .ofs_y = 4}
+    {.bitmap_index = 9183, .adv_w = 258, .box_w = 14, .box_h = 5, .ofs_x = 1, .ofs_y = 4},
+    {.bitmap_index = 9218, .adv_w = 176, .box_w = 9, .box_h = 8, .ofs_x = 1, .ofs_y = 9}
 };
 
 /*---------------------
@@ -1511,6 +1518,10 @@ static const lv_font_fmt_txt_cmap_t cmaps[] =
 {
     {
         .range_start = 32, .range_length = 95, .glyph_id_start = 1,
+        .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY
+    },
+    {
+        .range_start = 176, .range_length = 1, .glyph_id_start = 96,
         .unicode_list = NULL, .glyph_id_ofs_list = NULL, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY
     }
 };
@@ -1536,7 +1547,7 @@ static lv_font_fmt_txt_dsc_t font_dsc = {
     .cmaps = cmaps,
     .kern_dsc = NULL,
     .kern_scale = 0,
-    .cmap_num = 1,
+    .cmap_num = 2,
     .bpp = 4,
     .kern_classes = 0,
     .bitmap_format = 0,

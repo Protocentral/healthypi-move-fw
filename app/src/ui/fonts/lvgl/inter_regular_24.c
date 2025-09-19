@@ -4,8 +4,7 @@
  * Opts: --no-compress --font /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/ttf/Inter-Regular.ttf --size 24 --bpp 4 --range 0x20-0x7F --format lvgl --lv-font-name inter_regular_24 --output /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/lvgl/inter_regular_24.c
  ******************************************************************************/
 
-#include "lvgl.h"
-
+#include <lvgl.h>
 
 #ifndef INTER_REGULAR_24
 #define INTER_REGULAR_24 1

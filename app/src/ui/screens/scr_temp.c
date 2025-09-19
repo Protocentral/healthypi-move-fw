@@ -155,8 +155,11 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
         temp_last_update = 0;
     }
     
-    // Convert raw temperature to float for display
-    float temp_c = temp_raw / 100.0f;
+    // temp_raw contains temperature in Fahrenheit * 100 (e.g., 9860 = 98.6°F)
+    float temp_f = temp_raw / 100.0f;
+    
+    // Convert to Celsius for internal calculations
+    float temp_c = (temp_f - 32.0f) * 5.0f / 9.0f;
 
     // OUTER RING: Temperature Progress Arc (Radius 170-185px) - Orange theme for warmth
     arc_temp_zone = lv_arc_create(scr_temp);
@@ -188,7 +191,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
 
     // Screen title - properly positioned to avoid arc overlap
     lv_obj_t *label_title = lv_label_create(scr_temp);
-    lv_label_set_text(label_title, "TEMPERATURE");
+    lv_label_set_text(label_title, "Skin. Temp.");
     lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Centered at top, clear of arc
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -204,15 +207,26 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     // CENTRAL ZONE: Main Temperature Value (properly spaced from icon)
     label_temp_value = lv_label_create(scr_temp);
     if (temp_raw == 0) {
-        lv_label_set_text(label_temp_value, "READY");
+        lv_label_set_text(label_temp_value, "--");  // Restore original fallback
     } else {
         // Get temperature preference from user settings
         uint8_t temp_unit = hpi_user_settings_get_temp_unit();
-        if (temp_unit == 1) {  // 1 = Fahrenheit
-            float temp_f = temp_c_to_f(temp_c);
-            lv_label_set_text_fmt(label_temp_value, "%.1f", (double)temp_f);
-        } else {  // 0 = Celsius
-            lv_label_set_text_fmt(label_temp_value, "%.1f", (double)temp_c);
+        static char temp_str[16];  // Increased buffer size to avoid warnings
+        
+        if (temp_unit == 1) {  // 1 = Fahrenheit - use original temp_f
+            // Convert to integer with one decimal place (multiply by 10)
+            int temp_f_x10 = (int)(temp_f * 10.0f + 0.5f);  // Round to nearest tenth
+            int temp_whole = temp_f_x10 / 10;
+            int temp_decimal = temp_f_x10 % 10;
+            snprintf(temp_str, sizeof(temp_str), "%d.%d", temp_whole, temp_decimal);
+            lv_label_set_text(label_temp_value, temp_str);
+        } else {  // 0 = Celsius - use converted temp_c
+            // Convert to integer with one decimal place (multiply by 10)
+            int temp_c_x10 = (int)(temp_c * 10.0f + 0.5f);  // Round to nearest tenth
+            int temp_whole = temp_c_x10 / 10;
+            int temp_decimal = temp_c_x10 % 10;
+            snprintf(temp_str, sizeof(temp_str), "%d.%d", temp_whole, temp_decimal);
+            lv_label_set_text(label_temp_value, temp_str);
         }
     }
     lv_obj_align(label_temp_value, LV_ALIGN_CENTER, 0, -10);  // Centered, slightly above middle

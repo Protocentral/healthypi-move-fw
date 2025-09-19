@@ -131,7 +131,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     // CENTRAL ZONE: Main ECG Value/Status (properly spaced from icon)
     label_ecg_hr = lv_label_create(scr_ecg);
     if (m_ecg_hr == 0) {
-        lv_label_set_text(label_ecg_hr, "READY");
+        lv_label_set_text(label_ecg_hr, "--");
     } else {
         lv_label_set_text_fmt(label_ecg_hr, "%d", m_ecg_hr);
     }

@@ -101,26 +101,26 @@ $CONVERTER \
     --lv-font-name inter_regular_24 \
     --output "$LVGL_DIR/inter_regular_24.c"
 
-# Inter SemiBold 24px - Large emphasis text, metric values
+# Inter SemiBold 24px - Large emphasis text, metric values (includes degree symbol)
 echo "Converting Inter SemiBold 24px..."
 $CONVERTER \
     --no-compress \
     --font "$TTF_DIR/Inter-SemiBold.ttf" \
     --size 24 \
     --bpp 4 \
-    --range 0x20-0x7F \
+    --range 0x20-0x7F,0xB0 \
     --format lvgl \
     --lv-font-name inter_semibold_24 \
     --output "$LVGL_DIR/inter_semibold_24.c"
 
-# Inter SemiBold 80px - Large time display (digits, hyphen, and time chars)
+# Inter SemiBold 80px - Large time display (digits, hyphen, period, and time chars)
 echo "Converting Inter SemiBold 80px for time display..."
 $CONVERTER \
     --no-compress \
     --font "$TTF_DIR/Inter-SemiBold.ttf" \
     --size 80 \
     --bpp 4 \
-    --range 0x20,0x2D,0x30-0x39,0x3A,0x41,0x4D,0x50 \
+    --range 0x20,0x2D,0x2E,0x30-0x39,0x3A,0x41,0x4D,0x50 \
     --format lvgl \
     --lv-include lvgl.h \
     --lv-font-name inter_semibold_80_time \

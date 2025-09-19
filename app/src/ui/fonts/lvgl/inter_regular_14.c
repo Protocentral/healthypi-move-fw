@@ -4,11 +4,7 @@
  * Opts: --font /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/ttf/Inter-Regular.ttf --size 14 --bpp 4 --range 0x20-0x7F --format lvgl --output /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/lvgl/inter_regular_14.c
  ******************************************************************************/
 
-#ifdef LV_LVGL_H_INCLUDE_SIMPLE
-#include "lvgl.h"
-#else
-#include "lvgl.h"
-#endif
+#include <lvgl.h>
 
 #ifndef INTER_REGULAR_14
 #define INTER_REGULAR_14 1
