@@ -4,11 +4,8 @@
  * Opts: --font /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/ttf/JetBrainsMono-Regular.ttf --size 24 --bpp 4 --range 0x20-0x7F --format lvgl --output /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/lvgl/jetbrains_mono_regular_24.c
  ******************************************************************************/
 
-#ifdef LV_LVGL_H_INCLUDE_SIMPLE
 #include "lvgl.h"
-#else
-#include "lvgl.h"
-#endif
+
 
 #ifndef JETBRAINS_MONO_REGULAR_24
 #define JETBRAINS_MONO_REGULAR_24 1

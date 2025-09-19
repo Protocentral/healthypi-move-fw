@@ -279,31 +279,24 @@ void hpi_ecg_disp_add_samples(int num_samples)
 
 void hpi_ecg_disp_update_hr(int hr)
 {
-    if (label_ecg_hr == NULL)
+    // Check if we're on the ECG measurement screen (scr2) before updating
+    if (hpi_disp_get_curr_screen() != SCR_SPL_ECG_SCR2 || label_ecg_hr == NULL)
         return;
 
-    // Optimize string formatting for performance
+    // Use standard sprintf for reliability - avoid custom conversion that can cause font issues
     static char hr_buf[8]; // Static buffer to avoid repeated allocations
     static int last_hr = -1; // Cache last value to avoid unnecessary updates
     
     if (hr != last_hr) { // Only update if value changed
         if (hr == 0)
         {
-            strcpy(hr_buf, "--"); // More efficient than sprintf for simple strings
+            // Use standard dashes - the inter_semibold_24 font used by style_white_medium has hyphens
+            strcpy(hr_buf, "--");
         }
         else
         {
-            // Use lightweight integer to string conversion
-            if (hr < 100) {
-                hr_buf[0] = '0' + (hr / 10);
-                hr_buf[1] = '0' + (hr % 10);
-                hr_buf[2] = '\0';
-            } else {
-                hr_buf[0] = '0' + (hr / 100);
-                hr_buf[1] = '0' + ((hr / 10) % 10);
-                hr_buf[2] = '0' + (hr % 10);
-                hr_buf[3] = '\0';
-            }
+            // Use standard sprintf for proper character encoding
+            snprintf(hr_buf, sizeof(hr_buf), "%d", hr);
         }
         
         lv_label_set_text(label_ecg_hr, hr_buf);

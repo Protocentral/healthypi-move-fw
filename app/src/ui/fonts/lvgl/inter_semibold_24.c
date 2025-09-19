@@ -4,11 +4,8 @@
  * Opts: --no-compress --font /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/ttf/Inter-SemiBold.ttf --size 24 --bpp 4 --range 0x20-0x7F --format lvgl --lv-font-name inter_semibold_24 --output /Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts/lvgl/inter_semibold_24.c
  ******************************************************************************/
 
-#ifdef LV_LVGL_H_INCLUDE_SIMPLE
 #include "lvgl.h"
-#else
-#include "lvgl.h"
-#endif
+
 
 #ifndef INTER_SEMIBOLD_24
 #define INTER_SEMIBOLD_24 1
