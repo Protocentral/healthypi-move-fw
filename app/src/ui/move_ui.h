@@ -168,8 +168,9 @@ LV_IMG_DECLARE(img_steps_48);
 LV_IMG_DECLARE(img_calories_48);
 LV_IMG_DECLARE(img_timer_48);
 LV_IMG_DECLARE(ecg_70);
+LV_IMG_DECLARE(ecg_45);        // 45x45 ECG icon for circular display
 LV_IMG_DECLARE(bp_70);
-//LV_IMG_DECLARE(icon_spo2_30x35);
+LV_IMG_DECLARE(icon_spo2_30x35);
 
 #if defined(CONFIG_HPI_GSR_SCREEN)
 // GSR screens and helpers
@@ -194,7 +195,11 @@ static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
 static inline void hpi_gsr_set_measurement_active(bool active) { ARG_UNUSED(active); }
 #endif
 LV_IMG_DECLARE(img_heart_70);
+LV_IMG_DECLARE(hpi_logo_90x92);
 LV_IMG_DECLARE(img_temp_100);
+LV_IMG_DECLARE(img_temp_45);   // 45x45 temperature icon for circular display
+LV_IMG_DECLARE(img_battery_charged);
+LV_IMG_DECLARE(img_battery_discharging);
 LV_IMG_DECLARE(icon_spo2_100);
 LV_IMG_DECLARE(img_spo2_hand);
 
@@ -212,13 +217,11 @@ LV_FONT_DECLARE(ui_font_number_big);
 /* Modern Google Fonts for AMOLED Display */
 // Core System Fonts
 LV_FONT_DECLARE(inter_semibold_24);       // General UI text (upgraded to semibold for better readability)
-LV_FONT_DECLARE(inter_semibold_18);       // Metric values (HR, steps, SpO2)
+LV_FONT_DECLARE(inter_semibold_18);       // Legacy 18px font - kept for compatibility but styles now use 24px minimum
 LV_FONT_DECLARE(inter_semibold_80_time);  // Large minimalist time display (80px, digits only)
 //LV_FONT_DECLARE(jetbrains_mono_regular_16); // Time display, sensor readings
 // Additional Sizes
-LV_FONT_DECLARE(inter_regular_14);        // Secondary text, labels  
-LV_FONT_DECLARE(inter_regular_12);        // Small text, captions
-LV_FONT_DECLARE(inter_regular_16);        // Secondary size for specific contexts
+LV_FONT_DECLARE(inter_regular_16);        // Secondary size for specific contexts  
 LV_FONT_DECLARE(inter_semibold_24); // Large time display
 
 /* Modern style declarations */

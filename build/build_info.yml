@@ -1,0 +1,29 @@
+cmake:
+  board:
+    name: 'healthypi_move'
+    path:
+     - '/Users/akw/Documents/GitHub/healthypi-move-workspace/healthypi-move-fw/boards/protocentral/healthypi_move'
+    qualifiers: 'nrf5340/cpuapp'
+    revision: ''
+  images:
+   - name: 'app'
+     source-dir: '/Users/akw/Documents/GitHub/healthypi-move-workspace/healthypi-move-fw/app'
+     type: 'MAIN'
+   - name: 'mcuboot'
+     source-dir: '/Users/akw/Documents/GitHub/healthypi-move-workspace/bootloader/mcuboot/boot/zephyr'
+     type: 'BOOTLOADER'
+   - name: 'ipc_radio'
+     source-dir: ''
+   - name: 'b0n'
+     source-dir: ''
+  kconfig:
+    files:
+     - '/Users/akw/Documents/GitHub/healthypi-move-workspace/healthypi-move-fw/build/_sysbuild/empty.conf'
+     - '/Users/akw/Documents/GitHub/healthypi-move-workspace/healthypi-move-fw/app/sysbuild.conf'
+    user-files:
+     - '/Users/akw/Documents/GitHub/healthypi-move-workspace/healthypi-move-fw/app/sysbuild.conf'
+version: '0.1.0'
+west:
+  command: '//opt/homebrew/bin/west build app --board healthypi_move/nrf5340/cpuapp -- -DBOARD_ROOT=.'
+  topdir: '/Users/akw/Documents/GitHub/healthypi-move-workspace'
+  version: '1.4.0'

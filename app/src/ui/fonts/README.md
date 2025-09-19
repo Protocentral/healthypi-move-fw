@@ -1,20 +1,24 @@
-# Google Fonts Integration Complete! 🎉
+# Google Fonts Integration for 1.2" Circular Display 🎉
 
-## ✅ Successfully Downloaded & Converted
+## ✅ Optimized for Maximum Readability
 
-### **Fonts Available:**
-- ✅ **Inter Regular**: 12px, 14px, 16px, 24px
-- ✅ **Inter SemiBold**: 18px  
-- ✅ **JetBrains Mono Regular**: 16px, 24px
+### **Font Size Policy - 24px Minimum:**
+- ✅ **Inter SemiBold 24px**: New minimum font size for ALL UI text (59KB)
+- ✅ **Inter SemiBold 80px**: Large time/numeric displays (104KB)
+- ⚠️ **Inter SemiBold 18px**: Legacy font (40KB) - kept for compatibility but not used in styles
 
-### **Total Memory Usage:** ~272KB
-- inter_regular_12: 27KB
-- inter_regular_14: 32KB  
-- inter_regular_16: 35KB
-- inter_regular_24: 55KB
-- inter_semibold_18: 40KB
-- jetbrains_mono_regular_16: 34KB
-- inter_semibold_24: 49KB
+### **Fonts Removed (Too Small for 1.2" Display):**
+- ❌ **inter_regular_12**: Unreadable on small display (REMOVED)
+- ❌ **inter_regular_14**: Unreadable on small display (REMOVED)
+- ❌ **inter_regular_16**: Below minimum readable threshold (REMOVED)
+
+### **Readability Update:**
+All UI styles now enforce **24px minimum** for optimal readability on the 390x390 circular AMOLED display.
+
+### **Total Memory Usage:** ~203KB (optimized)
+- inter_semibold_18: 40KB (legacy - not used in styles)
+- inter_semibold_24: 59KB (PRIMARY FONT - all text)
+- inter_semibold_80_time: 104KB (large displays)
 
 ---
 

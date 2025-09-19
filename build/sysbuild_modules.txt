@@ -1,0 +1,2 @@
+"nrf":"/Users/akw/Documents/GitHub/healthypi-move-workspace/nrf":"/Users/akw/Documents/GitHub/healthypi-move-workspace/nrf/sysbuild"
+"mcuboot":"/Users/akw/Documents/GitHub/healthypi-move-workspace/bootloader/mcuboot":"/Users/akw/Documents/GitHub/healthypi-move-workspace/bootloader/mcuboot/boot/zephyr/sysbuild"

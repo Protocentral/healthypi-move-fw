@@ -171,8 +171,13 @@ void display_init_styles(void)
     lv_style_set_border_width(&style_btn_black, 0);
     lv_style_set_text_color(&style_btn_black, lv_color_white());
     lv_style_set_radius(&style_btn_black, 6);
-    /* internal padding for better touch target and readable label */
-    lv_style_set_pad_all(&style_btn_black, 12);
+    /* Increased padding for better touch target and readable label */
+    lv_style_set_pad_top(&style_btn_black, 20);
+    lv_style_set_pad_bottom(&style_btn_black, 20);
+    lv_style_set_pad_left(&style_btn_black, 16);
+    lv_style_set_pad_right(&style_btn_black, 16);
+    /* Set minimum height for touch-friendly buttons on small display */
+    lv_style_set_min_height(&style_btn_black, 56);
     /* external margin so buttons have breathing room from other objects */
     lv_style_set_margin_all(&style_btn_black, 6);
     /* Orange outline to make the button stand out */
@@ -189,8 +194,12 @@ void display_init_styles(void)
     lv_style_set_outline_width(&style_btn_black_pressed, 2);
     lv_style_set_outline_color(&style_btn_black_pressed, lv_color_hex(0xFF9900));
     lv_style_set_outline_opa(&style_btn_black_pressed, LV_OPA_COVER);
-    /* keep same internal padding and external margin on pressed state */
-    lv_style_set_pad_all(&style_btn_black_pressed, 12);
+    /* Keep same increased padding and external margin on pressed state */
+    lv_style_set_pad_top(&style_btn_black_pressed, 20);
+    lv_style_set_pad_bottom(&style_btn_black_pressed, 20);
+    lv_style_set_pad_left(&style_btn_black_pressed, 16);
+    lv_style_set_pad_right(&style_btn_black_pressed, 16);
+    lv_style_set_min_height(&style_btn_black_pressed, 56);
     lv_style_set_margin_all(&style_btn_black_pressed, 6);
 
     lv_style_init(&style_bg_blue);
@@ -250,7 +259,13 @@ void display_init_styles(void)
     lv_style_set_border_opa(&style_btn_primary, LV_OPA_COVER);
     lv_style_set_radius(&style_btn_primary, 24);
     lv_style_set_text_color(&style_btn_primary, lv_color_white());
-    lv_style_set_pad_all(&style_btn_primary, 16);
+    /* Increased padding for better touch interaction on small display */
+    lv_style_set_pad_top(&style_btn_primary, 24);
+    lv_style_set_pad_bottom(&style_btn_primary, 24);
+    lv_style_set_pad_left(&style_btn_primary, 20);
+    lv_style_set_pad_right(&style_btn_primary, 20);
+    /* Set minimum height for touch-friendly buttons */
+    lv_style_set_min_height(&style_btn_primary, 60);
     lv_style_set_margin_all(&style_btn_primary, 8);
     /* Subtle shadow for depth */
     lv_style_set_shadow_width(&style_btn_primary, 8);
@@ -266,6 +281,12 @@ void display_init_styles(void)
     lv_style_set_border_width(&style_btn_primary_pressed, 2);
     lv_style_set_border_color(&style_btn_primary_pressed, lv_color_hex(COLOR_PRIMARY_BLUE));
     lv_style_set_text_color(&style_btn_primary_pressed, lv_color_white());
+    /* Keep same increased padding for pressed state */
+    lv_style_set_pad_top(&style_btn_primary_pressed, 24);
+    lv_style_set_pad_bottom(&style_btn_primary_pressed, 24);
+    lv_style_set_pad_left(&style_btn_primary_pressed, 20);
+    lv_style_set_pad_right(&style_btn_primary_pressed, 20);
+    lv_style_set_min_height(&style_btn_primary_pressed, 60);
     lv_style_set_shadow_width(&style_btn_primary_pressed, 4);
     lv_style_set_shadow_opa(&style_btn_primary_pressed, LV_OPA_40);
 
@@ -278,16 +299,21 @@ void display_init_styles(void)
     lv_style_set_border_opa(&style_btn_secondary, LV_OPA_COVER);
     lv_style_set_radius(&style_btn_secondary, 20);
     lv_style_set_text_color(&style_btn_secondary, lv_color_white());
-    lv_style_set_pad_all(&style_btn_secondary, 12);
+    /* Increased padding for better touch interaction */
+    lv_style_set_pad_top(&style_btn_secondary, 20);
+    lv_style_set_pad_bottom(&style_btn_secondary, 20);
+    lv_style_set_pad_left(&style_btn_secondary, 16);
+    lv_style_set_pad_right(&style_btn_secondary, 16);
+    lv_style_set_min_height(&style_btn_secondary, 56);
     lv_style_set_margin_all(&style_btn_secondary, 6);
 
     /* Initialize icon button styles */
     lv_style_init(&style_btn_icon);
     lv_style_set_bg_color(&style_btn_icon, lv_color_hex(COLOR_SURFACE_MEDIUM));
     lv_style_set_bg_opa(&style_btn_icon, LV_OPA_COVER);
-    lv_style_set_radius(&style_btn_icon, 28); /* 56px diameter / 2 */
+    lv_style_set_radius(&style_btn_icon, 32); /* 64px diameter / 2 - increased from 56px */
     lv_style_set_border_width(&style_btn_icon, 0);
-    lv_style_set_pad_all(&style_btn_icon, 16);
+    lv_style_set_pad_all(&style_btn_icon, 20); /* Increased padding for better touch */
     lv_style_set_shadow_width(&style_btn_icon, 6);
     lv_style_set_shadow_color(&style_btn_icon, lv_color_black());
     lv_style_set_shadow_opa(&style_btn_icon, LV_OPA_30);
@@ -307,11 +333,11 @@ void display_init_styles(void)
     /* Initialize modern typography styles */
     lv_style_init(&style_headline);
     lv_style_set_text_color(&style_headline, lv_color_white());
-    lv_style_set_text_font(&style_headline, &inter_semibold_18); /* Headlines use Inter SemiBold */
+    lv_style_set_text_font(&style_headline, &inter_semibold_24); /* Headlines use Inter SemiBold 24px - increased for readability */
 
     lv_style_init(&style_body_large);
     lv_style_set_text_color(&style_body_large, lv_color_white());
-    lv_style_set_text_font(&style_body_large, &inter_semibold_18); /* Metric values use Inter SemiBold */
+    lv_style_set_text_font(&style_body_large, &inter_semibold_24); /* Metric values use Inter SemiBold 24px - increased for readability */
 
     lv_style_init(&style_body_medium);
     lv_style_set_text_color(&style_body_medium, lv_color_white());
@@ -319,7 +345,7 @@ void display_init_styles(void)
 
     lv_style_init(&style_caption);
     lv_style_set_text_color(&style_caption, lv_color_hex(COLOR_TEXT_SECONDARY));
-    lv_style_set_text_font(&style_caption, &inter_regular_14); /* Small labels and captions */
+    lv_style_set_text_font(&style_caption, &inter_semibold_24); /* Small labels and captions - increased to 24px minimum for small display readability */
 
     /* Initialize numeric display styles */
     lv_style_init(&style_numeric_large);
@@ -333,7 +359,7 @@ void display_init_styles(void)
     // Style for small status text
     lv_style_init(&style_status_small);
     lv_style_set_text_color(&style_status_small, lv_color_hex(COLOR_TEXT_SECONDARY));
-    lv_style_set_text_font(&style_status_small, &inter_regular_12); /* Smallest text for status */
+    lv_style_set_text_font(&style_status_small, &inter_semibold_24); /* Status text - increased to 24px minimum for small display readability */
 
     //lv_disp_set_bg_color(NULL, lv_color_black());
 }
@@ -395,7 +421,7 @@ lv_obj_t *hpi_btn_create_icon(lv_obj_t *parent)
         return NULL;
     }
     lv_obj_add_style(btn, &style_btn_icon, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_size(btn, 56, 56); /* Fixed size for icon buttons */
+    lv_obj_set_size(btn, 64, 64); /* Increased size for better touch on small display */
     return btn;
 }
 

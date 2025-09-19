@@ -1,0 +1,5 @@
+west:
+  command: //opt/homebrew/bin/west build app --board healthypi_move/nrf5340/cpuapp
+    -- -DBOARD_ROOT=.
+  topdir: /Users/akw/Documents/GitHub/healthypi-move-workspace
+  version: 1.4.0
