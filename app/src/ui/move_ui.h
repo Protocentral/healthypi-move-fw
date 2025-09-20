@@ -180,8 +180,6 @@ void hpi_gsr_process_bioz_sample(int32_t bioz_sample);
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 // Plot update helper called from sensor path
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
-// Control measurement state across screens
-void hpi_gsr_set_measurement_active(bool active);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
@@ -191,7 +189,6 @@ static inline void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t a1, 
     ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
 }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
-static inline void hpi_gsr_set_measurement_active(bool active) { ARG_UNUSED(active); }
 #endif
 LV_IMG_DECLARE(img_heart_70);
 LV_IMG_DECLARE(hpi_logo_90x92);
@@ -311,6 +308,7 @@ void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
 void gesture_down_scr_spl_raw_ppg(void);
 void gesture_down_scr_ecg_2(void);
+void gesture_down_scr_gsr_plot(void);
 void gesture_down_scr_fi_sens_wear(void);
 void gesture_down_scr_fi_sens_check(void);
 void gesture_down_scr_bpt_measure(void);

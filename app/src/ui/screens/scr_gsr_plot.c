@@ -8,8 +8,12 @@
 #include <zephyr/logging/log.h>
 #include <lvgl.h>
 #include "ui/move_ui.h"
+#include "hpi_sys.h"
 
-LOG_MODULE_REGISTER(hpi_disp_scr_gsr_plot, LOG_LEVEL_ERR);
+LOG_MODULE_REGISTER(hpi_disp_scr_gsr_plot, LOG_LEVEL_DBG);
+
+// Extern semaphore declarations for GSR control
+extern struct k_sem sem_gsr_cancel;
 
 // GUI
 static lv_obj_t *scr_gsr_plot;
@@ -23,15 +27,13 @@ extern lv_style_t style_scr_black;
 // Local state
 static bool plot_ready = false;
 
-void hpi_gsr_set_measurement_active(bool active);
-
 static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_CLICKED)
     {
-        // Stop measurement and go back to main GSR screen
-        hpi_gsr_set_measurement_active(false);
+        // Stop GSR measurement using semaphore control (same pattern as ECG)
+        k_sem_give(&sem_gsr_cancel);
         hpi_load_screen(SCR_GSR, SCROLL_DOWN);
     }
 }
@@ -91,16 +93,44 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100)
 {
-    if (!plot_ready || !chart_gsr_trend || !ser_gsr_trend) return;
+    LOG_DBG("GSR plot add sample: %u, plot_ready=%d, chart=%p, series=%p", 
+            gsr_value_x100, plot_ready, chart_gsr_trend, ser_gsr_trend);
+    
+    if (!plot_ready || !chart_gsr_trend || !ser_gsr_trend) {
+        LOG_WRN("GSR plot not ready or objects null");
+        return;
+    }
+    
     // Light autoscale around incoming values
     static uint16_t min_v = 65535, max_v = 0;
+    static bool first_sample = true;
+    
+    // Reset min/max on first sample to avoid stuck scaling
+    if (first_sample) {
+        min_v = gsr_value_x100;
+        max_v = gsr_value_x100;
+        first_sample = false;
+        LOG_DBG("GSR plot: First sample, reset scaling");
+    }
+    
     if (gsr_value_x100 < min_v) min_v = gsr_value_x100;
     if (gsr_value_x100 > max_v) max_v = gsr_value_x100;
     int y_min = (min_v > 50) ? (min_v - 50) : 0;
     int y_max = max_v + 50;
     if (y_max - y_min < 200) { int c = (y_min + y_max)/2; y_min = c - 100; y_max = c + 100; }
+    
+    LOG_DBG("GSR plot scaling: min_v=%u, max_v=%u, y_min=%d, y_max=%d", 
+            min_v, max_v, y_min, y_max);
+    
     lv_chart_set_range(chart_gsr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
 
     lv_chart_set_next_value(chart_gsr_trend, ser_gsr_trend, gsr_value_x100);
     lv_chart_refresh(chart_gsr_trend);
+}
+
+void gesture_down_scr_gsr_plot(void)
+{
+    printk("Cancel GSR\n");
+    k_sem_give(&sem_gsr_cancel);
+    hpi_load_screen(SCR_GSR, SCROLL_DOWN);
 }

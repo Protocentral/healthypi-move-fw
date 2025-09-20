@@ -76,6 +76,7 @@ K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);
+K_MSGQ_DEFINE(q_plot_gsr, sizeof(struct hpi_gsr_sensor_data_t), 64, 1);
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
@@ -489,6 +490,7 @@ extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_plot_ecg_bioz;
 extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_hrv;
+extern struct k_msgq q_plot_gsr;
 
 extern struct k_sem sem_crown_key_pressed;
 
@@ -751,6 +753,20 @@ static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg
     }*/
 }
 
+static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sample)
+{
+    LOG_DBG("Processing GSR data: value=%u, current_screen=%d, SCR_SPL_PLOT_GSR=%d", 
+            gsr_sensor_sample.gsr_value_x100, hpi_disp_get_curr_screen(), SCR_SPL_PLOT_GSR);
+    
+    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
+    {
+        // Add GSR sample to the plot
+        hpi_gsr_disp_plot_add_sample(gsr_sensor_sample.gsr_value_x100);
+    } else {
+        LOG_DBG("Not on GSR plot screen, ignoring data");
+    }
+}
+
 static void st_display_active_entry(void *o)
 {
     LOG_DBG("Display SM Active Entry");
@@ -920,6 +936,7 @@ void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1,
 static void st_display_active_run(void *o)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_gsr_sensor_data_t gsr_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
@@ -936,6 +953,17 @@ static void st_display_active_run(void *o)
         ecg_processed_count++;
         
         if (ecg_processed_count >= 8) break;  // Prevent blocking other processing
+    }
+
+    // Process GSR queue data
+    int gsr_processed_count = 0;
+    while (k_msgq_get(&q_plot_gsr, &gsr_sensor_sample, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("GSR queue data received: value=%u", gsr_sensor_sample.gsr_value_x100);
+        hpi_disp_process_gsr_data(gsr_sensor_sample);
+        gsr_processed_count++;
+        
+        if (gsr_processed_count >= 8) break;  // Prevent blocking other processing
     }
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)

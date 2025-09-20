@@ -21,6 +21,10 @@
 
 LOG_MODULE_REGISTER(hpi_disp_scr_gsr, LOG_LEVEL_ERR);
 
+// Extern semaphore declarations for GSR control
+extern struct k_sem sem_gsr_start;
+extern struct k_sem sem_gsr_cancel;
+
 // GUI Objects
 lv_obj_t *scr_gsr;
 static lv_obj_t *label_gsr_current;
@@ -38,7 +42,6 @@ static bool gsr_measurement_active = false;
 static void calculate_gsr_baseline(uint16_t new_value);
 static void update_gsr_status(uint16_t current_value);
 static void scr_gsr_measure_btn_event_handler(lv_event_t *e);
-void hpi_gsr_set_measurement_active(bool active);
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
 
 // Externs
@@ -105,15 +108,25 @@ static void scr_gsr_measure_btn_event_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         if (!gsr_measurement_active) {
+            // Start GSR measurement using semaphore control (same pattern as ECG)
             gsr_measurement_active = true;
-            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), "Stop");
+            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_STOP " Stop");
             lv_label_set_text(label_gsr_status, "Measuring...");
-            // Open plot screen
+            
+            // Open plot screen first
             hpi_load_scr_spl(SCR_SPL_PLOT_GSR, SCROLL_UP, (uint32_t)SCR_GSR, 0, 0, 0);
+            
+            // Start GSR measurement via semaphore (processed by state machine)
+            k_msleep(500);  // Allow screen transition
+            k_sem_give(&sem_gsr_start);
         } else {
+            // Stop GSR measurement using semaphore control
             gsr_measurement_active = false;
-            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), "Measure");
+            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_PLAY " Measure");
             lv_label_set_text(label_gsr_status, "Ready");
+            
+            // Stop GSR measurement via semaphore (processed by state machine)
+            k_sem_give(&sem_gsr_cancel);
         }
     }
 }
@@ -150,8 +163,7 @@ void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_updat
     // Update status
     update_gsr_status(gsr_value_x100);
 
-    // Forward to plot screen if visible
-    hpi_gsr_disp_plot_add_sample(gsr_value_x100);
+    // Note: GSR data is now sent to plot through queue-based system in data_module.c
     
     // Update last measurement time
     if (label_gsr_last_update != NULL) {
@@ -159,11 +171,6 @@ void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_updat
         hpi_helper_get_relative_time_str(gsr_last_update, last_meas_str, sizeof(last_meas_str));
         lv_label_set_text(label_gsr_last_update, last_meas_str);
     }
-}
-
-void hpi_gsr_set_measurement_active(bool active)
-{
-    gsr_measurement_active = active;
 }
 
 void draw_scr_gsr(enum scroll_dir m_scroll_dir)
