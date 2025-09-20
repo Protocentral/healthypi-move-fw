@@ -385,7 +385,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " 85%");  // Battery symbol with percentage
     lv_obj_align(label_batt_level_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
     lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label_batt_level_val, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
+    lv_obj_set_style_text_font(label_batt_level_val, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
     lv_obj_set_style_text_opa(label_batt_level_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(label_batt_level_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 

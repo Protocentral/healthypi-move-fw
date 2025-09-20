@@ -123,7 +123,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     // Date moved to bottom of screen
     label_date_subtitle = lv_label_create(scr_today);
-    lv_label_set_text(label_date_subtitle, "Sep 18, 2025");
+    lv_label_set_text(label_date_subtitle, "Today");
     lv_obj_align(label_date_subtitle, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_obj_set_style_text_color(label_date_subtitle, lv_color_hex(0x666666), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_style(label_date_subtitle, &style_lbl_white_14, LV_PART_MAIN);
@@ -135,7 +135,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     
     // Outer Arc - Steps (close to screen edges) - White theme
     arc_steps = lv_arc_create(scr_today);
-    lv_obj_set_size(arc_steps, 360, 360);  // Close to screen edges (390px)
+    lv_obj_set_size(arc_steps, 380, 380);  // Close to screen edges (390px)
     lv_obj_center(arc_steps);
     lv_arc_set_range(arc_steps, 0, 100);
     lv_arc_set_value(arc_steps, 0);
@@ -150,7 +150,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     // Middle Arc - Calories - Green theme
     arc_calories = lv_arc_create(scr_today);
-    lv_obj_set_size(arc_calories, 330, 330);  // 15px gap from outer (360-30=330)
+    lv_obj_set_size(arc_calories, 350, 350);  // 15px gap from outer (360-30=330)
     lv_obj_center(arc_calories);
     lv_arc_set_range(arc_calories, 0, 100);
     lv_arc_set_value(arc_calories, 0);
@@ -164,7 +164,7 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     // Inner Arc - Active Time - Blue theme
     arc_active_time = lv_arc_create(scr_today);
-    lv_obj_set_size(arc_active_time, 300, 300);  // 15px gap from middle (330-30=300)
+    lv_obj_set_size(arc_active_time, 320, 320);  // 15px gap from middle (330-30=300)
     lv_obj_center(arc_active_time);
     lv_arc_set_range(arc_active_time, 0, 100);
     lv_arc_set_value(arc_active_time, 0);
@@ -280,17 +280,4 @@ void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_ti
     lv_arc_set_value(arc_active_time, time_percent);  // Arc instead of bar
     
     // Target labels removed for minimalist design
-}
-
-void hpi_scr_today_update_date(struct tm date)
-{
-    if (label_date_subtitle == NULL)
-        return;
-
-    char date_buf[32];
-    char mon_strs[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-
-    sprintf(date_buf, "%s %02d", mon_strs[date.tm_mon], date.tm_mday);
-    lv_label_set_text(label_date_subtitle, date_buf);
 }

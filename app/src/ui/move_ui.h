@@ -271,7 +271,6 @@ void hpi_home_hr_update(int hr);
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s);
-void hpi_scr_today_update_date(struct tm date);
 void hpi_scr_today_cleanup(void);
 
 // HR Screen functions
