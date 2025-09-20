@@ -126,7 +126,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_img_set_src(img_ecg, &ecg_45);
     lv_obj_set_style_img_recolor(img_ecg, lv_color_hex(COLOR_SUCCESS_GREEN), 0);
     lv_obj_set_style_img_recolor_opa(img_ecg, LV_OPA_COVER, 0);
-    lv_obj_align(img_ecg, LV_ALIGN_CENTER, 0, -45);  // Positioned above center for arc design
+    lv_obj_align(img_ecg, LV_ALIGN_CENTER, 0, -85);  // Positioned above center for arc design
 
     // CENTRAL ZONE: Main ECG Value/Status (properly spaced from icon)
     label_ecg_hr = lv_label_create(scr_ecg);
@@ -143,7 +143,7 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     // Unit/Status label directly below main value
     lv_obj_t *label_ecg_unit = lv_label_create(scr_ecg);
     if (m_ecg_hr == 0) {
-        lv_label_set_text(label_ecg_unit, "Place fingers on electrodes");
+        lv_label_set_text(label_ecg_unit, "--");
     } else {
         lv_label_set_text(label_ecg_unit, "BPM");
     }

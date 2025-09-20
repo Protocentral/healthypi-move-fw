@@ -114,7 +114,7 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
 
     // MID-UPPER RING: Heart Icon (clean, no container - using smaller 35px heart icon)
     lv_obj_t *img_hr = lv_img_create(scr_hr);
-    lv_img_set_src(img_hr, &img_heart_35);
+    lv_img_set_src(img_hr, &img_heart_48px);
     lv_obj_align(img_hr, LV_ALIGN_TOP_MID, 0, 95);  // Moved down from 65px to account for lower title
     lv_obj_set_style_img_recolor(img_hr, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hr, LV_OPA_COVER, LV_PART_MAIN);

@@ -172,7 +172,7 @@ void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
 
     // Heart Icon
     lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_35);
+    lv_img_set_src(img_heart, &img_heart_48px);
     lv_obj_set_style_img_recolor(img_heart, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_heart, LV_OPA_COVER, LV_PART_MAIN);
 

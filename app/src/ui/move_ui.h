@@ -163,7 +163,6 @@ enum hpi_disp_subscreens
 
 // Images used in the UI
 LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
-LV_IMG_DECLARE(img_heart_35);
 LV_IMG_DECLARE(img_steps_48);
 LV_IMG_DECLARE(img_calories_48);
 LV_IMG_DECLARE(img_timer_48);

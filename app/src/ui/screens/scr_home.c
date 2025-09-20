@@ -240,7 +240,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     
     // Steps arc (left arc, 8-10:30 o'clock position with gap)
     arc_steps = lv_arc_create(scr_home);
-    lv_obj_set_size(arc_steps, 340, 340);  // Smaller radius to fit circle
+    lv_obj_set_size(arc_steps, 370, 370);  // Smaller radius to fit circle
     lv_obj_center(arc_steps);
     lv_arc_set_range(arc_steps, 0, 10000); // 10k step goal
     lv_arc_set_value(arc_steps, 2500); // Set to 25% to make indicator visible
@@ -257,13 +257,13 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     // Steps icon - positioned at the geometric center of the left arc (225°)
     lv_obj_t *img_steps = lv_img_create(scr_home);
     lv_img_set_src(img_steps, &img_steps_48);
-    lv_obj_align(img_steps, LV_ALIGN_CENTER, -85, -85);  // Closer to center at 225° angle
+    lv_obj_align(img_steps, LV_ALIGN_CENTER, -95, -95);  // Closer to center at 225° angle
     lv_obj_set_style_img_recolor(img_steps, lv_color_hex(COLOR_WARNING_AMBER), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_steps, LV_OPA_COVER, LV_PART_MAIN);
 
     // Steps value label - positioned below icon at arc center
     label_steps_value = lv_label_create(scr_home);
-    lv_obj_align(label_steps_value, LV_ALIGN_CENTER, -85, -50);  // Below icon, closer to center
+    lv_obj_align(label_steps_value, LV_ALIGN_CENTER, -95, -50);  // Below icon, closer to center
     lv_label_set_text(label_steps_value, "2.5k"); // Show test value to make it visible
     lv_obj_set_style_text_color(label_steps_value, lv_color_hex(COLOR_WARNING_AMBER), LV_PART_MAIN);
     lv_obj_add_style(label_steps_value, &style_body_medium, LV_PART_MAIN);  // Use 24px font style for better readability
@@ -271,7 +271,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
 
     // Heart rate arc (right arc, 1:30-4 o'clock position with gap)
     arc_hr = lv_arc_create(scr_home);
-    lv_obj_set_size(arc_hr, 340, 340);  // Same size as steps arc
+    lv_obj_set_size(arc_hr, 370, 370);  // Same size as steps arc
     lv_obj_center(arc_hr);
     lv_arc_set_range(arc_hr, 40, 180); // HR range
     lv_arc_set_value(arc_hr, 75); // Set test value to make indicator visible
@@ -287,14 +287,14 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
 
     // Heart rate icon - positioned at the geometric center of the right arc (45°)
     lv_obj_t *img_hr = lv_img_create(scr_home);
-    lv_img_set_src(img_hr, &img_heart_35);  // Use smaller 35px heart icon instead of 48px
-    lv_obj_align(img_hr, LV_ALIGN_CENTER, 85, 85);  // Closer to center at 45° angle
+    lv_img_set_src(img_hr, &img_heart_48px);  // Use 48px heart icon
+    lv_obj_align(img_hr, LV_ALIGN_CENTER, 105, 75);  // Closer to center at 45° angle
     lv_obj_set_style_img_recolor(img_hr, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hr, LV_OPA_COVER, LV_PART_MAIN);
 
     // Heart rate value label - positioned below icon at arc center
     label_hr_value = lv_label_create(scr_home);
-    lv_obj_align(label_hr_value, LV_ALIGN_CENTER, 85, 120);  // Below icon, closer to center
+    lv_obj_align(label_hr_value, LV_ALIGN_CENTER, 105, 115);  // Below icon, closer to center
     lv_label_set_text(label_hr_value, "75"); // Show test value to make it visible
     lv_obj_set_style_text_color(label_hr_value, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_add_style(label_hr_value, &style_body_medium, LV_PART_MAIN);  // Use 24px font style for better readability
