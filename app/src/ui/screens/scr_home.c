@@ -393,13 +393,6 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_home, m_scroll_dir);
 }
 
-
-
-/*void draw_scr_home(enum scroll_dir m_scroll_dir)
-{
-    draw_scr_home_digital(m_scroll_dir);
-}*/
-
 void hpi_scr_home_update_time_date(struct tm in_time)
 {
     if (ui_home_label_hour == NULL || ui_home_label_date == NULL)

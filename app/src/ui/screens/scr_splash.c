@@ -51,7 +51,8 @@ void draw_scr_splash(void)
 {
     scr_splash = lv_obj_create(NULL);
 
-    lv_obj_add_style(scr_splash, &style_scr_black, 0);
+    // AMOLED OPTIMIZATION: Pure black background for power efficiency
+    lv_obj_set_style_bg_color(scr_splash, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     LV_IMG_DECLARE(pc_logo_text_300);
     lv_obj_t *img1 = lv_img_create(scr_splash);

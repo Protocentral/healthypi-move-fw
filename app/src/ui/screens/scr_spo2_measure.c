@@ -160,7 +160,7 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 
     // Draw BPM
     /*lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_48);
+    lv_img_set_src(img_heart, &img_heart_48px);
 
     label_hr = lv_label_create(cont_hr);
     lv_label_set_text(label_hr, "00");

@@ -41,38 +41,47 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     LV_UNUSED(arg1); LV_UNUSED(arg2); LV_UNUSED(arg3); LV_UNUSED(arg4);
 
     scr_gsr_plot = lv_obj_create(NULL);
-    lv_obj_add_style(scr_gsr_plot, &style_scr_black, 0);
+    // AMOLED: solid black background for power savings
+    lv_obj_set_style_bg_color(scr_gsr_plot, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_gsr_plot, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Container
+    // Container with column layout
     lv_obj_t *cont_col = lv_obj_create(scr_gsr_plot);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_add_style(cont_col, &style_scr_black, 0);
+    lv_obj_set_style_bg_color(cont_col, lv_color_hex(0x000000), LV_PART_MAIN);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Chart
+    // Title
+    lv_obj_t *label_title = lv_label_create(cont_col);
+    lv_label_set_text(label_title, "GSR Trend");
+    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    // Chart - larger, cleaner trend view
     chart_gsr_trend = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_gsr_trend, 270, 140);
-    lv_chart_set_point_count(chart_gsr_trend, 60);
+    lv_obj_set_size(chart_gsr_trend, 380, 160);
+    lv_chart_set_point_count(chart_gsr_trend, 80);
     lv_chart_set_update_mode(chart_gsr_trend, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_chart_set_div_line_count(chart_gsr_trend, 0, 0);
     lv_obj_set_style_bg_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(chart_gsr_trend, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_width(chart_gsr_trend, 0, LV_PART_MAIN);
     lv_chart_set_type(chart_gsr_trend, LV_CHART_TYPE_LINE);
-    ser_gsr_trend = lv_chart_add_series(chart_gsr_trend, lv_color_hex(0x00FF88), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_gsr_trend, 2, LV_PART_ITEMS);
-    lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 1000);
+    ser_gsr_trend = lv_chart_add_series(chart_gsr_trend, lv_color_hex(COLOR_PRIMARY_BLUE), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_set_style_line_width(chart_gsr_trend, 3, LV_PART_ITEMS);
+    lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 0);
 
-    // Stop button
-    btn_stop = hpi_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_height(btn_stop, 60);
+    // Stop button - primary, compact
+    btn_stop = hpi_btn_create_primary(cont_col);
+    lv_obj_set_size(btn_stop, 140, 48);
+    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_style_radius(btn_stop, 22, LV_PART_MAIN);
     lv_obj_t *label_btn = lv_label_create(btn_stop);
     lv_label_set_text(label_btn, "Stop");
     lv_obj_center(label_btn);
+    lv_obj_set_style_text_color(label_btn, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
 
     plot_ready = true;
 
