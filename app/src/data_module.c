@@ -107,11 +107,12 @@ ZBUS_CHAN_DECLARE(hr_chan);
 
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 
-extern struct k_msgq q_ecg_bioz_sample;
+extern struct k_msgq q_ecg_sample;
+extern struct k_msgq q_bioz_sample;
 extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_ppg_fi_sample;
 
-extern struct k_msgq q_plot_ecg_bioz;
+extern struct k_msgq q_plot_ecg;
 extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_ppg_fi;
 extern struct k_msgq q_plot_hrv;
@@ -224,7 +225,6 @@ static void work_ecg_write_file_handler(struct k_work *work)
     struct tm tm_sys_time = hpi_sys_get_sys_time();
     int64_t log_time = timeutil_timegm64(&tm_sys_time);
 
-    LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);
     // Write ECG data to file
     hpi_write_ecg_record_file(ecg_record_buffer, ECG_RECORD_BUFFER_SAMPLES, log_time);
 }
@@ -266,8 +266,6 @@ void hpi_data_set_gsr_measurement_active(bool active)
     k_mutex_lock(&mutex_is_gsr_measurement_active, K_FOREVER);
     is_gsr_measurement_active = active;
     k_mutex_unlock(&mutex_is_gsr_measurement_active);
-    
-    LOG_INF("GSR measurement %s", active ? "started" : "stopped");
 }
 
 bool hpi_data_is_gsr_measurement_active(void)
@@ -281,7 +279,7 @@ bool hpi_data_is_gsr_measurement_active(void)
 
 void data_thread(void)
 {
-    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_wr_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
 
@@ -293,19 +291,19 @@ void data_thread(void)
     {
         bool processed_data = false;
         
-        // Process all available ECG samples
-        while (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+        // Process all available ECG samples (unchanged)
+    while (k_msgq_get(&q_ecg_sample, &ecg_sensor_sample, K_NO_WAIT) == 0)
         {
             processed_data = true;
             if (settings_send_ble_enabled)
             {
 
-                ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
-                ble_gsr_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
+                ble_ecg_notify(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples);
+                ble_gsr_notify(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples);
             }
             if (settings_plot_enabled)
             {
-                int ret = k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
+                int ret = k_msgq_put(&q_plot_ecg, &ecg_sensor_sample, K_NO_WAIT);
                 if (ret != 0) {
                     static uint32_t plot_drops = 0;
                     plot_drops++;
@@ -317,7 +315,7 @@ void data_thread(void)
 
             if (is_ecg_record_active == true)
             {
-                int samples_to_copy = ecg_bioz_sensor_sample.ecg_num_samples;
+                int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
 
                 // Log sample count for debugging
@@ -326,7 +324,7 @@ void data_thread(void)
                 
                 if (samples_to_copy <= space_left)
                 {
-                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_bioz_sensor_sample.ecg_samples, samples_to_copy * sizeof(int32_t));
+                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_sensor_sample.ecg_samples, samples_to_copy * sizeof(int32_t));
                     ecg_record_counter += samples_to_copy;
                     if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES)
                     {
@@ -336,62 +334,42 @@ void data_thread(void)
                 else
                 {
                     // Copy in two parts: to end of buffer, then wrap around
-                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_bioz_sensor_sample.ecg_samples, space_left * sizeof(int32_t));
-                    memcpy(ecg_record_buffer, &ecg_bioz_sensor_sample.ecg_samples[space_left], (samples_to_copy - space_left) * sizeof(int32_t));
+                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_sensor_sample.ecg_samples, space_left * sizeof(int32_t));
+                    memcpy(ecg_record_buffer, &ecg_sensor_sample.ecg_samples[space_left], (samples_to_copy - space_left) * sizeof(int32_t));
                     ecg_record_counter = samples_to_copy - space_left;
                 }
-                
-                // Log every 1000 samples for debugging
-                if ((total_samples_recorded % 1000) == 0) {
-                    LOG_DBG("ECG samples recorded: %u, buffer pos: %u", total_samples_recorded, ecg_record_counter);
-                }
             }
-            
-            // GSR Processing - Process BioZ data for GSR when measurement is active
-            if (is_gsr_measurement_active == true && ecg_bioz_sensor_sample.bioz_num_samples > 0) {
-                LOG_DBG("GSR processing: active=%d, bioz_samples=%d", 
-                        is_gsr_measurement_active, ecg_bioz_sensor_sample.bioz_num_samples);
-                
-                struct hpi_gsr_sensor_data_t gsr_sample = {0};
-                
-                // Copy BioZ samples for GSR processing
-                gsr_sample.bioz_num_samples = ecg_bioz_sensor_sample.bioz_num_samples;
-                memcpy(gsr_sample.bioz_samples, ecg_bioz_sensor_sample.bioz_sample, 
-                       ecg_bioz_sensor_sample.bioz_num_samples * sizeof(int32_t));
-                
-                // Convert BioZ to GSR value (using first sample for now)
-                if (gsr_sample.bioz_num_samples > 0) {
-                    // Convert raw BioZ to GSR (simplified conversion)
+        }
+
+        // Process lightweight BioZ-only samples for GSR processing
+        {
+            struct hpi_bioz_sample_t bsample;
+            while (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
+            {
+                processed_data = true;
+                if (is_gsr_measurement_active == true && bsample.bioz_num_samples > 0)
+                {
+                    struct hpi_gsr_sensor_data_t gsr_sample = {0};
+                    gsr_sample.bioz_num_samples = bsample.bioz_num_samples;
+                    for (int i = 0; i < bsample.bioz_num_samples && i < BIOZ_POINTS_PER_SAMPLE; i++) {
+                        gsr_sample.bioz_samples[i] = bsample.bioz_samples[i];
+                    }
+                    // Convert BioZ to GSR value (using first sample)
                     int32_t bioz_raw = gsr_sample.bioz_samples[0];
                     float gsr_us = 0.0f;
-                    
-                    LOG_INF("BioZ raw value: %d (0x%08X)", bioz_raw, (uint32_t)bioz_raw);
-                    
-                    // Convert BioZ impedance to GSR (conductance)
-                    // GSR (μS) = (100000 / |BioZ|) * 10
                     if (abs(bioz_raw) > 0) {
                         gsr_us = (100000.0f / abs(bioz_raw)) * 10.0f;
                     } else {
-                        gsr_us = 0.0f; // Avoid division by zero
+                        gsr_us = 0.0f;
                     }
+                    if (gsr_us > 50.0f) gsr_us = 50.0f;
+                    else if (gsr_us < 0.5f) gsr_us = 0.5f;
 
-                    // Clamp GSR to reasonable range (0.5 to 50 μS for GSR)
-                    if (gsr_us > 50.0f) {
-                        gsr_us = 50.0f;
-                    } else if (gsr_us < 0.5f) {
-                        gsr_us = 0.5f;
-                    }
-
-                    LOG_INF("GSR calculation: 100000/%d * 10 = %.2f μS", abs(bioz_raw), gsr_us);
-                    
                     gsr_sample.gsr_value_x100 = (uint16_t)(gsr_us * 100.0f);
-                    gsr_sample.bioz_lead_off = ecg_bioz_sensor_sample.bioz_lead_off;
-                    gsr_sample.timestamp = k_uptime_get();
+                    gsr_sample.bioz_lead_off = bsample.bioz_lead_off;
+                    gsr_sample.timestamp = bsample.timestamp;
                     gsr_sample.measurement_active = true;
-                    
-                    LOG_DBG("GSR converted: %u (%.2f μS)", gsr_sample.gsr_value_x100, gsr_us);
-                    
-                    // Send to GSR plot queue
+
                     int ret = k_msgq_put(&q_plot_gsr, &gsr_sample, K_NO_WAIT);
                     if (ret != 0) {
                         static uint32_t gsr_plot_drops = 0;
@@ -399,8 +377,6 @@ void data_thread(void)
                         if ((gsr_plot_drops % 10) == 0) {
                             LOG_WRN("GSR plot queue full - dropped %u sample batches", gsr_plot_drops);
                         }
-                    } else {
-                        LOG_DBG("GSR sample queued successfully");
                     }
                 }
             }

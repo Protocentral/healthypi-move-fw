@@ -40,7 +40,7 @@ LOG_MODULE_REGISTER(scr_device_user_settings, LOG_LEVEL_INF);
 #include "ui/move_ui.h"
 #include "hw_module.h"
 #include "hpi_settings_store.h"
-#include "sm/smf_ecg_bioz.h"
+#include "sm/smf_ecg.h"
 
 lv_obj_t *scr_device_user_settings;
 

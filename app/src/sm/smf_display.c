@@ -72,7 +72,7 @@ static uint32_t get_sleep_timeout_ms(void)
     return timeout_ms;
 }
 
-K_MSGQ_DEFINE(q_plot_ecg_bioz, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
+K_MSGQ_DEFINE(q_plot_ecg, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);
@@ -485,9 +485,9 @@ extern struct k_sem sem_disp_smf_start;
 extern struct k_sem sem_disp_boot_complete;
 extern struct k_sem sem_boot_update_req;
 
-extern struct k_msgq q_ecg_bioz_sample;
+extern struct k_msgq q_ecg_sample;
 extern struct k_msgq q_ppg_wrist_sample;
-extern struct k_msgq q_plot_ecg_bioz;
+extern struct k_msgq q_plot_ecg;
 extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_hrv;
 extern struct k_msgq q_plot_gsr;
@@ -738,11 +738,11 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
     }
 }
 
-static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample)
+static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample)
 {
     if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
     {
-        hpi_ecg_disp_draw_plotECG(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples, ecg_bioz_sensor_sample.ecg_lead_off);
+        hpi_ecg_disp_draw_plotECG(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
     }
     else
     {
@@ -755,15 +755,10 @@ static void hpi_disp_process_ecg_bioz_data(struct hpi_ecg_bioz_sensor_data_t ecg
 
 static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sample)
 {
-    LOG_DBG("Processing GSR data: value=%u, current_screen=%d, SCR_SPL_PLOT_GSR=%d", 
-            gsr_sensor_sample.gsr_value_x100, hpi_disp_get_curr_screen(), SCR_SPL_PLOT_GSR);
-    
     if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
     {
         // Add GSR sample to the plot
         hpi_gsr_disp_plot_add_sample(gsr_sensor_sample.gsr_value_x100);
-    } else {
-        LOG_DBG("Not on GSR plot screen, ignoring data");
     }
 }
 
@@ -935,7 +930,7 @@ void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1,
 
 static void st_display_active_run(void *o)
 {
-    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
     struct hpi_gsr_sensor_data_t gsr_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
@@ -947,9 +942,9 @@ static void st_display_active_run(void *o)
 
     // Process multiple ECG samples per cycle to prevent queue backups
     int ecg_processed_count = 0;
-    while (k_msgq_get(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+    while (k_msgq_get(&q_plot_ecg, &ecg_sensor_sample, K_NO_WAIT) == 0)
     {
-        hpi_disp_process_ecg_bioz_data(ecg_bioz_sensor_sample);
+        hpi_disp_process_ecg_data(ecg_sensor_sample);
         ecg_processed_count++;
         
         if (ecg_processed_count >= 8) break;  // Prevent blocking other processing
@@ -959,7 +954,6 @@ static void st_display_active_run(void *o)
     int gsr_processed_count = 0;
     while (k_msgq_get(&q_plot_gsr, &gsr_sensor_sample, K_NO_WAIT) == 0)
     {
-        LOG_DBG("GSR queue data received: value=%u", gsr_sensor_sample.gsr_value_x100);
         hpi_disp_process_gsr_data(gsr_sensor_sample);
         gsr_processed_count++;
         

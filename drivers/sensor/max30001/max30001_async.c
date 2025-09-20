@@ -192,7 +192,6 @@ static int max30001_async_sample_fetch(const struct device *dev,
     // Handle BioZ-only FIFO (when BINT is set but EINT is not)
     else if ((max30001_status & MAX30001_STATUS_MASK_BINT) == MAX30001_STATUS_MASK_BINT)
     {
-        LOG_INF("BioZ-only FIFO ready (BINT set, EINT not set)");
         max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
         
         // No ECG samples in this case
@@ -207,8 +206,6 @@ static int max30001_async_sample_fetch(const struct device *dev,
             b_fifo_num_samples = 32;
             *num_samples_bioz = 32;
         }
-        
-        LOG_INF("Reading %d BioZ samples (%d bytes)", b_fifo_num_samples, b_fifo_num_bytes);
 
         struct spi_buf rx_bioz_buf[2] = {{.buf = NULL, .len = 1}, {.buf = &buf_bioz, .len = b_fifo_num_bytes}};
         const struct spi_buf_set rx_bioz = {.buffers = rx_bioz_buf, .count = 2};
@@ -231,7 +228,6 @@ static int max30001_async_sample_fetch(const struct device *dev,
                 s_bioz_temp = (int32_t)(s_bioz_temp >> 4);
 
                 bioz_samples[i] = s_bioz_temp;
-                LOG_INF("BioZ sample %d: raw=0x%08X, processed=%d", i, u_bioz_temp, s_bioz_temp);
             }
             else if (btag == 0x06)
             {
@@ -320,9 +316,6 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
         ret = max30001_async_sample_fetch(dev, &m_edata->num_samples_ecg, &m_edata->num_samples_bioz,
                                           m_edata->ecg_samples, m_edata->bioz_samples, &m_edata->rri, &m_edata->hr, &m_edata->rrint,
                                           &m_edata->ecg_lead_off, &m_edata->bioz_lead_off);
-                                          
-        LOG_INF("RTIO submit: ECG samples=%u, BioZ samples=%u, ret=%d", 
-                m_edata->num_samples_ecg, m_edata->num_samples_bioz, ret);
     }
     if (ret != 0)
     {
@@ -334,11 +327,9 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     // Check if we have any data to return
     if (m_edata->chip_op_mode == MAX30001_OP_MODE_STREAM) {
         if (m_edata->num_samples_ecg == 0 && m_edata->num_samples_bioz == 0) {
-            LOG_DBG("RTIO submit: No samples available");
             rtio_iodev_sqe_ok(iodev_sqe, 0);  // Return 0 bytes
             return 0;
         } else {
-            LOG_INF("RTIO submit: Returning %u bytes of data", m_min_buf_len);
             rtio_iodev_sqe_ok(iodev_sqe, m_min_buf_len);  // Return actual data
             return 0;
         }

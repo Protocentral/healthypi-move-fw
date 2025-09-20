@@ -1,5 +1,5 @@
 /*
- * HealthyPi Move GSR Plot Screen
+ * HealthyPi Move GSR Live Plot Screen
  *
  * SPDX-License-Identifier: MIT
  */
@@ -58,7 +58,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Title
     lv_obj_t *label_title = lv_label_create(cont_col);
-    lv_label_set_text(label_title, "GSR Trend");
+    lv_label_set_text(label_title, "GSR Live");
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
@@ -72,7 +72,14 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_border_width(chart_gsr_trend, 0, LV_PART_MAIN);
     lv_chart_set_type(chart_gsr_trend, LV_CHART_TYPE_LINE);
     ser_gsr_trend = lv_chart_add_series(chart_gsr_trend, lv_color_hex(COLOR_PRIMARY_BLUE), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_gsr_trend, 3, LV_PART_ITEMS);
+    // Draw only lines (no point indicators) and make the line thicker for visibility
+    lv_obj_set_style_line_width(chart_gsr_trend, 5, LV_PART_ITEMS);
+    lv_obj_set_style_line_rounded(chart_gsr_trend, true, LV_PART_ITEMS);
+    // Disable point indicators (indicator part controls point rendering)
+    lv_obj_set_style_width(chart_gsr_trend, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_height(chart_gsr_trend, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_INDICATOR);
+    lv_obj_set_style_border_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_INDICATOR);
     lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 0);
 
     // Stop button - primary, compact
@@ -93,9 +100,6 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100)
 {
-    LOG_DBG("GSR plot add sample: %u, plot_ready=%d, chart=%p, series=%p", 
-            gsr_value_x100, plot_ready, chart_gsr_trend, ser_gsr_trend);
-    
     if (!plot_ready || !chart_gsr_trend || !ser_gsr_trend) {
         LOG_WRN("GSR plot not ready or objects null");
         return;
@@ -110,7 +114,6 @@ void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100)
         min_v = gsr_value_x100;
         max_v = gsr_value_x100;
         first_sample = false;
-        LOG_DBG("GSR plot: First sample, reset scaling");
     }
     
     if (gsr_value_x100 < min_v) min_v = gsr_value_x100;
@@ -118,9 +121,6 @@ void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100)
     int y_min = (min_v > 50) ? (min_v - 50) : 0;
     int y_max = max_v + 50;
     if (y_max - y_min < 200) { int c = (y_min + y_max)/2; y_min = c - 100; y_max = c + 100; }
-    
-    LOG_DBG("GSR plot scaling: min_v=%u, max_v=%u, y_min=%d, y_max=%d", 
-            min_v, max_v, y_min, y_max);
     
     lv_chart_set_range(chart_gsr_trend, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
 

@@ -582,7 +582,7 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_emux.bit.caln_sel = 0;
 
     // BIOZ Configuration
-    data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;                 // Lower SPS (8-32 SPS to match our 125ms read interval)
+    data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;                 // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
     data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b010;             // 500 Hz
     data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 40 Hz
     data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b010;             // 0.5 Hz
