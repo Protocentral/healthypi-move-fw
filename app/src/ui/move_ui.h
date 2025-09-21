@@ -58,6 +58,7 @@
 #define PPG_DISP_WINDOW_SIZE 256 // To be verified
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 8 - Increased for more ECG history
+#define GSR_DISP_WINDOW_SIZE 256
 
 #define BPT_DISP_WINDOW_SIZE 256
 #define SPO2_DISP_WINDOW_SIZE_FI 128
@@ -180,6 +181,7 @@ void hpi_gsr_process_bioz_sample(int32_t bioz_sample);
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 // Plot update helper called from sensor path
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
+void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }

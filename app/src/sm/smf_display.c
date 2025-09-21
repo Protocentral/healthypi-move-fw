@@ -757,8 +757,8 @@ static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sa
 {
     if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
     {
-        // Add GSR sample to the plot
-        hpi_gsr_disp_plot_add_sample(gsr_sensor_sample.gsr_value_x100);
+        // Call batched GSR plot function (bioz_samples contains multiple samples)
+        hpi_gsr_disp_draw_plotGSR(gsr_sensor_sample.bioz_samples, gsr_sensor_sample.bioz_num_samples, gsr_sensor_sample.bioz_lead_off != 0);
     }
 }
 
@@ -952,12 +952,12 @@ static void st_display_active_run(void *o)
 
     // Process GSR queue data
     int gsr_processed_count = 0;
-    while (k_msgq_get(&q_plot_gsr, &gsr_sensor_sample, K_NO_WAIT) == 0)
+    if(k_msgq_get(&q_plot_gsr, &gsr_sensor_sample, K_NO_WAIT) == 0)
     {
         hpi_disp_process_gsr_data(gsr_sensor_sample);
         gsr_processed_count++;
         
-        if (gsr_processed_count >= 8) break;  // Prevent blocking other processing
+        //if (gsr_processed_count >= 8) break;  // Prevent blocking other processing
     }
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
@@ -1131,7 +1131,7 @@ void smf_display_thread(void)
         }
 
         lv_task_handler();
-        k_msleep(100);
+        k_msleep(20);
     }
 }
 

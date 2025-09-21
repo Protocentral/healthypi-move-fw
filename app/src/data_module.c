@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -26,7 +26,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -240,7 +239,7 @@ void hpi_data_set_ecg_record_active(bool active)
     {
         ecg_record_counter = 0;
         memset(ecg_record_buffer, 0, sizeof(ecg_record_buffer));
-    } 
+    }
     else
     {
         // If recording is stopped, write the file
@@ -282,6 +281,7 @@ void data_thread(void)
     struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_wr_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+    struct hpi_bioz_sample_t bsample;
 
     static uint32_t hr_zbus_last_pub_time = 0;
 
@@ -290,9 +290,9 @@ void data_thread(void)
     for (;;)
     {
         bool processed_data = false;
-        
+
         // Process all available ECG samples (unchanged)
-    while (k_msgq_get(&q_ecg_sample, &ecg_sensor_sample, K_NO_WAIT) == 0)
+        if (k_msgq_get(&q_ecg_sample, &ecg_sensor_sample, K_NO_WAIT) == 0)
         {
             processed_data = true;
             if (settings_send_ble_enabled)
@@ -304,10 +304,12 @@ void data_thread(void)
             if (settings_plot_enabled)
             {
                 int ret = k_msgq_put(&q_plot_ecg, &ecg_sensor_sample, K_NO_WAIT);
-                if (ret != 0) {
+                if (ret != 0)
+                {
                     static uint32_t plot_drops = 0;
                     plot_drops++;
-                    if ((plot_drops % 10) == 0) {
+                    if ((plot_drops % 10) == 0)
+                    {
                         LOG_WRN("Plot queue full - dropped %u ECG sample batches", plot_drops);
                     }
                 }
@@ -321,7 +323,7 @@ void data_thread(void)
                 // Log sample count for debugging
                 static uint32_t total_samples_recorded = 0;
                 total_samples_recorded += samples_to_copy;
-                
+
                 if (samples_to_copy <= space_left)
                 {
                     memcpy(&ecg_record_buffer[ecg_record_counter], ecg_sensor_sample.ecg_samples, samples_to_copy * sizeof(int32_t));
@@ -341,42 +343,23 @@ void data_thread(void)
             }
         }
 
-        // Process lightweight BioZ-only samples for GSR processing
+        if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
-            struct hpi_bioz_sample_t bsample;
-            while (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
+            processed_data = true;
+            if (settings_send_ble_enabled)
             {
-                processed_data = true;
-                if (is_gsr_measurement_active == true && bsample.bioz_num_samples > 0)
+                ble_gsr_notify(bsample.bioz_samples, bsample.bioz_num_samples);
+            }
+            if (settings_plot_enabled)
+            {
+                int ret = k_msgq_put(&q_plot_gsr, &bsample, K_NO_WAIT);
+                if (ret != 0)
                 {
-                    struct hpi_gsr_sensor_data_t gsr_sample = {0};
-                    gsr_sample.bioz_num_samples = bsample.bioz_num_samples;
-                    for (int i = 0; i < bsample.bioz_num_samples && i < BIOZ_POINTS_PER_SAMPLE; i++) {
-                        gsr_sample.bioz_samples[i] = bsample.bioz_samples[i];
-                    }
-                    // Convert BioZ to GSR value (using first sample)
-                    int32_t bioz_raw = gsr_sample.bioz_samples[0];
-                    float gsr_us = 0.0f;
-                    if (abs(bioz_raw) > 0) {
-                        gsr_us = (100000.0f / abs(bioz_raw)) * 10.0f;
-                    } else {
-                        gsr_us = 0.0f;
-                    }
-                    if (gsr_us > 50.0f) gsr_us = 50.0f;
-                    else if (gsr_us < 0.5f) gsr_us = 0.5f;
-
-                    gsr_sample.gsr_value_x100 = (uint16_t)(gsr_us * 100.0f);
-                    gsr_sample.bioz_lead_off = bsample.bioz_lead_off;
-                    gsr_sample.timestamp = bsample.timestamp;
-                    gsr_sample.measurement_active = true;
-
-                    int ret = k_msgq_put(&q_plot_gsr, &gsr_sample, K_NO_WAIT);
-                    if (ret != 0) {
-                        static uint32_t gsr_plot_drops = 0;
-                        gsr_plot_drops++;
-                        if ((gsr_plot_drops % 10) == 0) {
-                            LOG_WRN("GSR plot queue full - dropped %u sample batches", gsr_plot_drops);
-                        }
+                    static uint32_t plot_drops = 0;
+                    plot_drops++;
+                    if ((plot_drops % 10) == 0)
+                    {
+                        LOG_WRN("Plot queue full - dropped %u GSR sample batches", plot_drops);
                     }
                 }
             }
@@ -435,15 +418,18 @@ void data_thread(void)
         }
 
         // Sleep longer if no data was processed to reduce CPU usage
-        if (processed_data) {
+        if (processed_data)
+        {
             k_yield(); // Give other threads a chance to run
-        } else {
-            k_sleep(K_MSEC(1));  // Reduced sleep time to process samples faster
+        }
+        else
+        {
+            k_sleep(K_MSEC(1)); // Reduced sleep time to process samples faster
         }
     }
 }
 
 #define DATA_THREAD_STACKSIZE 4096
-#define DATA_THREAD_PRIORITY 5  // Higher priority to process samples faster
+#define DATA_THREAD_PRIORITY 5 // Higher priority to process samples faster
 
 K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);

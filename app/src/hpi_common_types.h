@@ -72,11 +72,7 @@ struct hpi_gsr_sensor_data_t
 {
     int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];  // Raw BioZ samples from MAX30001
     uint8_t bioz_num_samples;                      // Number of valid samples in this batch
-    
-    uint16_t gsr_value_x100;                       // Processed GSR value (microsiemens * 100)
     uint8_t bioz_lead_off;                         // Lead-off detection status
-    int64_t timestamp;                             // Timestamp of measurement
-    bool measurement_active;                       // GSR measurement state
 };
 
 /*
