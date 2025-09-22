@@ -60,3 +60,4 @@ CMakeCache.txt
 .github/copilot-instructions.md
 app/src/add_headers.sh
 build
+app/src/ui/fonts/lv_font_conv/
