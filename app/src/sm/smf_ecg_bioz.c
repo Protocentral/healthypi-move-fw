@@ -196,7 +196,7 @@ RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
 
 static bool ecg_active = false;
 static bool gsr_active = false;  // Independent GSR (BioZ) state
-static bool m_ecg_lead_on_off = true;
+static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
 
 static uint16_t m_ecg_hr = 0;
 
@@ -313,6 +313,17 @@ static void get_ecg_timer_values(uint32_t *last_timer, int *countdown)
     k_mutex_unlock(&ecg_timer_mutex);
 }
 
+// Function to reset ECG timer countdown to full duration (30s)
+void hpi_ecg_reset_countdown_timer(void)
+{
+    k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
+    ecg_countdown_val = ECG_RECORD_DURATION_S;  // Reset to 30 seconds
+    ecg_last_timer_val = k_uptime_get_32();     // Update timestamp
+    k_mutex_unlock(&ecg_timer_mutex);
+    
+    LOG_INF("ECG SMF: Timer countdown RESET to %d seconds", ECG_RECORD_DURATION_S);
+}
+
 static void set_ecg_stabilization_values(int stabilization_countdown, bool complete)
 {
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
@@ -397,24 +408,28 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
 
         // Thread-safe lead detection logic
         bool current_lead_state = get_ecg_lead_on_off();
+        LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s", 
+                edata->ecg_lead_off, current_lead_state ? "OFF" : "ON");
+        
         if (edata->ecg_lead_off == 1 && current_lead_state == false)
         {
+            LOG_INF("ECG Lead OFF detected (edata->ecg_lead_off=1) - signaling display thread");
             set_ecg_lead_on_off(true);
             k_work_submit(&work_ecg_loff);
 
-            // Only transition to leadoff state if actively recording (not during stabilization)
-            if (hpi_data_is_ecg_record_active()) {
-                // k_sem_give(&sem_ecg_lead_off);
-                // smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_LEADOFF]);
-            }
+            // Signal display thread for UI update
+            LOG_INF("ECG SMF: Giving sem_ecg_lead_off semaphore");
+            k_sem_give(&sem_ecg_lead_off);
         }
         else if (edata->ecg_lead_off == 0 && current_lead_state == true)
         {
-                set_ecg_lead_on_off(false);
+            LOG_INF("ECG Lead ON detected (edata->ecg_lead_off=0) - signaling display thread");
+            set_ecg_lead_on_off(false);
             k_work_submit(&work_ecg_lon);
-            // k_sem_give(&sem_ecg_lead_on);
-            // k_sem_give(&sem_ecg_lead_on_local);
-                //  smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STREAM]);
+            
+            // Signal display thread for UI update  
+            LOG_INF("ECG SMF: Giving sem_ecg_lead_on semaphore");
+            k_sem_give(&sem_ecg_lead_on);
         }
 
         if (get_ecg_active() || get_gsr_active())
@@ -690,10 +705,20 @@ static void st_ecg_stream_entry(void *o)
     // Start actual recording
     hpi_data_set_ecg_record_active(true);
     
-    // Timer initialization
+    // Timer initialization - start paused until lead ON is detected
     set_ecg_timer_values(k_uptime_get_32(), ECG_RECORD_DURATION_S);
+    hpi_ecg_timer_reset();  // Start in reset state (paused, waiting for leads)
     
-    LOG_INF("ECG recording started - %d seconds", ECG_RECORD_DURATION_S);
+    // Initialize screen with current lead state - signal display thread
+    bool current_lead_off = get_ecg_lead_on_off();
+    if (current_lead_off) {
+        k_sem_give(&sem_ecg_lead_off);
+    } else {
+        k_sem_give(&sem_ecg_lead_on);
+    }
+    
+    LOG_INF("ECG recording started - waiting for leads to be connected");
+    LOG_INF("Timer will start automatically when leads are detected");
 }
 
 static void st_ecg_stream_run(void *o)
@@ -706,10 +731,13 @@ static void st_ecg_stream_run(void *o)
         int countdown;
         get_ecg_timer_values(&last_timer, &countdown);
         
-        if ((k_uptime_get_32() - last_timer) >= 1000)
+        // Only count down if timer is actually running (leads are on)
+        if (hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
         {
             countdown--;
             set_ecg_timer_values(k_uptime_get_32(), countdown);
+            
+            LOG_DBG("ECG SMF: Timer countdown: %ds remaining (timer running)", countdown);
 
             struct hpi_ecg_status_t ecg_stat = {
                 .ts_complete = 0,
@@ -720,8 +748,24 @@ static void st_ecg_stream_run(void *o)
 
             if (countdown <= 0)
             {
+                LOG_INF("ECG SMF: Timer completed - switching to COMPLETE state");
                 smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
             }
+        }
+        // If timer is paused (leads off), still update the display but don't count down
+        else if (!hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
+        {
+            // Update timestamp to prevent rapid firing but keep countdown unchanged
+            set_ecg_timer_values(k_uptime_get_32(), countdown);
+            
+            LOG_DBG("ECG SMF: Timer paused: %ds remaining (timer not running)", countdown);
+            
+            struct hpi_ecg_status_t ecg_stat = {
+                .ts_complete = 0,
+                .status = HPI_ECG_STATUS_STREAMING,
+                .hr = get_ecg_hr(),
+                .progress_timer = countdown};  // Keep same countdown value
+            zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
         }
     }
 
@@ -750,7 +794,10 @@ static void st_ecg_stream_run(void *o)
 static void st_ecg_stream_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stream Exit");
-
+    
+    // Reset timer when exiting stream state
+    hpi_ecg_timer_reset();
+    
     hpi_data_set_ecg_record_active(false);
 
     // Reset timer

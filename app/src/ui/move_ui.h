@@ -307,6 +307,13 @@ void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
+// ECG Timer control functions for lead-based automatic start/stop
+void hpi_ecg_timer_start(void);
+void hpi_ecg_timer_pause(void);
+void hpi_ecg_timer_reset(void);
+bool hpi_ecg_timer_is_running(void);
+void hpi_ecg_reset_countdown_timer(void);
+
 void gesture_down_scr_spl_raw_ppg(void);
 void gesture_down_scr_ecg_2(void);
 void gesture_down_scr_gsr_plot(void);

@@ -850,13 +850,33 @@ static void hpi_disp_update_screens(void)
         }
         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
-            scr_ecg_lead_on_off_handler(true);
-            m_lead_on_off = true;
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
+            scr_ecg_lead_on_off_handler(false);  // false = leads ON
+            m_lead_on_off = false;  // false = leads ON
+            
+            // Start/restart timer when leads come on during recording
+            bool is_ecg_active = hpi_data_is_ecg_record_active();
+            LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
+            if (is_ecg_active) {
+                LOG_INF("DISPLAY THREAD: Calling hpi_ecg_timer_start()");
+                hpi_ecg_timer_start();
+            }
         }
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
         {
-            scr_ecg_lead_on_off_handler(false);
-            m_lead_on_off = false;
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore - calling UI handler");
+            scr_ecg_lead_on_off_handler(true);   // true = leads OFF
+            m_lead_on_off = true;   // true = leads OFF
+            
+            // Reset timer to restart 30s countdown when leads come back on
+            bool is_ecg_active = hpi_data_is_ecg_record_active();
+            LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
+            if (is_ecg_active) {
+                LOG_INF("DISPLAY THREAD: Resetting UI timer state");
+                hpi_ecg_timer_reset();
+                LOG_INF("DISPLAY THREAD: Resetting ECG SMF countdown to 30s");
+                hpi_ecg_reset_countdown_timer();
+            }
         }
 
         lv_disp_trig_activity(NULL);

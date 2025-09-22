@@ -42,6 +42,9 @@ LOG_MODULE_REGISTER(scr_ecg_scr2, LOG_LEVEL_DBG);
 #include "hw_module.h"
 #include "hpi_sys.h"
 
+// Mutex for thread-safe timer state access
+K_MUTEX_DEFINE(timer_state_mutex);
+
 static lv_obj_t *scr_ecg_scr2;
 // static lv_obj_t *btn_ecg_cancel;  // Commented out - not used
 static lv_obj_t *chart_ecg;
@@ -59,6 +62,11 @@ static float y_min_ecg = 10000;
 // static bool ecg_plot_hidden = false;
 
 static float gx = 0;
+
+// Timer control variables for lead-based automatic start/stop
+static bool timer_running = false;
+static bool timer_paused = true;  // Start paused, wait for lead ON
+static bool lead_on_detected = false;
 
 // Performance optimization variables - LVGL 9.2 optimized
 static uint32_t sample_counter = 0;
@@ -176,6 +184,11 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange accent
 
+    // Initialize timer state - start paused, waiting for lead ON detection
+    timer_running = false;
+    timer_paused = true;
+    lead_on_detected = false;
+
     // CENTRAL ZONE: ECG Chart (positioned in center area)
     chart_ecg = lv_chart_create(scr_ecg_scr2);
     lv_obj_set_size(chart_ecg, 340, 100);  // Smaller chart for circular design
@@ -258,11 +271,14 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     label_ecg_lead_off = lv_label_create(scr_ecg_scr2);
     lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_ecg_lead_off, 300);
-    lv_label_set_text(label_ecg_lead_off, "Touch electrodes to start");
+    lv_label_set_text(label_ecg_lead_off, "Place fingers on electrodes\nTimer will start automatically");
     lv_obj_align(label_ecg_lead_off, LV_ALIGN_BOTTOM_MID, 0, -30);
     lv_obj_add_style(label_ecg_lead_off, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_ecg_lead_off, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    
+    // Set reference for lead on/off handler
+    label_info = label_ecg_lead_off;
 
     // Initialize performance optimization system
     ecg_chart_reset_performance_counters();
@@ -375,10 +391,68 @@ void hpi_ecg_disp_update_timer(int time_left)
             // Show progress: empty at start (30s), full at end (0s)
             int arc_value = (time_left < 0) ? 30 : ((time_left > 30) ? 0 : (30 - time_left));
             lv_arc_set_value(arc_ecg_zone, arc_value);
+            
+            // Change arc color based on timer state: Orange when running, gray when paused
+            // Thread-safe access to timer_paused
+            k_mutex_lock(&timer_state_mutex, K_FOREVER);
+            bool is_paused = timer_paused;
+            k_mutex_unlock(&timer_state_mutex);
+            
+            if (is_paused) {
+                lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0x666666), LV_PART_INDICATOR);  // Gray when paused
+            } else {
+                lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0xFF8C00), LV_PART_INDICATOR);  // Orange when running
+            }
         }
         
         last_time = time_left;
     }
+}
+
+void hpi_ecg_timer_start(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    timer_running = true;
+    timer_paused = false;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_INF("ECG timer STARTED - leads detected (running=%s, paused=%s)", 
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+}
+
+void hpi_ecg_timer_pause(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    timer_paused = true;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_INF("ECG timer paused - leads off (running=%s, paused=%s)",
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+}
+
+void hpi_ecg_timer_reset(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    timer_running = false;
+    timer_paused = true;
+    lead_on_detected = false;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_INF("ECG timer RESET - ready for fresh start (running=%s, paused=%s)",
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+}
+
+bool hpi_ecg_timer_is_running(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    bool is_running = timer_running && !timer_paused;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_DBG("Timer status check: running=%s, paused=%s, is_running=%s",
+            timer_running ? "true" : "false", 
+            timer_paused ? "true" : "false",
+            is_running ? "true" : "false");
+    return is_running;
 }
 
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
@@ -441,24 +515,49 @@ void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead
 
 void scr_ecg_lead_on_off_handler(bool lead_on_off)
 {
-    if (label_info == NULL)
+    LOG_INF("Screen handler called with lead_on_off=%s", lead_on_off ? "OFF" : "ON");
+    
+    if (label_info == NULL) {
+        LOG_WRN("label_info is NULL, screen handler returning early");
         return;
-
-    if (lead_on_off == false)
-    {
-        lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
     }
-    else
+
+    // Update lead state tracking (thread-safe)
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    lead_on_detected = !lead_on_off;  // ecg_lead_off == 0 means leads are ON
+    bool current_timer_running = timer_running;
+    bool current_timer_paused = timer_paused;
+    k_mutex_unlock(&timer_state_mutex);
+
+    if (lead_on_off == false)  // Lead ON condition (ecg_lead_off == false)
     {
+        LOG_INF("Handling Lead ON: hiding info, showing chart, starting timer");
         lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+    }
+    else  // Lead OFF condition (ecg_lead_off == true)
+    {
+        LOG_INF("Handling Lead OFF: showing info, hiding chart, pausing timer");
+        lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+        
+        // Update message based on timer state
+        if (current_timer_running && !current_timer_paused) {
+            lv_label_set_text(label_info, "Leads disconnected\nTimer paused - reconnect to continue");
+        } else {
+            lv_label_set_text(label_info, "Place fingers on electrodes\nTimer will start automatically");
+        }
     }
 }
 
 void gesture_down_scr_ecg_2(void)
 {
     printk("Cancel ECG\n");
+    LOG_INF("ECG measurement cancelled by user");
+    
+    // Reset timer state when cancelling
+    hpi_ecg_timer_reset();
+    
     k_sem_give(&sem_ecg_cancel);
     hpi_load_screen(SCR_ECG, SCROLL_DOWN);
 }
