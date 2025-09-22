@@ -69,7 +69,7 @@ extern lv_style_t style_scr_container;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
-extern lv_style_t style_white_small;
+extern lv_style_t style_white_medium;
 
 extern lv_style_t style_scr_black;
 extern lv_style_t style_bg_red;
@@ -113,7 +113,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
-    lv_obj_add_style(label_signal, &style_white_small, 0);
+    lv_obj_add_style(label_signal, &style_white_medium, 0);
 
     // Draw a horizontal line
     /*lv_obj_t * line1 = lv_line_create(cont_col);
@@ -121,7 +121,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
        
     lv_obj_t *lbl_l1 = lv_label_create(cont_col);
     lv_label_set_text(lbl_l1, "Last hour trend");
-    lv_obj_add_style(lbl_l1, &style_white_small, 0);
+    lv_obj_add_style(lbl_l1, &style_white_medium, 0);
 
     chart_hr_hour_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_hour_trend, 270, 110);

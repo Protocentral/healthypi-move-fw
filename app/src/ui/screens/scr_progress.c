@@ -59,11 +59,17 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
+// Modern style system
+extern lv_style_t style_body_medium;
+extern lv_style_t style_numeric_large;
+extern lv_style_t style_caption;
+
 void draw_scr_progress(const char *title, const char *message)
 {
     scr_progress = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_progress, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-    lv_obj_add_style(scr_progress, &style_scr_black, 0);
+    // AMOLED OPTIMIZATION: Pure black background for power efficiency
+    lv_obj_set_style_bg_color(scr_progress, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_t *cont_col = lv_obj_create(scr_progress);
     lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
@@ -71,27 +77,26 @@ void draw_scr_progress(const char *title, const char *message)
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_add_style(cont_col, &style_scr_black, 0);
-
     lv_obj_set_style_bg_color(cont_col, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(cont_col, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(cont_col, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     label_title = lv_label_create(cont_col);
     lv_label_set_text(label_title, title ? title : "Progress");
-    lv_obj_add_style(label_title, &style_white_medium, 0);
+    lv_obj_add_style(label_title, &style_body_medium, 0);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 20);
 
     label_subtitle = lv_label_create(cont_col);
     lv_label_set_text(label_subtitle, message ? message : "Please wait...");
-    lv_obj_add_style(label_subtitle, &style_white_medium, 0);
+    lv_obj_add_style(label_subtitle, &style_caption, 0);
     lv_obj_set_style_text_align(label_subtitle, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(label_subtitle, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
     lv_obj_align_to(label_subtitle, label_title, LV_ALIGN_OUT_BOTTOM_MID, 0, 5);
 
     bar_progress = lv_bar_create(cont_col);
     lv_obj_set_size(bar_progress, 300, 40);
     // Set initial progress bar color
-    lv_obj_set_style_bg_color(bar_progress, lv_palette_main(LV_PALETTE_BLUE), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(bar_progress, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_INDICATOR);
 
     label_progress = lv_label_create(cont_col);
     lv_label_set_text(label_progress, "0%");

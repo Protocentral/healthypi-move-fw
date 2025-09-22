@@ -68,6 +68,25 @@ struct hpi_ecg_bioz_sensor_data_t
     uint8_t rrint;
 };
 
+struct hpi_gsr_sensor_data_t
+{
+    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];  // Raw BioZ samples from MAX30001
+    uint8_t bioz_num_samples;                      // Number of valid samples in this batch
+    uint8_t bioz_lead_off;                         // Lead-off detection status
+};
+
+/*
+ * Lightweight BioZ-only sample used for internal producer/consumer queues
+ * when ECG decoding is not required. Keeps the copy footprint small.
+ */
+struct hpi_bioz_sample_t
+{
+    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];
+    uint8_t bioz_num_samples;
+    uint8_t bioz_lead_off;
+    int64_t timestamp;
+};
+
 struct hpi_ppg_wr_data_t
 {
     uint32_t raw_red[PPG_POINTS_PER_SAMPLE];

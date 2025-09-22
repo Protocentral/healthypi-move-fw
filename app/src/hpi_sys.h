@@ -62,3 +62,6 @@ struct tm hpi_sys_get_current_time(void);
 
 void hpi_data_set_ecg_record_active(bool active);
 bool hpi_data_is_ecg_record_active(void);
+
+void hpi_data_set_gsr_measurement_active(bool active);
+bool hpi_data_is_gsr_measurement_active(void);

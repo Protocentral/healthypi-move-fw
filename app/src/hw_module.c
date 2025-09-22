@@ -209,7 +209,7 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 // Signals to start dependent threads
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
-K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
+K_SEM_DEFINE(sem_ecg_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
@@ -732,7 +732,7 @@ void hw_module_init(void)
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
 
-        k_sem_give(&sem_ecg_bioz_sm_start);
+    k_sem_give(&sem_ecg_start);
     }
 
     k_sleep(K_MSEC(100));

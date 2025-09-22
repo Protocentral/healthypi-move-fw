@@ -44,10 +44,21 @@
 #define DISP_SLEEP_TIME_MS 10000
 #define DISPLAY_DEFAULT_BRIGHTNESS 50
 
+// Modern AMOLED-optimized color palette
+#define COLOR_SURFACE_DARK    0x1C1C1E
+#define COLOR_SURFACE_MEDIUM  0x2C2C2E
+#define COLOR_SURFACE_LIGHT   0x3C3C3E
+#define COLOR_PRIMARY_BLUE    0x007AFF
+#define COLOR_SUCCESS_GREEN   0x34C759
+#define COLOR_WARNING_AMBER   0xFF9500
+#define COLOR_CRITICAL_RED    0xFF3B30
+#define COLOR_TEXT_SECONDARY  0xE5E5E7
+
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 256 // To be verified
 #define HRV_DISP_WINDOW_SIZE 128
 #define ECG_DISP_WINDOW_SIZE 512 // SAMPLE_RATE * 8 - Increased for more ECG history
+#define GSR_DISP_WINDOW_SIZE 256
 
 #define BPT_DISP_WINDOW_SIZE 256
 #define SPO2_DISP_WINDOW_SIZE_FI 128
@@ -153,25 +164,23 @@ enum hpi_disp_subscreens
 
 // Images used in the UI
 LV_IMG_DECLARE(img_heart_48px); // assets/heart2.png
-LV_IMG_DECLARE(img_heart_35);
 LV_IMG_DECLARE(img_steps_48);
 LV_IMG_DECLARE(img_calories_48);
 LV_IMG_DECLARE(img_timer_48);
 LV_IMG_DECLARE(ecg_70);
+LV_IMG_DECLARE(ecg_45);        // 45x45 ECG icon for circular display
 LV_IMG_DECLARE(bp_70);
-//LV_IMG_DECLARE(icon_spo2_30x35);
+LV_IMG_DECLARE(icon_spo2_30x35);
 
 #if defined(CONFIG_HPI_GSR_SCREEN)
 // GSR screens and helpers
 void draw_scr_gsr(enum scroll_dir m_scroll_dir);
 void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_update);
-void hpi_gsr_process_bioz_sample(int32_t bioz_sample);
 // Special GSR plot screen
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 // Plot update helper called from sensor path
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
-// Control measurement state across screens
-void hpi_gsr_set_measurement_active(bool active);
+void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
@@ -181,10 +190,13 @@ static inline void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t a1, 
     ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
 }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
-static inline void hpi_gsr_set_measurement_active(bool active) { ARG_UNUSED(active); }
 #endif
 LV_IMG_DECLARE(img_heart_70);
+LV_IMG_DECLARE(hpi_logo_90x92);
 LV_IMG_DECLARE(img_temp_100);
+LV_IMG_DECLARE(img_temp_45);   // 45x45 temperature icon for circular display
+LV_IMG_DECLARE(img_battery_charged);
+LV_IMG_DECLARE(img_battery_discharging);
 LV_IMG_DECLARE(icon_spo2_100);
 LV_IMG_DECLARE(img_spo2_hand);
 
@@ -193,17 +205,44 @@ LV_IMG_DECLARE(img_failed_80);
 LV_IMG_DECLARE(img_bpt_finger_90);
 LV_IMG_DECLARE(img_bpt_finger_45);
 LV_IMG_DECLARE(img_wrist_45);
-LV_IMG_DECLARE(bck_heart_2_200);
+LV_IMG_DECLARE(bck_heart_2_180);
 LV_IMG_DECLARE(low_batt_100);
 
 LV_FONT_DECLARE(oxanium_90);
 LV_FONT_DECLARE(ui_font_number_big);
+
+/* Modern Google Fonts for AMOLED Display */
+// Core System Fonts
+LV_FONT_DECLARE(inter_semibold_24);       // General UI text (upgraded to semibold for better readability)
+LV_FONT_DECLARE(inter_semibold_18);       // Legacy 18px font - kept for compatibility but styles now use 24px minimum
+LV_FONT_DECLARE(inter_semibold_80_time);  // Large minimalist time display (80px, digits only)
+//LV_FONT_DECLARE(jetbrains_mono_regular_16); // Time display, sensor readings
+// Additional Sizes
+LV_FONT_DECLARE(inter_regular_16);        // Secondary size for specific contexts  
+LV_FONT_DECLARE(inter_semibold_24); // Large time display
+
+/* Modern style declarations */
+extern lv_style_t style_health_arc;
+extern lv_style_t style_health_arc_bg;
+extern lv_style_t style_headline;
+extern lv_style_t style_body_large;
+extern lv_style_t style_body_medium;
+extern lv_style_t style_caption;
+/* Additional specialized styles */
+extern lv_style_t style_numeric_large;  // For large numeric displays (time, main values)
+extern lv_style_t style_numeric_medium; // For medium numeric displays
+extern lv_style_t style_status_small;   // For small status text
 
 
 /******** UI Function Prototypes ********/
 void display_init_styles(void);
 void hpi_ui_styles_init(void);
 lv_obj_t *hpi_btn_create(lv_obj_t *parent);
+
+/* Modern button creation helpers */
+lv_obj_t *hpi_btn_create_primary(lv_obj_t *parent);
+lv_obj_t *hpi_btn_create_secondary(lv_obj_t *parent);
+lv_obj_t *hpi_btn_create_icon(lv_obj_t *parent);
 
 // Boot Screen functions
 void draw_scr_splash(void);
@@ -230,6 +269,7 @@ void hpi_home_hr_update(int hr);
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s);
+void hpi_scr_today_cleanup(void);
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
@@ -269,6 +309,7 @@ void scr_ecg_lead_on_off_handler(bool lead_on_off);
 
 void gesture_down_scr_spl_raw_ppg(void);
 void gesture_down_scr_ecg_2(void);
+void gesture_down_scr_gsr_plot(void);
 void gesture_down_scr_fi_sens_wear(void);
 void gesture_down_scr_fi_sens_check(void);
 void gesture_down_scr_bpt_measure(void);

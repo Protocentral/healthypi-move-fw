@@ -64,34 +64,50 @@ static void scr_btn_ok_handler(lv_event_t *e)
 void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_cal_required = lv_obj_create(NULL);
-    lv_obj_add_style(scr_bpt_cal_required, &style_scr_black, 0);
+    // AMOLED OPTIMIZATION: Pure black background for power efficiency
+    lv_obj_set_style_bg_color(scr_bpt_cal_required, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_bpt_cal_required, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *cont_col = lv_obj_create(scr_bpt_cal_required);
-    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    lv_obj_add_style(cont_col, &style_scr_black, 0);
+    // CIRCULAR AMOLED-OPTIMIZED CALIBRATION REQUIRED SCREEN
+    // Display center: (195, 195), Usable radius: ~185px
+    // Blue theme for blood pressure consistency
 
-    lv_obj_t *label_info = lv_label_create(cont_col);
-    lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Calibration Required");
-    lv_obj_add_style(label_info, &style_white_medium, 0);
-    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
+    // Screen title - properly positioned to avoid arc overlap
+    lv_obj_t *label_title = lv_label_create(scr_bpt_cal_required);
+    lv_label_set_text(label_title, "Calibration Required");
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
 
-    label_bpt_cal_required = lv_label_create(cont_col);
-    lv_label_set_text(label_bpt_cal_required, "Calibration is required before taking BPT measurements. You can perform the process through the Healthy Move Mobiel App.");
+    // Warning icon (centered above message)
+    lv_obj_t *img_warning = lv_img_create(scr_bpt_cal_required);
+    lv_label_set_text(img_warning, LV_SYMBOL_WARNING);
+    lv_obj_align(img_warning, LV_ALIGN_CENTER, 0, -40);
+    lv_obj_set_style_text_color(img_warning, lv_color_hex(0x4A90E2), LV_PART_MAIN);  // Blue accent
+    lv_obj_set_style_text_font(img_warning, &lv_font_montserrat_24, LV_PART_MAIN);
 
-    btn_ok = hpi_btn_create(cont_col);
+    // Main message (centered)
+    label_bpt_cal_required = lv_label_create(scr_bpt_cal_required);
+    lv_label_set_long_mode(label_bpt_cal_required, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_bpt_cal_required, 300);
+    lv_label_set_text(label_bpt_cal_required, "Calibration is required before taking BP measurements. Use the HealthyPi Mobile App to complete calibration.");
+    lv_obj_align(label_bpt_cal_required, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_add_style(label_bpt_cal_required, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_bpt_cal_required, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_bpt_cal_required, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+
+    // BOTTOM ZONE: Action Button (consistent with other screens)
+    btn_ok = hpi_btn_create_primary(scr_bpt_cal_required);
     lv_obj_add_event_cb(btn_ok, scr_btn_ok_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_height(btn_ok, 85);
+    lv_obj_set_size(btn_ok, 180, 50);  // Standard size matching other screens
+    lv_obj_align(btn_ok, LV_ALIGN_BOTTOM_MID, 0, -30);  // Standard bottom positioning
+    lv_obj_set_style_radius(btn_ok, 25, LV_PART_MAIN);
 
     lv_obj_t *label_btn = lv_label_create(btn_ok);
-    lv_label_set_text(label_btn, LV_SYMBOL_CLOSE " OK");
+    lv_label_set_text(label_btn, LV_SYMBOL_OK " OK");
     lv_obj_center(label_btn);
+    lv_obj_add_style(label_btn, &style_body_medium, LV_PART_MAIN);
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_CAL_REQUIRED);
     hpi_show_screen(scr_bpt_cal_required, m_scroll_dir);

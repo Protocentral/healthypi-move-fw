@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -27,18 +27,18 @@
  * SOFTWARE.
  */
 
-
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <stdio.h>
+#include <math.h>
 #include <arm_math.h>
 
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 #include <time.h>
 
-LOG_MODULE_REGISTER(data_module, CONFIG_SENSOR_LOG_LEVEL);
+LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 
 #include "max30001.h"
 
@@ -93,6 +93,9 @@ static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128*30 = 3840
 static volatile uint16_t ecg_record_counter = 0;
 K_MUTEX_DEFINE(mutex_is_ecg_record_active);
 
+static bool is_gsr_measurement_active = false;
+K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
+
 static uint32_t last_hr_update_time = 0;
 
 K_MUTEX_DEFINE(mutex_hr_change);
@@ -103,14 +106,16 @@ ZBUS_CHAN_DECLARE(hr_chan);
 
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 
-extern struct k_msgq q_ecg_bioz_sample;
+extern struct k_msgq q_ecg_sample;
+extern struct k_msgq q_bioz_sample;
 extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_ppg_fi_sample;
 
-extern struct k_msgq q_plot_ecg_bioz;
+extern struct k_msgq q_plot_ecg;
 extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_ppg_fi;
 extern struct k_msgq q_plot_hrv;
+extern struct k_msgq q_plot_gsr;
 
 void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_t raw_ir, int32_t temp, uint8_t hr,
               uint8_t bpt_status, uint8_t spo2, bool _bioZSkipSample)
@@ -219,7 +224,6 @@ static void work_ecg_write_file_handler(struct k_work *work)
     struct tm tm_sys_time = hpi_sys_get_sys_time();
     int64_t log_time = timeutil_timegm64(&tm_sys_time);
 
-    LOG_DBG("ECG/BioZ SM Write File: %" PRId64, log_time);
     // Write ECG data to file
     hpi_write_ecg_record_file(ecg_record_buffer, ECG_RECORD_BUFFER_SAMPLES, log_time);
 }
@@ -235,7 +239,7 @@ void hpi_data_set_ecg_record_active(bool active)
     {
         ecg_record_counter = 0;
         memset(ecg_record_buffer, 0, sizeof(ecg_record_buffer));
-    } 
+    }
     else
     {
         // If recording is stopped, write the file
@@ -256,11 +260,28 @@ bool hpi_data_is_ecg_record_active(void)
     return active;
 }
 
+void hpi_data_set_gsr_measurement_active(bool active)
+{
+    k_mutex_lock(&mutex_is_gsr_measurement_active, K_FOREVER);
+    is_gsr_measurement_active = active;
+    k_mutex_unlock(&mutex_is_gsr_measurement_active);
+}
+
+bool hpi_data_is_gsr_measurement_active(void)
+{
+    bool active = false;
+    k_mutex_lock(&mutex_is_gsr_measurement_active, K_FOREVER);
+    active = is_gsr_measurement_active;
+    k_mutex_unlock(&mutex_is_gsr_measurement_active);
+    return active;
+}
+
 void data_thread(void)
 {
-    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_wr_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+    struct hpi_bioz_sample_t bsample;
 
     static uint32_t hr_zbus_last_pub_time = 0;
 
@@ -269,24 +290,26 @@ void data_thread(void)
     for (;;)
     {
         bool processed_data = false;
-        
-        // Process all available ECG samples
-        while (k_msgq_get(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT) == 0)
+
+        // Process all available ECG samples (unchanged)
+        if (k_msgq_get(&q_ecg_sample, &ecg_sensor_sample, K_NO_WAIT) == 0)
         {
             processed_data = true;
             if (settings_send_ble_enabled)
             {
 
-                ble_ecg_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
-                ble_gsr_notify(ecg_bioz_sensor_sample.ecg_samples, ecg_bioz_sensor_sample.ecg_num_samples);
+                ble_ecg_notify(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples);
+                ble_gsr_notify(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples);
             }
             if (settings_plot_enabled)
             {
-                int ret = k_msgq_put(&q_plot_ecg_bioz, &ecg_bioz_sensor_sample, K_NO_WAIT);
-                if (ret != 0) {
+                int ret = k_msgq_put(&q_plot_ecg, &ecg_sensor_sample, K_NO_WAIT);
+                if (ret != 0)
+                {
                     static uint32_t plot_drops = 0;
                     plot_drops++;
-                    if ((plot_drops % 10) == 0) {
+                    if ((plot_drops % 10) == 0)
+                    {
                         LOG_WRN("Plot queue full - dropped %u ECG sample batches", plot_drops);
                     }
                 }
@@ -294,16 +317,16 @@ void data_thread(void)
 
             if (is_ecg_record_active == true)
             {
-                int samples_to_copy = ecg_bioz_sensor_sample.ecg_num_samples;
+                int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
 
                 // Log sample count for debugging
                 static uint32_t total_samples_recorded = 0;
                 total_samples_recorded += samples_to_copy;
-                
+
                 if (samples_to_copy <= space_left)
                 {
-                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_bioz_sensor_sample.ecg_samples, samples_to_copy * sizeof(int32_t));
+                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_sensor_sample.ecg_samples, samples_to_copy * sizeof(int32_t));
                     ecg_record_counter += samples_to_copy;
                     if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES)
                     {
@@ -313,14 +336,31 @@ void data_thread(void)
                 else
                 {
                     // Copy in two parts: to end of buffer, then wrap around
-                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_bioz_sensor_sample.ecg_samples, space_left * sizeof(int32_t));
-                    memcpy(ecg_record_buffer, &ecg_bioz_sensor_sample.ecg_samples[space_left], (samples_to_copy - space_left) * sizeof(int32_t));
+                    memcpy(&ecg_record_buffer[ecg_record_counter], ecg_sensor_sample.ecg_samples, space_left * sizeof(int32_t));
+                    memcpy(ecg_record_buffer, &ecg_sensor_sample.ecg_samples[space_left], (samples_to_copy - space_left) * sizeof(int32_t));
                     ecg_record_counter = samples_to_copy - space_left;
                 }
-                
-                // Log every 1000 samples for debugging
-                if ((total_samples_recorded % 1000) == 0) {
-                    LOG_DBG("ECG samples recorded: %u, buffer pos: %u", total_samples_recorded, ecg_record_counter);
+            }
+        }
+
+        if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
+        {
+            processed_data = true;
+            if (settings_send_ble_enabled)
+            {
+                ble_gsr_notify(bsample.bioz_samples, bsample.bioz_num_samples);
+            }
+            if (settings_plot_enabled)
+            {
+                int ret = k_msgq_put(&q_plot_gsr, &bsample, K_NO_WAIT);
+                if (ret != 0)
+                {
+                    static uint32_t plot_drops = 0;
+                    plot_drops++;
+                    if ((plot_drops % 10) == 0)
+                    {
+                        LOG_WRN("Plot queue full - dropped %u GSR sample batches", plot_drops);
+                    }
                 }
             }
         }
@@ -378,15 +418,18 @@ void data_thread(void)
         }
 
         // Sleep longer if no data was processed to reduce CPU usage
-        if (processed_data) {
+        if (processed_data)
+        {
             k_yield(); // Give other threads a chance to run
-        } else {
-            k_sleep(K_MSEC(1));  // Reduced sleep time to process samples faster
+        }
+        else
+        {
+            k_sleep(K_MSEC(1)); // Reduced sleep time to process samples faster
         }
     }
 }
 
 #define DATA_THREAD_STACKSIZE 4096
-#define DATA_THREAD_PRIORITY 5  // Higher priority to process samples faster
+#define DATA_THREAD_PRIORITY 5 // Higher priority to process samples faster
 
 K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);
