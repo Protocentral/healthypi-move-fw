@@ -97,14 +97,15 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_set_style_text_align(label_bpt_cal_required, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpt_cal_required, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
-    // OK button (positioned at bottom)
-    btn_ok = hpi_btn_create(scr_bpt_cal_required);
+    // BOTTOM ZONE: Action Button (consistent with other screens)
+    btn_ok = hpi_btn_create_primary(scr_bpt_cal_required);
     lv_obj_add_event_cb(btn_ok, scr_btn_ok_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_size(btn_ok, 150, 50);
-    lv_obj_align(btn_ok, LV_ALIGN_BOTTOM_MID, 0, -40);
+    lv_obj_set_size(btn_ok, 180, 50);  // Standard size matching other screens
+    lv_obj_align(btn_ok, LV_ALIGN_BOTTOM_MID, 0, -30);  // Standard bottom positioning
+    lv_obj_set_style_radius(btn_ok, 25, LV_PART_MAIN);
 
     lv_obj_t *label_btn = lv_label_create(btn_ok);
-    lv_label_set_text(label_btn, LV_SYMBOL_CLOSE " OK");
+    lv_label_set_text(label_btn, LV_SYMBOL_OK " OK");
     lv_obj_center(label_btn);
     lv_obj_add_style(label_btn, &style_body_medium, LV_PART_MAIN);
 

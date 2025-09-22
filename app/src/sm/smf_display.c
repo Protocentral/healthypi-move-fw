@@ -76,7 +76,7 @@ K_MSGQ_DEFINE(q_plot_ecg, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);
-K_MSGQ_DEFINE(q_plot_gsr, sizeof(struct hpi_gsr_sensor_data_t), 64, 1);
+K_MSGQ_DEFINE(q_plot_gsr, sizeof(struct hpi_gsr_sensor_data_t), 128, 1);
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
@@ -950,14 +950,15 @@ static void st_display_active_run(void *o)
         if (ecg_processed_count >= 8) break;  // Prevent blocking other processing
     }
 
-    // Process GSR queue data
+    // Process GSR queue data (allow multiple batches per cycle to keep up with producer)
     int gsr_processed_count = 0;
-    if(k_msgq_get(&q_plot_gsr, &gsr_sensor_sample, K_NO_WAIT) == 0)
+    while (k_msgq_get(&q_plot_gsr, &gsr_sensor_sample, K_NO_WAIT) == 0)
     {
         hpi_disp_process_gsr_data(gsr_sensor_sample);
+        lv_disp_trig_activity(NULL);
         gsr_processed_count++;
-        
-        //if (gsr_processed_count >= 8) break;  // Prevent blocking other processing
+
+        if (gsr_processed_count >= 8) break;  // Prevent blocking other processing
     }
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)

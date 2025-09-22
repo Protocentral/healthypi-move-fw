@@ -53,34 +53,42 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
 {
     
     scr_bpt_scr3 = lv_obj_create(NULL);
-    lv_obj_add_style(scr_bpt_scr3, &style_scr_black, 0);
-    lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE); /// Flags
+    // AMOLED OPTIMIZATION: Pure black background for power efficiency
+    lv_obj_set_style_bg_color(scr_bpt_scr3, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *cont_col = lv_obj_create(scr_bpt_scr3);
-    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
-    lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
-    lv_obj_add_style(cont_col, &style_scr_black, 0);
+    // CIRCULAR AMOLED-OPTIMIZED SENSOR CHECK SCREEN
+    // Display center: (195, 195), Usable radius: ~185px
+    // Blue theme for blood pressure consistency
 
-    lv_obj_t *img_bpt = lv_img_create(cont_col);
+    // Screen title - properly positioned at top
+    lv_obj_t *label_title = lv_label_create(scr_bpt_scr3);
+    lv_label_set_text(label_title, "Sensor Check");
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+
+    // Finger sensor image (positioned above spinner)
+    lv_obj_t *img_bpt = lv_img_create(scr_bpt_scr3);
     lv_img_set_src(img_bpt, &img_bpt_finger_90);
-    
+    lv_obj_align(img_bpt, LV_ALIGN_CENTER, 0, -50);
 
-    lv_obj_t *label_info = lv_label_create(cont_col);
+    // Progress indicator (centered)
+    lv_obj_t *spinner = lv_spinner_create(scr_bpt_scr3);
+    lv_obj_set_size(spinner, 100, 100);
+    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 10);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(0x4A90E2), LV_PART_INDICATOR);  // Blue theme
+
+    // Status message (below spinner with proper spacing)
+    lv_obj_t *label_info = lv_label_create(scr_bpt_scr3);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
     lv_label_set_text(label_info, "Waiting for sensor to connect...");
-    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
-
-    /* LVGL 9.2 compatible spinner widget */
-    lv_obj_t *spinner = lv_spinner_create(cont_col);
-    lv_obj_set_size(spinner, 100, 100);
-    lv_spinner_set_anim_params(spinner, 1000, 270); /* 1000ms period, 270 degree arc */
-    lv_obj_center(spinner);
+    lv_obj_align(label_info, LV_ALIGN_CENTER, 0, 80);
+    lv_obj_add_style(label_info, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_info, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
     hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_CHECK);
     hpi_show_screen(scr_bpt_scr3, dir);

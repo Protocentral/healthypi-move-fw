@@ -202,24 +202,25 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(label_dia_unit, lv_color_hex(0x7B68EE), LV_PART_MAIN);
     lv_obj_set_style_text_align(label_dia_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // Last measurement time (positioned below values)
+    // Last measurement time (positioned below values with proper spacing)
     char last_meas_str[74];
     hpi_helper_get_relative_time_str(bpt_time, last_meas_str, sizeof(last_meas_str));
     label_bpt_last_update_time = lv_label_create(scr_bpt);
     lv_label_set_text(label_bpt_last_update_time, last_meas_str);
-    lv_obj_align(label_bpt_last_update_time, LV_ALIGN_CENTER, 0, 55);  // Below BP values
+    lv_obj_align(label_bpt_last_update_time, LV_ALIGN_CENTER, 0, 80);  // Increased spacing to match other screens
     lv_obj_add_style(label_bpt_last_update_time, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_bpt_last_update_time, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpt_last_update_time, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
-    // Measure button (positioned at bottom)
-    lv_obj_t *btn_bpt_measure = hpi_btn_create(scr_bpt);
+    // BOTTOM ZONE: Action Button (consistent with other screens)
+    lv_obj_t *btn_bpt_measure = hpi_btn_create_primary(scr_bpt);
     lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_measure_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_size(btn_bpt_measure, 200, 50);
+    lv_obj_set_size(btn_bpt_measure, 180, 50);  // Standard size matching other screens
     lv_obj_align(btn_bpt_measure, LV_ALIGN_BOTTOM_MID, 0, -30);
+    lv_obj_set_style_radius(btn_bpt_measure, 25, LV_PART_MAIN);
 
     lv_obj_t *label_btn_measure = lv_label_create(btn_bpt_measure);
-    lv_label_set_text(label_btn_measure, LV_SYMBOL_PLAY " Measure");
+    lv_label_set_text(label_btn_measure, LV_SYMBOL_REFRESH " Measure");  // Use refresh symbol like SPO2
     lv_obj_center(label_btn_measure);
     lv_obj_add_style(label_btn_measure, &style_body_medium, LV_PART_MAIN);
 

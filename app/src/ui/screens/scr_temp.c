@@ -98,42 +98,6 @@ static uint16_t convert_f_to_c(uint16_t temp_f)
     return result;
 }
 
-/**
- * @brief Get formatted temperature string and unit based on user setting
- * @param temp_f Temperature in Fahrenheit (raw value * 100)
- * @param temp_str Output buffer for temperature string
- * @param temp_str_size Size of temperature string buffer
- * @param unit_str Output buffer for unit string
- * @param unit_str_size Size of unit string buffer
- */
-static void get_formatted_temperature(uint16_t temp_f, char *temp_str, size_t temp_str_size, 
-                                     char *unit_str, size_t unit_str_size)
-{
-    uint8_t temp_unit = hpi_user_settings_get_temp_unit();
-    
-    if (temp_f == 0) {
-        snprintf(temp_str, temp_str_size, "--");
-        snprintf(unit_str, unit_str_size, "°C"); // Default unit when no data
-    } else {
-        if (temp_unit == 0) {
-            // Celsius - convert from stored Fahrenheit
-            uint16_t temp_c = convert_f_to_c(temp_f);
-            // Format as integer with decimal: e.g., 2456 becomes "24.5"
-            int whole = temp_c / 100;
-            int decimal = (temp_c % 100) / 10; // Only show 1 decimal place
-            snprintf(temp_str, temp_str_size, "%d.%d", whole, decimal);
-            snprintf(unit_str, unit_str_size, "°C");
-        } else {
-            // Fahrenheit - use stored value directly
-            // Format as integer with decimal: e.g., 9860 becomes "98.6"
-            int whole = temp_f / 100;
-            int decimal = (temp_f % 100) / 10; // Only show 1 decimal place
-            snprintf(temp_str, temp_str_size, "%d.%d", whole, decimal);
-            snprintf(unit_str, unit_str_size, "°F");
-        }
-    }
-}
-
 void draw_scr_temp(enum scroll_dir m_scroll_dir)
 {
     scr_temp = lv_obj_create(NULL);

@@ -176,7 +176,6 @@ LV_IMG_DECLARE(icon_spo2_30x35);
 // GSR screens and helpers
 void draw_scr_gsr(enum scroll_dir m_scroll_dir);
 void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_update);
-void hpi_gsr_process_bioz_sample(int32_t bioz_sample);
 // Special GSR plot screen
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 // Plot update helper called from sensor path

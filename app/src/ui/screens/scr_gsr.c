@@ -230,29 +230,6 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_img_recolor(img_gsr, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_gsr, LV_OPA_COVER, LV_PART_MAIN);
 
-    // CENTRAL ZONE: Main GSR Value (properly spaced from icon)
-    // Large central metric display for maximum readability
-    label_gsr_current = lv_label_create(scr_gsr);
-    if (has_data) {
-        uint16_t integer_part = gsr_value_stored / 100;
-        uint16_t decimal_part = gsr_value_stored % 100;
-        lv_label_set_text_fmt(label_gsr_current, "%u.%02u", integer_part, decimal_part);
-    } else {
-        lv_label_set_text(label_gsr_current, "--");
-    }
-    lv_obj_align(label_gsr_current, LV_ALIGN_CENTER, 0, -10);  // Centered, slightly above middle
-    lv_obj_set_style_text_color(label_gsr_current, lv_color_white(), LV_PART_MAIN);
-    lv_obj_add_style(label_gsr_current, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_gsr_current, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-
-    // Unit label directly below main value with proper spacing
-    lv_obj_t *label_gsr_unit = lv_label_create(scr_gsr);
-    lv_label_set_text(label_gsr_unit, "μS");
-    lv_obj_align(label_gsr_unit, LV_ALIGN_CENTER, 0, 35);  // Below main value with gap
-    lv_obj_set_style_text_color(label_gsr_unit, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
-    lv_obj_add_style(label_gsr_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_gsr_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-
     // Status info - centered below unit with proper spacing
     label_gsr_status = lv_label_create(scr_gsr);
     lv_label_set_text(label_gsr_status, "Ready");
@@ -299,65 +276,3 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     hpi_show_screen(scr_gsr, m_scroll_dir);
 }
 
-/**
- * @brief Convert BioZ measurement to GSR value (simplified integer math)
- * @param bioz_raw Raw BioZ value from MAX30001
- * @return GSR value in microsiemens * 100 (0 if invalid)
- */
-static uint16_t convert_bioz_to_gsr(int32_t bioz_raw)
-{
-    // Input validation
-    if (bioz_raw == 0) {
-        return 0;
-    }
-    
-    // Simple conversion avoiding floating point
-    // BioZ impedance is inversely related to conductance
-    // GSR (conductance) = 1 / resistance
-    
-    uint32_t abs_bioz = (bioz_raw < 0) ? -bioz_raw : bioz_raw;
-    
-    // Avoid division by zero and very small values
-    if (abs_bioz < 100) {
-        return 0;
-    }
-    
-    // Simple inverse relationship with scaling
-    // Target range: 0.5 to 50 μS (50 to 5000 when x100)
-    uint32_t gsr_x100;
-    
-    if (abs_bioz > 10000) {
-        // Low impedance = High conductance
-        gsr_x100 = 300000 / abs_bioz;  // Scale factor for reasonable range
-    } else {
-        // Medium impedance = Medium conductance  
-        gsr_x100 = 150000 / abs_bioz;
-    }
-    
-    // Clamp to reasonable GSR range (0.5 to 50 μS)
-    if (gsr_x100 < 50) gsr_x100 = 50;    // Min 0.50 μS
-    if (gsr_x100 > 5000) gsr_x100 = 5000; // Max 50.00 μS
-    
-    return (uint16_t)gsr_x100;
-}
-
-/**
- * @brief Process new BioZ sample and update GSR trends
- * @param bioz_sample Raw BioZ sample from MAX30001
- */
-void hpi_gsr_process_bioz_sample(int32_t bioz_sample)
-{
-    uint16_t gsr_value_x100 = convert_bioz_to_gsr(bioz_sample);
-    
-    if (gsr_value_x100 > 0) {
-        int64_t current_time = k_uptime_get();
-        
-        // Store GSR value in system
-        hpi_sys_set_last_gsr_update(gsr_value_x100, hw_get_sys_time_ts());
-        
-        // Update display if currently on GSR screen
-        if (hpi_disp_get_curr_screen() == SCR_GSR) {
-            hpi_gsr_disp_update_gsr_int(gsr_value_x100, current_time);
-        }
-    }
-}

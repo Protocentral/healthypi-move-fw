@@ -114,56 +114,56 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_bg_color(scr_gsr_plot, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_gsr_plot, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Container with column layout
-    lv_obj_t *cont_col = lv_obj_create(scr_gsr_plot);
-    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_bg_color(cont_col, lv_color_hex(0x000000), LV_PART_MAIN);
-    lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Title
-    lv_obj_t *label_title = lv_label_create(cont_col);
+    // Title - positioned at top center
+    lv_obj_t *label_title = lv_label_create(scr_gsr_plot);
     lv_label_set_text(label_title, "GSR Live");
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 20);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_width(label_title, lv_pct(100));
 
-    // Chart - larger, cleaner trend view
-    chart_gsr_trend = lv_chart_create(cont_col);
-    // Make chart match container width so flex spacing distributes evenly
-    lv_obj_set_size(chart_gsr_trend, lv_pct(100), 160);
+    // Chart - positioned in center area
+    chart_gsr_trend = lv_chart_create(scr_gsr_plot);
+    lv_obj_set_size(chart_gsr_trend, 340, 120);
+    lv_obj_align(chart_gsr_trend, LV_ALIGN_CENTER, 0, -20);
+    
+    // Configure chart properties
+    lv_chart_set_type(chart_gsr_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(chart_gsr_trend, GSR_DISP_WINDOW_SIZE);
     lv_chart_set_update_mode(chart_gsr_trend, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_chart_set_div_line_count(chart_gsr_trend, 0, 0);
+    
+    // Configure main chart background (transparent for AMOLED)
     lv_obj_set_style_bg_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(chart_gsr_trend, 0, LV_PART_MAIN);
-    lv_chart_set_type(chart_gsr_trend, LV_CHART_TYPE_LINE);
+    lv_obj_set_style_outline_width(chart_gsr_trend, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(chart_gsr_trend, 5, LV_PART_MAIN);
+    
+    // Create series for GSR data
     ser_gsr_trend = lv_chart_add_series(chart_gsr_trend, lv_color_hex(COLOR_PRIMARY_BLUE), LV_CHART_AXIS_PRIMARY_Y);
-    // Follow ECG plotting pattern: line series styling, no point indicators, and performance flags
+    
+    // Configure line series styling - blue theme for GSR
     lv_obj_set_style_line_width(chart_gsr_trend, 3, LV_PART_ITEMS);
     lv_obj_set_style_line_color(chart_gsr_trend, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_ITEMS);
     lv_obj_set_style_line_opa(chart_gsr_trend, LV_OPA_COVER, LV_PART_ITEMS);
     lv_obj_set_style_line_rounded(chart_gsr_trend, false, LV_PART_ITEMS);
-
-    // Disable point indicators (indicator part controls point rendering)
+    
+    // Disable points completely
     lv_obj_set_style_width(chart_gsr_trend, 0, LV_PART_INDICATOR);
     lv_obj_set_style_height(chart_gsr_trend, 0, LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_INDICATOR);
     lv_obj_set_style_border_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_INDICATOR);
-
-    // Chart background / layout performance tuning (match ECG pattern)
-    lv_obj_set_style_outline_width(chart_gsr_trend, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(chart_gsr_trend, 5, LV_PART_MAIN);
+    
+    // Performance optimizations for real-time GSR display
     lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+    
+    // Initialize chart with baseline values
     lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 0);
 
-    // Stop button - primary, compact
-    btn_stop = hpi_btn_create_primary(cont_col);
-    lv_obj_set_size(btn_stop, lv_pct(50), 48);
-    lv_obj_set_align(btn_stop, LV_ALIGN_CENTER);
+    // Stop button - positioned at bottom center
+    btn_stop = hpi_btn_create_primary(scr_gsr_plot);
+    lv_obj_set_size(btn_stop, 140, 48);
+    lv_obj_align(btn_stop, LV_ALIGN_BOTTOM_MID, 0, -30);
     lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_CLICKED, NULL);
     lv_obj_set_style_radius(btn_stop, 22, LV_PART_MAIN);
     lv_obj_t *label_btn = lv_label_create(btn_stop);
