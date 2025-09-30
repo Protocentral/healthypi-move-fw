@@ -52,6 +52,10 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 
 #include "log_module.h"
 
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+ZBUS_CHAN_DECLARE(gsr_stress_chan);
+#endif
+
 // ProtoCentral data formats
 #define CES_CMDIF_PKT_START_1 0x0A
 #define CES_CMDIF_PKT_START_2 0xFA
@@ -363,6 +367,37 @@ void data_thread(void)
                     }
                 }
             }
+
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+            // Calculate stress index from GSR samples
+            if (is_gsr_measurement_active && bsample.bioz_num_samples > 0)
+            {
+                // Convert raw BioZ sample to GSR conductance value (μS * 100)
+                // MAX30001 BioZ output needs calibration - using average of samples
+                int32_t sum = 0;
+                for (uint8_t i = 0; i < bsample.bioz_num_samples; i++)
+                {
+                    sum += bsample.bioz_samples[i];
+                }
+                int32_t avg_bioz = sum / bsample.bioz_num_samples;
+
+                // Convert to GSR: Simplified linear mapping (tune based on calibration)
+                // Assuming ~10kΩ corresponds to ~10μS, adjust scaling as needed
+                uint16_t gsr_value_x100 = (uint16_t)((avg_bioz / 100) + 1000); // Offset + scale
+
+                // Update last GSR value
+                hpi_sys_set_last_gsr_update(gsr_value_x100, bsample.timestamp);
+
+                // Calculate and publish stress index
+                static struct hpi_gsr_stress_index_t stress_data = {0};
+                calculate_gsr_stress_index(gsr_value_x100, &stress_data);
+
+                if (stress_data.stress_data_ready)
+                {
+                    zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
+                }
+            }
+#endif
         }
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)

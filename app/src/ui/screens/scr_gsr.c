@@ -33,6 +33,11 @@ static lv_obj_t *btn_gsr_measure;
 static lv_obj_t *label_gsr_last_update;
 static lv_obj_t *arc_gsr_range;  // Add arc reference
 
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+static lv_obj_t *label_stress_level;
+static lv_obj_t *label_stress_value;
+#endif
+
 // GSR Data Management
 static uint16_t gsr_baseline_x100 = 1000;  // 10.00 μS default baseline
 static uint8_t baseline_sample_count = 0;
@@ -272,7 +277,51 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(label_btn_gsr_measure, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_gsr_measure, scr_gsr_measure_btn_event_handler, LV_EVENT_CLICKED, NULL);
 
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+    // Stress level indicator - positioned above button
+    label_stress_level = lv_label_create(scr_gsr);
+    lv_label_set_text(label_stress_level, "Stress");
+    lv_obj_align(label_stress_level, LV_ALIGN_BOTTOM_LEFT, 30, -100);
+    lv_obj_set_style_text_color(label_stress_level, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_obj_add_style(label_stress_level, &style_caption, LV_PART_MAIN);
+
+    label_stress_value = lv_label_create(scr_gsr);
+    lv_label_set_text(label_stress_value, "--");
+    lv_obj_align(label_stress_value, LV_ALIGN_BOTTOM_RIGHT, -30, -100);
+    lv_obj_set_style_text_color(label_stress_value, lv_color_white(), LV_PART_MAIN);
+    lv_obj_add_style(label_stress_value, &style_body_medium, LV_PART_MAIN);
+#endif
+
     hpi_disp_set_curr_screen(SCR_GSR);
     hpi_show_screen(scr_gsr, m_scroll_dir);
 }
+
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+/**
+ * @brief Update stress level display
+ * @param stress_index Stress index data structure
+ */
+void hpi_gsr_update_stress_display(const struct hpi_gsr_stress_index_t *stress_index)
+{
+    if (!stress_index || !stress_index->stress_data_ready) {
+        return;
+    }
+
+    if (label_stress_value == NULL) {
+        return;
+    }
+
+    // Update stress level value
+    lv_label_set_text_fmt(label_stress_value, "%u", stress_index->stress_level);
+
+    // Color code based on stress level
+    if (stress_index->stress_level < 30) {
+        lv_obj_set_style_text_color(label_stress_value, lv_color_hex(0x00FF00), LV_PART_MAIN); // Green - Low
+    } else if (stress_index->stress_level < 60) {
+        lv_obj_set_style_text_color(label_stress_value, lv_color_hex(0xFFFF00), LV_PART_MAIN); // Yellow - Medium
+    } else {
+        lv_obj_set_style_text_color(label_stress_value, lv_color_hex(0xFF0000), LV_PART_MAIN); // Red - High
+    }
+}
+#endif
 
