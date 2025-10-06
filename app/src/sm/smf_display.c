@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -27,7 +27,6 @@
  * SOFTWARE.
  */
 
-
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
@@ -49,26 +48,40 @@ LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 #define HPI_DEFAULT_START_SCREEN SCR_HOME
 
 /**
+ * @brief Signal touch wakeup from sleep state
+ * This function can be called by touch drivers or input handlers to wake the display
+ */
+/* forward-declare the semaphore which is defined later in this file */
+extern struct k_sem sem_touch_wakeup;
+
+void hpi_display_signal_touch_wakeup(void)
+{
+    k_sem_give(&sem_touch_wakeup);
+}
+
+/**
  * @brief Get the current sleep timeout in milliseconds based on user settings
  * @return Sleep timeout in milliseconds, or default if auto sleep is disabled
  */
 static uint32_t get_sleep_timeout_ms(void)
 {
-    if (!hpi_user_settings_get_auto_sleep_enabled()) {
+    if (!hpi_user_settings_get_auto_sleep_enabled())
+    {
         return UINT32_MAX; // Never sleep if auto sleep is disabled
     }
-    
+
     uint8_t sleep_timeout_seconds = hpi_user_settings_get_sleep_timeout();
     uint32_t timeout_ms = sleep_timeout_seconds * 1000;
-    
+
     // Log the current sleep timeout occasionally for debugging
     static uint32_t last_log_time = 0;
     uint32_t now = k_uptime_get_32();
-    if (now - last_log_time > 60000) { // Log every minute
+    if (now - last_log_time > 60000)
+    { // Log every minute
         LOG_DBG("Sleep timeout: %d seconds (%d ms)", sleep_timeout_seconds, timeout_ms);
         last_log_time = now;
     }
-    
+
     return timeout_ms;
 }
 
@@ -82,6 +95,7 @@ K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
+K_SEM_DEFINE(sem_touch_wakeup, 0, 1);
 
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
@@ -275,7 +289,7 @@ int hpi_disp_reset_all_last_updated(void)
     m_disp_bp_last_refresh = 0;
     m_disp_bpt_status = 0;
     m_disp_bpt_progress = 0;
-    
+
     return 0;
 }
 
@@ -412,7 +426,7 @@ void disp_screen_event(lv_event_t *e)
             return;
         }
 
-        if( hpi_disp_get_curr_screen() == SCR_SPL_DEVICE_USER_SETTINGS)
+        if (hpi_disp_get_curr_screen() == SCR_SPL_DEVICE_USER_SETTINGS)
         {
             // If we are in the device user settings screen, go back to the pull down screen
             hpi_load_screen(SCR_HOME, SCROLL_RIGHT);
@@ -594,13 +608,16 @@ static void st_display_boot_run(void *o)
         // Get the current device type to show the correct title
         enum max32664_updater_device_type device_type = max32664_get_current_update_device_type();
         const char *msg;
-        
-        if (device_type == MAX32664_UPDATER_DEV_TYPE_MAX32664C) {
+
+        if (device_type == MAX32664_UPDATER_DEV_TYPE_MAX32664C)
+        {
             msg = "MAX32664C \n FW Update Required";
-        } else {
+        }
+        else
+        {
             msg = "MAX32664D \n FW Update Required";
         }
-        
+
         // Copy the appropriate message
         strcpy(s->title, msg);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SCR_PROGRESS]);
@@ -628,10 +645,10 @@ static void st_display_progress_entry(void *o)
 
     LOG_DBG("Display SM Progress Entry");
     draw_scr_progress(s->title, "Please wait...");
-    
+
     // Reset progress screen to normal state
     hpi_disp_scr_reset_progress();
-    
+
     max32664_set_progress_callback(hpi_max32664_update_progress);
     max32664_update_progress = 0;
     max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
@@ -644,22 +661,35 @@ static void st_display_progress_run(void *o)
     {
         // Provide detailed status messages based on progress
         const char *status_msg = "Updating...";
-        if (max32664_update_progress <= 5) {
+        if (max32664_update_progress <= 5)
+        {
             status_msg = "Checking filesystem...";
-        } else if (max32664_update_progress <= 10) {
+        }
+        else if (max32664_update_progress <= 10)
+        {
             status_msg = "Entering bootloader...";
-        } else if (max32664_update_progress <= 15) {
+        }
+        else if (max32664_update_progress <= 15)
+        {
             status_msg = "Loading firmware file...";
-        } else if (max32664_update_progress <= 25) {
+        }
+        else if (max32664_update_progress <= 25)
+        {
             status_msg = "Setting up bootloader...";
-        } else if (max32664_update_progress <= 35) {
+        }
+        else if (max32664_update_progress <= 35)
+        {
             status_msg = "Erasing flash...";
-        } else if (max32664_update_progress < 95) {
+        }
+        else if (max32664_update_progress < 95)
+        {
             status_msg = "Writing firmware...";
-        } else {
+        }
+        else
+        {
             status_msg = "Finalizing update...";
         }
-        
+
         hpi_disp_scr_update_progress(max32664_update_progress, status_msg);
     }
     else if (max32664_update_status == MAX32664_UPDATER_STATUS_SUCCESS)
@@ -672,7 +702,8 @@ static void st_display_progress_run(void *o)
     {
         // Provide specific error message based on when the error occurred
         const char *error_msg = "Firmware File Not Found!";
-        if (max32664_update_progress <= 5) {
+        if (max32664_update_progress <= 5)
+        {
             error_msg = "No Firmware Files in LFS!";
         }
         hpi_disp_scr_update_progress(max32664_update_progress, error_msg);
@@ -855,13 +886,14 @@ static void hpi_disp_update_screens(void)
         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
-            scr_ecg_lead_on_off_handler(false);  // false = leads ON
-            m_lead_on_off = false;  // false = leads ON
-            
+            scr_ecg_lead_on_off_handler(false); // false = leads ON
+            m_lead_on_off = false;              // false = leads ON
+
             // Start/restart timer when leads come on during recording
             bool is_ecg_active = hpi_data_is_ecg_record_active();
             LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
-            if (is_ecg_active) {
+            if (is_ecg_active)
+            {
                 LOG_INF("DISPLAY THREAD: Calling hpi_ecg_timer_start()");
                 hpi_ecg_timer_start();
             }
@@ -869,13 +901,14 @@ static void hpi_disp_update_screens(void)
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
         {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore - calling UI handler");
-            scr_ecg_lead_on_off_handler(true);   // true = leads OFF
-            m_lead_on_off = true;   // true = leads OFF
-            
+            scr_ecg_lead_on_off_handler(true); // true = leads OFF
+            m_lead_on_off = true;              // true = leads OFF
+
             // Reset timer to restart 30s countdown when leads come back on
             bool is_ecg_active = hpi_data_is_ecg_record_active();
             LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
-            if (is_ecg_active) {
+            if (is_ecg_active)
+            {
                 LOG_INF("DISPLAY THREAD: Resetting UI timer state");
                 hpi_ecg_timer_reset();
                 LOG_INF("DISPLAY THREAD: Resetting ECG SMF countdown to 30s");
@@ -977,8 +1010,9 @@ static void st_display_active_run(void *o)
     {
         hpi_disp_process_ecg_data(ecg_sensor_sample);
         ecg_processed_count++;
-        
-        if (ecg_processed_count >= 8) break;  // Prevent blocking other processing
+
+        if (ecg_processed_count >= 8)
+            break; // Prevent blocking other processing
     }
 
     // Process GSR queue data (allow multiple batches per cycle to keep up with producer)
@@ -989,7 +1023,8 @@ static void st_display_active_run(void *o)
         lv_disp_trig_activity(NULL);
         gsr_processed_count++;
 
-        if (gsr_processed_count >= 8) break;  // Prevent blocking other processing
+        if (gsr_processed_count >= 8)
+            break; // Prevent blocking other processing
     }
 
     if (k_msgq_get(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
@@ -1064,13 +1099,13 @@ static void st_display_active_run(void *o)
 
     int inactivity_time = lv_disp_get_inactive_time(NULL);
     // LOG_DBG("Inactivity Time: %d", inactivity_time);
-    
+
     // Get current sleep timeout based on user settings
     uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
-    
+
     // Prevent sleep during low battery conditions or if auto sleep is disabled
-    if (sleep_timeout_ms != UINT32_MAX && 
-        inactivity_time > sleep_timeout_ms && 
+    if (sleep_timeout_ms != UINT32_MAX &&
+        inactivity_time > sleep_timeout_ms &&
         !hw_is_low_battery())
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
@@ -1089,8 +1124,25 @@ static void st_display_sleep_entry(void *o)
     // Save the current screen state before going to sleep
     hpi_disp_save_screen_state();
 
+    /*
+     * Instead of cutting the display LDO (which may also power the touch
+     * controller on some hardware revisions), request the display driver to
+     * blank the panel (DISPOFF / SLPIN). This keeps the panel power rail
+     * enabled so the touch controller remains powered and can still report
+     * touches while the screen is off.
+     */
     display_set_brightness(display_dev, 0);
-    hw_pwr_display_enable(false);
+    if (display_dev && device_is_ready(display_dev))
+    {
+        /* Use the display blanking API which maps to sh8601_display_blanking_on */
+        display_blanking_on(display_dev);
+        /* Also request panel sleep to reduce power inside the panel */
+        sh8601_transmit_cmd(display_dev, SH8601_C_SLPIN, NULL, 0);
+    }
+    else
+    {
+        LOG_WRN("Display device not ready; skipping blanking");
+    }
 }
 
 static void st_display_sleep_run(void *o)
@@ -1099,21 +1151,39 @@ static void st_display_sleep_run(void *o)
     {
         LOG_DBG("Crown key pressed in sleep state");
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+        return;
     }
-    
-    // TODO: Add other wake-up triggers here if needed (touch events, etc.)
+
+    // Check for touch wakeup
+    if (k_sem_take(&sem_touch_wakeup, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("Touch detected in sleep state - waking up");
+        smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
+        return;
+    }
 }
 
 static void st_display_sleep_exit(void *o)
 {
     LOG_DBG("Display SM Sleep Exit");
+    /* Ensure the display power rail is enabled (no-op if already on) */
     hw_pwr_display_enable(true);
 
-    sh8601_reinit(display_dev);
-    k_msleep(10);
+    /* Bring the panel out of sleep and reinit the driver */
+    if (display_dev && device_is_ready(display_dev))
+    {
+        sh8601_transmit_cmd(display_dev, SH8601_C_SLPOUT, NULL, 0);
+        k_msleep(10);
+        sh8601_reinit(display_dev);
+        k_msleep(10);
+        /* Turn display back on and restore brightness */
+        display_blanking_off(display_dev);
+    }
 
     hpi_disp_set_brightness(hpi_disp_get_brightness());
 
+    /* Re-init touch in case its driver needs re-attachment (safe no-op)
+     * This keeps the existing wake path behavior. */
     device_init(touch_dev);
     k_msleep(10);
 
@@ -1122,7 +1192,7 @@ static void st_display_sleep_exit(void *o)
 
     // Clear the saved state after successful restoration
     hpi_disp_clear_saved_state();
-    
+
     // Trigger LVGL activity to reset the inactivity timer
     lv_disp_trig_activity(NULL);
 }

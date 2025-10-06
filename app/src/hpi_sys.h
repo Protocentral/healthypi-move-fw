@@ -47,6 +47,8 @@ int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_upda
 void hpi_sys_set_device_on_skin(bool on_skin);
 bool hpi_sys_get_device_on_skin(void);
 
+void hpi_display_signal_touch_wakeup(void);
+
 int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_str_size);
 int hpi_sys_set_sys_time(struct tm *tm);
 

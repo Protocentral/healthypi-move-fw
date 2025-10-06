@@ -222,7 +222,8 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_btn_measure = lv_label_create(btn_bpt_measure);
     lv_label_set_text(label_btn_measure, LV_SYMBOL_REFRESH " Measure");  // Use refresh symbol like SPO2
     lv_obj_center(label_btn_measure);
-    lv_obj_add_style(label_btn_measure, &style_body_medium, LV_PART_MAIN);
+    //lv_obj_set_style_text_color(label_btn_raw, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    //lv_obj_add_style(label_btn_measure, &style_body_medium, LV_PART_MAIN);
 
     hpi_disp_set_curr_screen(SCR_BPT);
     hpi_show_screen(scr_bpt, m_scroll_dir);

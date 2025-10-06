@@ -17,6 +17,8 @@
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/device_runtime.h>
 
+#include "../../app/src/hpi_sys.h"
+
 struct chsc5816_config
 {
 	struct i2c_dt_spec i2c;
@@ -174,6 +176,9 @@ static int chsc5816_process(const struct device *dev)
 			input_report_abs(dev, INPUT_ABS_X, col, false, K_FOREVER);
 			input_report_abs(dev, INPUT_ABS_Y, row, false, K_FOREVER);
 			input_report_key(dev, INPUT_BTN_TOUCH, 1, true, K_FOREVER);
+			
+			/* Signal display wakeup on any touch */
+			hpi_display_signal_touch_wakeup();
 
 			LOG_DBG("Touch at %d, %d", col, row);
 		}
