@@ -49,6 +49,7 @@ void calculate_hrv (int32_t heart_rate, int32_t *hrv_max, int32_t *hrv_min, floa
 
 // GSR Stress Index calculation
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+#include "hpi_common_types.h"  // for struct hpi_gsr_stress_index_t
 void calculate_gsr_stress_index(uint16_t gsr_value_x100, struct hpi_gsr_stress_index_t *stress_index);
 void reset_gsr_stress_index(void);
 #endif

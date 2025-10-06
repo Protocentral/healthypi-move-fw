@@ -146,6 +146,9 @@ static int m_disp_ecg_timer = 0;
 static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
 
+// @brief GSR Screen variables
+static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
+
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -191,7 +194,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_COMPLETE] = {draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete},
     [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
     [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
-    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, NULL},
+    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, unload_scr_gsr_plot},
+    [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, unload_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
 
@@ -882,6 +886,13 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
 
         break;
+    case SCR_SPL_PLOT_GSR:
+#if defined(CONFIG_HPI_GSR_SCREEN)
+        // Update GSR countdown timer display (mirrors ECG pattern)
+        hpi_gsr_disp_update_timer(m_disp_gsr_remaining);
+#endif
+        lv_disp_trig_activity(NULL);
+        break;
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
@@ -1239,6 +1250,36 @@ static void disp_ecg_stat_listener(const struct zbus_channel *chan)
     // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
+
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+static void disp_gsr_stress_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_gsr_stress_index_t *stress_data = zbus_chan_const_msg(chan);
+    
+    if (stress_data && stress_data->stress_data_ready) {
+        // Update the GSR complete screen if it's currently displayed
+        hpi_gsr_complete_update_results(stress_data);
+        
+        LOG_DBG("GSR Stress Index: level=%d, tonic=%d.%02d μS, peaks/min=%d", 
+                stress_data->stress_level,
+                stress_data->tonic_level_x100 / 100,
+                stress_data->tonic_level_x100 % 100,
+                stress_data->peaks_per_minute);
+    }
+}
+ZBUS_LISTENER_DEFINE(disp_gsr_stress_lis, disp_gsr_stress_listener);
+#endif
+
+#if defined(CONFIG_HPI_GSR_SCREEN)
+static void disp_gsr_status_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_gsr_status_t *status = zbus_chan_const_msg(chan);
+    if (!status) return;
+    // Store in display thread variable for periodic update (mirrors ECG pattern)
+    m_disp_gsr_remaining = status->remaining_s;
+}
+ZBUS_LISTENER_DEFINE(disp_gsr_status_lis, disp_gsr_status_listener);
+#endif
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 24576
 #define SMF_DISPLAY_THREAD_PRIORITY 5

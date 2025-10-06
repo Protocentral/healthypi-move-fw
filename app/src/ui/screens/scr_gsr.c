@@ -42,6 +42,7 @@ static lv_obj_t *label_stress_value;
 static uint16_t gsr_baseline_x100 = 1000;  // 10.00 μS default baseline
 static uint8_t baseline_sample_count = 0;
 static bool gsr_measurement_active = false;
+static int64_t gsr_measurement_start_ts = 0; // uptime (ms) when measurement started
 
 // Function declarations
 static void calculate_gsr_baseline(uint16_t new_value);
@@ -115,6 +116,7 @@ static void scr_gsr_measure_btn_event_handler(lv_event_t *e)
         if (!gsr_measurement_active) {
             // Start GSR measurement using semaphore control (same pattern as ECG)
             gsr_measurement_active = true;
+            gsr_measurement_start_ts = k_uptime_get();
             lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_STOP " Stop");
             lv_label_set_text(label_gsr_status, "Measuring...");
             
@@ -127,6 +129,7 @@ static void scr_gsr_measure_btn_event_handler(lv_event_t *e)
         } else {
             // Stop GSR measurement using semaphore control
             gsr_measurement_active = false;
+            gsr_measurement_start_ts = 0;
             lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_PLAY " Measure");
             lv_label_set_text(label_gsr_status, "Ready");
             
@@ -135,6 +138,7 @@ static void scr_gsr_measure_btn_event_handler(lv_event_t *e)
         }
     }
 }
+
 
 /**
  * @brief Update GSR display with new measurement data (integer-only)

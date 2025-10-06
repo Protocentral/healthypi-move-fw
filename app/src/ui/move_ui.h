@@ -140,6 +140,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_CANCELLED,
     SCR_SPL_HR_SCR2,
     SCR_SPL_PLOT_GSR,
+    SCR_SPL_GSR_COMPLETE,
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -178,9 +179,15 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir);
 void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_update);
 // Special GSR plot screen
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_gsr_plot(void);
+// GSR complete screen
+void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_gsr_complete(void);
+void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *results);
 // Plot update helper called from sensor path
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off);
+void hpi_gsr_disp_update_timer(uint16_t remaining_s);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
@@ -189,6 +196,11 @@ static inline void hpi_gsr_process_bioz_sample(int32_t s) { ARG_UNUSED(s); }
 static inline void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
     ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
 }
+static inline void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
+}
+static inline void unload_scr_gsr_complete(void) { }
+static inline void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *r) { ARG_UNUSED(r); }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
 #endif
 LV_IMG_DECLARE(img_heart_70);
