@@ -277,6 +277,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void draw_scr_home(enum scroll_dir m_scroll_dir);
 void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
+void hpi_home_steps_update(int steps);
 
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
@@ -408,6 +409,9 @@ void gesture_down_scr_sleep_timeout_select(void);
 void gesture_right_scr_sleep_timeout_select(void);
 void hpi_update_height_weight_labels(void);
 void hpi_update_setting_labels(void);
+
+// Global flag to suspend screen updates during transitions
+extern volatile bool screen_transition_in_progress;
 
 // Helper objects
 void draw_scr_common(lv_obj_t *parent);

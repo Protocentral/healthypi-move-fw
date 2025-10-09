@@ -513,6 +513,10 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
+    // CRITICAL: Set global transition flag to suspend ALL screen updates
+    // This protects the entire screen loading process across all screens
+    screen_transition_in_progress = true;
+    
     switch (m_screen)
     {
     case SCR_HOME:
@@ -551,6 +555,10 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     default:
         printk("Invalid screen: %d", m_screen);
     }
+    
+    // CRITICAL: Clear transition flag after screen is loaded
+    // This re-enables screen updates
+    screen_transition_in_progress = false;
 }
 
 void hpi_move_load_scr_pulldown(enum scroll_dir m_scroll_dir)

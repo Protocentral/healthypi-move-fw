@@ -177,7 +177,7 @@ static int chsc5816_process(const struct device *dev)
 			input_report_abs(dev, INPUT_ABS_Y, row, false, K_FOREVER);
 			input_report_key(dev, INPUT_BTN_TOUCH, 1, true, K_FOREVER);
 			
-			/* Signal display wakeup on any touch */
+			/* Signal display wakeup - uses LVGL activity tracking internally */
 			hpi_display_signal_touch_wakeup();
 
 			LOG_DBG("Touch at %d, %d", col, row);
