@@ -67,6 +67,13 @@
 #define HPI_DISP_TIME_REFR_INT 1000
 #define HPI_DISP_BATT_REFR_INT 1000
 
+// Battery level thresholds for display symbols
+#define HPI_BATTERY_LEVEL_FULL     90
+#define HPI_BATTERY_LEVEL_HIGH     65
+#define HPI_BATTERY_LEVEL_MEDIUM   35
+#define HPI_BATTERY_LEVEL_LOW      15
+#define HPI_BATTERY_LEVEL_CRITICAL 10
+
 #define HPI_DISP_TODAY_REFRESH_INT 3000
 #define HPI_DISP_BPT_REFRESH_INT 3000
 #define HPI_DISP_TEMP_REFRESH_INT 3000
@@ -425,6 +432,10 @@ int hpi_disp_get_curr_screen(void);
 
 void hpi_disp_set_brightness(uint8_t brightness_percent);
 uint8_t hpi_disp_get_brightness(void);
+
+// Battery display helper functions
+const char* hpi_get_battery_symbol(uint8_t level, bool charging);
+lv_color_t hpi_get_battery_color(uint8_t level, bool charging);
 
 // Component objects
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);

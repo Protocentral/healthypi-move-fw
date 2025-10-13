@@ -8,6 +8,8 @@
 // Delete callback - LVGL calls this when auto-deleting the screen during navigation
 static void scr_today_delete_event_cb(lv_event_t *e)
 {
+    LOG_DBG("Today screen delete event - marking invalid and clearing pointers");
+    
     // Mark screen as invalid immediately to block any concurrent update attempts
     screen_is_valid = false;
     
@@ -148,12 +150,16 @@ extern lv_style_t style_numeric_large;  // For large hero numbers
 
 void draw_scr_today(enum scroll_dir m_scroll_dir)
 {
+    LOG_DBG("draw_scr_today: START");
+    
     // Set current screen immediately
     hpi_disp_set_curr_screen(SCR_TODAY);
     
     // Mark this screen as invalid during recreation - CRITICAL: Do this FIRST
     // This prevents update function from running during screen creation
     screen_is_valid = false;
+    
+    LOG_DBG("draw_scr_today: Marked invalid, nulling pointers");
     
     // CRITICAL: NULL all pointers immediately to prevent race conditions
     // This ensures update function can't access partially-deleted objects
@@ -168,6 +174,8 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     img_steps_icon = NULL;
     img_calories_icon = NULL;
     img_time_icon = NULL;
+    
+    LOG_DBG("draw_scr_today: Creating screen object");
     
     // Now create the new screen
     scr_today = lv_obj_create(NULL);
@@ -286,45 +294,65 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     // Quick actions removed for minimalist design
 
+    LOG_DBG("draw_scr_today: Showing screen");
+
     // Show the screen
     hpi_show_screen(scr_today, m_scroll_dir);
+    
+    LOG_DBG("draw_scr_today: Marking valid");
     
     // Mark screen as valid AFTER all objects are created and screen is shown
     // Objects are created synchronously, animation happens asynchronously
     screen_is_valid = true;
     
+    LOG_DBG("draw_scr_today: Calling initial update");
+    
     // Update with current data - using default values for initial display
     hpi_scr_today_update_all(0, 0, 0);
+    
+    LOG_DBG("draw_scr_today: COMPLETE");
 }
 
 void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s)
 {
+    LOG_DBG("UPDATE START: valid=%d, scr_today=%p", screen_is_valid, scr_today);
+    
     // CRITICAL: Check validity flag first to prevent race conditions during screen recreation
     if (!screen_is_valid) {
+        LOG_DBG("Today screen not valid (being recreated), skipping update");
         return;
     }
     
     // Check scr_today first as a master validity flag
     // If scr_today is NULL, the screen is being destroyed/recreated, so return immediately
     if (scr_today == NULL) {
+        LOG_WRN("Today screen not initialized (scr_today is NULL), skipping update");
         return;
     }
+    
+    LOG_DBG("UPDATE: Checking lv_obj_is_valid");
     
     // CRITICAL: Check if the screen object is still valid in LVGL
     // This catches the case where we navigated away and LVGL auto-deleted the screen
     if (!lv_obj_is_valid(scr_today)) {
+        LOG_WRN("Today screen object is invalid (deleted by LVGL), skipping update");
         screen_is_valid = false;  // Update our flag to match reality
         scr_today = NULL;  // Clear the pointer
         return;
     }
+    
+    LOG_DBG("UPDATE: Checking child pointers");
     
     // Check for NULL pointers to prevent crashes during sleep/wake cycles
     // This is a secondary check - if scr_today exists but children don't, we have a problem
     if (label_steps_value == NULL || label_calories_value == NULL || label_time_value == NULL ||
         arc_steps == NULL || arc_calories == NULL || arc_active_time == NULL)
     {
+        LOG_WRN("Today screen objects not initialized, skipping update");
         return;
     }
+
+    LOG_DBG("UPDATE: All checks passed, proceeding with update");
 
     // Update Hero Element - Steps (formatted for readability)
     char steps_buf[16];
@@ -362,6 +390,8 @@ void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_ti
     int time_percent = (active_time_minutes * 100) / m_active_time_today_target;
     if (time_percent > 100) time_percent = 100;
     lv_arc_set_value(arc_active_time, time_percent);  // Arc instead of bar
+    
+    LOG_DBG("UPDATE: COMPLETE");
     
     // Target labels removed for minimalist design
 }

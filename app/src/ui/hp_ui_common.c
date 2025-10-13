@@ -106,8 +106,9 @@ lv_style_t style_bg_purple;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
-static lv_obj_t *label_batt_level;
-static lv_obj_t *label_batt_level_val;
+// Note: Battery label variables removed - each screen now manages its own battery display
+// static lv_obj_t *label_batt_level;       // REMOVED - dead code, never used
+// static lv_obj_t *label_batt_level_val;   // REMOVED - dead code, never used
 
 static lv_obj_t *lbl_hdr_hour;
 static lv_obj_t *lbl_hdr_min;
@@ -430,60 +431,57 @@ uint8_t hpi_disp_get_brightness(void)
     return hpi_disp_curr_brightness;
 }
 
-void hpi_disp_update_batt_level(int batt_level, bool charging)
+/**
+ * @brief Get the appropriate battery symbol for a given battery level and charging state
+ * @param level Battery level percentage (0-100)
+ * @param charging Whether the battery is currently charging
+ * @return LVGL symbol string for the battery state
+ */
+const char* hpi_get_battery_symbol(uint8_t level, bool charging)
 {
-    if (label_batt_level == NULL || label_batt_level_val == NULL)
-    {
-        return;
+    if (charging) {
+        return LV_SYMBOL_CHARGE; // Lightning bolt for charging
     }
-
-    if (batt_level <= 0)
-    {
-        batt_level = 0;
-    }
-
-    // printk("Updating battery level: %d\n", batt_level);
-
-    char buf[8];
-    sprintf(buf, " %2d %% ", batt_level);
-    lv_label_set_text(label_batt_level_val, buf);
-
-    if (batt_level > 75)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_FULL "");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
-    }
-    else if (batt_level > 50)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_3 " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_3);
-    }
-    else if (batt_level > 25)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_2 " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_2);
-    }
-    else if (batt_level > 10)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_1 " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_1);
-    }
-    else
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_EMPTY " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_EMPTY);
+    
+    // Battery symbols based on level thresholds
+    if (level >= HPI_BATTERY_LEVEL_FULL) {
+        return LV_SYMBOL_BATTERY_FULL;  // Full battery (90-100%)
+    } else if (level >= HPI_BATTERY_LEVEL_HIGH) {
+        return LV_SYMBOL_BATTERY_3;     // 3/4 battery (65-89%)
+    } else if (level >= HPI_BATTERY_LEVEL_MEDIUM) {
+        return LV_SYMBOL_BATTERY_2;     // 2/4 battery (35-64%)
+    } else if (level >= HPI_BATTERY_LEVEL_LOW) {
+        return LV_SYMBOL_BATTERY_1;     // 1/4 battery (15-34%)
+    } else {
+        return LV_SYMBOL_BATTERY_EMPTY; // Empty battery (0-14%)
     }
 }
+
+/**
+ * @brief Get the appropriate color for battery display
+ * @param level Battery level percentage (0-100)
+ * @param charging Whether the battery is currently charging
+ * @return LVGL color for the battery display
+ */
+lv_color_t hpi_get_battery_color(uint8_t level, bool charging)
+{
+    if (charging) {
+        return lv_color_hex(0x66FF66);  // Bright green when charging
+    } else if (level <= HPI_BATTERY_LEVEL_LOW) {
+        return lv_color_hex(0xFF6666);  // Bright red for low battery
+    } else if (level <= 30) {
+        return lv_color_hex(0xFFBB66);  // Bright orange for warning
+    } else {
+        return lv_color_hex(0xFFFFFF);  // Bright white for normal levels
+    }
+}
+
+// REMOVED: hpi_disp_update_batt_level() - Dead code, never called
+// This function and its associated static variables were never used.
+// Use screen-specific battery update functions instead:
+// - hpi_disp_home_update_batt_level() for home screen
+// - hpi_disp_settings_update_batt_level() for pulldown screen
+// - hpi_disp_low_battery_update() for low battery screen
 
 void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 {

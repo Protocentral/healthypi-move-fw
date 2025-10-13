@@ -65,11 +65,13 @@ static lv_obj_t *ui_home_label_hour = NULL;
 static lv_obj_t *ui_home_label_min = NULL;
 static lv_obj_t *ui_home_label_date = NULL;
 static lv_obj_t *ui_home_label_ampm = NULL;
-static lv_obj_t *label_batt_level_val = NULL;
+static lv_obj_t *label_home_batt_val = NULL;  // Renamed to avoid conflicts with other screens
 
 // LVGL delete event callback - called when LVGL auto-deletes this screen
 static void scr_home_delete_event_cb(lv_event_t *e)
 {
+    LOG_DBG("Home screen delete event - clearing main pointer and canceling timers");
+    
     // Cancel any active timer
     if (quick_actions_timer != NULL) {
         lv_timer_del(quick_actions_timer);
@@ -249,7 +251,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     ui_home_label_min = NULL;
     ui_home_label_date = NULL;
     ui_home_label_ampm = NULL;
-    label_batt_level_val = NULL;
+    label_home_batt_val = NULL;
     home_step_disp = NULL;
     home_hr_disp = NULL;
     
@@ -407,13 +409,13 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(ui_home_label_date, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // Battery indicator - positioned at 12 o'clock within circular bounds
-    label_batt_level_val = lv_label_create(scr_home);
-    lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " 85%");  // Battery symbol with percentage
-    lv_obj_align(label_batt_level_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
-    lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label_batt_level_val, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
-    lv_obj_set_style_text_opa(label_batt_level_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_align(label_batt_level_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    label_home_batt_val = lv_label_create(scr_home);
+    lv_label_set_text(label_home_batt_val, LV_SYMBOL_BATTERY_FULL " 85%");  // Battery symbol with percentage
+    lv_obj_align(label_home_batt_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
+    lv_obj_set_style_text_color(label_home_batt_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label_home_batt_val, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
+    lv_obj_set_style_text_opa(label_home_batt_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(label_home_batt_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // Register delete callback to cleanup pointers when LVGL auto-deletes this screen
     lv_obj_add_event_cb(scr_home, scr_home_delete_event_cb, LV_EVENT_DELETE, NULL);
@@ -492,7 +494,7 @@ void hpi_home_steps_update(int steps)
 
 void hpi_disp_home_update_batt_level(int batt_level, bool charging)
 {
-    if (label_batt_level_val == NULL)
+    if (label_home_batt_val == NULL)
     {
         return;
     }
@@ -502,36 +504,13 @@ void hpi_disp_home_update_batt_level(int batt_level, bool charging)
         batt_level = 0;
     }
 
-    // Battery display with LVGL built-in symbols based on level and charging status
-    const char* battery_symbol;
+    // Use centralized helper functions for consistency
+    const char* battery_symbol = hpi_get_battery_symbol(batt_level, charging);
+    lv_color_t battery_color = hpi_get_battery_color(batt_level, charging);
     
-    if (charging) {
-        battery_symbol = LV_SYMBOL_CHARGE; // Lightning bolt for charging
-    } else {
-        // Different battery symbols based on charge level using LVGL built-in symbols
-        if (batt_level >= 90) {
-            battery_symbol = LV_SYMBOL_BATTERY_FULL; // Full battery (90-100%)
-        } else if (batt_level >= 65) {
-            battery_symbol = LV_SYMBOL_BATTERY_3;    // 3/4 battery (65-89%)
-        } else if (batt_level >= 35) {
-            battery_symbol = LV_SYMBOL_BATTERY_2;    // 2/4 battery (35-64%)
-        } else if (batt_level >= 15) {
-            battery_symbol = LV_SYMBOL_BATTERY_1;    // 1/4 battery (15-34%)
-        } else {
-            battery_symbol = LV_SYMBOL_BATTERY_EMPTY; // Empty battery (0-14%)
-        }
-    }
+    // Update label with symbol and percentage
+    lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, batt_level);
     
-    lv_label_set_text_fmt(label_batt_level_val, "%s %d%%", battery_symbol, batt_level);
-    
-    // Color coding for battery levels - brighter colors for AMOLED visibility
-    if (charging) {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0x66FF66), LV_PART_MAIN);  // Bright green when charging
-    } else if (batt_level <= 15) {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFF6666), LV_PART_MAIN);  // Brighter red
-    } else if (batt_level <= 30) {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFBB66), LV_PART_MAIN);  // Brighter orange
-    } else {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);  // Bright white for normal levels
-    }
+    // Apply color coding
+    lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN);
 }

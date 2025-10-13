@@ -140,6 +140,10 @@ static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
 static struct tm m_disp_sys_time;
 
+// Battery change detection - only update UI when data actually changes
+static uint8_t last_displayed_batt_level = 0;
+static bool last_displayed_batt_charging = false;
+
 static uint32_t splash_scr_start_time = 0;
 
 // HR Screen variables
@@ -1063,19 +1067,31 @@ static void st_display_active_run(void *o)
     // Do screen specific updates
     hpi_disp_update_screens();
 
+    // Update battery display only when data actually changes
+    // This optimization reduces unnecessary UI updates since battery data only arrives every 5 seconds
+    // while the display refresh runs every second
     if (k_uptime_get_32() - last_batt_refresh > HPI_DISP_BATT_REFR_INT)
     {
-        if ((hpi_disp_get_curr_screen() == SCR_HOME))
+        // Only update UI if battery level or charging state has changed
+        if (m_disp_batt_level != last_displayed_batt_level || 
+            m_disp_batt_charging != last_displayed_batt_charging)
         {
-            hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_PULLDOWN)
-        {
-            hpi_disp_settings_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_LOW_BATTERY)
-        {
-            hpi_disp_low_battery_update(m_disp_batt_level, m_disp_batt_charging);
+            if ((hpi_disp_get_curr_screen() == SCR_HOME))
+            {
+                hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            }
+            else if (hpi_disp_get_curr_screen() == SCR_SPL_PULLDOWN)
+            {
+                hpi_disp_settings_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+            }
+            else if (hpi_disp_get_curr_screen() == SCR_SPL_LOW_BATTERY)
+            {
+                hpi_disp_low_battery_update(m_disp_batt_level, m_disp_batt_charging);
+            }
+            
+            // Update tracking variables
+            last_displayed_batt_level = m_disp_batt_level;
+            last_displayed_batt_charging = m_disp_batt_charging;
         }
         last_batt_refresh = k_uptime_get_32();
     }

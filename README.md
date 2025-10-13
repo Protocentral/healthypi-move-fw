@@ -4,7 +4,9 @@
 
 </div>
 
-# HealthyPi Move Firmware 
+# HealthyPi Move Firmware
+
+[![CI Build](https://github.com/protocentral/healthypi-move-fw/actions/workflows/ci.yml/badge.svg)](https://github.com/protocentral/healthypi-move-fw/actions/workflows/ci.yml) 
 
 This repository contains the firmware for the HealthyPi Move device. The firmware is based on the [Zephyr RTOS](https://www.zephyrproject.org/). 
 
