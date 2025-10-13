@@ -15,6 +15,16 @@ config HPI_GSR_SCREEN
 			Disable to save flash/RAM and remove GSR UI. When disabled, GSR
 			source files are excluded and runtime hooks become no-ops.
 
+config HPI_GSR_STRESS_INDEX
+		bool "Enable GSR stress index calculation"
+		default y
+		depends on HPI_GSR_SCREEN
+		help
+			Enable stress index calculation from GSR measurements including
+			tonic/phasic separation, peak detection, and arousal scoring.
+			Adds ~2KB flash and ~300 bytes RAM for history buffers.
+			Disable to save memory if only raw GSR values are needed.
+
 endmenu
 
 source "Kconfig.zephyr"

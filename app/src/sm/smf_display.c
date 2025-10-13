@@ -48,18 +48,6 @@ LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 #define HPI_DEFAULT_START_SCREEN SCR_HOME
 
 /**
- * @brief Signal touch wakeup from sleep state
- * This function can be called by touch drivers or input handlers to wake the display
- */
-/* forward-declare the semaphore which is defined later in this file */
-extern struct k_sem sem_touch_wakeup;
-
-void hpi_display_signal_touch_wakeup(void)
-{
-    k_sem_give(&sem_touch_wakeup);
-}
-
-/**
  * @brief Get the current sleep timeout in milliseconds based on user settings
  * @return Sleep timeout in milliseconds, or default if auto sleep is disabled
  */
@@ -95,7 +83,22 @@ K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
-K_SEM_DEFINE(sem_touch_wakeup, 0, 1);
+K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
+
+/**
+ * @brief Signal touch wakeup from sleep state
+ * Called by input drivers (touch controller) when touch is detected.
+ * Uses LVGL's activity tracking as the source of truth, but provides
+ * explicit wakeup signaling for sleep state.
+ */
+void hpi_display_signal_touch_wakeup(void)
+{
+    // Trigger LVGL activity tracking
+    lv_disp_trig_activity(NULL);
+    
+    // Signal the display state machine to wake up
+    k_sem_give(&sem_touch_wakeup);
+}
 
 static bool hpi_boot_all_passed = true;
 static int last_batt_refresh = 0;
@@ -120,10 +123,17 @@ enum display_state
     HPI_DISPLAY_STATE_BOOT,
     HPI_DISPLAY_STATE_SCR_PROGRESS,
     HPI_DISPLAY_STATE_ACTIVE,
+    HPI_DISPLAY_STATE_TRANSITION,  // NEW: Blocks all updates during screen changes
     HPI_DISPLAY_STATE_SLEEP,
     HPI_DISPLAY_STATE_ON,
     HPI_DISPLAY_STATE_OFF,
 };
+
+// Global flag to suspend ALL screen updates during screen transitions
+// This prevents race conditions where update functions try to access objects
+// that are being deleted/created during screen changes
+// NOTE: Not static because it's declared extern in move_ui.h
+volatile bool screen_transition_in_progress = false;
 
 // Display screen variables
 static uint8_t m_disp_batt_level = 0;
@@ -159,6 +169,9 @@ static uint8_t m_disp_bpt_progress = 0;
 static int m_disp_ecg_timer = 0;
 static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
+
+// @brief GSR Screen variables
+static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
 
 struct s_disp_object
 {
@@ -205,7 +218,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_COMPLETE] = {draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete},
     [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
     [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
-    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, NULL},
+    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, unload_scr_gsr_plot},
+    [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, unload_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
 
@@ -338,17 +352,26 @@ static void hpi_disp_restore_screen_state(void)
         LOG_DBG("Restoring screen state: screen=%d, scroll_dir=%d",
                 saved_screen, saved_scroll);
 
-        // Check if the saved screen has a valid draw function
-        if (saved_screen >= 0 && saved_screen < ARRAY_SIZE(screen_func_table) &&
+        // Check if this is a special screen (SCR_SPL_*) or a regular screen
+        // Regular screens: SCR_LIST_START < screen < SCR_LIST_END (e.g., SCR_HOME, SCR_TODAY, etc.)
+        // Special screens: SCR_SPL_LIST_START <= screen (e.g., SCR_SPL_BOOT, SCR_SPL_PULLDOWN, etc.)
+        if (saved_screen >= SCR_SPL_LIST_START && 
+            saved_screen < ARRAY_SIZE(screen_func_table) &&
             screen_func_table[saved_screen].draw != NULL)
         {
-            // Use the special screen loading function for complex screens
+            // Use the special screen loading function for complex screens with arguments
             hpi_load_scr_spl(saved_screen, saved_scroll, saved_arg1, saved_arg2, saved_arg3, saved_arg4);
+        }
+        else if (saved_screen > SCR_LIST_START && saved_screen < SCR_LIST_END)
+        {
+            // Regular screen - use standard loading function
+            hpi_load_screen(saved_screen, saved_scroll);
         }
         else
         {
-            // Fall back to regular screen loading for basic screens
-            hpi_load_screen(saved_screen, SCROLL_NONE);
+            // Invalid screen ID - fall back to home screen
+            LOG_WRN("Invalid saved screen %d, loading home screen", saved_screen);
+            hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
     }
     else
@@ -809,12 +832,21 @@ static void st_display_active_entry(void *o)
 
 static void hpi_disp_update_screens(void)
 {
+    // CRITICAL: Do not update ANY screen if a transition is in progress
+    // This prevents race conditions during screen creation/deletion
+    if (screen_transition_in_progress) {
+        return;
+    }
+    
     switch (hpi_disp_get_curr_screen())
     {
     case SCR_HOME:
         if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
         {
-            // ui_home_time_display_update(m_disp_sys_time);
+            // Update home screen arcs with actual ZBus data
+            hpi_home_hr_update(m_disp_hr);
+            hpi_home_steps_update(m_disp_steps);
+            // Also update quick action buttons for consistency
             ui_hr_button_update(m_disp_hr);
             ui_steps_button_update(m_disp_steps);
         }
@@ -914,6 +946,13 @@ static void hpi_disp_update_screens(void)
 
         lv_disp_trig_activity(NULL);
 
+        break;
+    case SCR_SPL_PLOT_GSR:
+#if defined(CONFIG_HPI_GSR_SCREEN)
+        // Update GSR countdown timer display (mirrors ECG pattern)
+        hpi_gsr_disp_update_timer(m_disp_gsr_remaining);
+#endif
+        lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
@@ -1079,10 +1118,18 @@ static void st_display_active_run(void *o)
     if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
     {
         LOG_DBG("Change Screen: %d", scr_to_change);
+        
+        // CRITICAL: Set transition flag to block all screen updates
+        screen_transition_in_progress = true;
+        
         if (screen_func_table[g_screen].draw)
         {
             screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
         }
+        
+        // CRITICAL: Clear transition flag after screen is loaded
+        screen_transition_in_progress = false;
+        
         lv_disp_trig_activity(NULL);
     }
 
@@ -1136,6 +1183,7 @@ static void st_display_sleep_entry(void *o)
 
 static void st_display_sleep_run(void *o)
 {
+    // Check for crown button wakeup
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
         LOG_DBG("Crown key pressed in sleep state");
@@ -1143,10 +1191,10 @@ static void st_display_sleep_run(void *o)
         return;
     }
 
-    // Check for touch wakeup
+    // Check for touch wakeup signaled by LVGL input event callback
     if (k_sem_take(&sem_touch_wakeup, K_NO_WAIT) == 0)
     {
-        LOG_DBG("Touch detected in sleep state - waking up");
+        LOG_DBG("Touch detected via LVGL event - waking up");
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
         return;
     }
@@ -1181,6 +1229,11 @@ static void st_display_sleep_exit(void *o)
 
     // Clear the saved state after successful restoration
     hpi_disp_clear_saved_state();
+    
+    // CRITICAL: Process LVGL tasks to ensure screen is fully rendered
+    // This prevents race conditions where updates try to run before rendering completes
+    lv_task_handler();
+    k_msleep(5);  // Small delay to ensure LVGL finishes processing
 
     // Trigger LVGL activity to reset the inactivity timer
     lv_disp_trig_activity(NULL);
@@ -1191,6 +1244,23 @@ static void st_display_on_entry(void *o)
     LOG_DBG("Display SM On Entry");
 }
 
+// ============================================================================
+// TRANSITION State: Blocks all screen updates during screen loading
+// ============================================================================
+
+static void st_display_transition_entry(void *o)
+{
+    LOG_DBG("Display SM Transition Entry - Updates suspended");
+    // State machine automatically blocks updates - no run function defined
+}
+
+static void st_display_transition_exit(void *o)
+{
+    LOG_DBG("Display SM Transition Exit - Updates resumed");
+}
+
+// ============================================================================
+
 static const struct smf_state display_states[] = {
     [HPI_DISPLAY_STATE_INIT] = SMF_CREATE_STATE(st_display_init_entry, NULL, NULL, NULL, NULL),
     [HPI_DISPLAY_STATE_SPLASH] = SMF_CREATE_STATE(st_display_splash_entry, st_display_splash_run, NULL, NULL, NULL),
@@ -1198,6 +1268,7 @@ static const struct smf_state display_states[] = {
 
     [HPI_DISPLAY_STATE_SCR_PROGRESS] = SMF_CREATE_STATE(st_display_progress_entry, st_display_progress_run, st_display_progress_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ACTIVE] = SMF_CREATE_STATE(st_display_active_entry, st_display_active_run, st_display_active_exit, NULL, NULL),
+    [HPI_DISPLAY_STATE_TRANSITION] = SMF_CREATE_STATE(st_display_transition_entry, NULL, st_display_transition_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_SLEEP] = SMF_CREATE_STATE(st_display_sleep_entry, st_display_sleep_run, st_display_sleep_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ON] = SMF_CREATE_STATE(st_display_on_entry, NULL, NULL, NULL, NULL),
 };
@@ -1309,6 +1380,36 @@ static void disp_ecg_stat_listener(const struct zbus_channel *chan)
     // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
+
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+static void disp_gsr_stress_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_gsr_stress_index_t *stress_data = zbus_chan_const_msg(chan);
+    
+    if (stress_data && stress_data->stress_data_ready) {
+        // Update the GSR complete screen if it's currently displayed
+        hpi_gsr_complete_update_results(stress_data);
+        
+        LOG_DBG("GSR Stress Index: level=%d, tonic=%d.%02d μS, peaks/min=%d", 
+                stress_data->stress_level,
+                stress_data->tonic_level_x100 / 100,
+                stress_data->tonic_level_x100 % 100,
+                stress_data->peaks_per_minute);
+    }
+}
+ZBUS_LISTENER_DEFINE(disp_gsr_stress_lis, disp_gsr_stress_listener);
+#endif
+
+#if defined(CONFIG_HPI_GSR_SCREEN)
+static void disp_gsr_status_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_gsr_status_t *status = zbus_chan_const_msg(chan);
+    if (!status) return;
+    // Store in display thread variable for periodic update (mirrors ECG pattern)
+    m_disp_gsr_remaining = status->remaining_s;
+}
+ZBUS_LISTENER_DEFINE(disp_gsr_status_lis, disp_gsr_status_listener);
+#endif
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 24576
 #define SMF_DISPLAY_THREAD_PRIORITY 5

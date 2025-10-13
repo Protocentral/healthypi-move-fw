@@ -140,6 +140,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_CANCELLED,
     SCR_SPL_HR_SCR2,
     SCR_SPL_PLOT_GSR,
+    SCR_SPL_GSR_COMPLETE,
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -178,9 +179,15 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir);
 void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_update);
 // Special GSR plot screen
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_gsr_plot(void);
+// GSR complete screen
+void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_gsr_complete(void);
+void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *results);
 // Plot update helper called from sensor path
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off);
+void hpi_gsr_disp_update_timer(uint16_t remaining_s);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
@@ -189,6 +196,11 @@ static inline void hpi_gsr_process_bioz_sample(int32_t s) { ARG_UNUSED(s); }
 static inline void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
     ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
 }
+static inline void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
+}
+static inline void unload_scr_gsr_complete(void) { }
+static inline void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *r) { ARG_UNUSED(r); }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
 #endif
 LV_IMG_DECLARE(img_heart_70);
@@ -265,6 +277,7 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void draw_scr_home(enum scroll_dir m_scroll_dir);
 void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
+void hpi_home_steps_update(int steps);
 
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
@@ -396,6 +409,9 @@ void gesture_down_scr_sleep_timeout_select(void);
 void gesture_right_scr_sleep_timeout_select(void);
 void hpi_update_height_weight_labels(void);
 void hpi_update_setting_labels(void);
+
+// Global flag to suspend screen updates during transitions
+extern volatile bool screen_transition_in_progress;
 
 // Helper objects
 void draw_scr_common(lv_obj_t *parent);

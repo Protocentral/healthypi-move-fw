@@ -300,3 +300,23 @@ struct hpi_last_update_time_t
     uint16_t gsr_last_value; // GSR value * 100 (microsiemens)
     int64_t gsr_last_update_ts;
 };
+
+struct hpi_gsr_stress_index_t
+{
+    uint8_t stress_level;              // 0-100 stress score
+    uint16_t tonic_level_x100;         // Baseline GSR (SCL) in μS * 100
+    uint16_t phasic_amplitude_x100;    // Current phasic response (SCR) in μS * 100
+    uint8_t peaks_per_minute;          // Number of SCR peaks detected per minute
+    uint16_t mean_peak_amplitude_x100; // Average peak amplitude in μS * 100
+    int64_t last_peak_timestamp;       // Timestamp of last detected peak
+    bool stress_data_ready;            // Flag indicating valid stress data
+};
+
+// Live GSR measurement status (mirrors ECG status concept for timers)
+struct hpi_gsr_status_t
+{
+    uint16_t elapsed_s;    // Seconds since measurement start
+    uint16_t remaining_s;  // Seconds remaining to target duration (0 when complete)
+    uint16_t total_s;      // Total target duration (e.g. 60)
+    bool active;           // Measurement currently active
+};

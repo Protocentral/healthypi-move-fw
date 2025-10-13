@@ -100,3 +100,23 @@ ZBUS_CHAN_DEFINE(ecg_stat_chan, /* Name */
                  ZBUS_OBSERVERS(disp_ecg_stat_lis, sys_ecg_stat_lis),
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
+
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+ZBUS_CHAN_DEFINE(gsr_stress_chan, /* Name */
+                 struct hpi_gsr_stress_index_t,
+                 NULL, /* Validator */
+                 NULL, /* User Data */
+                 ZBUS_OBSERVERS(disp_gsr_stress_lis),
+                 ZBUS_MSG_INIT(0) /* Initial value {0} */
+);
+#endif
+
+#if defined(CONFIG_HPI_GSR_SCREEN)
+// Live GSR status channel (elapsed/remaining time updates)
+ZBUS_CHAN_DEFINE(gsr_status_chan,
+                 struct hpi_gsr_status_t,
+                 NULL,
+                 NULL,
+                 ZBUS_OBSERVERS(disp_gsr_status_lis),
+                 ZBUS_MSG_INIT(0));
+#endif

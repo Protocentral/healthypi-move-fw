@@ -3,7 +3,22 @@
  * 
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 Protocentral Electronics
+ *static lv_obj_t *label_date_subtitle = NULL;
+
+// Delete callback - LVGL calls this when auto-deleting the screen during navigation
+static void scr_today_delete_event_cb(lv_event_t *e)
+{
+    // Mark screen as invalid immediately to block any concurrent update attempts
+    screen_is_valid = false;
+    
+    // CRITICAL: NULL the main screen pointer immediately
+    // Child pointers will be handled by draw function, but main pointer needs to be NULLed now
+    scr_today = NULL;
+    
+    // NOTE: We don't NULL child object pointers here because LVGL handles them automatically
+    // when it deletes the parent screen. The pointers will become dangling, but that's OK
+    // because screen_is_valid==false will prevent any access to them.
+}025 Protocentral Electronics
  *
  * Author: Ashwin Whitchurch, Protocentral Electronics
  * Contact: ashwin@protocentral.com
@@ -39,25 +54,43 @@
 
 LOG_MODULE_REGISTER(hpi_disp_scr_today, LOG_LEVEL_DBG);
 
-lv_obj_t *scr_today;
+lv_obj_t *scr_today = NULL;
+
+// Flag to prevent updates during screen recreation (prevents race conditions)
+static volatile bool screen_is_valid = false;
 
 // Modern concentric arc-based progress display for full screen utilization
-static lv_obj_t *arc_steps;          // Outer arc for steps
-static lv_obj_t *arc_calories;       // Middle arc for calories  
-static lv_obj_t *arc_active_time;    // Inner arc for active time
+static lv_obj_t *arc_steps = NULL;          // Outer arc for steps
+static lv_obj_t *arc_calories = NULL;       // Middle arc for calories  
+static lv_obj_t *arc_active_time = NULL;    // Inner arc for active time
 
 // Metric value labels positioned around the arcs
-static lv_obj_t *label_steps_value;
-static lv_obj_t *label_calories_value;
-static lv_obj_t *label_time_value;
+static lv_obj_t *label_steps_value = NULL;
+static lv_obj_t *label_calories_value = NULL;
+static lv_obj_t *label_time_value = NULL;
 
 // Central date element (title removed for minimalist design)
-static lv_obj_t *label_date_subtitle;
+static lv_obj_t *label_date_subtitle = NULL;
 
 // Icons for metric identification
-static lv_obj_t *img_steps_icon;
-static lv_obj_t *img_calories_icon;
-static lv_obj_t *img_time_icon;
+static lv_obj_t *img_steps_icon = NULL;
+static lv_obj_t *img_calories_icon = NULL;
+static lv_obj_t *img_time_icon = NULL;
+
+// Event handler called when LVGL auto-deletes the screen (during navigation away)
+// This is CRITICAL to NULL out pointers when screen is deleted by LVGL's auto-delete
+static void scr_today_delete_event_cb(lv_event_t *e)
+{
+    LOG_DBG("Today screen being deleted by LVGL - clearing pointers");
+    
+    // Mark screen as invalid immediately to block any concurrent update attempts
+    screen_is_valid = false;
+    
+    // DO NOT NULL LVGL object pointers here! LVGL is still using them during deletion.
+    // The pointers will become invalid after this callback returns, but LVGL needs
+    // them to remain valid during the delete process. Instead, we NULL them at the
+    // START of the next draw function, which is the safe time to do so.
+}
 
 // Removed quick actions for minimalist design
 
@@ -73,12 +106,17 @@ void hpi_scr_today_cleanup(void)
 {
     LOG_DBG("Cleaning up today screen");
     
+    // Mark screen as invalid to block any updates during cleanup
+    screen_is_valid = false;
+    
     // Reset state - quick actions removed for minimalist design
     
     // Clear object references to prevent dangling pointers during sleep/wake cycles
+    // Important: Set scr_today to NULL FIRST before clearing other pointers
+    // This ensures the update function sees NULL and returns early
     scr_today = NULL;
     
-    // Arc objects
+    // Arc objects - clear after scr_today to prevent race conditions
     arc_steps = NULL;
     arc_calories = NULL;
     arc_active_time = NULL;
@@ -110,12 +148,35 @@ extern lv_style_t style_numeric_large;  // For large hero numbers
 
 void draw_scr_today(enum scroll_dir m_scroll_dir)
 {
-    // Clean up any previous state to prevent crashes
-    hpi_scr_today_cleanup();
+    // Set current screen immediately
+    hpi_disp_set_curr_screen(SCR_TODAY);
     
+    // Mark this screen as invalid during recreation - CRITICAL: Do this FIRST
+    // This prevents update function from running during screen creation
+    screen_is_valid = false;
+    
+    // CRITICAL: NULL all pointers immediately to prevent race conditions
+    // This ensures update function can't access partially-deleted objects
+    scr_today = NULL;
+    arc_steps = NULL;
+    arc_calories = NULL;
+    arc_active_time = NULL;
+    label_steps_value = NULL;
+    label_calories_value = NULL;
+    label_time_value = NULL;
+    label_date_subtitle = NULL;
+    img_steps_icon = NULL;
+    img_calories_icon = NULL;
+    img_time_icon = NULL;
+    
+    // Now create the new screen
     scr_today = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(scr_today, lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);  // Solid black background
     lv_obj_clear_flag(scr_today, LV_OBJ_FLAG_SCROLLABLE);
+
+    // CRITICAL: Register delete event callback to NULL pointers when LVGL auto-deletes the screen
+    // This prevents dangling pointers when navigating away from this screen
+    lv_obj_add_event_cb(scr_today, scr_today_delete_event_cb, LV_EVENT_DELETE, NULL);
 
     // Solid background without transparency effects
 
@@ -225,8 +286,12 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
     // Quick actions removed for minimalist design
 
-    hpi_disp_set_curr_screen(SCR_TODAY);
+    // Show the screen
     hpi_show_screen(scr_today, m_scroll_dir);
+    
+    // Mark screen as valid AFTER all objects are created and screen is shown
+    // Objects are created synchronously, animation happens asynchronously
+    screen_is_valid = true;
     
     // Update with current data - using default values for initial display
     hpi_scr_today_update_all(0, 0, 0);
@@ -234,11 +299,30 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
 
 void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s)
 {
+    // CRITICAL: Check validity flag first to prevent race conditions during screen recreation
+    if (!screen_is_valid) {
+        return;
+    }
+    
+    // Check scr_today first as a master validity flag
+    // If scr_today is NULL, the screen is being destroyed/recreated, so return immediately
+    if (scr_today == NULL) {
+        return;
+    }
+    
+    // CRITICAL: Check if the screen object is still valid in LVGL
+    // This catches the case where we navigated away and LVGL auto-deleted the screen
+    if (!lv_obj_is_valid(scr_today)) {
+        screen_is_valid = false;  // Update our flag to match reality
+        scr_today = NULL;  // Clear the pointer
+        return;
+    }
+    
     // Check for NULL pointers to prevent crashes during sleep/wake cycles
+    // This is a secondary check - if scr_today exists but children don't, we have a problem
     if (label_steps_value == NULL || label_calories_value == NULL || label_time_value == NULL ||
         arc_steps == NULL || arc_calories == NULL || arc_active_time == NULL)
     {
-        LOG_WRN("Today screen objects not initialized, skipping update");
         return;
     }
 
