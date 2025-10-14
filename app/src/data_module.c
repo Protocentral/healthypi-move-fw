@@ -93,7 +93,7 @@ uint16_t current_session_log_id = 0;
 char session_id_str[5];
 
 static bool is_ecg_record_active = false;
-static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128*30 = 3840
+static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128 Hz * 30 seconds = 3840 samples (15.36KB)
 static volatile uint16_t ecg_record_counter = 0;
 K_MUTEX_DEFINE(mutex_is_ecg_record_active);
 
@@ -252,6 +252,16 @@ void hpi_data_set_ecg_record_active(bool active)
             k_work_submit(&work_ecg_write_file);
         }
     }
+    k_mutex_unlock(&mutex_is_ecg_record_active);
+}
+
+void hpi_data_reset_ecg_record_buffer(void)
+{
+    k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
+    // Reset buffer and counter without saving (for lead-off restart)
+    ecg_record_counter = 0;
+    memset(ecg_record_buffer, 0, sizeof(ecg_record_buffer));
+    LOG_INF("ECG recording buffer reset (discard incomplete data)");
     k_mutex_unlock(&mutex_is_ecg_record_active);
 }
 

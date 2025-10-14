@@ -147,13 +147,6 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_clear_flag(arc_ecg_zone, LV_OBJ_FLAG_CLICKABLE);
 
     // Screen title - properly positioned to avoid arc overlap
-    lv_obj_t *label_title = lv_label_create(scr_ecg_scr2);
-    lv_label_set_text(label_title, "ECG Measurement");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Centered at top, clear of arc
-    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
-
     // MID-UPPER RING: Timer container with icon (following design pattern)
     lv_obj_t *cont_timer = lv_obj_create(scr_ecg_scr2);
     lv_obj_set_size(cont_timer, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -272,7 +265,7 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_ecg_lead_off, 300);
     lv_label_set_text(label_ecg_lead_off, "Place fingers on electrodes\nTimer will start automatically");
-    lv_obj_align(label_ecg_lead_off, LV_ALIGN_BOTTOM_MID, 0, -30);
+    lv_obj_align(label_ecg_lead_off, LV_ALIGN_CENTER, 0, 0);  // Centered overlay on chart
     lv_obj_add_style(label_ecg_lead_off, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_ecg_lead_off, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);

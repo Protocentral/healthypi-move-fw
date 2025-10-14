@@ -936,13 +936,21 @@ static void hpi_disp_update_screens(void)
             scr_ecg_lead_on_off_handler(true); // true = leads OFF
             m_lead_on_off = true;              // true = leads OFF
 
-            // Reset timer to restart 30s countdown when leads come back on
+            // Reset recording to ensure continuous 30s data when leads come back on
             bool is_ecg_active = hpi_data_is_ecg_record_active();
             LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
             if (is_ecg_active)
             {
+                LOG_INF("DISPLAY THREAD: Lead disconnected - resetting recording buffer for continuous capture");
+                
+                // Reset the recording buffer without saving incomplete data
+                hpi_data_reset_ecg_record_buffer();
+                
+                // Reset UI timer state
                 LOG_INF("DISPLAY THREAD: Resetting UI timer state");
                 hpi_ecg_timer_reset();
+                
+                // Reset ECG SMF countdown to 30s
                 LOG_INF("DISPLAY THREAD: Resetting ECG SMF countdown to 30s");
                 hpi_ecg_reset_countdown_timer();
             }

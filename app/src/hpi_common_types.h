@@ -41,7 +41,7 @@ HealthyPi specific common data types
 #define PPG_POINTS_PER_SAMPLE 8
 #define BPT_PPG_POINTS_PER_SAMPLE 32
 
-#define ECG_RECORD_BUFFER_SAMPLES 1920 // Reduced from 3840 to 1920 (128*15 instead of 128*30) - saves 7.68KB 
+#define ECG_RECORD_BUFFER_SAMPLES 3840 // Full 30 seconds at 128 Hz (128*30) - 15.36KB total
 
 enum hpi_ppg_status 
 {

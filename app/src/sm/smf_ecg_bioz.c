@@ -76,6 +76,11 @@ K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 
+// Lead off debounce (500ms) to avoid false triggers
+#define ECG_LEAD_OFF_DEBOUNCE_MS 500
+static int64_t lead_off_debounce_start = 0;
+static bool lead_off_debouncing = false;
+
 // Mutex for protecting timer and countdown variables (used by non-ISR thread functions)
 K_MUTEX_DEFINE(ecg_timer_mutex);
 
@@ -412,30 +417,61 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
 
     ecg_sensor_sample.ecg_lead_off = edata->ecg_lead_off;
 
-        // Thread-safe lead detection logic
+        // Thread-safe lead detection logic with debouncing
         bool current_lead_state = get_ecg_lead_on_off();
-        LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s", 
-                edata->ecg_lead_off, current_lead_state ? "OFF" : "ON");
+        LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s, debouncing=%s", 
+                edata->ecg_lead_off, current_lead_state ? "OFF" : "ON", 
+                lead_off_debouncing ? "yes" : "no");
         
-        if (edata->ecg_lead_off == 1 && current_lead_state == false)
+        // Handle Lead OFF with debounce
+        if (edata->ecg_lead_off == 1)
         {
-            LOG_INF("ECG Lead OFF detected (edata->ecg_lead_off=1) - signaling display thread");
-            set_ecg_lead_on_off(true);
-            k_work_submit(&work_ecg_loff);
-
-            // Signal display thread for UI update
-            LOG_INF("ECG SMF: Giving sem_ecg_lead_off semaphore");
-            k_sem_give(&sem_ecg_lead_off);
+            if (current_lead_state == false)
+            {
+                // Lead OFF detected - start or continue debounce timer
+                if (!lead_off_debouncing) {
+                    lead_off_debouncing = true;
+                    lead_off_debounce_start = k_uptime_get();
+                    LOG_INF("ECG Lead OFF detected - starting debounce timer");
+                } else {
+                    // Check if debounce period elapsed
+                    int64_t elapsed = k_uptime_get() - lead_off_debounce_start;
+                    if (elapsed >= ECG_LEAD_OFF_DEBOUNCE_MS) {
+                        LOG_INF("ECG Lead OFF confirmed after %lld ms - signaling display thread", elapsed);
+                        set_ecg_lead_on_off(true);
+                        k_work_submit(&work_ecg_loff);
+                        
+                        // Signal display thread for UI update
+                        LOG_INF("ECG SMF: Giving sem_ecg_lead_off semaphore");
+                        k_sem_give(&sem_ecg_lead_off);
+                        
+                        // Reset debounce state
+                        lead_off_debouncing = false;
+                    }
+                }
+            }
+            // else: already in lead-off state, nothing to do
         }
-        else if (edata->ecg_lead_off == 0 && current_lead_state == true)
+        // Handle Lead ON (immediate, cancels debounce)
+        else if (edata->ecg_lead_off == 0)
         {
-            LOG_INF("ECG Lead ON detected (edata->ecg_lead_off=0) - signaling display thread");
-            set_ecg_lead_on_off(false);
-            k_work_submit(&work_ecg_lon);
+            // Cancel any ongoing debounce first
+            if (lead_off_debouncing) {
+                LOG_INF("ECG Lead OFF debounce cancelled - leads reconnected before timeout");
+                lead_off_debouncing = false;
+            }
             
-            // Signal display thread for UI update  
-            LOG_INF("ECG SMF: Giving sem_ecg_lead_on semaphore");
-            k_sem_give(&sem_ecg_lead_on);
+            // Signal lead ON if state changed
+            if (current_lead_state == true) {
+                LOG_INF("ECG Lead ON detected (edata->ecg_lead_off=0) - signaling display thread");
+                set_ecg_lead_on_off(false);
+                k_work_submit(&work_ecg_lon);
+                
+                // Signal display thread for UI update  
+                LOG_INF("ECG SMF: Giving sem_ecg_lead_on semaphore");
+                k_sem_give(&sem_ecg_lead_on);
+            }
+            // else: already in lead-on state, nothing to do
         }
 
         if (get_ecg_active() || get_gsr_active())

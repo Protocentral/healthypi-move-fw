@@ -63,6 +63,7 @@ int hpi_sys_force_time_sync(void);
 struct tm hpi_sys_get_current_time(void);
 
 void hpi_data_set_ecg_record_active(bool active);
+void hpi_data_reset_ecg_record_buffer(void);
 bool hpi_data_is_ecg_record_active(void);
 
 void hpi_data_set_gsr_measurement_active(bool active);
