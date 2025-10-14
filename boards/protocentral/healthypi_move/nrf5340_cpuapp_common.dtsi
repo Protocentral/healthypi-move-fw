@@ -339,7 +339,7 @@
 		//rtor-enabled;
 		//ecg-enabled;
 		bioz-enabled;
-		ecg-gain = <0>; 
+		ecg-gain = <1>; // 40 V/V gain
 		bioz-gain = <1>; // 20 V/V gain for GSR measurement
 		bioz_cgmag = <2>; // 16 uA excitation current for good GSR sensitivity
 		bioz_dlpf = <1>; // Digital low pass filter

@@ -920,17 +920,32 @@ static void hpi_disp_update_screens(void)
         {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
             scr_ecg_lead_on_off_handler(false); // false = leads ON
-            m_lead_on_off = false;              // false = leads ON
-
-            // Start/restart timer when leads come on during recording
+            
+            // Only trigger stabilization if this is a reconnection (previous state was leads OFF)
             bool is_ecg_active = hpi_data_is_ecg_record_active();
-            LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
-            if (is_ecg_active)
+            bool was_lead_off = m_lead_on_off;  // Previous state before this update
+            
+            m_lead_on_off = false;              // Update to leads ON
+            
+            LOG_INF("DISPLAY THREAD: ECG active=%s, was_lead_off=%s", 
+                    is_ecg_active ? "true" : "false", 
+                    was_lead_off ? "true" : "false");
+            
+            // Only trigger re-stabilization if:
+            // 1. Recording is active AND
+            // 2. This is a reconnection (previous state was lead off)
+            if (is_ecg_active && was_lead_off)
             {
                 LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
                 
-                // NEW: Signal state machine to enter stabilization before resuming recording
+                // Signal state machine to enter stabilization before resuming recording
                 k_sem_give(&sem_ecg_lead_on_stabilize);
+            }
+            // Start timer if this is first lead-on (not a reconnection)
+            else if (is_ecg_active && !was_lead_off)
+            {
+                LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
+                hpi_ecg_timer_start();
             }
         }
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)

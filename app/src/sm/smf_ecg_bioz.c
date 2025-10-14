@@ -800,6 +800,14 @@ static void st_ecg_stream_entry(void *o)
     set_ecg_timer_values(k_uptime_get_32(), ECG_RECORD_DURATION_S);
     hpi_ecg_timer_reset();  // Start in reset state (paused, waiting for leads)
     
+    // Publish initial timer status to update display immediately
+    struct hpi_ecg_status_t ecg_stat = {
+        .ts_complete = 0,
+        .status = HPI_ECG_STATUS_STREAMING,
+        .hr = get_ecg_hr(),
+        .progress_timer = ECG_RECORD_DURATION_S};
+    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+    
     // Initialize screen with current lead state - signal display thread
     bool current_lead_off = get_ecg_lead_on_off();
     if (current_lead_off) {
@@ -822,8 +830,9 @@ static void st_ecg_stream_run(void *o)
         // Reset software smoothing filter for clean start
         ecg_smooth_reset();
         
-        // Reset MAX30001 FIFO to clear any stale samples
-        max30001_fifo_reset(max30001_dev);
+        // Note: We don't reset FIFO here - the sensor is already running
+        // and FIFO reset during active operation might cause issues
+        // The stabilization period will naturally discard transient samples
         
         // Transition to stabilizing state
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
@@ -1013,13 +1022,11 @@ static void st_ecg_stabilizing_entry(void *o)
         
         k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     } else {
-        LOG_INF("Re-stabilization during active recording - resetting filters and FIFO only");
+        LOG_INF("Re-stabilization during active recording - syncing MAX30001");
         
-        // Reset MAX30001 FIFO to clear stale samples
-        max30001_fifo_reset(max30001_dev);
-        
-        // Optional: Synchronize MAX30001 internal state machine
-        // max30001_synch(max30001_dev);
+        // SYNCH command resets internal decimation filters and timing
+        // without affecting configuration registers (gain, leads, etc.)
+        //max30001_synch(max30001_dev);
     }
     
     // Init stabilization values
