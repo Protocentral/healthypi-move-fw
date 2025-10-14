@@ -76,6 +76,9 @@ K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 
+// Semaphore for lead reconnection during recording (triggers re-stabilization)
+K_SEM_DEFINE(sem_ecg_lead_on_stabilize, 0, 1);
+
 // Lead off debounce (500ms) to avoid false triggers
 #define ECG_LEAD_OFF_DEBOUNCE_MS 500
 static int64_t lead_off_debounce_start = 0;
@@ -333,6 +336,14 @@ void hpi_ecg_reset_countdown_timer(void)
     k_mutex_unlock(&ecg_timer_mutex);
     
     LOG_INF("ECG SMF: Timer countdown RESET to %d seconds", ECG_RECORD_DURATION_S);
+    
+    // Immediately publish the reset timer value to update the display
+    struct hpi_ecg_status_t ecg_stat = {
+        .ts_complete = 0,
+        .status = HPI_ECG_STATUS_STREAMING,
+        .hr = get_ecg_hr(),
+        .progress_timer = ECG_RECORD_DURATION_S};  // Show 30 seconds
+    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 }
 
 static void set_ecg_stabilization_values(int stabilization_countdown, bool complete)
@@ -803,6 +814,22 @@ static void st_ecg_stream_entry(void *o)
 
 static void st_ecg_stream_run(void *o)
 {
+    // Check for lead reconnection requiring stabilization
+    if (k_sem_take(&sem_ecg_lead_on_stabilize, K_NO_WAIT) == 0)
+    {
+        LOG_INF("ECG SMF: Lead reconnected - entering stabilization phase");
+        
+        // Reset software smoothing filter for clean start
+        ecg_smooth_reset();
+        
+        // Reset MAX30001 FIFO to clear any stale samples
+        max30001_fifo_reset(max30001_dev);
+        
+        // Transition to stabilizing state
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
+        return;
+    }
+
     // LOG_DBG("ECG/BioZ SM Stream Run");
     // Stream for ECG duration (30s)
     if (hpi_data_is_ecg_record_active() == true)
@@ -967,19 +994,33 @@ static void st_ecg_stabilizing_entry(void *o)
     LOG_DBG("ECG/BioZ SM Stabilizing Entry");
     int ret;
 
-    // Enable ECG
-    // Reset ECG smoothing filter for clean start
+    // Check if this is initial stabilization or re-stabilization during recording
+    bool is_recording_active = hpi_data_is_ecg_record_active();
+
+    // Always reset ECG smoothing filter for clean start
     ecg_smooth_reset();
 
-    // Enable ECG but don't start recording yet
-    ret = hw_max30001_ecg_enable();
-    if (ret != 0) {
-        LOG_ERR("Failed to enable ECG in stabilizing entry: %d", ret);
-       
-        return;
+    // Only enable ECG and start sampling if not already active (initial start)
+    if (!is_recording_active) {
+        LOG_INF("Initial stabilization - enabling ECG and starting sampling");
+        
+        // Enable ECG but don't start recording yet
+        ret = hw_max30001_ecg_enable();
+        if (ret != 0) {
+            LOG_ERR("Failed to enable ECG in stabilizing entry: %d", ret);
+            return;
+        }
+        
+        k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+    } else {
+        LOG_INF("Re-stabilization during active recording - resetting filters and FIFO only");
+        
+        // Reset MAX30001 FIFO to clear stale samples
+        max30001_fifo_reset(max30001_dev);
+        
+        // Optional: Synchronize MAX30001 internal state machine
+        // max30001_synch(max30001_dev);
     }
-    
-    k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     
     // Init stabilization values
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
@@ -988,7 +1029,7 @@ static void st_ecg_stabilizing_entry(void *o)
     // Publish status indicating stabilization phase
     struct hpi_ecg_status_t ecg_stat = {
         .ts_complete = 0,
-        .status = HPI_ECG_STATUS_STREAMING, // add HPI_ECG_STATUS_STABILIZING
+        .status = HPI_ECG_STATUS_STREAMING, // TODO: Consider adding HPI_ECG_STATUS_STABILIZING
         .hr = 0,
         .progress_timer = ECG_RECORD_DURATION_S + ECG_STABILIZATION_DURATION_S};
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
@@ -1060,6 +1101,13 @@ static void st_ecg_stabilizing_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stabilizing Exit");
     set_ecg_stabilization_values(0, true);
+    
+    // If this was a re-stabilization during recording, restart the timer
+    bool is_recording_active = hpi_data_is_ecg_record_active();
+    if (is_recording_active) {
+        LOG_INF("Stabilization complete - resuming recording with timer start");
+        hpi_ecg_timer_start();
+    }
 }
 
 static const struct smf_state ecg_states[] = {

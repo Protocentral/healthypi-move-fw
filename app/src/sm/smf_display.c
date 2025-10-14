@@ -537,6 +537,7 @@ extern struct k_sem sem_crown_key_pressed;
 
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
+extern struct k_sem sem_ecg_lead_on_stabilize;
 
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
@@ -926,8 +927,10 @@ static void hpi_disp_update_screens(void)
             LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
             if (is_ecg_active)
             {
-                LOG_INF("DISPLAY THREAD: Calling hpi_ecg_timer_start()");
-                hpi_ecg_timer_start();
+                LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
+                
+                // NEW: Signal state machine to enter stabilization before resuming recording
+                k_sem_give(&sem_ecg_lead_on_stabilize);
             }
         }
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
