@@ -958,6 +958,11 @@ static void hpi_disp_update_screens(void)
 #endif
         lv_disp_trig_activity(NULL);
         break;
+    case SCR_SPL_RAW_PPG:
+        // Periodically check for signal timeout to show "No Signal" message
+        hpi_ppg_check_signal_timeout();
+        lv_disp_trig_activity(NULL);
+        break;
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {

@@ -361,6 +361,7 @@ void gesture_down_scr_bpt_cal_required(void);
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);
+void hpi_ppg_check_signal_timeout(void);  // Check for signal timeout periodically
 
 /* Shared autoscale helper for PPG/LVGL charts.
  * chart: LVGL chart object
@@ -369,6 +370,9 @@ void hpi_ppg_disp_update_hr(int hr);
  * disp_window_size: window size constant used to determine threshold
  */
 void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *y_max_ppg, float *gx, int disp_window_size);
+
+/* Reset autoscale state - call when initializing a screen that uses autoscaling */
+void hpi_ppg_autoscale_reset(void);
 
 // EDA screen functions
 void draw_scr_pre(enum scroll_dir m_scroll_dir);
