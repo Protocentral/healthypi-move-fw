@@ -217,9 +217,11 @@ void draw_scr_today(enum scroll_dir m_scroll_dir)
     // Show the screen
     hpi_show_screen(scr_today, m_scroll_dir);
     
+    // Mark screen as valid - updates can now proceed
     screen_is_valid = true;
-    // Update with current data - using default values for initial display
-    hpi_scr_today_update_all(0, 0, 0);
+    
+    // NOTE: Don't call update here - let the periodic update in smf_display handle it
+    // Calling update immediately can cause race conditions with LVGL's screen deletion
 }
 
 void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s)
@@ -248,6 +250,21 @@ void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_ti
         arc_steps == NULL || arc_calories == NULL || arc_active_time == NULL)
     {
         LOG_WRN("Today screen objects not initialized, skipping update");
+        return;
+    }
+
+    // CRITICAL: Validate that all arc objects are not just non-NULL, but fully valid
+    // This prevents crashes when LVGL is still processing the screen or arcs are being deleted
+    if (!lv_obj_is_valid(arc_steps) || !lv_obj_is_valid(arc_calories) || !lv_obj_is_valid(arc_active_time))
+    {
+        LOG_WRN("Arc objects are invalid, skipping update");
+        return;
+    }
+
+    // Additional safety: Validate label objects as well
+    if (!lv_obj_is_valid(label_steps_value) || !lv_obj_is_valid(label_calories_value) || !lv_obj_is_valid(label_time_value))
+    {
+        LOG_WRN("Label objects are invalid, skipping update");
         return;
     }
 

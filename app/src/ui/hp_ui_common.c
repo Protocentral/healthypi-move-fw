@@ -472,35 +472,27 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 {
     lv_obj_add_event_cb(m_screen, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
-    // Get the currently active screen before loading the new one
-    lv_obj_t *old_screen = lv_scr_act();
-    
+    // Let LVGL automatically delete the old screen after animation completes
+    // This is the safest approach as LVGL handles the timing correctly
     if (m_scroll_dir == SCROLL_LEFT)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, false);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
     }
     else if (m_scroll_dir == SCROLL_RIGHT)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, false);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
     }
     else if (m_scroll_dir == SCROLL_UP)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, false);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, true);
     }
     else if (m_scroll_dir == SCROLL_DOWN)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, false);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, true);
     }
     else
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
-    }
-    
-    // After loading the new screen, delete the old one if it's different
-    // This prevents memory leaks and ensures clean screen transitions
-    if (old_screen != NULL && old_screen != m_screen && lv_obj_is_valid(old_screen))
-    {
-        lv_obj_del(old_screen);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
     }
 }
 
@@ -515,9 +507,11 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
+#if defined(CONFIG_HPI_TODAY_SCREEN)
     case SCR_TODAY:
         draw_scr_today(m_scroll_dir);
         break;
+#endif
     case SCR_HR:
         draw_scr_hr(m_scroll_dir);
         break;

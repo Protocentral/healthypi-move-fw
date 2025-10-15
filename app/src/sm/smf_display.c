@@ -519,7 +519,9 @@ static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
 extern lv_obj_t *scr_bpt;
+#if defined(CONFIG_HPI_TODAY_SCREEN)
 extern lv_obj_t *scr_today;
+#endif
 
 extern struct k_sem sem_disp_smf_start;
 
@@ -1009,6 +1011,7 @@ static void hpi_disp_update_screens(void)
         }
         if
         break;*/
+#if defined(CONFIG_HPI_TODAY_SCREEN)
     case SCR_TODAY:
         if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
         {
@@ -1021,6 +1024,7 @@ static void hpi_disp_update_screens(void)
             }
         }
         break;
+#endif
     case SCR_SPL_PULLDOWN:
         if (k_uptime_get_32() - last_settings_refresh > HPI_DISP_SETTINGS_REFRESH_INT)
         {

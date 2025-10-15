@@ -103,7 +103,9 @@ enum hpi_disp_screens
     SCR_LIST_START,
 
     SCR_HOME,
+#if defined(CONFIG_HPI_TODAY_SCREEN)
     SCR_TODAY,
+#endif
     SCR_HR,
     SCR_SPO2,
     SCR_ECG,
@@ -286,9 +288,11 @@ void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
 void hpi_home_steps_update(int steps);
 
+#if defined(CONFIG_HPI_TODAY_SCREEN)
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s);
+#endif
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);

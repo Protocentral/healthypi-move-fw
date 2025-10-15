@@ -161,8 +161,13 @@ static void quick_action_steps_clicked(lv_event_t *e)
             lv_obj_add_flag(quick_actions_container, LV_OBJ_FLAG_HIDDEN);
             quick_actions_visible = false;
         }
+#if defined(CONFIG_HPI_TODAY_SCREEN)
         // Navigate to steps screen
         hpi_load_screen(SCR_TODAY, SCROLL_LEFT);
+#else
+        // TODAY screen disabled - could navigate to another screen or do nothing
+        LOG_WRN("TODAY screen is disabled");
+#endif
     }
 }
 

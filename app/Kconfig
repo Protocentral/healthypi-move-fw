@@ -7,6 +7,14 @@ rsource "src/max32664_updater/Kconfig"
  
 menu "HealthyPi Move application options"
 
+config HPI_TODAY_SCREEN
+		bool "Enable TODAY screen"
+		default y
+		help
+			Enable the TODAY screen showing daily activity summary (steps, calories,
+			active time). Disable to temporarily exclude from build during debugging
+			or to save flash/RAM. When disabled, screen is excluded from navigation.
+
 config HPI_GSR_SCREEN
 		bool "Enable GSR screen"
 		default y
