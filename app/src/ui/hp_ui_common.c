@@ -106,14 +106,6 @@ lv_style_t style_bg_purple;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
-// Note: Battery label variables removed - each screen now manages its own battery display
-// static lv_obj_t *label_batt_level;       // REMOVED - dead code, never used
-// static lv_obj_t *label_batt_level_val;   // REMOVED - dead code, never used
-
-static lv_obj_t *lbl_hdr_hour;
-static lv_obj_t *lbl_hdr_min;
-static lv_obj_t *ui_label_date;
-
 lv_obj_t *cui_battery_percent;
 int tmp_scr_parent = 0;
 
@@ -476,36 +468,39 @@ lv_color_t hpi_get_battery_color(uint8_t level, bool charging)
     }
 }
 
-// REMOVED: hpi_disp_update_batt_level() - Dead code, never called
-// This function and its associated static variables were never used.
-// Use screen-specific battery update functions instead:
-// - hpi_disp_home_update_batt_level() for home screen
-// - hpi_disp_settings_update_batt_level() for pulldown screen
-// - hpi_disp_low_battery_update() for low battery screen
-
 void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 {
     lv_obj_add_event_cb(m_screen, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
+    // Get the currently active screen before loading the new one
+    lv_obj_t *old_screen = lv_scr_act();
+    
     if (m_scroll_dir == SCROLL_LEFT)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, false);
     }
     else if (m_scroll_dir == SCROLL_RIGHT)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, false);
     }
     else if (m_scroll_dir == SCROLL_UP)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, false);
     }
     else if (m_scroll_dir == SCROLL_DOWN)
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, false);
     }
     else
     {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
+        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
+    }
+    
+    // After loading the new screen, delete the old one if it's different
+    // This prevents memory leaks and ensures clean screen transitions
+    if (old_screen != NULL && old_screen != m_screen && lv_obj_is_valid(old_screen))
+    {
+        lv_obj_del(old_screen);
     }
 }
 
