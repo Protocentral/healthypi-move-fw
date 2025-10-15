@@ -885,6 +885,14 @@ static void st_ecg_stream_run(void *o)
         }
     }
 
+    // Check if buffer is full (signaled by data module)
+    // This provides redundant protection in case timer and buffer get out of sync
+    if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+    {
+        LOG_INF("ECG SMF: Buffer full signal received - switching to COMPLETE state");
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
+    }
+
     // Handle GSR start/stop even during ECG recording
     if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
     {
