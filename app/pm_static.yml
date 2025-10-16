@@ -1,8 +1,8 @@
 app:
   address: 0x10200
-  end_address: 0xe0000
+  end_address: 0xe4000
   region: flash_primary
-  size: 0xcfe00
+  size: 0xd3e00
 external_flash:
   address: 0x120000
   device: w25q01jv
@@ -21,12 +21,12 @@ mcuboot_pad:
   size: 0x200
 mcuboot_primary:
   address: 0x10000
-  end_address: 0xe4000
+  end_address: 0xe8000
   orig_span: &id001
   - mcuboot_pad
   - app
   region: flash_primary
-  size: 0xd4000
+  size: 0xd8000
   span: *id001
 mcuboot_primary_1:
   address: 0x0
@@ -36,31 +36,31 @@ mcuboot_primary_1:
   size: 0x40000
 mcuboot_primary_app:
   address: 0x10200
-  end_address: 0xe0000
+  end_address: 0xe4000
   orig_span: &id002
   - app
   region: flash_primary
-  size: 0xcfe00
+  size: 0xd3e00
   span: *id002
 #External Flash STARTS
 mcuboot_secondary:
   address: 0x0
   device: w25q01jv
-  end_address: 0xd4000
+  end_address: 0xd8000
   region: external_flash
-  size: 0xd4000
+  size: 0xd8000
 mcuboot_secondary_1:
-  address: 0xd4000
+  address: 0xd8000
   device: w25q01jv
-  end_address: 0x114000
+  end_address: 0x118000
   region: external_flash
   size: 0x40000
 EMPTY_1:
-  address: 0x114000
+  address: 0x118000
   device: w25q01jv
   end_address: 0x120000
   region: external_flash
-  size: 0xc000
+  size: 0x8000
 mcuboot_primary_2:
   address: 0x120000
   device: w25q01jv
