@@ -241,6 +241,13 @@ void hpi_data_set_ecg_record_active(bool active)
         // This prevents race condition where new recording could start before write completes
         if (ecg_record_counter > 0)
         {
+            // Validate counter is within bounds before writing
+            if (ecg_record_counter > ECG_RECORD_BUFFER_SAMPLES) {
+                LOG_ERR("ECG counter overflow detected: %d > %d - clamping to max",
+                        ecg_record_counter, ECG_RECORD_BUFFER_SAMPLES);
+                ecg_record_counter = ECG_RECORD_BUFFER_SAMPLES;
+            }
+            
             struct tm tm_sys_time = hpi_sys_get_sys_time();
             int64_t log_time = timeutil_timegm64(&tm_sys_time);
             
@@ -341,6 +348,16 @@ void data_thread(void)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
+
+                // Defensive check: prevent counter from exceeding buffer size
+                if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES) {
+                    LOG_ERR("ECG buffer counter overflow detected: %d >= %d - stopping recording",
+                            ecg_record_counter, ECG_RECORD_BUFFER_SAMPLES);
+                    extern struct k_sem sem_ecg_complete;
+                    k_sem_give(&sem_ecg_complete);
+                    k_mutex_unlock(&mutex_is_ecg_record_active);
+                    continue;  // Skip this sample batch
+                }
 
                 if (samples_to_copy <= space_left)
                 {

@@ -1156,4 +1156,7 @@ void smf_ecg_thread(void)
     }
 }
 
-K_THREAD_DEFINE(smf_ecg_thread_id, 1024, smf_ecg_thread, NULL, NULL, NULL, 10, 0, 0);
+// Increased from 1024 to 4096 bytes to accommodate file write operations
+// File writes require ~500-700 bytes for LittleFS operations, path buffers,
+// and file structures. 1024 bytes was causing stack overflow crashes.
+K_THREAD_DEFINE(smf_ecg_thread_id, 4096, smf_ecg_thread, NULL, NULL, NULL, 10, 0, 0);
