@@ -38,6 +38,7 @@ LOG_MODULE_REGISTER(scr_pulldown, LOG_LEVEL_INF);
 
 #include "ui/move_ui.h"
 #include "hw_module.h"
+#include "battery_module.h"
 
 lv_obj_t *scr_pulldown;
 
@@ -168,7 +169,10 @@ void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Battery status at top - more spacing from edge
     label_pulldown_batt_val = lv_label_create(scr_pulldown);
-    lv_label_set_text(label_pulldown_batt_val, LV_SYMBOL_BATTERY_FULL " --");
+    // Initialize with current battery level from fuel gauge
+    uint8_t current_batt_level = battery_get_level();
+    const char* battery_symbol = hpi_get_battery_symbol(current_batt_level, false);
+    lv_label_set_text_fmt(label_pulldown_batt_val, "%s %d %%", battery_symbol, current_batt_level);
     lv_obj_align(label_pulldown_batt_val, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_set_style_text_font(label_pulldown_batt_val, LV_FONT_DEFAULT, LV_PART_MAIN);
     lv_obj_add_style(label_pulldown_batt_val, &style_body_medium, LV_PART_MAIN);

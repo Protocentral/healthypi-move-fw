@@ -92,7 +92,7 @@ void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     // Screen title - properly positioned to avoid arc overlap
     lv_obj_t *label_title = lv_label_create(scr_bpt_measure);
     lv_label_set_text(label_title, "Blood Pressure");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Centered at top, clear of arc
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 50);  // Moved down to avoid arc overlap
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
@@ -131,18 +131,16 @@ void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     
     // Configure main chart background (transparent for AMOLED)
     lv_obj_set_style_bg_opa(chart_bpt_ppg, LV_OPA_TRANSP, LV_PART_MAIN);  // Transparent background
-    lv_obj_set_style_border_width(chart_bpt_ppg, 1, LV_PART_MAIN);        // Subtle border
-    lv_obj_set_style_border_color(chart_bpt_ppg, lv_color_hex(0x333333), LV_PART_MAIN);
-    lv_obj_set_style_border_opa(chart_bpt_ppg, LV_OPA_50, LV_PART_MAIN);
+    lv_obj_set_style_border_width(chart_bpt_ppg, 0, LV_PART_MAIN);        // No border (matches SpO2)
     lv_obj_set_style_outline_width(chart_bpt_ppg, 0, LV_PART_MAIN);       // No outline
     lv_obj_set_style_pad_all(chart_bpt_ppg, 5, LV_PART_MAIN);             // Minimal padding
     
     // Create series for PPG data
-    ser_bpt_ppg = lv_chart_add_series(chart_bpt_ppg, lv_color_hex(0x7B68EE), LV_CHART_AXIS_PRIMARY_Y);
+    ser_bpt_ppg = lv_chart_add_series(chart_bpt_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     
-    // Configure line series styling - purple theme for PPG
-    lv_obj_set_style_line_width(chart_bpt_ppg, 2, LV_PART_ITEMS);         // Line width
-    lv_obj_set_style_line_color(chart_bpt_ppg, lv_color_hex(0x7B68EE), LV_PART_ITEMS);
+    // Configure line series styling - orange theme matching SpO2/raw PPG screens
+    lv_obj_set_style_line_width(chart_bpt_ppg, 6, LV_PART_ITEMS);         // Thicker line matching SpO2
+    lv_obj_set_style_line_color(chart_bpt_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_ITEMS);
     lv_obj_set_style_line_opa(chart_bpt_ppg, LV_OPA_COVER, LV_PART_ITEMS); // Full opacity for medical clarity
     lv_obj_set_style_line_rounded(chart_bpt_ppg, false, LV_PART_ITEMS);   // Sharp lines for precision
     
@@ -191,7 +189,7 @@ void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
 
     // Instructions at bottom
     lv_obj_t *label_instructions = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_instructions, "Keep still during measurement");
+    lv_label_set_text(label_instructions, "Hold Still");
     lv_obj_align(label_instructions, LV_ALIGN_BOTTOM_MID, 0, -30);
     lv_obj_add_style(label_instructions, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_instructions, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);

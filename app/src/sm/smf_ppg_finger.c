@@ -254,6 +254,11 @@ void work_fi_sample_handler(struct k_work *work)
 
     int ret = 0;
     static int consecutive_timeouts = 0;
+    static int sample_count = 0;
+    sample_count++;
+    if (sample_count <= 5 || sample_count % 10 == 0) {
+        LOG_DBG("Reading sensor data (sample #%d)...", sample_count);
+    }
     ret = sensor_read(&max32664d_iodev, &max32664d_read_rtio_poll_ctx, data_buf, sizeof(data_buf));
     if (ret < 0)
     {
@@ -460,6 +465,7 @@ static void st_ppg_fing_idle_run(void *o)
 
     if (k_sem_take(&sem_bpt_enter_mode_cal, K_NO_WAIT) == 0)
     {
+        LOG_INF("sem_bpt_enter_mode_cal received - entering BPT calibration mode");
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
     }
@@ -470,14 +476,18 @@ static void st_ppg_fing_idle_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 
-    // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
-
-    /*if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
+    // FIX: Allow calibration to start directly from IDLE if app sends HPI_CMD_START_BPT_CAL_START
+    // without first sending HPI_CMD_BPT_SEL_CAL_MODE. This makes the device more tolerant
+    // of different app implementations.
+    if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
-        // k_msleep(1000);
+        LOG_INF("BPT calibration start from IDLE - transitioning to CAL_WAIT then CAL");
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
-    }*/
+        // First enter CAL_WAIT to show the progress screen, then immediately transition to CAL
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
+        // Re-signal the semaphore so CAL_WAIT state can pick it up
+        k_sem_give(&sem_bpt_cal_start);
+    }
 }
 
 static void bpt_cal_timeout_handler(struct k_timer *timer_id)
@@ -506,6 +516,7 @@ static void st_ppg_fi_cal_wait_run(void *o)
     // LOG_DBG("PPG Finger SM BPT Calibration Running");
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
+        LOG_INF("sem_bpt_cal_start received in CAL_WAIT state - starting calibration");
         // Turn off timeout
         k_timer_stop(&tmr_bpt_cal_timeout);
 
@@ -522,10 +533,14 @@ static void st_ppg_fi_cal_wait_run(void *o)
 
 static void st_ppg_fing_bpt_cal_entry(void *o)
 {
-    LOG_DBG("PPG Finger SM BPT Calibration Entry");
+    LOG_INF("PPG Finger SM BPT Calibration Entry");
+    LOG_INF("Step 1: Enabling finger sensor power");
     hpi_hw_fi_sensor_on();
+    LOG_INF("Step 2: Starting BPT calibration with index=%d sys=%d dia=%d", m_cal_index, m_cal_sys, m_cal_dia);
     hw_bpt_start_cal(m_cal_index, m_cal_sys, m_cal_dia);
+    LOG_INF("Step 3: Signaling to start sampling");
     k_sem_give(&sem_start_fi_sampling);
+    LOG_INF("BPT Calibration Entry complete");
 }
 
 static void st_ppg_fing_bpt_cal_run(void *o)
@@ -809,9 +824,12 @@ static void ppg_fi_ctrl_thread(void)
     {
         if (k_sem_take(&sem_start_fi_sampling, K_NO_WAIT) == 0)
         {
-            LOG_INF("Start sampling");
+            LOG_INF("Start sampling signal received");
+            LOG_INF("Waiting 1 second for sensor stabilization...");
             k_msleep(1000);
+            LOG_INF("Starting sampling timer (interval: %d ms)", PPG_FI_SAMPLING_INTERVAL_MS);
             k_timer_start(&tmr_ppg_fi_sampling, K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS), K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS));
+            LOG_INF("Sampling timer started successfully");
         }
 
         if (k_sem_take(&sem_stop_fi_sampling, K_NO_WAIT) == 0)

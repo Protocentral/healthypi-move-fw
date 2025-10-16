@@ -574,7 +574,12 @@ static int hw_enable_pmic_callback(void)
 
 void hpi_hw_fi_sensor_on(void)
 {
-    regulator_enable(dev_ldsw_fi_sens);
+    int ret = regulator_enable(dev_ldsw_fi_sens);
+    if (ret == 0) {
+        LOG_INF("Finger sensor power enabled (LDO2)");
+    } else {
+        LOG_ERR("Failed to enable finger sensor power: %d", ret);
+    }
 }
 
 void hpi_hw_fi_sensor_off(void)

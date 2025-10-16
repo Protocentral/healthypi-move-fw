@@ -114,26 +114,26 @@ static void scr_gsr_measure_btn_event_handler(lv_event_t *e)
     if (code == LV_EVENT_CLICKED)
     {
         if (!gsr_measurement_active) {
-            // Start GSR measurement using semaphore control (same pattern as ECG)
+            // Start GSR live view - no calculation, just monitoring
             gsr_measurement_active = true;
             gsr_measurement_start_ts = k_uptime_get();
             lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_STOP " Stop");
-            lv_label_set_text(label_gsr_status, "Measuring...");
+            lv_label_set_text(label_gsr_status, "Live Monitoring");
             
-            // Open plot screen first
+            // Open live plot screen
             hpi_load_scr_spl(SCR_SPL_PLOT_GSR, SCROLL_UP, (uint32_t)SCR_GSR, 0, 0, 0);
             
-            // Start GSR measurement via semaphore (processed by state machine)
+            // Start GSR live view via semaphore
             k_msleep(500);  // Allow screen transition
             k_sem_give(&sem_gsr_start);
         } else {
-            // Stop GSR measurement using semaphore control
+            // Stop GSR live view
             gsr_measurement_active = false;
             gsr_measurement_start_ts = 0;
-            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_PLAY " Measure");
-            lv_label_set_text(label_gsr_status, "Ready");
+            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_EYE_OPEN " Live View");
+            lv_label_set_text(label_gsr_status, "Live View Only");
             
-            // Stop GSR measurement via semaphore (processed by state machine)
+            // Stop GSR via semaphore
             k_sem_give(&sem_gsr_cancel);
         }
     }
@@ -151,35 +151,22 @@ void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_updat
         return;
     }
     
-    // Only update if measurement is active
+    // Only update if live view is active
     if (!gsr_measurement_active) {
         return;
     }
     
-    // Update baseline calculation
-    calculate_gsr_baseline(gsr_value_x100);
-    
-    // Update current value display - show value without unit
+    // Display current value for live monitoring (no calculation)
     uint16_t integer_part = gsr_value_x100 / 100;
     uint16_t decimal_part = gsr_value_x100 % 100;
     lv_label_set_text_fmt(label_gsr_current, "%u.%02u", integer_part, decimal_part);
     
-    // Update arc progress
+    // Update arc to show current value position
     if (arc_gsr_range != NULL) {
         lv_arc_set_value(arc_gsr_range, gsr_value_x100);
     }
-    
-    // Update status
-    update_gsr_status(gsr_value_x100);
 
-    // Note: GSR data is now sent to plot through queue-based system in data_module.c
-    
-    // Update last measurement time
-    if (label_gsr_last_update != NULL) {
-        char last_meas_str[25];
-        hpi_helper_get_relative_time_str(gsr_last_update, last_meas_str, sizeof(last_meas_str));
-        lv_label_set_text(label_gsr_last_update, last_meas_str);
-    }
+    // Note: GSR data is sent to plot for live visualization
 }
 
 void draw_scr_gsr(enum scroll_dir m_scroll_dir)
@@ -226,37 +213,26 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
 
     // Screen title - clean and simple positioning
     lv_obj_t *label_title = lv_label_create(scr_gsr);
-    lv_label_set_text(label_title, "GSR");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Centered at top, clear of arc
+    lv_label_set_text(label_title, "GSR Monitor");
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 50);  // Centered at top, clear of arc
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
 
-    // MID-UPPER RING: GSR Icon (clean, no container)
-    lv_obj_t *img_gsr = lv_img_create(scr_gsr);
-    lv_img_set_src(img_gsr, &img_heart_48px);  // Using heart as GSR placeholder
-    lv_obj_align(img_gsr, LV_ALIGN_TOP_MID, 0, 95);  // Positioned below title
-    lv_obj_set_style_img_recolor(img_gsr, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
-    lv_obj_set_style_img_recolor_opa(img_gsr, LV_OPA_COVER, LV_PART_MAIN);
-
     // Status info - centered below unit with proper spacing
     label_gsr_status = lv_label_create(scr_gsr);
-    lv_label_set_text(label_gsr_status, "Ready");
-    lv_obj_align(label_gsr_status, LV_ALIGN_CENTER, 0, 65);  // Centered, below unit with gap
-    lv_obj_set_style_text_color(label_gsr_status, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_label_set_text(label_gsr_status, "Live View Only");
+    lv_obj_align(label_gsr_status, LV_ALIGN_CENTER, 0, -10);  // Centered, better vertical spacing
+    lv_obj_set_style_text_color(label_gsr_status, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
     lv_obj_add_style(label_gsr_status, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_gsr_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // Last update time - below status
+    // Informational label - explain live view mode
     label_gsr_last_update = lv_label_create(scr_gsr);
-    if (has_data) {
-        char last_meas_str[25];
-        hpi_helper_get_relative_time_str(gsr_last_update_stored, last_meas_str, sizeof(last_meas_str));
-        lv_label_set_text(label_gsr_last_update, last_meas_str);
-    } else {
-        lv_label_set_text(label_gsr_last_update, "");
-    }
-    lv_obj_align(label_gsr_last_update, LV_ALIGN_CENTER, 0, 90);  // Centered, below status
+    lv_label_set_long_mode(label_gsr_last_update, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_gsr_last_update, 280);
+    lv_label_set_text(label_gsr_last_update, "Real-time monitoring without analysis");
+    lv_obj_align(label_gsr_last_update, LV_ALIGN_CENTER, 0, 30);  // Centered, below status with better spacing
     lv_obj_set_style_text_color(label_gsr_last_update, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     lv_obj_add_style(label_gsr_last_update, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_gsr_last_update, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -276,7 +252,7 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_shadow_width(btn_gsr_measure, 0, LV_PART_MAIN);  // No shadow for AMOLED
     
     lv_obj_t *label_btn_gsr_measure = lv_label_create(btn_gsr_measure);
-    lv_label_set_text(label_btn_gsr_measure, LV_SYMBOL_PLAY " Measure");
+    lv_label_set_text(label_btn_gsr_measure, LV_SYMBOL_EYE_OPEN " Live View");
     lv_obj_center(label_btn_gsr_measure);
     lv_obj_set_style_text_color(label_btn_gsr_measure, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_gsr_measure, scr_gsr_measure_btn_event_handler, LV_EVENT_CLICKED, NULL);

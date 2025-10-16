@@ -753,8 +753,8 @@ static void st_ecg_idle_entry(void *o)
                 k_timer_stop(&tmr_bioz_sampling);
             }
             
-            // Transition to complete screen
-            hpi_load_scr_spl(SCR_SPL_GSR_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
+            // Return to GSR home screen (no results to display for live view only)
+            hpi_load_screen(SCR_GSR, SCROLL_DOWN);
         }
         else {
             // Publish status once per second via ZBus

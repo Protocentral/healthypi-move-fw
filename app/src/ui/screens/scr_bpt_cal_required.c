@@ -107,7 +107,7 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_t *label_btn = lv_label_create(btn_ok);
     lv_label_set_text(label_btn, LV_SYMBOL_OK " OK");
     lv_obj_center(label_btn);
-    lv_obj_add_style(label_btn, &style_body_medium, LV_PART_MAIN);
+    // Note: Do not apply style_body_medium - LVGL symbols require default LVGL font
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_CAL_REQUIRED);
     hpi_show_screen(scr_bpt_cal_required, m_scroll_dir);

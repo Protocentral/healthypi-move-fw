@@ -141,7 +141,7 @@ static bool m_disp_batt_charging = false;
 static struct tm m_disp_sys_time;
 
 // Battery change detection - only update UI when data actually changes
-static uint8_t last_displayed_batt_level = 0;
+static uint8_t last_displayed_batt_level = 255; // Initialize to invalid value to force first update
 static bool last_displayed_batt_charging = false;
 
 static uint32_t splash_scr_start_time = 0;
@@ -773,6 +773,19 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
 
         lv_disp_trig_activity(NULL);
     }
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS)
+    {
+        // Update calibration progress text
+        if (k_uptime_get_32() - m_disp_bp_last_refresh > 1000)
+        {
+            m_disp_bp_last_refresh = k_uptime_get_32();
+            char progress_str[32];
+            snprintf(progress_str, sizeof(progress_str), "Calibrating... %d%%", ppg_sensor_sample.bpt_progress);
+            scr_bpt_cal_progress_update_text(progress_str);
+            LOG_INF("BPT Cal Progress: %d%%", ppg_sensor_sample.bpt_progress);
+        }
+        lv_disp_trig_activity(NULL);
+    }
     else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
     {
         lv_disp_trig_activity(NULL);
@@ -1111,22 +1124,32 @@ static void st_display_active_run(void *o)
         if (m_disp_batt_level != last_displayed_batt_level || 
             m_disp_batt_charging != last_displayed_batt_charging)
         {
+            // Track if any screen was actually updated
+            bool ui_updated = false;
+            
             if ((hpi_disp_get_curr_screen() == SCR_HOME))
             {
                 hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+                ui_updated = true;
             }
             else if (hpi_disp_get_curr_screen() == SCR_SPL_PULLDOWN)
             {
                 hpi_disp_settings_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
+                ui_updated = true;
             }
             else if (hpi_disp_get_curr_screen() == SCR_SPL_LOW_BATTERY)
             {
                 hpi_disp_low_battery_update(m_disp_batt_level, m_disp_batt_charging);
+                ui_updated = true;
             }
             
-            // Update tracking variables
-            last_displayed_batt_level = m_disp_batt_level;
-            last_displayed_batt_charging = m_disp_batt_charging;
+            // Only update tracking variables if UI was actually updated
+            // This ensures that when user returns to home screen, it will show updated value
+            if (ui_updated)
+            {
+                last_displayed_batt_level = m_disp_batt_level;
+                last_displayed_batt_charging = m_disp_batt_charging;
+            }
         }
         last_batt_refresh = k_uptime_get_32();
     }
