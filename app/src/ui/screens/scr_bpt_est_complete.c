@@ -74,7 +74,7 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     // Screen title - optimized position
     lv_obj_t *label_title = lv_label_create(scr_bpt_est_complete);
     lv_label_set_text(label_title, "Blood Pressure");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 60);  // Moved down for better spacing
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 55);  // Slightly higher for more space below
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
@@ -82,7 +82,7 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     // CENTRAL ZONE: BP Values Container (centered)
     lv_obj_t *cont_bp_values = lv_obj_create(scr_bpt_est_complete);
     lv_obj_set_size(cont_bp_values, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_align(cont_bp_values, LV_ALIGN_CENTER, 0, -10);  // Centered vertically
+    lv_obj_align(cont_bp_values, LV_ALIGN_CENTER, 0, -25);  // Moved up for better vertical distribution
     lv_obj_set_style_bg_opa(cont_bp_values, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(cont_bp_values, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(cont_bp_values, 0, LV_PART_MAIN);
@@ -163,7 +163,7 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     if (arg3 > 0) {
         lv_obj_t *cont_hr = lv_obj_create(scr_bpt_est_complete);
         lv_obj_set_size(cont_hr, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_align(cont_hr, LV_ALIGN_CENTER, 0, 65);  // Closer to BP values for better spacing
+        lv_obj_align(cont_hr, LV_ALIGN_CENTER, 0, 75);  // More space below BP values to prevent overlap
         lv_obj_set_style_bg_opa(cont_hr, LV_OPA_TRANSP, LV_PART_MAIN);
         lv_obj_set_style_border_width(cont_hr, 0, LV_PART_MAIN);
         lv_obj_set_style_pad_all(cont_hr, 0, LV_PART_MAIN);
