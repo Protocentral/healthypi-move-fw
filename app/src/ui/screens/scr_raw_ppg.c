@@ -33,6 +33,7 @@
 #include <zephyr/device.h>
 #include <lvgl.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
@@ -62,6 +63,11 @@ float y3_max = 0;
 float y3_min = 10000;
 
 static float gx = 0;
+
+// Signal detection and timeout tracking
+static uint32_t last_ppg_data_time = 0;
+static enum hpi_ppg_status last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
+#define PPG_SIGNAL_TIMEOUT_MS 3000  // Show "No Signal" if no data for 3 seconds
 
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
@@ -106,6 +112,10 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
+    
+    // Set initial Y-axis range suitable for PPG data (typically 0-65535 for raw values)
+    // Start with a reasonable range around typical PPG baseline
+    lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, 0, 65535);
 
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
@@ -154,6 +164,26 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_align_to(label_status, chart_ppg, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
     lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
 
+    // Create "No Signal" overlay label (initially hidden)
+    label_ppg_no_signal = lv_label_create(scr_raw_ppg);
+    lv_label_set_text(label_ppg_no_signal, "No Signal");
+    lv_obj_align(label_ppg_no_signal, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_set_style_text_color(label_ppg_no_signal, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_obj_add_style(label_ppg_no_signal, &style_white_medium, 0);
+    lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN); // Start hidden
+
+    // Initialize timestamp and SCD state
+    last_ppg_data_time = k_uptime_get_32();
+    last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
+
+    // Reset min/max tracking for fresh autoscaling
+    y_min_ppg = 10000;
+    y_max_ppg = 0;
+    gx = 0;
+    
+    // Reset autoscale state to ensure first update happens
+    hpi_ppg_autoscale_reset();
+
     hpi_disp_set_curr_screen(SCR_SPL_RAW_PPG);
     hpi_show_screen(scr_raw_ppg, m_scroll_dir);
 }
@@ -193,25 +223,94 @@ static void hpi_ppg_disp_do_set_scale(int disp_window_size)
     hpi_ppg_disp_do_set_scale_shared(chart_ppg, &y_min_ppg, &y_max_ppg, &gx, disp_window_size);
 }
 
+/* Update "No Signal" label visibility based on data presence and SCD status */
+static void hpi_ppg_update_signal_status(enum hpi_ppg_status scd_state)
+{
+    if (label_ppg_no_signal == NULL)
+        return;
+
+    uint32_t current_time = k_uptime_get_32();
+    bool timeout = (current_time - last_ppg_data_time) > PPG_SIGNAL_TIMEOUT_MS;
+    bool no_skin_contact = (scd_state == HPI_PPG_SCD_OFF_SKIN);
+
+    // Show "No Signal" if timeout OR no skin contact (but ONLY check skin contact if we have valid state)
+    if (timeout || no_skin_contact)
+    {
+        lv_obj_clear_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
+        
+        // Update message based on reason - prioritize skin contact message when both conditions exist
+        if (no_skin_contact)
+        {
+            lv_label_set_text(label_ppg_no_signal, "No Skin Contact");
+        }
+        else if (timeout)
+        {
+            lv_label_set_text(label_ppg_no_signal, "No Signal");
+        }
+    }
+    else
+    {
+        lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
+    // Update last data received timestamp
+    last_ppg_data_time = k_uptime_get_32();
+
+    // Store the SCD state for use in periodic timeout checks
+    last_scd_state = ppg_sensor_sample.scd_state;
+
+    // Update signal status based on SCD state
+    hpi_ppg_update_signal_status(ppg_sensor_sample.scd_state);
+
     uint32_t *data_ppg = ppg_sensor_sample.raw_green;
 
+    // Find min/max in current batch for accurate tracking
+    uint32_t batch_min = UINT32_MAX;
+    uint32_t batch_max = 0;
+    
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
-        if (data_ppg[i] < y_min_ppg)
-        {
-            y_min_ppg = data_ppg[i];
-        }
-
-        if (data_ppg[i] > y_max_ppg)
-        {
-            y_max_ppg = data_ppg[i];
-        }
-
-        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
-
-        hpi_ppg_disp_add_samples(1);
-        hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
+        if (data_ppg[i] < batch_min) batch_min = data_ppg[i];
+        if (data_ppg[i] > batch_max) batch_max = data_ppg[i];
     }
+    
+    // Update global min/max with batch values
+    if (y_min_ppg == 10000)
+    {
+        y_min_ppg = batch_min;
+    }
+    else
+    {
+        if (batch_min < y_min_ppg) y_min_ppg = batch_min;
+    }
+    
+    if (y_max_ppg == 0)
+    {
+        y_max_ppg = batch_max;
+    }
+    else
+    {
+        if (batch_max > y_max_ppg) y_max_ppg = batch_max;
+    }
+
+    // Plot all samples
+    for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
+    {
+        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
+        hpi_ppg_disp_add_samples(1);
+    }
+    
+    // Call autoscale once per batch, not per sample, for better performance
+    hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
+}
+
+/* Public function to check for signal timeout - called periodically by display SM */
+void hpi_ppg_check_signal_timeout(void)
+{
+    // Use the last known SCD state for timeout checks
+    // This way we only show timeout, not incorrectly assuming "no skin contact"
+    hpi_ppg_update_signal_status(last_scd_state);
 }

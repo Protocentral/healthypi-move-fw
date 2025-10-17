@@ -362,8 +362,13 @@ int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_st
     else
     {
         struct tm *tm_info = localtime(&in_ts);
-        snprintf(out_str, out_str_size, "%02d-%02d-%04d",
-                 tm_info->tm_mday, tm_info->tm_mon + 1, tm_info->tm_year + 1900);
+        if (tm_info != NULL) {
+            snprintf(out_str, out_str_size, "%02d-%02d-%04d",
+                     tm_info->tm_mday, tm_info->tm_mon + 1, tm_info->tm_year + 1900);
+        } else {
+            // Fallback if localtime fails
+            snprintf(out_str, out_str_size, "Long ago");
+        }
     }
     return 0;
 }

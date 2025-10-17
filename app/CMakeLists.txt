@@ -22,8 +22,13 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/fonts/lvgl/*.c
                         src/ui/screens/*.c
                         src/ui/screens/*.c
-                        src/ui/hp_ui_common.c
+                        src/ui/screens/*.c
                         src/sm/*.c)  
+
+# Exclude TODAY screen source if disabled
+if(NOT CONFIG_HPI_TODAY_SCREEN)
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_today\\.c$")
+endif()
 
 # Exclude GSR sources if the screen is disabled
 if(NOT CONFIG_HPI_GSR_SCREEN)

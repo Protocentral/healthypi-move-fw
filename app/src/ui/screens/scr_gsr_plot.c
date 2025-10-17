@@ -20,6 +20,8 @@ static lv_obj_t *scr_gsr_plot;
 static lv_obj_t *chart_gsr_trend;
 static lv_chart_series_t *ser_gsr_trend;
 static lv_obj_t *btn_stop;
+static lv_obj_t *label_timer; // shows remaining countdown
+static lv_obj_t *arc_gsr_progress; // progress arc for measurement duration
 
 // Styles extern
 extern lv_style_t style_scr_black;
@@ -34,6 +36,26 @@ static const uint32_t GSR_RANGE_UPDATE_INTERVAL = 128;
 static int32_t gsr_batch_data[32] __attribute__((aligned(4)));
 static uint32_t gsr_batch_count = 0;
 static bool gsr_chart_auto_refresh_enabled = true;
+
+// Simple timer update function (called from display thread, mirrors ECG pattern)
+void hpi_gsr_disp_update_timer(uint16_t remaining_s)
+{
+    if (!plot_ready || !label_timer) return;
+    
+    // Optimize with caching to avoid unnecessary LVGL updates
+    static uint16_t last_remaining = 0xFFFF;
+    if (remaining_s != last_remaining) {
+        last_remaining = remaining_s;
+        lv_label_set_text_fmt(label_timer, "%02u", remaining_s);
+        
+        // Update the progress arc to show countdown progress
+        if (arc_gsr_progress != NULL) {
+            // Arc shows progress from full (60s) to empty (0s)
+            // Value range: 0-60, display remaining time
+            lv_arc_set_value(arc_gsr_progress, remaining_s);
+        }
+    }
+}
 
 static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
 {
@@ -114,6 +136,24 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_bg_color(scr_gsr_plot, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_gsr_plot, LV_OBJ_FLAG_SCROLLABLE);
 
+    // Progress Arc - outer ring showing countdown from 60s to 0s (blue theme for GSR)
+    arc_gsr_progress = lv_arc_create(scr_gsr_plot);
+    lv_obj_set_size(arc_gsr_progress, 370, 370);  // 185px radius
+    lv_obj_center(arc_gsr_progress);
+    lv_arc_set_range(arc_gsr_progress, 0, 60);  // Timer range: 0-60 seconds
+    
+    // Background arc: Full 270° track (gray)
+    lv_arc_set_bg_angles(arc_gsr_progress, 135, 45);  // Full background arc
+    lv_arc_set_value(arc_gsr_progress, 60);  // Start at full (60 seconds), will countdown to 0
+    
+    // Style the progress arc - blue theme for GSR measurement
+    lv_obj_set_style_arc_color(arc_gsr_progress, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
+    lv_obj_set_style_arc_width(arc_gsr_progress, 8, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(arc_gsr_progress, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_INDICATOR);  // Blue progress
+    lv_obj_set_style_arc_width(arc_gsr_progress, 6, LV_PART_INDICATOR);
+    lv_obj_remove_style(arc_gsr_progress, NULL, LV_PART_KNOB);  // Remove knob
+    lv_obj_clear_flag(arc_gsr_progress, LV_OBJ_FLAG_CLICKABLE);
+
     // Title - positioned at top center
     lv_obj_t *label_title = lv_label_create(scr_gsr_plot);
     lv_label_set_text(label_title, "GSR Live");
@@ -171,10 +211,26 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_center(label_btn);
     lv_obj_set_style_text_color(label_btn, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
 
+    // Timer label (remaining seconds) positioned below title
+    label_timer = lv_label_create(scr_gsr_plot);
+    lv_label_set_text(label_timer, "60");
+    lv_obj_align(label_timer, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_set_style_text_color(label_timer, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_timer, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
     plot_ready = true;
 
     hpi_disp_set_curr_screen(SCR_SPL_PLOT_GSR);
     hpi_show_screen(scr_gsr_plot, m_scroll_dir);
+}
+
+void unload_scr_gsr_plot(void)
+{
+    plot_ready = false;
+    if (scr_gsr_plot) {
+        lv_obj_del(scr_gsr_plot);
+        scr_gsr_plot = NULL;
+    }
 }
 
 

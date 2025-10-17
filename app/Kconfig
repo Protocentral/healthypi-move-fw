@@ -7,6 +7,14 @@ rsource "src/max32664_updater/Kconfig"
  
 menu "HealthyPi Move application options"
 
+config HPI_TODAY_SCREEN
+		bool "Enable TODAY screen"
+		default y
+		help
+			Enable the TODAY screen showing daily activity summary (steps, calories,
+			active time). Disable to temporarily exclude from build during debugging
+			or to save flash/RAM. When disabled, screen is excluded from navigation.
+
 config HPI_GSR_SCREEN
 		bool "Enable GSR screen"
 		default y
@@ -14,6 +22,16 @@ config HPI_GSR_SCREEN
 			Enable the Galvanic Skin Response (GSR) UI screens and related code.
 			Disable to save flash/RAM and remove GSR UI. When disabled, GSR
 			source files are excluded and runtime hooks become no-ops.
+
+config HPI_GSR_STRESS_INDEX
+		bool "Enable GSR stress index calculation"
+		default y
+		depends on HPI_GSR_SCREEN
+		help
+			Enable stress index calculation from GSR measurements including
+			tonic/phasic separation, peak detection, and arousal scoring.
+			Adds ~2KB flash and ~300 bytes RAM for history buffers.
+			Disable to save memory if only raw GSR values are needed.
 
 endmenu
 

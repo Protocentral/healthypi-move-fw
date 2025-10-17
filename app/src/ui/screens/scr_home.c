@@ -40,34 +40,39 @@
 #include "ui/move_ui.h"
 #include "hw_module.h"
 #include "hpi_user_settings_api.h"
+#include "battery_module.h"
 
-lv_obj_t *scr_home;
+LOG_MODULE_REGISTER(hpi_disp_scr_home, LOG_LEVEL_DBG);
 
-static lv_obj_t *home_step_disp;
-static lv_obj_t *home_hr_disp;
+lv_obj_t *scr_home = NULL;
+
+static lv_obj_t *home_step_disp = NULL;
+static lv_obj_t *home_hr_disp = NULL;
 
 // Modern arc-based health metrics
-static lv_obj_t *arc_steps;
-static lv_obj_t *arc_hr;
-static lv_obj_t *label_steps_value;
-static lv_obj_t *label_hr_value;
+static lv_obj_t *arc_steps = NULL;
+static lv_obj_t *arc_hr = NULL;
+static lv_obj_t *label_steps_value = NULL;
+static lv_obj_t *label_hr_value = NULL;
 
 // Contextual quick actions
-static lv_obj_t *quick_actions_container;
-static lv_obj_t *btn_quick_hr;
-static lv_obj_t *btn_quick_steps;
+static lv_obj_t *quick_actions_container = NULL;
+static lv_obj_t *btn_quick_hr = NULL;
+static lv_obj_t *btn_quick_steps = NULL;
 static bool quick_actions_visible = false;
 static lv_timer_t *quick_actions_timer = NULL;
 
-static lv_obj_t *ui_home_label_hour;
-static lv_obj_t *ui_home_label_min;
-static lv_obj_t *ui_home_label_date;
-static lv_obj_t *ui_home_label_ampm;
-static lv_obj_t *label_batt_level_val;
+static lv_obj_t *ui_home_label_hour = NULL;
+static lv_obj_t *ui_home_label_min = NULL;
+static lv_obj_t *ui_home_label_date = NULL;
+static lv_obj_t *ui_home_label_ampm = NULL;
+static lv_obj_t *label_home_batt_val = NULL;  // Renamed to avoid conflicts with other screens
 
-// Cleanup function to prevent memory issues during screen transitions
-void hpi_scr_home_cleanup(void)
+// LVGL delete event callback - called when LVGL auto-deletes this screen
+static void scr_home_delete_event_cb(lv_event_t *e)
 {
+    LOG_DBG("Home screen delete event - clearing main pointer and canceling timers");
+    
     // Cancel any active timer
     if (quick_actions_timer != NULL) {
         lv_timer_del(quick_actions_timer);
@@ -77,21 +82,20 @@ void hpi_scr_home_cleanup(void)
     // Reset state
     quick_actions_visible = false;
     
-    // Clear object references to prevent dangling pointers
-    quick_actions_container = NULL;
-    btn_quick_hr = NULL;
-    btn_quick_steps = NULL;
-    arc_steps = NULL;
-    arc_hr = NULL;
-    label_steps_value = NULL;
-    label_hr_value = NULL;
-    ui_home_label_hour = NULL;
-    ui_home_label_min = NULL;
-    ui_home_label_date = NULL;
-    ui_home_label_ampm = NULL;
-    label_batt_level_val = NULL;
-    home_step_disp = NULL;
-    home_hr_disp = NULL;
+    // CRITICAL: NULL the main screen pointer immediately  
+    // This allows the update function check (scr_home != NULL) to work correctly
+    scr_home = NULL;
+    
+    // NOTE: We don't NULL child object pointers here because LVGL handles them automatically
+    // when it deletes the parent screen. They'll become dangling but that's OK because
+    // the update functions check (scr_home != NULL || child == NULL) before using them.
+}
+
+// Cleanup function to prevent memory issues during screen transitions
+void hpi_scr_home_cleanup(void)
+{
+    // Just call the delete callback directly
+    scr_home_delete_event_cb(NULL);
 }
 
 // Function prototypes
@@ -158,8 +162,13 @@ static void quick_action_steps_clicked(lv_event_t *e)
             lv_obj_add_flag(quick_actions_container, LV_OBJ_FLAG_HIDDEN);
             quick_actions_visible = false;
         }
+#if defined(CONFIG_HPI_TODAY_SCREEN)
         // Navigate to steps screen
         hpi_load_screen(SCR_TODAY, SCROLL_LEFT);
+#else
+        // TODAY screen disabled - could navigate to another screen or do nothing
+        LOG_WRN("TODAY screen is disabled");
+#endif
     }
 }
 
@@ -224,8 +233,33 @@ extern lv_style_t style_numeric_large;
 
 void draw_scr_home(enum scroll_dir m_scroll_dir)
 {
-    // Clean up any previous state to prevent crashes
-    hpi_scr_home_cleanup();
+    // Set current screen immediately
+    hpi_disp_set_curr_screen(SCR_HOME);
+    
+    // Cancel any active quick actions timer from previous instance
+    if (quick_actions_timer != NULL) {
+        lv_timer_del(quick_actions_timer);
+        quick_actions_timer = NULL;
+    }
+    quick_actions_visible = false;
+    
+    // NULL all object pointers at the start of draw to prevent use of stale/dangling pointers
+    // LVGL auto-delete will handle deletion, we just need to ensure our pointers are clean
+    scr_home = NULL;
+    arc_steps = NULL;
+    arc_hr = NULL;
+    label_steps_value = NULL;
+    label_hr_value = NULL;
+    quick_actions_container = NULL;
+    btn_quick_hr = NULL;
+    btn_quick_steps = NULL;
+    ui_home_label_hour = NULL;
+    ui_home_label_min = NULL;
+    ui_home_label_date = NULL;
+    ui_home_label_ampm = NULL;
+    label_home_batt_val = NULL;
+    home_step_disp = NULL;
+    home_hr_disp = NULL;
     
     scr_home = lv_obj_create(NULL);
 
@@ -243,7 +277,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_set_size(arc_steps, 370, 370);  // Smaller radius to fit circle
     lv_obj_center(arc_steps);
     lv_arc_set_range(arc_steps, 0, 10000); // 10k step goal
-    lv_arc_set_value(arc_steps, 2500); // Set to 25% to make indicator visible
+    lv_arc_set_value(arc_steps, 0); // Start at 0, will be updated by ZBus data
     // LVGL 9 API: Use lv_arc_set_bg_angles to set the background arc range
     lv_arc_set_bg_angles(arc_steps, 180, 270); // Left side arc (6-9 o'clock) - clear separation
     // Use modern arc styling
@@ -264,7 +298,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     // Steps value label - positioned below icon at arc center
     label_steps_value = lv_label_create(scr_home);
     lv_obj_align(label_steps_value, LV_ALIGN_CENTER, -95, -50);  // Below icon, closer to center
-    lv_label_set_text(label_steps_value, "2.5k"); // Show test value to make it visible
+    lv_label_set_text(label_steps_value, "0"); // Start at 0, will be updated by ZBus data
     lv_obj_set_style_text_color(label_steps_value, lv_color_hex(COLOR_WARNING_AMBER), LV_PART_MAIN);
     lv_obj_add_style(label_steps_value, &style_body_medium, LV_PART_MAIN);  // Use 24px font style for better readability
     lv_obj_set_style_text_align(label_steps_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -274,7 +308,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_set_size(arc_hr, 370, 370);  // Same size as steps arc
     lv_obj_center(arc_hr);
     lv_arc_set_range(arc_hr, 40, 180); // HR range
-    lv_arc_set_value(arc_hr, 75); // Set test value to make indicator visible
+    lv_arc_set_value(arc_hr, 70); // Default to resting HR position, will be updated by ZBus data
     // LVGL 9 API: Use lv_arc_set_bg_angles to set the background arc range
     lv_arc_set_bg_angles(arc_hr, 0, 90); // Right side arc (12-3 o'clock) - clear separation  
     // Use modern arc styling
@@ -295,7 +329,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     // Heart rate value label - positioned below icon at arc center
     label_hr_value = lv_label_create(scr_home);
     lv_obj_align(label_hr_value, LV_ALIGN_CENTER, 105, 115);  // Below icon, closer to center
-    lv_label_set_text(label_hr_value, "75"); // Show test value to make it visible
+    lv_label_set_text(label_hr_value, "--"); // Start with placeholder, will be updated by ZBus data
     lv_obj_set_style_text_color(label_hr_value, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_add_style(label_hr_value, &style_body_medium, LV_PART_MAIN);  // Use 24px font style for better readability
     lv_obj_set_style_text_align(label_hr_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -341,9 +375,9 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(lbl_steps, &style_body_medium, LV_PART_MAIN);
     lv_obj_center(lbl_steps);
 
-    // Gesture handler
-    lv_obj_add_event_cb(scr_home, home_screen_gesture_handler, LV_EVENT_GESTURE, NULL);
-    lv_obj_add_event_cb(scr_home, home_screen_gesture_handler, LV_EVENT_CLICKED, NULL);
+    // Gesture handler - DISABLED to prevent quick actions from appearing
+    // lv_obj_add_event_cb(scr_home, home_screen_gesture_handler, LV_EVENT_GESTURE, NULL);
+    // lv_obj_add_event_cb(scr_home, home_screen_gesture_handler, LV_EVENT_CLICKED, NULL);
 
     // CENTERED TIME DISPLAY - optimized for circular watchface
     ui_home_label_hour = lv_label_create(scr_home);
@@ -381,15 +415,22 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(ui_home_label_date, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // Battery indicator - positioned at 12 o'clock within circular bounds
-    label_batt_level_val = lv_label_create(scr_home);
-    lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " 85%");  // Battery symbol with percentage
-    lv_obj_align(label_batt_level_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
-    lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label_batt_level_val, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
-    lv_obj_set_style_text_opa(label_batt_level_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_align(label_batt_level_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    label_home_batt_val = lv_label_create(scr_home);
+    // Initialize with current battery level from fuel gauge
+    uint8_t current_batt_level = battery_get_level();
+    const char* battery_symbol = hpi_get_battery_symbol(current_batt_level, false);
+    lv_color_t battery_color = hpi_get_battery_color(current_batt_level, false);
+    lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, current_batt_level);
+    lv_obj_align(label_home_batt_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
+    lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label_home_batt_val, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
+    lv_obj_set_style_text_opa(label_home_batt_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(label_home_batt_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    hpi_disp_set_curr_screen(SCR_HOME);
+    // Register delete callback to cleanup pointers when LVGL auto-deletes this screen
+    lv_obj_add_event_cb(scr_home, scr_home_delete_event_cb, LV_EVENT_DELETE, NULL);
+
+    // Show the screen
     hpi_show_screen(scr_home, m_scroll_dir);
 }
 
@@ -463,7 +504,7 @@ void hpi_home_steps_update(int steps)
 
 void hpi_disp_home_update_batt_level(int batt_level, bool charging)
 {
-    if (label_batt_level_val == NULL)
+    if (label_home_batt_val == NULL)
     {
         return;
     }
@@ -473,36 +514,13 @@ void hpi_disp_home_update_batt_level(int batt_level, bool charging)
         batt_level = 0;
     }
 
-    // Battery display with LVGL built-in symbols based on level and charging status
-    const char* battery_symbol;
+    // Use centralized helper functions for consistency
+    const char* battery_symbol = hpi_get_battery_symbol(batt_level, charging);
+    lv_color_t battery_color = hpi_get_battery_color(batt_level, charging);
     
-    if (charging) {
-        battery_symbol = LV_SYMBOL_CHARGE; // Lightning bolt for charging
-    } else {
-        // Different battery symbols based on charge level using LVGL built-in symbols
-        if (batt_level >= 90) {
-            battery_symbol = LV_SYMBOL_BATTERY_FULL; // Full battery (90-100%)
-        } else if (batt_level >= 65) {
-            battery_symbol = LV_SYMBOL_BATTERY_3;    // 3/4 battery (65-89%)
-        } else if (batt_level >= 35) {
-            battery_symbol = LV_SYMBOL_BATTERY_2;    // 2/4 battery (35-64%)
-        } else if (batt_level >= 15) {
-            battery_symbol = LV_SYMBOL_BATTERY_1;    // 1/4 battery (15-34%)
-        } else {
-            battery_symbol = LV_SYMBOL_BATTERY_EMPTY; // Empty battery (0-14%)
-        }
-    }
+    // Update label with symbol and percentage
+    lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, batt_level);
     
-    lv_label_set_text_fmt(label_batt_level_val, "%s %d%%", battery_symbol, batt_level);
-    
-    // Color coding for battery levels - brighter colors for AMOLED visibility
-    if (charging) {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0x66FF66), LV_PART_MAIN);  // Bright green when charging
-    } else if (batt_level <= 15) {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFF6666), LV_PART_MAIN);  // Brighter red
-    } else if (batt_level <= 30) {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFBB66), LV_PART_MAIN);  // Brighter orange
-    } else {
-        lv_obj_set_style_text_color(label_batt_level_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);  // Bright white for normal levels
-    }
+    // Apply color coding
+    lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN);
 }

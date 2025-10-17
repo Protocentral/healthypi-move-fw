@@ -268,11 +268,12 @@ static int max30001_async_sample_fetch(const struct device *dev,
         {
             data->lastRRI = (uint16_t)(max30001_rtor >> 10) * 8;
             data->lastHR = (uint16_t)(60 * 1000 / data->lastRRI);
-
-            *hr = data->lastHR;
-            *rri = data->lastRRI;
         }
     }
+
+    // Always output the last known good HR and RRI values (prevents displaying garbage/stale data)
+    *hr = data->lastHR;
+    *rri = data->lastRRI;
 
     return 0;
 }

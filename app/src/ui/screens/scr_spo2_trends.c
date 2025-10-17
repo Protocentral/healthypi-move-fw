@@ -198,6 +198,7 @@ void draw_scr_spo2_trends(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_t *label_btn_spo2_live = lv_label_create(btn_spo2_live);
     lv_label_set_text(label_btn_spo2_live, LV_SYMBOL_PLAY " Raw PPG");
     lv_obj_center(label_btn_spo2_live);
+    // Note: No custom style applied - LVGL symbols require built-in fonts
 
     lv_obj_align_to(btn_spo2_live, NULL, LV_ALIGN_CENTER, 0, 130);
 

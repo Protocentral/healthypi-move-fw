@@ -45,7 +45,11 @@ static void scr_home_steps_btn_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
+#if defined(CONFIG_HPI_TODAY_SCREEN)
         hpi_load_screen(SCR_TODAY, SCROLL_LEFT);
+#else
+        // TODAY screen disabled - no action
+#endif
     }
 }
 

@@ -38,11 +38,12 @@ LOG_MODULE_REGISTER(scr_pulldown, LOG_LEVEL_INF);
 
 #include "ui/move_ui.h"
 #include "hw_module.h"
+#include "battery_module.h"
 
 lv_obj_t *scr_pulldown;
 
-static lv_obj_t *label_batt_level;
-static lv_obj_t *label_batt_level_val;
+// Renamed to avoid conflicts with other screens
+static lv_obj_t *label_pulldown_batt_val;  // Note: label_batt_level removed as it was unused
 static lv_obj_t *msgbox_shutdown;
 
 extern lv_style_t style_scr_black;
@@ -167,12 +168,15 @@ void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     // Optimized for 1.2" 390x390 display with finger-friendly spacing
 
     // Battery status at top - more spacing from edge
-    label_batt_level_val = lv_label_create(scr_pulldown);
-    lv_label_set_text(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " --");
-    lv_obj_align(label_batt_level_val, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_set_style_text_font(label_batt_level_val, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_add_style(label_batt_level_val, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_batt_level_val, lv_color_white(), LV_PART_MAIN);
+    label_pulldown_batt_val = lv_label_create(scr_pulldown);
+    // Initialize with current battery level from fuel gauge
+    uint8_t current_batt_level = battery_get_level();
+    const char* battery_symbol = hpi_get_battery_symbol(current_batt_level, false);
+    lv_label_set_text_fmt(label_pulldown_batt_val, "%s %d %%", battery_symbol, current_batt_level);
+    lv_obj_align(label_pulldown_batt_val, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_set_style_text_font(label_pulldown_batt_val, LV_FONT_DEFAULT, LV_PART_MAIN);
+    lv_obj_add_style(label_pulldown_batt_val, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_pulldown_batt_val, lv_color_white(), LV_PART_MAIN);
 
     // Brightness Control Section - increased spacing
     lv_obj_t *lbl_brightness = lv_label_create(scr_pulldown);
@@ -228,7 +232,7 @@ void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
 void hpi_disp_settings_update_batt_level(int batt_level, bool charging)
 {
-    if (label_batt_level_val == NULL)
+    if (label_pulldown_batt_val == NULL)
     {
         return;
     }
@@ -238,41 +242,16 @@ void hpi_disp_settings_update_batt_level(int batt_level, bool charging)
         batt_level = 0;
     }
 
-    if (batt_level > 75)
-    {
-        if (charging)
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_FULL " %d %%", batt_level);
-        else
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_FULL " %d %%", batt_level);
-    }
-
-    else if (batt_level > 50)
-    {
-        if (charging)
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_3 " %d %%", batt_level);
-        else
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_3 " %d %%", batt_level);
-    }
-    else if (batt_level > 25)
-    {
-        if (charging)
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_2 " %d %%", batt_level);
-        else
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_2 " %d %%", batt_level);
-    }
-    else if (batt_level > 10)
-    {
-        if (charging)
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_1 " %d %%", batt_level);
-        else
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_1 " %d %%", batt_level);
-    }
-    else
-    {
-        if (charging)
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_EMPTY " %d %%", batt_level);
-        else
-            lv_label_set_text_fmt(label_batt_level_val, LV_SYMBOL_BATTERY_EMPTY " %d %%", batt_level);
+    // Use centralized helper functions for consistency
+    const char* battery_symbol = hpi_get_battery_symbol(batt_level, charging);
+    
+    // Format with charging indicator if applicable
+    if (charging) {
+        lv_label_set_text_fmt(label_pulldown_batt_val, "%s %s %d %%", 
+                              LV_SYMBOL_CHARGE, battery_symbol, batt_level);
+    } else {
+        lv_label_set_text_fmt(label_pulldown_batt_val, "%s %d %%", 
+                              battery_symbol, batt_level);
     }
 }
 

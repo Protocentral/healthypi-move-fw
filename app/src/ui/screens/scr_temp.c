@@ -44,6 +44,8 @@ LOG_MODULE_REGISTER(scr_temp, LOG_LEVEL_DBG);
 // GUI Elements
 static lv_obj_t *scr_temp;
 static lv_obj_t *label_temp_value;      // Main temperature display value
+static lv_obj_t *label_temp_unit;       // Temperature unit label (°F/°C)
+static lv_obj_t *label_temp_status;     // Status/last update label
 static lv_obj_t *btn_temp_unit;         // Unit toggle button
 static lv_obj_t *arc_temp_zone;         // Temperature progress arc
 
@@ -199,7 +201,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_temp_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Unit label directly below main value
-    lv_obj_t *label_temp_unit = lv_label_create(scr_temp);
+    label_temp_unit = lv_label_create(scr_temp);
     if (temp_raw == 0) {
         lv_label_set_text(label_temp_unit, "Place sensor on skin");
     } else {
@@ -217,7 +219,7 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_temp_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Status info - centered below unit with proper spacing
-    lv_obj_t *label_temp_status = lv_label_create(scr_temp);
+    label_temp_status = lv_label_create(scr_temp);
     if (temp_raw == 0) {
         lv_label_set_text(label_temp_status, "Body temperature");
     } else {
@@ -264,14 +266,54 @@ void draw_scr_temp(enum scroll_dir m_scroll_dir)
  * @brief Update temperature display - compatibility function for display state machine
  * @param temp_f Temperature in Fahrenheit
  * @param temp_f_last_update Last update timestamp
- * @note In the new circular design, temperature updates are handled via screen refresh
+ * @note Now properly updates the UI elements when temperature changes
  */
 void hpi_temp_disp_update_temp_f(double temp_f, int64_t temp_f_last_update)
 {
-    // In the new circular AMOLED design, temperature updates are handled by full screen refresh
-    // This function is kept for compatibility with the display state machine
-    // The actual temperature display is updated when the screen is drawn/refreshed
-    LOG_DBG("Temperature update notification: %.1f°F at %" PRId64, temp_f, temp_f_last_update);
+    // Check if screen elements exist
+    if (label_temp_value == NULL || label_temp_unit == NULL || label_temp_status == NULL || arc_temp_zone == NULL) {
+        LOG_DBG("Temperature UI elements not initialized, skipping update");
+        return;
+    }
+    
+    LOG_DBG("Updating temperature display: %.1f°F at %" PRId64, temp_f, temp_f_last_update);
+    
+    // Convert to Celsius for arc range
+    float temp_c = (temp_f - 32.0f) * 5.0f / 9.0f;
+    
+    // Update arc value based on temperature
+    if (temp_f > 0) {
+        // Clamp temperature to display range (30-42°C)
+        float display_temp = temp_c;
+        if (display_temp < 30.0f) display_temp = 30.0f;
+        if (display_temp > 42.0f) display_temp = 42.0f;
+        lv_arc_set_value(arc_temp_zone, (int)(display_temp * 10));  // Scale for arc range
+    }
+    
+    // Update main temperature value
+    uint8_t temp_unit = hpi_user_settings_get_temp_unit();
+    static char temp_str[16];
+    
+    if (temp_unit == 1) {  // Fahrenheit
+        int temp_f_x10 = (int)(temp_f * 10.0f + 0.5f);
+        int temp_whole = temp_f_x10 / 10;
+        int temp_decimal = temp_f_x10 % 10;
+        snprintf(temp_str, sizeof(temp_str), "%d.%d", temp_whole, temp_decimal);
+        lv_label_set_text(label_temp_value, temp_str);
+        lv_label_set_text(label_temp_unit, "°F");
+    } else {  // Celsius
+        int temp_c_x10 = (int)(temp_c * 10.0f + 0.5f);
+        int temp_whole = temp_c_x10 / 10;
+        int temp_decimal = temp_c_x10 % 10;
+        snprintf(temp_str, sizeof(temp_str), "%d.%d", temp_whole, temp_decimal);
+        lv_label_set_text(label_temp_value, temp_str);
+        lv_label_set_text(label_temp_unit, "°C");
+    }
+    
+    // Update status/timestamp
+    char last_meas_str[25];
+    hpi_helper_get_relative_time_str(temp_f_last_update, last_meas_str, sizeof(last_meas_str));
+    lv_label_set_text(label_temp_status, last_meas_str);
 }
 
 // Temperature screen event handlers

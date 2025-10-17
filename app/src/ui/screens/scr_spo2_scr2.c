@@ -85,16 +85,6 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
     lv_obj_set_style_bg_color(scr_spo2_scr2, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_spo2_scr2, LV_OBJ_FLAG_SCROLLABLE);
 
-    // CIRCULAR AMOLED-OPTIMIZED SpO2 INSTRUCTION SCREEN
-    // Display center: (195, 195), Usable radius: ~185px
-    
-    // Scroll hint at top
-    lv_obj_t *lbl_scroll_cancel = lv_label_create(scr_spo2_scr2);
-    lv_label_set_text(lbl_scroll_cancel, LV_SYMBOL_DOWN);
-    lv_obj_align(lbl_scroll_cancel, LV_ALIGN_TOP_MID, 0, 10);
-    lv_obj_set_style_text_color(lbl_scroll_cancel, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
-    lv_obj_add_style(lbl_scroll_cancel, &style_caption, LV_PART_MAIN);
-
     // UPPER ZONE: Instructional Image (centered in upper area)
     if (spo2_source == SPO2_SOURCE_PPG_WR)
     {
@@ -150,7 +140,7 @@ void draw_scr_spo2_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t ar
     lv_label_set_text(label_btn, LV_SYMBOL_PLAY " Proceed");
     lv_obj_center(label_btn);
     lv_obj_set_style_text_color(label_btn, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
-    lv_obj_add_style(label_btn, &style_body_medium, LV_PART_MAIN);
+    // Note: No custom style applied - LVGL symbols require built-in fonts
     lv_obj_add_event_cb(btn_spo2_proceed, scr_spo2_btn_proceed_handler, LV_EVENT_CLICKED, NULL);
 
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_SCR2);

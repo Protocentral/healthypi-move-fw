@@ -111,7 +111,7 @@ void draw_scr_fi_sens_wear(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_t *label_btn = lv_label_create(btn_spo2_proceed);
     lv_label_set_text(label_btn, LV_SYMBOL_PLAY " Proceed");
     lv_obj_center(label_btn);
-    lv_obj_add_style(label_btn, &style_body_medium, LV_PART_MAIN);
+    // Note: Do not apply style_body_medium - LVGL symbols require default LVGL font
 
     hpi_disp_set_curr_screen(SCR_SPL_FI_SENS_WEAR);
     hpi_show_screen(scr_bpt_scr2, m_scroll_dir);

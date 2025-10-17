@@ -203,7 +203,9 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_dia_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Last measurement time (positioned below values with proper spacing)
-    char last_meas_str[74];
+    // Fixed: Reduced from 74 to 32 bytes to match other screens and prevent stack/heap corruption
+    // Maximum string length from hpi_helper_get_relative_time_str is ~20 chars
+    char last_meas_str[32];
     hpi_helper_get_relative_time_str(bpt_time, last_meas_str, sizeof(last_meas_str));
     label_bpt_last_update_time = lv_label_create(scr_bpt);
     lv_label_set_text(label_bpt_last_update_time, last_meas_str);

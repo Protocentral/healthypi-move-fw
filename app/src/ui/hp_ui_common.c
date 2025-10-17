@@ -106,13 +106,6 @@ lv_style_t style_bg_purple;
 
 static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 
-static lv_obj_t *label_batt_level;
-static lv_obj_t *label_batt_level_val;
-
-static lv_obj_t *lbl_hdr_hour;
-static lv_obj_t *lbl_hdr_min;
-static lv_obj_t *ui_label_date;
-
 lv_obj_t *cui_battery_percent;
 int tmp_scr_parent = 0;
 
@@ -430,58 +423,48 @@ uint8_t hpi_disp_get_brightness(void)
     return hpi_disp_curr_brightness;
 }
 
-void hpi_disp_update_batt_level(int batt_level, bool charging)
+/**
+ * @brief Get the appropriate battery symbol for a given battery level and charging state
+ * @param level Battery level percentage (0-100)
+ * @param charging Whether the battery is currently charging
+ * @return LVGL symbol string for the battery state
+ */
+const char* hpi_get_battery_symbol(uint8_t level, bool charging)
 {
-    if (label_batt_level == NULL || label_batt_level_val == NULL)
-    {
-        return;
+    if (charging) {
+        return LV_SYMBOL_CHARGE; // Lightning bolt for charging
     }
+    
+    // Battery symbols based on level thresholds
+    if (level >= HPI_BATTERY_LEVEL_FULL) {
+        return LV_SYMBOL_BATTERY_FULL;  // Full battery (90-100%)
+    } else if (level >= HPI_BATTERY_LEVEL_HIGH) {
+        return LV_SYMBOL_BATTERY_3;     // 3/4 battery (65-89%)
+    } else if (level >= HPI_BATTERY_LEVEL_MEDIUM) {
+        return LV_SYMBOL_BATTERY_2;     // 2/4 battery (35-64%)
+    } else if (level >= HPI_BATTERY_LEVEL_LOW) {
+        return LV_SYMBOL_BATTERY_1;     // 1/4 battery (15-34%)
+    } else {
+        return LV_SYMBOL_BATTERY_EMPTY; // Empty battery (0-14%)
+    }
+}
 
-    if (batt_level <= 0)
-    {
-        batt_level = 0;
-    }
-
-    // printk("Updating battery level: %d\n", batt_level);
-
-    char buf[8];
-    sprintf(buf, " %2d %% ", batt_level);
-    lv_label_set_text(label_batt_level_val, buf);
-
-    if (batt_level > 75)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_FULL "");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_FULL);
-    }
-    else if (batt_level > 50)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_3 " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_3);
-    }
-    else if (batt_level > 25)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_2 " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_2);
-    }
-    else if (batt_level > 10)
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_1 " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_1);
-    }
-    else
-    {
-        if (charging)
-            lv_label_set_text(label_batt_level, LV_SYMBOL_CHARGE " " LV_SYMBOL_BATTERY_EMPTY " ");
-        else
-            lv_label_set_text(label_batt_level, LV_SYMBOL_BATTERY_EMPTY);
+/**
+ * @brief Get the appropriate color for battery display
+ * @param level Battery level percentage (0-100)
+ * @param charging Whether the battery is currently charging
+ * @return LVGL color for the battery display
+ */
+lv_color_t hpi_get_battery_color(uint8_t level, bool charging)
+{
+    if (charging) {
+        return lv_color_hex(0x66FF66);  // Bright green when charging
+    } else if (level <= HPI_BATTERY_LEVEL_LOW) {
+        return lv_color_hex(0xFF6666);  // Bright red for low battery
+    } else if (level <= 30) {
+        return lv_color_hex(0xFFBB66);  // Bright orange for warning
+    } else {
+        return lv_color_hex(0xFFFFFF);  // Bright white for normal levels
     }
 }
 
@@ -489,6 +472,8 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 {
     lv_obj_add_event_cb(m_screen, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
+    // Let LVGL automatically delete the old screen after animation completes
+    // This is the safest approach as LVGL handles the timing correctly
     if (m_scroll_dir == SCROLL_LEFT)
     {
         lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
@@ -513,14 +498,20 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
+    // CRITICAL: Set global transition flag to suspend ALL screen updates
+    // This protects the entire screen loading process across all screens
+    screen_transition_in_progress = true;
+    
     switch (m_screen)
     {
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
+#if defined(CONFIG_HPI_TODAY_SCREEN)
     case SCR_TODAY:
         draw_scr_today(m_scroll_dir);
         break;
+#endif
     case SCR_HR:
         draw_scr_hr(m_scroll_dir);
         break;
@@ -551,6 +542,10 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     default:
         printk("Invalid screen: %d", m_screen);
     }
+    
+    // CRITICAL: Clear transition flag after screen is loaded
+    // This re-enables screen updates
+    screen_transition_in_progress = false;
 }
 
 void hpi_move_load_scr_pulldown(enum scroll_dir m_scroll_dir)

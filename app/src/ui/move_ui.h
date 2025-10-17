@@ -67,6 +67,13 @@
 #define HPI_DISP_TIME_REFR_INT 1000
 #define HPI_DISP_BATT_REFR_INT 1000
 
+// Battery level thresholds for display symbols
+#define HPI_BATTERY_LEVEL_FULL     90
+#define HPI_BATTERY_LEVEL_HIGH     65
+#define HPI_BATTERY_LEVEL_MEDIUM   35
+#define HPI_BATTERY_LEVEL_LOW      15
+#define HPI_BATTERY_LEVEL_CRITICAL 10
+
 #define HPI_DISP_TODAY_REFRESH_INT 3000
 #define HPI_DISP_BPT_REFRESH_INT 3000
 #define HPI_DISP_TEMP_REFRESH_INT 3000
@@ -96,7 +103,9 @@ enum hpi_disp_screens
     SCR_LIST_START,
 
     SCR_HOME,
+#if defined(CONFIG_HPI_TODAY_SCREEN)
     SCR_TODAY,
+#endif
     SCR_HR,
     SCR_SPO2,
     SCR_ECG,
@@ -140,6 +149,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SPO2_CANCELLED,
     SCR_SPL_HR_SCR2,
     SCR_SPL_PLOT_GSR,
+    SCR_SPL_GSR_COMPLETE,
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -178,9 +188,15 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir);
 void hpi_gsr_disp_update_gsr_int(uint16_t gsr_value_x100, int64_t gsr_last_update);
 // Special GSR plot screen
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_gsr_plot(void);
+// GSR complete screen
+void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_gsr_complete(void);
+void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *results);
 // Plot update helper called from sensor path
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off);
+void hpi_gsr_disp_update_timer(uint16_t remaining_s);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
@@ -189,6 +205,11 @@ static inline void hpi_gsr_process_bioz_sample(int32_t s) { ARG_UNUSED(s); }
 static inline void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
     ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
 }
+static inline void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
+}
+static inline void unload_scr_gsr_complete(void) { }
+static inline void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *r) { ARG_UNUSED(r); }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
 #endif
 LV_IMG_DECLARE(img_heart_70);
@@ -265,11 +286,13 @@ void draw_scr_clock_small(enum scroll_dir m_scroll_dir);
 void draw_scr_home(enum scroll_dir m_scroll_dir);
 void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
+void hpi_home_steps_update(int steps);
 
+#if defined(CONFIG_HPI_TODAY_SCREEN)
 // Today Screen functions
 void draw_scr_today(enum scroll_dir m_scroll_dir);
 void hpi_scr_today_update_all(uint16_t steps, uint16_t kcals, uint16_t active_time_s);
-void hpi_scr_today_cleanup(void);
+#endif
 
 // HR Screen functions
 void draw_scr_hr(enum scroll_dir m_scroll_dir);
@@ -341,6 +364,7 @@ void gesture_down_scr_bpt_cal_required(void);
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);
+void hpi_ppg_check_signal_timeout(void);  // Check for signal timeout periodically
 
 /* Shared autoscale helper for PPG/LVGL charts.
  * chart: LVGL chart object
@@ -349,6 +373,9 @@ void hpi_ppg_disp_update_hr(int hr);
  * disp_window_size: window size constant used to determine threshold
  */
 void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *y_max_ppg, float *gx, int disp_window_size);
+
+/* Reset autoscale state - call when initializing a screen that uses autoscaling */
+void hpi_ppg_autoscale_reset(void);
 
 // EDA screen functions
 void draw_scr_pre(enum scroll_dir m_scroll_dir);
@@ -397,6 +424,9 @@ void gesture_right_scr_sleep_timeout_select(void);
 void hpi_update_height_weight_labels(void);
 void hpi_update_setting_labels(void);
 
+// Global flag to suspend screen updates during transitions
+extern volatile bool screen_transition_in_progress;
+
 // Helper objects
 void draw_scr_common(lv_obj_t *parent);
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir);
@@ -409,6 +439,10 @@ int hpi_disp_get_curr_screen(void);
 
 void hpi_disp_set_brightness(uint8_t brightness_percent);
 uint8_t hpi_disp_get_brightness(void);
+
+// Battery display helper functions
+const char* hpi_get_battery_symbol(uint8_t level, bool charging);
+lv_color_t hpi_get_battery_color(uint8_t level, bool charging);
 
 // Component objects
 lv_obj_t *ui_hr_button_create(lv_obj_t *comp_parent);
@@ -444,6 +478,7 @@ void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir);
 
 void draw_scr_bpt_cal_complete(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void scr_bpt_cal_progress_update_text(char *text);
 void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
