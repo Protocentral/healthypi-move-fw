@@ -41,11 +41,19 @@
 
 #include "hw_module.h"
 
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+#include "recording_module.h"
+#endif
+
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
 int main(void)
 {
 	hw_module_init();
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+	recording_module_init();
+#endif
 
 	LOG_INF("HealthyPi Move %d.%d.%d started!", APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_PATCHLEVEL);
 

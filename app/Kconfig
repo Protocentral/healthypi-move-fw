@@ -33,6 +33,18 @@ config HPI_GSR_STRESS_INDEX
 			Adds ~2KB flash and ~300 bytes RAM for history buffers.
 			Disable to save memory if only raw GSR values are needed.
 
+config HPI_RECORDING_MODULE
+		bool "Enable recording module"
+		default y
+		depends on FILE_SYSTEM && FILE_SYSTEM_LITTLEFS
+		help
+			Enable multi-signal recording module for continuous data capture.
+			Supports recording PPG (wrist/finger), IMU (accelerometer/gyroscope),
+			and GSR signals with configurable durations (5-120 minutes) and
+			sampling rates. Records to binary .hpr files in /lfs/rec/ directory.
+			Adds ~25KB flash and ~24KB RAM (during recording only).
+			Disable to save memory if recording functionality is not needed.
+
 endmenu
 
 source "Kconfig.zephyr"

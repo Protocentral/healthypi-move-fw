@@ -120,3 +120,15 @@ ZBUS_CHAN_DEFINE(gsr_status_chan,
                  ZBUS_OBSERVERS(disp_gsr_status_lis),
                  ZBUS_MSG_INIT(0));
 #endif
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+#include "recording_module.h"
+
+// Recording status channel
+ZBUS_CHAN_DEFINE(recording_status_chan,
+                 struct recording_status,
+                 NULL,
+                 NULL,
+                 ZBUS_OBSERVERS(disp_rec_status_lis, sys_rec_status_lis),
+                 ZBUS_MSG_INIT(0));
+#endif

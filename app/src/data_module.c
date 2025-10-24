@@ -48,6 +48,10 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "ble_module.h"
 #include "algos.h"
 #include "ui/move_ui.h"
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+#include "recording_module.h"
+#endif
 #include "hpi_sys.h"
 
 #include "log_module.h"
@@ -445,6 +449,18 @@ void data_thread(void)
                 // Update last GSR value
                 hpi_sys_set_last_gsr_update(gsr_value_x100, bsample.timestamp);
 
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+                // Feed GSR data to recording module if active
+                if (recording_is_active())
+                {
+                    struct recording_gsr_sample rec_sample = {
+                        .timestamp_ms = (uint32_t)(k_uptime_get() - recording_get_start_time()),
+                        .resistance = gsr_value_x100
+                    };
+                    recording_add_gsr_sample(&rec_sample);
+                }
+#endif
+
                 // Calculate and publish stress index
                 static struct hpi_gsr_stress_index_t stress_data = {0};
                 calculate_gsr_stress_index(gsr_value_x100, &stress_data);
@@ -453,9 +469,35 @@ void data_thread(void)
                 {
                     zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
                 }
-            }
+                }
 #endif
         }
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+        // TODO: IMU recording hook - add when IMU data path is configured
+        // The IMU sensor (BMI323) needs to be configured for continuous sampling
+        // and a message queue similar to q_ecg_sample needs to be set up.
+        // Example implementation:
+        /*
+        struct bmi323_imu_sample imu_sample;
+        if (k_msgq_get(&q_imu_sample, &imu_sample, K_NO_WAIT) == 0)
+        {
+            if (recording_is_active())
+            {
+                struct recording_imu_sample rec_sample = {
+                    .timestamp_ms = (uint32_t)(k_uptime_get() - recording_get_start_time()),
+                    .accel_x = imu_sample.accel_x,
+                    .accel_y = imu_sample.accel_y,
+                    .accel_z = imu_sample.accel_z,
+                    .gyro_x = imu_sample.gyro_x,
+                    .gyro_y = imu_sample.gyro_y,
+                    .gyro_z = imu_sample.gyro_z
+                };
+                recording_add_imu_sample(&rec_sample);
+            }
+        }
+        */
+#endif
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
         {
@@ -482,6 +524,23 @@ void data_thread(void)
             {
                 k_msgq_put(&q_plot_ppg_wrist, &ppg_wr_sensor_sample, K_NO_WAIT);
             }
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+            // Feed PPG wrist data to recording module if active
+            if (recording_is_active())
+            {
+                for (int i = 0; i < ppg_wr_sensor_sample.ppg_num_samples; i++)
+                {
+                    struct recording_ppg_sample rec_sample = {
+                        .timestamp_ms = (uint32_t)(k_uptime_get() - recording_get_start_time()),
+                        .red = ppg_wr_sensor_sample.raw_red[i],
+                        .ir = ppg_wr_sensor_sample.raw_ir[i],
+                        .green = ppg_wr_sensor_sample.raw_green[i]
+                    };
+                    recording_add_ppg_sample(&rec_sample);
+                }
+            }
+#endif
 
             if (settings_send_usb_enabled)
             {

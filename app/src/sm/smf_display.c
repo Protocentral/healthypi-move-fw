@@ -43,6 +43,10 @@
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
 
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+#include "recording_module.h"
+#endif
+
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
 #define HPI_DEFAULT_START_SCREEN SCR_HOME
@@ -224,6 +228,10 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
     [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, unload_scr_gsr_plot},
     [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, unload_scr_gsr_complete},
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+    [SCR_SPL_RECORDING_ACTIVE] = {draw_scr_recording_active, unload_scr_recording_active},
+    [SCR_SPL_RECORDING_COMPLETE] = {draw_scr_recording_complete, unload_scr_recording_complete},
+#endif
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
 
@@ -1483,6 +1491,31 @@ static void disp_gsr_status_listener(const struct zbus_channel *chan)
     m_disp_gsr_remaining = status->remaining_s;
 }
 ZBUS_LISTENER_DEFINE(disp_gsr_status_lis, disp_gsr_status_listener);
+#endif
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+static void disp_rec_status_listener(const struct zbus_channel *chan)
+{
+    const struct recording_status *status = zbus_chan_const_msg(chan);
+    if (!status) return;
+    
+    LOG_DBG("Recording status: state=%d, elapsed=%ums, samples: PPG=%u GSR=%u",
+            status->state, status->elapsed_ms,
+            status->ppg_wrist_samples, status->gsr_samples);
+    
+    // Update active recording screen if visible
+    if (hpi_disp_get_curr_screen() == SCR_SPL_RECORDING_ACTIVE) {
+        // Screen has its own periodic update mechanism
+    }
+    
+    // Handle automatic completion when recording finishes
+    if (status->state == REC_STATE_IDLE && status->elapsed_ms > 0) {
+        // Recording completed (IDLE state after stop) - completion screen shown by stop handler
+        LOG_INF("Recording completed: %ums duration, %u bytes", 
+                status->elapsed_ms, status->file_size_bytes);
+    }
+}
+ZBUS_LISTENER_DEFINE(disp_rec_status_lis, disp_rec_status_listener);
 #endif
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 24576

@@ -36,6 +36,16 @@ if(NOT CONFIG_HPI_GSR_SCREEN)
   list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr_plot\\.c$")
 endif()
 
+# Recording module sources (conditional)
+if(CONFIG_HPI_RECORDING_MODULE)
+  target_sources(app PRIVATE
+    src/recording_module.c
+    src/ui/screens/scr_recording.c
+    src/ui/screens/scr_recording_active.c
+    src/ui/screens/scr_recording_complete.c
+  )
+endif()
+
 target_sources(app PRIVATE ${app_sources})
 
 # Explicitly include autoscale helper (ensure CMake picks it up if globbing was run earlier)

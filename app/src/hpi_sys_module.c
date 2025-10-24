@@ -49,6 +49,10 @@
 #include "hpi_sys.h"
 #include "hw_module.h"
 
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+#include "recording_module.h"
+#endif
+
 LOG_MODULE_REGISTER(hpi_sys_module, LOG_LEVEL_DBG);
 
 // External device references (declared extern in hw_module.c)
@@ -654,6 +658,21 @@ static void sys_ecg_stat_list(const struct zbus_channel *chan)
     g_hpi_last_update.ecg_last_hr = hpi_ecg->hr;
 }
 ZBUS_LISTENER_DEFINE(sys_ecg_stat_lis, sys_ecg_stat_list);
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+static void sys_rec_status_list(const struct zbus_channel *chan)
+{
+    const struct recording_status *status = zbus_chan_const_msg(chan);
+    if (!status) return;
+    
+    LOG_DBG("System: Recording status update - state=%d, elapsed=%ums",
+            status->state, status->elapsed_ms);
+    
+    // System module can track recording state for power management decisions
+    // or other system-level concerns if needed
+}
+ZBUS_LISTENER_DEFINE(sys_rec_status_lis, sys_rec_status_list);
+#endif
 
 #define HPI_SYS_THREAD_STACKSIZE 2048
 #define HPI_SYS_THREAD_PRIORITY 5

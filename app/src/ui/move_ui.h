@@ -112,6 +112,9 @@ enum hpi_disp_screens
     SCR_TEMP,
     SCR_BPT,
     SCR_GSR,
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+    SCR_RECORDING,
+#endif
 
     SCR_LIST_END,
     // Should not go here
@@ -150,6 +153,11 @@ enum hpi_disp_spl_screens
     SCR_SPL_HR_SCR2,
     SCR_SPL_PLOT_GSR,
     SCR_SPL_GSR_COMPLETE,
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+    SCR_SPL_RECORDING_ACTIVE,
+    SCR_SPL_RECORDING_COMPLETE,
+#endif
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -212,6 +220,27 @@ static inline void unload_scr_gsr_complete(void) { }
 static inline void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *r) { ARG_UNUSED(r); }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
 #endif
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+// Recording module screens
+void draw_scr_recording(enum scroll_dir m_scroll_dir);
+void draw_scr_recording_active(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_recording_active(void);
+void draw_scr_recording_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void unload_scr_recording_complete(void);
+#else
+// Stubs when recording module is disabled
+static inline void draw_scr_recording(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
+static inline void draw_scr_recording_active(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
+}
+static inline void unload_scr_recording_active(void) { }
+static inline void draw_scr_recording_complete(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
+    ARG_UNUSED(m_scroll_dir); ARG_UNUSED(a1); ARG_UNUSED(a2); ARG_UNUSED(a3); ARG_UNUSED(a4);
+}
+static inline void unload_scr_recording_complete(void) { }
+#endif
+
 LV_IMG_DECLARE(img_heart_70);
 LV_IMG_DECLARE(hpi_logo_90x92);
 LV_IMG_DECLARE(img_temp_100);
