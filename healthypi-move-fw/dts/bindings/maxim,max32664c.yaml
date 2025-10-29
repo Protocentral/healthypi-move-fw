@@ -1,0 +1,25 @@
+# ProtoCentral Electronics (info@protocentral.com)
+# SPDX-License-Identifier: Apache-2.0
+
+description: MAX32664C I2C Device
+
+compatible: "maxim,max32664c"
+
+include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+    reset-gpios:
+      type: phandle-array
+      required: true
+      description: RESET pin.
+
+        The RESET pin of MAX32664C is active low.
+        If connected directly the MCU pin should be configured
+        as active low.
+
+    mfio-gpios:
+      type: phandle-array
+      required: true
+      description: MFIO pin.
+
+        Pin for MFIO control.

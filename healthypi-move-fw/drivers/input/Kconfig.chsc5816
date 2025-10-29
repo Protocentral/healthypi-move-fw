@@ -1,0 +1,12 @@
+ # Copyright 2024 Protocentral Electronics
+ # SPDX-License-Identifier: Apache-2.0
+ # CHSC5816 Capacitive Touch Panel driver
+
+config INPUT_CHSC5816
+	bool "Use CHSC5816 capacitive touch panel driver"
+	default y
+	depends on DT_HAS_CHIPSEMI_CHSC5816_ENABLED
+	select GPIO
+	select I2C
+	help
+	  Enable out of tree driver for CHSC5816 touch panel.

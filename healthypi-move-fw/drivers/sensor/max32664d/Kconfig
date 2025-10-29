@@ -1,0 +1,13 @@
+# Configuration options
+
+config SENSOR_MAX32664D
+	bool "MAX32664D Driver"
+	default y
+	select I2C
+	help
+		Enable the driver for the Maxim MAX32664D sensor
+
+module = MAX32664D
+module-str = max32664d
+
+source "subsys/logging/Kconfig.template.log_config"
