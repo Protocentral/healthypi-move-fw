@@ -521,6 +521,10 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_BPT:
         draw_scr_bpt(m_scroll_dir);
         break;
+    case SCR_HRV_SUMMARY:
+        draw_scr_hrv_frequency_compact(m_scroll_dir);
+        break;
+    
 
     case SCR_TEMP:
         draw_scr_temp(m_scroll_dir);

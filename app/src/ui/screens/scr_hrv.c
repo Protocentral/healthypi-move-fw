@@ -138,7 +138,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_add_style(label_sdnn_caption, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_sdnn_caption, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
-    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
+   // hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
 
     // Add screen to display
     hpi_show_screen(scr_hrv, m_scroll_dir);

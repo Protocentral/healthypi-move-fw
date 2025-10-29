@@ -46,7 +46,6 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ble_module.h"
-#include "algos.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
 
