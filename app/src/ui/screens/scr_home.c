@@ -419,13 +419,13 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     // Initialize with current battery level from fuel gauge
     uint8_t current_batt_level = battery_get_level();
     const char* battery_symbol = hpi_get_battery_symbol(current_batt_level, false);
-    // lv_color_t battery_color = hpi_get_battery_color(current_batt_level, false);// 
-    // lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, current_batt_level);
-    // lv_obj_align(label_home_batt_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
-    // lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN | LV_STATE_DEFAULT);
-    // lv_obj_set_style_text_font(label_home_batt_val, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
-    // lv_obj_set_style_text_opa(label_home_batt_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    // lv_obj_set_style_text_align(label_home_batt_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_color_t battery_color = hpi_get_battery_color(current_batt_level, false);// 
+    lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, current_batt_level);
+    lv_obj_align(label_home_batt_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
+    lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(label_home_batt_val, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);  // Use readable 20pt font
+    lv_obj_set_style_text_opa(label_home_batt_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(label_home_batt_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // Register delete callback to cleanup pointers when LVGL auto-deletes this screen
     lv_obj_add_event_cb(scr_home, scr_home_delete_event_cb, LV_EVENT_DELETE, NULL);
@@ -514,13 +514,13 @@ void hpi_disp_home_update_batt_level(int batt_level, bool charging)
         batt_level = 0;
     }
 
-    // // Use centralized helper functions for consistency
-    // const char* battery_symbol = hpi_get_battery_symbol(batt_level, charging);
-    // lv_color_t battery_color = hpi_get_battery_color(batt_level, charging);
+    // Use centralized helper functions for consistency
+    const char* battery_symbol = hpi_get_battery_symbol(batt_level, charging);
+    lv_color_t battery_color = hpi_get_battery_color(batt_level, charging);
     
-    // // Update label with symbol and percentage
-    // lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, batt_level);
+    // Update label with symbol and percentage
+    lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, batt_level);
     
-    // // Apply color coding
-    // lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN);
+    // Apply color coding
+    lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN);
 }

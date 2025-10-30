@@ -244,6 +244,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
+
+    [SCR_SPL_HRV_LAYOUT] = {draw_scr_hrv_layout, gesture_down_scr_spl_hrv},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -1372,7 +1374,7 @@ void smf_display_thread(void)
         struct rtor_msg msg;
         if(k_msgq_get(&ppg_wrist_rtor, &msg, K_NO_WAIT) == 0)
         {
-                   //LOG_INF("Inside display smf thread - RR Interval: %.2f ms", (float)msg.rtor);
+            LOG_INF("Inside display smf thread - RR Interval: %.2f ms", msg.rtor);
                 
 
                    on_new_rr_interval_detected(msg.rtor);

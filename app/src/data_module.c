@@ -951,9 +951,9 @@ void data_thread(void)
             
             if (ppg_wr_sensor_sample.rtor > 300 && ppg_wr_sensor_sample.rtor < 2000)
             {
-                    //LOG_INF("RTOR: %u ms - INSIDE DATA THREAD", ppg_wr_sensor_sample.rtor);
+                    LOG_INF("RTOR: %u ms - INSIDE DATA THREAD", ppg_wr_sensor_sample.rtor);
                     k_msgq_put(&ppg_wrist_rtor, &ppg_wr_sensor_sample.rtor, K_NO_WAIT);
-                   // LOG_INF("Message put to queue");
+                    LOG_INF("Message put to queue");
             }
 
             

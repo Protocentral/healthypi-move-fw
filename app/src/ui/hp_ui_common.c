@@ -515,11 +515,11 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_HOME:
         draw_scr_home(m_scroll_dir);
         break;
-//#if defined(CONFIG_HPI_TODAY_SCREEN)
+#if defined(CONFIG_HPI_TODAY_SCREEN)
     case SCR_TODAY:
         draw_scr_today(m_scroll_dir);
         break;
-//#endif
+#endif
     case SCR_HR:
         draw_scr_hr(m_scroll_dir);
         break;
