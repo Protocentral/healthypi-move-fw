@@ -131,14 +131,6 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_add_style(label_hrv_sdnn, &style_numeric_large, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_hrv_sdnn, lv_color_white(), LV_PART_MAIN);
 
-    // SDNN caption
-    lv_obj_t *label_sdnn_caption = lv_label_create(scr_hrv);
-    lv_label_set_text(label_sdnn_caption, "SDNN (ms)");
-    lv_obj_align_to(label_sdnn_caption, label_hrv_sdnn, LV_ALIGN_OUT_TOP_MID, 0, -5);
-    lv_obj_add_style(label_sdnn_caption, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_sdnn_caption, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-
-<<<<<<< HEAD
     // SDNN bpm label
     lv_obj_t *label_sdnn_sub = lv_label_create(scr_hrv);
     lv_label_set_text(label_sdnn_sub, "ms");
@@ -173,9 +165,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_anim_set_values(&a, 10, 300);
     lv_anim_start(&a);
 
-=======
->>>>>>> main
-   // hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
+    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
 
     // Add screen to display
     hpi_show_screen(scr_hrv, m_scroll_dir);
