@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -31,7 +61,7 @@ static lv_obj_t *label_spo2_last_update_time;
 
 // Externs
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
@@ -161,13 +191,14 @@ void draw_scr_spo2_trends(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_label_set_text(label_btn_spo2_settings, LV_SYMBOL_SETTINGS " Settings");
     lv_obj_center(label_btn_spo2_settings);*/
 
-    lv_obj_t *btn_spo2_live = lv_btn_create(cont_col);
+    lv_obj_t *btn_spo2_live = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_spo2_live, scr_spo2_btn_live_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_spo2_live, 80);
 
     lv_obj_t *label_btn_spo2_live = lv_label_create(btn_spo2_live);
     lv_label_set_text(label_btn_spo2_live, LV_SYMBOL_PLAY " Raw PPG");
     lv_obj_center(label_btn_spo2_live);
+    // Note: No custom style applied - LVGL symbols require built-in fonts
 
     lv_obj_align_to(btn_spo2_live, NULL, LV_ALIGN_CENTER, 0, 130);
 

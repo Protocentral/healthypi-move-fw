@@ -15,7 +15,7 @@ fi
 for png_file in *.png; do
     if [ -f "$png_file" ]; then
         echo "Converting $png_file..."
-        python3 $(eval echo $LVGL_SCRIPT) --ofmt C --cf I8 -o . "$png_file"
+        python3 $(eval echo $LVGL_SCRIPT) --ofmt C --cf I4 -o . "$png_file"
         
         if [ $? -eq 0 ]; then
             echo "Successfully converted $png_file"

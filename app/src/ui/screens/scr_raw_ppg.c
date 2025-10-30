@@ -1,8 +1,39 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <lvgl.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
@@ -20,6 +51,8 @@ static lv_obj_t *label_ppg_spo2;
 static lv_obj_t *label_status;
 static lv_obj_t *label_ppg_no_signal;
 
+static int parent_screen = 0;
+
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
 
@@ -30,6 +63,11 @@ float y3_max = 0;
 float y3_min = 10000;
 
 static float gx = 0;
+
+// Signal detection and timeout tracking
+static uint32_t last_ppg_data_time = 0;
+static enum hpi_ppg_status last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
+#define PPG_SIGNAL_TIMEOUT_MS 3000  // Show "No Signal" if no data for 3 seconds
 
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
@@ -44,86 +82,10 @@ uint8_t ppg_disp_signal_type = PPG_SIGNAL_RED;
 
 LOG_MODULE_REGISTER(ppg_scr);
 
-static lv_obj_t *btn_settings_close;
-
-static lv_obj_t *msg_box_settings;
-
-static void event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t *obj = lv_event_get_target(e);
-    if (code == LV_EVENT_VALUE_CHANGED)
-    {
-        char buf[32];
-        lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
-        LOG_DBG("Option: %s", buf);
-    }
-}
-
-static void btn_close_event_handler(lv_event_t *e)
-{
-    lv_event_code_t code = lv_event_get_code(e);
-
-    if (code == LV_EVENT_CLICKED)
-    {
-        lv_msgbox_close(msg_box_settings);
-    }
-}
-
-static void hpi_disp_ppg_settings_open(void)
-{
-    msg_box_settings = lv_msgbox_create(scr_raw_ppg);
-    lv_obj_set_style_clip_corner(msg_box_settings, true, 0);
-
-    // /lv_obj_set_size(msg_box_settings, 320, 320);
-    lv_obj_center(msg_box_settings);
-
-    lv_obj_t *content = lv_msgbox_get_content(msg_box_settings);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(content, -1, LV_PART_SCROLLBAR);
-
-    lv_obj_t *lbl_plot_signal = lv_label_create(content);
-    lv_label_set_text(lbl_plot_signal, "Plot Signal : ");
-
-    /*Create a normal drop down list*/
-    lv_obj_t *dd = lv_dropdown_create(content);
-    lv_dropdown_set_options(dd, "Red\n"
-                                "IR\n"
-                                "Green");
-
-    lv_obj_align(dd, LV_ALIGN_TOP_MID, 0, 20);
-    lv_obj_add_event_cb(dd, event_handler, LV_EVENT_ALL, NULL);
-
-    /*lv_obj_t *cont_speed = lv_obj_create(content);
-    lv_obj_set_size(cont_speed, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_speed, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_speed, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-
-    lv_obj_t *lb_speed = lv_label_create(cont_speed);
-    lv_label_set_text(lb_speed, "Speed : ");
-    lv_obj_t *slider_speed = lv_slider_create(cont_speed);
-    lv_obj_set_width(slider_speed, lv_pct(100));
-    lv_slider_set_value(slider_speed, 80, LV_ANIM_OFF);
-    */
-
-    btn_settings_close = lv_btn_create(content);
-    lv_obj_add_event_cb(btn_settings_close, btn_close_event_handler, LV_EVENT_ALL, NULL);
-    lv_obj_align(btn_settings_close, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_set_height(btn_settings_close, 80);
-
-    lv_obj_t *label_btn_bpt_measure = lv_label_create(btn_settings_close);
-    lv_label_set_text(label_btn_bpt_measure, "Close");
-    lv_obj_center(label_btn_bpt_measure);
-}
-
-static void ppg_settings_button_cb(lv_event_t *e)
-{
-    hpi_disp_ppg_settings_open();
-}
-
 void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    parent_screen = arg1;
+
     scr_raw_ppg = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_raw_ppg, LV_OBJ_FLAG_SCROLLABLE); /// Flags
 
@@ -141,23 +103,22 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_align(label_signal, LV_ALIGN_TOP_MID, 0, 5);
 
     chart_ppg = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_ppg, 380, 130);
+    /* Match SpO2 measure chart styling */
+    lv_obj_set_size(chart_ppg, 390, 140);
     lv_obj_set_style_bg_color(chart_ppg, lv_color_black(), LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(chart_ppg, 0, LV_PART_MAIN);
-    // LVGL 9: Chart point styling changed - commented out
-
-    // lv_obj_set_style_width(...);
-    // LVGL 9: Chart point styling changed - commented out
-
-    // lv_obj_set_style_height(...);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
     lv_chart_set_point_count(chart_ppg, PPG_RAW_WINDOW_SIZE);
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
+    
+    // Set initial Y-axis range suitable for PPG data (typically 0-65535 for raw values)
+    // Start with a reasonable range around typical PPG baseline
+    lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, 0, 65535);
 
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_ppg, 5, LV_PART_ITEMS);
+    lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
 
     // Draw BPM container
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
@@ -167,7 +128,7 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_35);
+    lv_img_set_src(img_heart, &img_heart_48px);
 
     label_ppg_hr = lv_label_create(cont_hr);
     lv_label_set_text(label_ppg_hr, "00");
@@ -203,8 +164,34 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_align_to(label_status, chart_ppg, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
     lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
 
+    // Create "No Signal" overlay label (initially hidden)
+    label_ppg_no_signal = lv_label_create(scr_raw_ppg);
+    lv_label_set_text(label_ppg_no_signal, "No Signal");
+    lv_obj_align(label_ppg_no_signal, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_set_style_text_color(label_ppg_no_signal, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_obj_add_style(label_ppg_no_signal, &style_white_medium, 0);
+    lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN); // Start hidden
+
+    // Initialize timestamp and SCD state
+    last_ppg_data_time = k_uptime_get_32();
+    last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
+
+    // Reset min/max tracking for fresh autoscaling
+    y_min_ppg = 10000;
+    y_max_ppg = 0;
+    gx = 0;
+    
+    // Reset autoscale state to ensure first update happens
+    hpi_ppg_autoscale_reset();
+
     hpi_disp_set_curr_screen(SCR_SPL_RAW_PPG);
     hpi_show_screen(scr_raw_ppg, m_scroll_dir);
+}
+
+void gesture_down_scr_spl_raw_ppg(void)
+{
+    /* Return to parent screen on gesture down */
+    hpi_load_screen(parent_screen, SCROLL_DOWN);
 }
 
 void hpi_ppg_disp_update_hr(int hr)
@@ -230,38 +217,100 @@ static void hpi_ppg_disp_add_samples(int num_samples)
     gx += num_samples;
 }
 
+/* Delegate autoscale to shared helper to keep behavior consistent across screens */
 static void hpi_ppg_disp_do_set_scale(int disp_window_size)
 {
-    if (gx >= (disp_window_size / 4))
+    hpi_ppg_disp_do_set_scale_shared(chart_ppg, &y_min_ppg, &y_max_ppg, &gx, disp_window_size);
+}
+
+/* Update "No Signal" label visibility based on data presence and SCD status */
+static void hpi_ppg_update_signal_status(enum hpi_ppg_status scd_state)
+{
+    if (label_ppg_no_signal == NULL)
+        return;
+
+    uint32_t current_time = k_uptime_get_32();
+    bool timeout = (current_time - last_ppg_data_time) > PPG_SIGNAL_TIMEOUT_MS;
+    bool no_skin_contact = (scd_state == HPI_PPG_SCD_OFF_SKIN);
+
+    // Show "No Signal" if timeout OR no skin contact (but ONLY check skin contact if we have valid state)
+    if (timeout || no_skin_contact)
     {
-
-        lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
-
-        gx = 0;
-        y_max_ppg = -900000;
-        y_min_ppg = 900000;
+        lv_obj_clear_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
+        
+        // Update message based on reason - prioritize skin contact message when both conditions exist
+        if (no_skin_contact)
+        {
+            lv_label_set_text(label_ppg_no_signal, "No Skin Contact");
+        }
+        else if (timeout)
+        {
+            lv_label_set_text(label_ppg_no_signal, "No Signal");
+        }
+    }
+    else
+    {
+        lv_obj_add_flag(label_ppg_no_signal, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
+    // Update last data received timestamp
+    last_ppg_data_time = k_uptime_get_32();
+
+    // Store the SCD state for use in periodic timeout checks
+    last_scd_state = ppg_sensor_sample.scd_state;
+
+    // Update signal status based on SCD state
+    hpi_ppg_update_signal_status(ppg_sensor_sample.scd_state);
+
     uint32_t *data_ppg = ppg_sensor_sample.raw_green;
 
+    // Find min/max in current batch for accurate tracking
+    uint32_t batch_min = UINT32_MAX;
+    uint32_t batch_max = 0;
+    
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
-        if (data_ppg[i] < y_min_ppg)
-        {
-            y_min_ppg = data_ppg[i];
-        }
-
-        if (data_ppg[i] > y_max_ppg)
-        {
-            y_max_ppg = data_ppg[i];
-        }
-
-        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
-
-        hpi_ppg_disp_add_samples(1);
-        hpi_ppg_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
+        if (data_ppg[i] < batch_min) batch_min = data_ppg[i];
+        if (data_ppg[i] > batch_max) batch_max = data_ppg[i];
     }
+    
+    // Update global min/max with batch values
+    if (y_min_ppg == 10000)
+    {
+        y_min_ppg = batch_min;
+    }
+    else
+    {
+        if (batch_min < y_min_ppg) y_min_ppg = batch_min;
+    }
+    
+    if (y_max_ppg == 0)
+    {
+        y_max_ppg = batch_max;
+    }
+    else
+    {
+        if (batch_max > y_max_ppg) y_max_ppg = batch_max;
+    }
+
+    // Plot all samples
+    for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
+    {
+        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
+        hpi_ppg_disp_add_samples(1);
+    }
+    
+    // Call autoscale once per batch, not per sample, for better performance
+    hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
+}
+
+/* Public function to check for signal timeout - called periodically by display SM */
+void hpi_ppg_check_signal_timeout(void)
+{
+    // Use the last known SCD state for timeout checks
+    // This way we only show timeout, not incorrectly assuming "no skin contact"
+    hpi_ppg_update_signal_status(last_scd_state);
 }

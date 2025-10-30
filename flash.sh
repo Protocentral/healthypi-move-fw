@@ -1,0 +1,1 @@
+west flash -d app/build --erase

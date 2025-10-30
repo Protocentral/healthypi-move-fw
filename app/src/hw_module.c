@@ -1,8 +1,38 @@
+/*
+ * HealthyPi Move
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/rtc.h>
+#include <zephyr/drivers/i2c.h>
 
 #include <zephyr/dfu/mcuboot.h>
 #include <stdio.h>
@@ -13,9 +43,9 @@
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/usb/usbd.h>
 
-#include <zephyr/drivers/sensor/npm1300_charger.h>
-#include <zephyr/dt-bindings/regulator/npm1300.h>
-#include <zephyr/drivers/mfd/npm1300.h>
+#include <zephyr/drivers/sensor/npm13xx_charger.h>
+#include <zephyr/dt-bindings/regulator/npm13xx.h>
+#include <zephyr/drivers/mfd/npm13xx.h>
 #include <zephyr/drivers/regulator.h>
 
 #include <zephyr/input/input.h>
@@ -44,6 +74,7 @@
 #include "display_sh8601.h"
 
 #include "hw_module.h"
+#include "battery_module.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
@@ -53,18 +84,27 @@
 
 #include <max32664_updater.h>
 
+#include <lvgl.h>
+
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 
-// Battery cutoff thresholds - voltage based (typical Li-ion voltages)
-// These values can be adjusted based on the specific battery characteristics
-#define HPI_BATTERY_CRITICAL_VOLTAGE 3.2f // Show critical low battery screen (V)
-#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f // Auto shutdown level (V) - prevents over-discharge
-#define HPI_BATTERY_RECOVERY_VOLTAGE 3.4f // Recovery threshold when charging (V) - allows hysteresis
+// Re-define battery constants for backward compatibility
+#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f
+
+// Force update option for testing MAX32664 updater logic
+// Uncomment the line(s) below to force updates regardless of version
+// #define FORCE_MAX32664C_UPDATE_FOR_TESTING
+// #define FORCE_MAX32664D_UPDATE_FOR_TESTING
+
+// MSBL firmware file paths - must match max32664_updater.c
+#define MAX32664C_FW_PATH "/lfs/sys/max32664c_30_13_31.msbl"
+#define MAX32664D_FW_PATH "/lfs/sys/max32664d_40_6_0.msbl"
 
 char curr_string[40];
 
 // Peripheral Device Pointers
-static const struct device *max30208_dev = DEVICE_DT_GET_ANY(maxim_max30208);
+static const struct device *max30208a50_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a50));
+static const struct device *max30208a52_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a52));
 
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
@@ -78,12 +118,13 @@ const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv))
 // PMIC Device Pointers
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
 static const struct device *ldsw_disp_unit = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
-static const struct device *ldsw_sens_1_8 = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
+static const struct device *dev_ldsw_fi_sens = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
 const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); // DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
+const struct device *i2c2_dev = DEVICE_DT_GET(DT_NODELABEL(i2c2));
 
 // LED Power DC/DC Enable
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
@@ -93,17 +134,71 @@ volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 
 static volatile bool vbus_connected;
-static int64_t ref_time;
 
-// Low battery state tracking
-static bool low_battery_screen_active = false;
-static bool critical_battery_notified = false;
-static uint32_t low_battery_last_update = 0;
-static uint8_t last_battery_level = 100;  // Store last known battery level
-static float last_battery_voltage = 4.2f; // Store last known battery voltage
+/**
+ * @brief Scan I2C2 bus for available devices
+ *
+ * This function scans the I2C2 bus from address 0x08 to 0x77 to detect
+ * which devices are present. Used for debugging purposes during initialization.
+ *
+ * @note This function should only be called during initialization/debugging
+ * as it can temporarily block the I2C bus while scanning.
+ */
+static void i2c2_bus_scan_debug(void)
+{
+    LOG_INF("=== I2C2 Bus Scan Debug ===");
+
+    if (!device_is_ready(i2c2_dev))
+    {
+        LOG_ERR("I2C2 device not ready for scanning");
+        return;
+    }
+
+    int devices_found = 0;
+    uint8_t dummy_data = 0;
+
+    // Scan addresses from 0x08 to 0x77 (avoid reserved addresses)
+    for (uint8_t addr = 0x08; addr <= 0x77; addr++)
+    {
+        // Try to read 1 byte from the device
+        int ret = i2c_read(i2c2_dev, &dummy_data, 1, addr);
+
+        if (ret == 0)
+        {
+            LOG_INF("I2C device found at address 0x%02X", addr);
+            devices_found++;
+
+            // Add specific device identification for known addresses
+            switch (addr)
+            {
+            case 0x50:
+                LOG_INF("  -> Expected: MAX30208 temperature sensor");
+                break;
+            case 0x55:
+                LOG_INF("  -> Expected: MAX32664C bio-sensor hub");
+                break;
+            default:
+                LOG_INF("  -> Unknown device");
+                break;
+            }
+        }
+
+        // Small delay between scans to be gentle on the bus
+        k_usleep(100);
+    }
+
+    LOG_INF("I2C2 scan complete. Found %d device(s)", devices_found);
+
+    if (devices_found == 0)
+    {
+        LOG_WRN("No I2C devices found on bus 2. Check connections and power.");
+    }
+
+    LOG_INF("=== End I2C2 Bus Scan ===");
+}
 
 // USB CDC UART
-#define RING_BUF_SIZE 512  // Reduced from 1024 to 512 bytes
+#define RING_BUF_SIZE 512 // Reduced from 1024 to 512 bytes
 uint8_t ring_buffer[RING_BUF_SIZE];
 struct ring_buf ringbuf_usb_cdc;
 static bool rx_throttled;
@@ -114,7 +209,7 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 // Signals to start dependent threads
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
-K_SEM_DEFINE(sem_ecg_bioz_sm_start, 0, 1);
+K_SEM_DEFINE(sem_ecg_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
 K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
@@ -129,13 +224,6 @@ K_SEM_DEFINE(sem_boot_update_req, 0, 1);
 ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
-
-static const struct battery_model battery_model = {
-#include "battery_profile_200.inc"
-};
-
-static float max_charge_current;
-static float term_charge_current;
 
 static uint16_t today_total_steps = 0;
 K_MUTEX_DEFINE(mutex_today_steps);
@@ -183,31 +271,30 @@ void today_init_steps(uint16_t steps)
     k_mutex_unlock(&mutex_today_steps);
 }
 
-// Low battery management functions
+// Backward compatibility wrapper functions for battery management
 bool hw_is_low_battery(void)
 {
-    return low_battery_screen_active;
+    return battery_is_low();
 }
 
 bool hw_is_critical_battery(void)
 {
-    return (last_battery_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE);
+    return battery_is_critical();
 }
 
 void hw_reset_low_battery_state(void)
 {
-    low_battery_screen_active = false;
-    critical_battery_notified = false;
+    battery_reset_low_state();
 }
 
 uint8_t hw_get_current_battery_level(void)
 {
-    return last_battery_level;
+    return battery_get_level();
 }
 
 float hw_get_current_battery_voltage(void)
 {
-    return last_battery_voltage;
+    return battery_get_voltage();
 }
 
 static void today_reset_steps(void)
@@ -330,120 +417,6 @@ static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_
 }
 #endif
 
-static int npm_read_sensors(const struct device *charger,
-                            float *voltage, float *current, float *temp, int32_t *chg_status)
-{
-    struct sensor_value value;
-    int ret;
-
-    ret = sensor_sample_fetch(charger);
-    if (ret < 0)
-    {
-        return ret;
-    }
-
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_VOLTAGE, &value);
-    *voltage = (float)value.val1 + ((float)value.val2 / 1000000);
-
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_TEMP, &value);
-    *temp = (float)value.val1 + ((float)value.val2 / 1000000);
-
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_AVG_CURRENT, &value);
-    *current = (float)value.val1 + ((float)value.val2 / 1000000);
-
-    sensor_channel_get(charger, SENSOR_CHAN_NPM1300_CHARGER_STATUS, &value);
-    *chg_status = value.val1;
-
-    return 0;
-}
-
-int npm_fuel_gauge_init(const struct device *charger)
-{
-    struct sensor_value value;
-    struct nrf_fuel_gauge_init_parameters parameters = {
-        .model = &battery_model,
-        .opt_params = NULL,
-    };
-    int32_t chg_status;
-    int ret;
-
-    LOG_DBG("nRF Fuel Gauge version: %s", nrf_fuel_gauge_version);
-
-    ret = npm_read_sensors(charger, &parameters.v0, &parameters.i0, &parameters.t0, &chg_status);
-    if (ret < 0)
-    {
-        return ret;
-    }
-
-    /* Store charge nominal and termination current, needed for ttf calculation */
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_DESIRED_CHARGING_CURRENT, &value);
-    max_charge_current = (float)value.val1 + ((float)value.val2 / 1000000);
-    term_charge_current = max_charge_current / 10.f;
-
-    nrf_fuel_gauge_init(&parameters, NULL);
-
-    ref_time = k_uptime_get();
-
-    return 0;
-}
-
-int npm_fuel_gauge_update(const struct device *charger, bool vbus_connected, uint8_t *batt_level, bool *batt_charging, float *batt_voltage)
-{
-    static int32_t chg_status_prev;
-    float voltage;
-    float current;
-    float temp;
-    float soc;
-    float tte;
-    float ttf;
-    float delta;
-    int32_t chg_status;
-    bool cc_charging;
-    int ret;
-
-    ret = npm_read_sensors(charger, &voltage, &current, &temp, &chg_status);
-    if (ret < 0)
-    {
-        printk("Error: Could not read from charger device\n");
-        return ret;
-    }
-
-    ret = nrf_fuel_gauge_ext_state_update(
-        vbus_connected ? NRF_FUEL_GAUGE_EXT_STATE_INFO_VBUS_CONNECTED
-                       : NRF_FUEL_GAUGE_EXT_STATE_INFO_VBUS_DISCONNECTED,
-        NULL);
-    if (ret < 0)
-    {
-        printk("Error: Could not inform of state\n");
-        return ret;
-    }
-
-    /*if (chg_status != chg_status_prev) {
-        chg_status_prev = chg_status;
-
-        ret = charge_status_inform(chg_status);
-        if (ret < 0) {
-            printk("Error: Could not inform of charge status\n");
-            return ret;
-        }
-    }*/
-
-    delta = (float)k_uptime_delta(&ref_time) / 1000.f;
-
-    /* Process fuel gauge data with nRF Connect SDK 3.0.2 API */
-    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, NULL);
-    tte = nrf_fuel_gauge_tte_get();
-    ttf = nrf_fuel_gauge_ttf_get();
-
-    LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
-            (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
-
-    *batt_level = (uint8_t)soc;
-    *batt_charging = chg_status;
-    *batt_voltage = voltage; // Return the battery voltage
-    return 0;
-}
-
 #if 0 // USB init function - not currently used
 static int usb_init()
 {
@@ -478,8 +451,8 @@ double read_temp_f(void)
 {
     struct sensor_value temp_sample;
 
-    sensor_sample_fetch(max30208_dev);
-    sensor_channel_get(max30208_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
+    sensor_sample_fetch(max30208a50_dev);
+    sensor_channel_get(max30208a50_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
     // last_read_temp_value = temp_sample.val1;
     double temp_c = (double)temp_sample.val1 * 0.005;
     double temp_f = (temp_c * 1.8) + 32.0;
@@ -545,15 +518,15 @@ int hw_max32664c_stop_algo(void)
 
 static void pmic_event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-    if (pins & BIT(NPM1300_EVENT_VBUS_DETECTED))
+    if (pins & BIT(NPM13XX_EVENT_VBUS_DETECTED))
     {
-        printk("Vbus connected\n");
+        LOG_DBG("Vbus connected");
         vbus_connected = true;
     }
 
-    if (pins & BIT(NPM1300_EVENT_VBUS_REMOVED))
+    if (pins & BIT(NPM13XX_EVENT_VBUS_REMOVED))
     {
-        printk("Vbus removed\n");
+        LOG_DBG("Vbus removed");
         vbus_connected = false;
     }
 }
@@ -577,9 +550,9 @@ static int hw_enable_pmic_callback(void)
     int ret = 0;
 
     gpio_init_callback(&event_cb, pmic_event_callback,
-                       BIT(NPM1300_EVENT_VBUS_DETECTED) | BIT(NPM1300_EVENT_VBUS_REMOVED));
+                       BIT(NPM13XX_EVENT_VBUS_DETECTED) | BIT(NPM13XX_EVENT_VBUS_REMOVED));
 
-    ret = mfd_npm1300_add_callback(pmic, &event_cb);
+    ret = mfd_npm13xx_add_callback(pmic, &event_cb);
     if (ret)
     {
         LOG_ERR("Failed to add pmic callback");
@@ -599,14 +572,32 @@ static int hw_enable_pmic_callback(void)
     return 0;
 }
 
-void hpi_hw_ldsw2_on(void)
+void hpi_hw_fi_sensor_on(void)
 {
-    regulator_enable(ldsw_sens_1_8);
+    int ret = regulator_enable(dev_ldsw_fi_sens);
+    if (ret == 0) {
+        LOG_INF("Finger sensor power enabled (LDO2)");
+    } else {
+        LOG_ERR("Failed to enable finger sensor power: %d", ret);
+    }
 }
 
-void hpi_hw_ldsw2_off(void)
+void hpi_hw_fi_sensor_off(void)
 {
-    regulator_disable(ldsw_sens_1_8);
+    regulator_disable(dev_ldsw_fi_sens);
+}
+
+static bool hw_check_msbl_file_exists(const char *file_path)
+{
+    struct fs_dirent entry;
+    int ret = fs_stat(file_path, &entry);
+    if (ret < 0)
+    {
+        LOG_ERR("MSBL file not found: %s (error: %d)", file_path, ret);
+        return false;
+    }
+    LOG_INF("MSBL file found: %s (%zu bytes)", file_path, entry.size);
+    return true;
 }
 
 void hw_module_init(void)
@@ -614,9 +605,17 @@ void hw_module_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
+    // Check battery voltage during boot
+    uint8_t boot_batt_level = 0;
+    bool boot_batt_charging = false;
+    float boot_batt_voltage = 0.0f;
+
     // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
     NRF_TWIM2->FREQUENCY = 0x06200000;
     NRF_TWIM1->FREQUENCY = 0x06200000;
+
+    // Debug: Scan I2C2 bus for available devices before initialization
+    // i2c2_bus_scan_debug();
 
     if (!device_is_ready(pmic))
     {
@@ -633,26 +632,7 @@ void hw_module_init(void)
         LOG_ERR("Charger device not ready.\n");
     }
 
-    // Power ON display
-    regulator_disable(ldsw_disp_unit);
-    k_msleep(100);
-    regulator_enable(ldsw_disp_unit);
-    k_msleep(500);
-
-    // Reset all sensors before starting
-    regulator_disable(ldsw_sens_1_8);
-    k_msleep(100);
-    regulator_enable(ldsw_sens_1_8);
-    k_msleep(100);
-
-    // Signal to start display state machine
-    k_sem_give(&sem_disp_smf_start);
-
-    // Wait for display system to be initialized and ready
-    k_sem_take(&sem_disp_ready, K_FOREVER);
-
-    hw_enable_pmic_callback();
-    if (npm_fuel_gauge_init(charger) < 0)
+    if (battery_fuel_gauge_init(charger) < 0)
     {
         LOG_ERR("Could not initialise fuel gauge.\n");
         hw_add_boot_msg("PMIC", true, true, false, 0);
@@ -663,15 +643,31 @@ void hw_module_init(void)
         hw_enable_pmic_callback();
     }
 
-    // Check battery voltage during boot
-    uint8_t boot_batt_level = 0;
-    bool boot_batt_charging = false;
-    float boot_batt_voltage = 0.0f;
+    // Power ON display
+    regulator_disable(ldsw_disp_unit);
+    k_msleep(100);
+    regulator_enable(ldsw_disp_unit);
+    k_msleep(500);
 
-    if (npm_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
+    // Reset all sensors before starting (use wrapper for FI sensor)
+    hpi_hw_fi_sensor_off();
+    k_msleep(100);
+    hpi_hw_fi_sensor_on();
+    k_msleep(100);
+
+    // Signal to start display state machine
+    k_sem_give(&sem_disp_smf_start);
+
+    // Wait for display system to be initialized and ready
+    k_sem_take(&sem_disp_ready, K_FOREVER);
+
+    if (battery_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
     {
         char batt_msg[32];
-        snprintf(batt_msg, sizeof(batt_msg), "Battery: %.2fV (%d%%)", (double)boot_batt_voltage, boot_batt_level);
+        // Convert voltage to millivolts to avoid floating point in snprintf
+        int voltage_mv = (int)(boot_batt_voltage * 1000);
+        snprintf(batt_msg, sizeof(batt_msg), "Battery: %d.%02d V (%d%%)",
+                 voltage_mv / 1000, (voltage_mv % 1000) / 10, boot_batt_level);
 
         // Check if battery voltage is critically low
         if (boot_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE && !boot_batt_charging)
@@ -682,11 +678,11 @@ void hw_module_init(void)
 
             // Wait a bit to show the message, then shutdown
             k_msleep(3000);
-            LOG_ERR("Boot aborted - critical battery voltage: %.2fV", (double)boot_batt_voltage);
+            LOG_ERR("Boot aborted - critical battery voltage: %.2f V", (double)boot_batt_voltage);
             hpi_hw_pmic_off();
             return; // This should never be reached, but just in case
         }
-        else if (boot_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !boot_batt_charging)
+        else if (boot_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE) // && !boot_batt_charging)
         {
             hw_add_boot_msg(batt_msg, false, true, false, 0);
             hw_add_boot_msg("LOW VOLTAGE WARNING", false, true, false, 0);
@@ -704,6 +700,8 @@ void hw_module_init(void)
     {
         hw_add_boot_msg("Battery: ERROR", false, true, false, 0);
     }
+
+    fs_module_init();
 
     // Init IMU device
     ret = device_init(imu_dev);
@@ -739,7 +737,7 @@ void hw_module_init(void)
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
 
-        k_sem_give(&sem_ecg_bioz_sm_start);
+    k_sem_give(&sem_ecg_start);
     }
 
     k_sleep(K_MSEC(100));
@@ -753,14 +751,73 @@ void hw_module_init(void)
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(100));
 
+    /* Path of the one-shot reboot-attempt marker stored in LFS */
+    const char *max32664c_reboot_marker = "/lfs/sys/max32664c_reboot_attempt";
+
     device_init(max32664c_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664c_dev))
     {
         LOG_ERR("MAX32664C device not present!");
-        max32664c_device_present = false;
-        hw_add_boot_msg("MAX32664C", false, true, false, 0);
+
+        /* Check if we've already attempted a reboot previously by checking the marker file */
+        int rc = fs_check_file_exists(max32664c_reboot_marker);
+        if (rc == 0)
+        {
+            /* Marker exists -> this is the second boot after an attempted reboot.
+             * Clear the marker and proceed without rebooting again. */
+            LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
+            /* Try to remove the marker file using fs_unlink; retry a few times if it fails. */
+            int unlink_rc = -1;
+            const int max_unlink_retries = 3;
+            for (int i = 0; i < max_unlink_retries; i++)
+            {
+                unlink_rc = fs_unlink(max32664c_reboot_marker);
+                if (unlink_rc == 0)
+                {
+                    LOG_DBG("Reboot marker removed on attempt %d: %s", i + 1, max32664c_reboot_marker);
+                    break;
+                }
+                else
+                {
+                    LOG_DBG("Attempt %d: unlink returned %d, retrying...", i + 1, unlink_rc);
+                    k_sleep(K_MSEC(50));
+                }
+            }
+
+            /* Final verification: check whether the file still exists. */
+            int exists_after_unlink = fs_check_file_exists(max32664c_reboot_marker);
+            if (exists_after_unlink == 0)
+            {
+                LOG_WRN("Reboot marker still present after unlink attempts: %s", max32664c_reboot_marker);
+            }
+            else
+            {
+                LOG_DBG("Reboot marker cleared: %s", max32664c_reboot_marker);
+            }
+
+            max32664c_device_present = false;
+            hw_add_boot_msg("MAX32664C", false, true, false, 0);
+        }
+        else
+        {
+            LOG_INF("MAX32664C probe failed; creating reboot marker and rebooting to recover I2C bus");
+            uint8_t marker_data[1] = {1};
+            fs_write_buffer_to_file((char *)max32664c_reboot_marker, marker_data, sizeof(marker_data));
+            int exists = fs_check_file_exists(max32664c_reboot_marker);
+            if (exists != 0)
+            {
+                LOG_ERR("Failed to create reboot marker '%s' (rc=%d) - will not reboot to avoid loop", max32664c_reboot_marker, exists);
+                max32664c_device_present = false;
+                hw_add_boot_msg("MAX32664C", false, true, false, 0);
+            }
+            else
+            {
+                k_sleep(K_MSEC(100));
+                sys_reboot(SYS_REBOOT_COLD);
+            }
+        }
     }
     else
     {
@@ -800,12 +857,37 @@ void hw_module_init(void)
             hw_add_boot_msg("\t Acc", true, true, false, 0);
         }
 
+        bool update_required_c = false;
+
+#ifdef FORCE_MAX32664C_UPDATE_FOR_TESTING
+        // Force update for testing purposes (compile-time)
+        update_required_c = true;
+        LOG_INF("MAX32664C Force update enabled for testing (compile-time)");
+        hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
+#else
+        // Normal version check
         if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
         {
+            update_required_c = true;
             LOG_INF("MAX32664C App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
-            k_sem_give(&sem_boot_update_req);
-            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+        }
+#endif
+
+        if (update_required_c)
+        {
+            // Check if MSBL file exists before starting update
+            if (!hw_check_msbl_file_exists(MAX32664C_FW_PATH))
+            {
+                LOG_ERR("MAX32664C MSBL file not available - skipping update");
+                hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
+                hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
+            }
+            else
+            {
+                k_sem_give(&sem_boot_update_req);
+                max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+            }
         }
 
         k_sem_give(&sem_ppg_wrist_sm_start);
@@ -819,6 +901,8 @@ void hw_module_init(void)
         LOG_ERR("MAX32664D device not present!");
         max32664d_device_present = false;
         hw_add_boot_msg("MAX32664D", false, true, false, 0);
+        /* Ensure FI sensor is powered off after failed detection */
+        hpi_hw_fi_sensor_off();
     }
     else
     {
@@ -834,15 +918,42 @@ void hw_module_init(void)
         snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
         hw_add_boot_msg(ver_msg, true, false, false, 0);
 
+        bool update_required = false;
+
+#ifdef FORCE_MAX32664D_UPDATE_FOR_TESTING
+        // Force update for testing purposes (compile-time)
+        update_required = true;
+        LOG_INF("MAX32664D Force update enabled for testing (compile-time)");
+        hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
+#else
+        // Normal version check
         if ((ver_get.val1 < hpi_max32664d_req_ver.major) || (ver_get.val2 < hpi_max32664d_req_ver.minor))
         {
+            update_required = true;
             LOG_INF("MAX32664D App update required");
             hw_add_boot_msg("\tUpdate required", false, false, false, 0);
-            k_sem_give(&sem_boot_update_req);
-            // max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+        }
+#endif
+
+        if (update_required)
+        {
+            // Check if MSBL file exists before starting update
+            if (!hw_check_msbl_file_exists(MAX32664D_FW_PATH))
+            {
+                LOG_ERR("MAX32664D MSBL file not available - skipping update");
+                hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
+                hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
+            }
+            else
+            {
+                k_sem_give(&sem_boot_update_req);
+                max32664_updater_start(max32664d_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664D);
+            }
         }
 
         k_sem_give(&sem_ppg_finger_sm_start);
+        /* Power down FI sensor after successful boot-time detection/self-test */
+        hpi_hw_fi_sensor_off();
     }
 
     // Confirm MCUBoot image if not already confirmed by app
@@ -865,19 +976,38 @@ void hw_module_init(void)
 
     // setup_pmic_callbacks();
 
-    device_init(max30208_dev);
+    device_init(max30208a50_dev);
     k_sleep(K_MSEC(100));
 
-    if (!device_is_ready(max30208_dev))
+    if (!device_is_ready(max30208a50_dev))
     {
-        LOG_ERR("MAX30208 device not found!");
-        hw_add_boot_msg("MAX30208", false, true, false, 0);
+        LOG_ERR("MAX30208A50 device not found!");
+        hw_add_boot_msg("MAX30208 @50", false, true, false, 0);
+
+        device_init(max30208a52_dev);
+        k_sleep(K_MSEC(100));
+
+        if (!device_is_ready(max30208a52_dev))
+        {
+            LOG_ERR("MAX30208A52 device not found!");
+            hw_add_boot_msg("MAX30208 @52", false, true, false, 0);
+        }
+        else
+        {
+            max30208a50_dev = max30208a52_dev; // Use the device with address 0x52
+            LOG_INF("MAX30208A52 device found!");
+            hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
+        }
     }
     else
     {
-        LOG_INF("MAX30208 device found!");
-        hw_add_boot_msg("MAX30208", true, true, false, 0);
+        LOG_INF("MAX30208A50 device found!");
+        hw_add_boot_msg("MAX30208A50 @50", true, true, false, 0);
     }
+
+    hw_add_boot_msg("Boot complete !!", true, false, false, 0);
+
+    k_sleep(K_MSEC(400));
 
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
@@ -895,8 +1025,6 @@ void hw_module_init(void)
     hpi_sys_force_time_sync(); // Force initial sync
 
     // npm_fuel_gauge_update(charger, vbus_connected);
-
-    fs_module_init();
 
     // Initialize user settings (load from file)
     ret = hpi_user_settings_init();
@@ -945,14 +1073,17 @@ static uint32_t acc_get_steps(void)
     return (uint32_t)steps.val1;
 }
 
+uint8_t sys_batt_level = 0;
+bool sys_batt_charging = false;
+ float sys_batt_voltage = 4.2f; 
+
 void hw_thread(void)
 {
     uint32_t _steps = 0;
     double _temp_f = 0.0;
 
-    uint8_t sys_batt_level = 0;
-    bool sys_batt_charging = false;
-    float sys_batt_voltage = 4.2f; // Add voltage tracking
+   
+   
 
     // Variables for tracking daily reset
     static int last_day = -1;
@@ -966,9 +1097,7 @@ void hw_thread(void)
     for (;;)
     {
         // Read and publish battery level
-        npm_fuel_gauge_update(charger, vbus_connected, &sys_batt_level, &sys_batt_charging, &sys_batt_voltage);
-        last_battery_level = sys_batt_level;     // Store for external access
-        last_battery_voltage = sys_batt_voltage; // Store voltage for external access
+        battery_fuel_gauge_update(charger, vbus_connected, &sys_batt_level, &sys_batt_charging, &sys_batt_voltage);
 
         struct hpi_batt_status_t batt_s = {
             .batt_level = (uint8_t)sys_batt_level,
@@ -976,55 +1105,11 @@ void hw_thread(void)
         };
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
-        // Check for low battery conditions (voltage-based)
-        if (!sys_batt_charging)
-        { // Only check cutoff when not charging
-            if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
-            {
-                // Critical battery voltage - immediately shutdown
-                LOG_ERR("Critical battery voltage (%.2fV) - shutting down", (double)sys_batt_voltage);
-                k_msleep(1000); // Give time for log message
-                hpi_hw_pmic_off();
-            }
-            else if (sys_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !low_battery_screen_active)
-            {
-                // Show low battery warning screen
-                LOG_WRN("Low battery voltage (%.2fV) - showing warning screen", (double)sys_batt_voltage);
-                low_battery_screen_active = true;
-                critical_battery_notified = true;
+        // Check for low battery conditions using the battery module
+        battery_monitor_conditions(sys_batt_level, sys_batt_charging, sys_batt_voltage);
 
-                // Load the low battery screen with battery level and voltage as arguments
-                // Pass voltage as arg3 (multiply by 100 to preserve 2 decimal places in uint32_t)
-                hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
-            }
-        }
-        else
-        {
-            // Reset flags when charging and voltage recovers
-            if (sys_batt_voltage > HPI_BATTERY_RECOVERY_VOLTAGE)
-            {
-                if (low_battery_screen_active)
-                {
-                    LOG_INF("Battery voltage recovered (%.2fV) - dismissing low battery screen", (double)sys_batt_voltage);
-                    // Return to home screen
-                    hpi_load_screen(SCR_HOME, SCROLL_NONE);
-                }
-                low_battery_screen_active = false;
-                critical_battery_notified = false;
-            }
-        }
-
-        // Update low battery screen if it's currently active and status changed
-        if (low_battery_screen_active)
-        {
-            // Only refresh every 5 seconds to avoid excessive updates
-            if (k_uptime_get_32() - low_battery_last_update > 5000)
-            {
-                // Refresh the low battery screen to show updated charging status and voltage
-                hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
-                low_battery_last_update = k_uptime_get_32();
-            }
-        }
+        // Update low battery screen if currently active
+        battery_update_low_battery_screen(sys_batt_level, sys_batt_charging, sys_batt_voltage);
 
         // Sync time with RTC if needed
         if (hpi_sys_sync_time_if_needed() < 0)

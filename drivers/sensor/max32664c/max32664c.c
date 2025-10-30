@@ -1,7 +1,30 @@
 /*
- * (c) 2024 Protocentral Electronics
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
  *
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #define DT_DRV_COMPAT maxim_max32664c
@@ -9,6 +32,14 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/sys/reboot.h>
+#include <nrfx.h>
+#include <errno.h>
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+#include <zephyr/rtio/rtio.h>
+#endif
 
 #include "max32664c.h"
 
@@ -22,7 +53,141 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 #define DEFAULT_SPO2_B -34.659664
 #define DEFAULT_SPO2_C 112.68987
 
-#define MAX32664C_FW_BIN_INCLUDE 0
+#define MAX32664C_INT_THRESHOLD 0x04
+#define MAX32664C_REPORT_PERIOD 0x01
+
+/* I2C wrapper implementations - centralize error handling or logging here */
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+
+static int max32664c_i2c_rtio_write_impl(struct rtio *r, struct rtio_iodev *iodev, const void *buf, size_t len)
+{
+    int rc;
+    struct rtio_sqe sqe;
+    struct rtio_cqe cqe;
+
+    rtio_sqe_prep_write(&sqe, iodev, 0, (const uint8_t *)buf, (uint32_t)len, NULL);
+
+    rc = rtio_sqe_copy_in(r, &sqe, 1);
+    if (rc < 0)
+    {
+        return rc;
+    }
+
+    rc = rtio_submit(r, 1);
+    if (rc < 0)
+    {
+        return rc;
+    }
+
+    /* Wait for completion and copy out one CQE */
+    rc = rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER);
+    if (rc != 1)
+    {
+        return -EIO;
+    }
+
+    /* Extract result and release the CQE */
+    rc = cqe.result;
+    rtio_cqe_release(r, &cqe);
+
+    return rc;
+}
+
+static int max32664c_i2c_rtio_read_impl(struct rtio *r, struct rtio_iodev *iodev, void *buf, size_t len)
+{
+    /* RTIO-only implementation: prepare a read SQE, copy it into the RTIO
+     * context, submit and block for the completion, then return the result
+     */
+    int rc;
+    struct rtio_sqe sqe;
+    struct rtio_cqe cqe;
+
+    rtio_sqe_prep_read(&sqe, iodev, 0, (uint8_t *)buf, (uint32_t)len, NULL);
+
+    rc = rtio_sqe_copy_in(r, &sqe, 1);
+    if (rc < 0)
+    {
+        return rc;
+    }
+
+    rc = rtio_submit(r, 1);
+    if (rc < 0)
+    {
+        return rc;
+    }
+
+    /* Wait for completion */
+    rc = rtio_cqe_copy_out(r, &cqe, 1, K_FOREVER);
+    if (rc != 1)
+    {
+        return -EIO;
+    }
+
+    rc = cqe.result;
+    rtio_cqe_release(r, &cqe);
+
+    return rc;
+}
+#endif /* CONFIG_SENSOR_ASYNC_API */
+
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+static struct rtio *max32664c_rtio_ctx = NULL;
+static struct rtio_iodev *max32664c_rtio_iodev = NULL;
+
+void max32664c_register_rtio_context(struct rtio *r, struct rtio_iodev *iodev)
+{
+    max32664c_rtio_ctx = r;
+    max32664c_rtio_iodev = iodev;
+}
+#endif
+
+static int max32664c_i2c_write_impl(const struct i2c_dt_spec *i2c, const void *buf, size_t len)
+{
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+    if (max32664c_rtio_ctx && max32664c_rtio_iodev)
+    {
+        return max32664c_i2c_rtio_write_impl(max32664c_rtio_ctx, max32664c_rtio_iodev, buf, len);
+    }
+#else
+    return i2c_write_dt(i2c, buf, len);
+#endif
+}
+
+static int max32664c_i2c_read_impl(const struct i2c_dt_spec *i2c, void *buf, size_t len)
+{
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+    if (max32664c_rtio_ctx && max32664c_rtio_iodev)
+    {
+        return max32664c_i2c_rtio_read_impl(max32664c_rtio_ctx, max32664c_rtio_iodev, buf, len);
+    }
+#else
+    return i2c_read_dt(i2c, buf, len);
+#endif
+}
+
+/* Public wrappers used by this driver */
+int max32664c_i2c_write(const struct i2c_dt_spec *i2c, const void *buf, size_t len)
+{
+    return max32664c_i2c_write_impl(i2c, buf, len);
+}
+
+int max32664c_i2c_read(const struct i2c_dt_spec *i2c, void *buf, size_t len)
+{
+    return max32664c_i2c_read_impl(i2c, buf, len);
+}
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+int max32664c_i2c_rtio_write(struct rtio *r, struct rtio_iodev *iodev, const void *buf, size_t len)
+{
+    return max32664c_i2c_rtio_write_impl(r, iodev, buf, len);
+}
+
+int max32664c_i2c_rtio_read(struct rtio *r, struct rtio_iodev *iodev, void *buf, size_t len)
+{
+    return max32664c_i2c_rtio_read_impl(r, iodev, buf, len);
+}
+#endif /* CONFIG_SENSOR_ASYNC_API */
 
 static int m_read_op_mode(const struct device *dev)
 {
@@ -33,11 +198,11 @@ static int m_read_op_mode(const struct device *dev)
     uint8_t wr_buf[2] = {0x02, 0x00};
 
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -61,14 +226,25 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     // k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Stat %x %x | ", rd_buf[0], rd_buf[1]);
+    LOG_DBG("Hub status bytes: %02x %02x", rd_buf[0], rd_buf[1]);
+
+    /* Check for overflow and error bits and log at INFO/ERR as appropriate */
+    if (rd_buf[1] & 0x10) {
+        LOG_WRN("Hub FIFO output overflow detected (FifoOutOvrInt)");
+    }
+    if (rd_buf[1] & 0x20) {
+        LOG_WRN("Hub FIFO input overflow detected (FifoInOverInt)");
+    }
+    if (rd_buf[1] & 0x01) {
+        LOG_ERR("Hub reported sensor comm error (Err0)");
+    }
 
     return rd_buf[1];
 }
@@ -85,9 +261,9 @@ static int m_i2c_write_cmd_2(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -113,11 +289,11 @@ static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
 
     k_sleep(K_MSEC(cmd_delay));
 
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -143,9 +319,9 @@ static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(cmd_delay));
-    i2c_read_dt(&config->i2c, rd_buf, 1);
+    max32664c_i2c_read(&config->i2c, rd_buf, 1);
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -172,9 +348,9 @@ static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, 1);
+    max32664c_i2c_read(&config->i2c, rd_buf, 1);
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -202,9 +378,9 @@ static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t by
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    i2c_read_dt(&config->i2c, rd_buf, 1);
+    max32664c_i2c_read(&config->i2c, rd_buf, 1);
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -224,12 +400,12 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, wr_len);
+    max32664c_i2c_write(&config->i2c, wr_buf, wr_len);
 
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -285,13 +461,13 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
 
     k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
     // gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(500));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -359,11 +535,11 @@ static int max32664c_set_mode_extended_algo(const struct device *dev)
     // Output mode sensor + algo data
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x02, MAX32664C_DEFAULT_CMD_DELAY);
+    // Set interrupt threshold (extended ALGO value)
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set continuous mode
     m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
@@ -395,7 +571,7 @@ static int max32664c_set_mode_raw(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Enable accel
     m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 200);
@@ -437,11 +613,11 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
+    k_sleep(K_MSEC(4));
 
-    i2c_read_dt(&config->i2c, ver_buf, 4);
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+    max32664c_i2c_read(&config->i2c, ver_buf, 4);
+    k_sleep(K_USEC(300));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
@@ -477,8 +653,6 @@ static int max32664c_set_mode_scd(const struct device *dev)
 
     max32664c_stop_algo(dev);
 
-    // max32664c_check_sensors(dev);
-
     // max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
     // Set LED for SCD
@@ -488,10 +662,10 @@ static int max32664c_set_mode_scd(const struct device *dev)
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x02, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, 100);
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, 100);
 
     // Enable AFE
     m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
@@ -507,36 +681,38 @@ static int max32664c_set_mode_scd(const struct device *dev)
 
 static int max32664c_set_mode_wake_on_motion(const struct device *dev)
 {
-    LOG_DBG("MAX32664C entering wake on motion mode...");
+    LOG_DBG("MAX32664C entering wake on motion mode per datasheet...");
 
-    // Stop Algorithm
     m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Set motion detection threshold
-    m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, 0x03, 0x04);
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Set output mode accel only
+    m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
+
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Set report rate
     m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
 
-    // Enable Accel
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 30);
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
 
+    LOG_INF("Wake-on-motion configured: WUFC=0x%02x (0.4s), ATH=0x%02x (1.5g)", 
+            MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
     return 0;
 }
 
 static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
 {
-    LOG_DBG("MAX32664C exiting wake on motion mode...");
+    LOG_DBG("MAX32664C exiting wake on motion mode per datasheet...");
 
-    // Disable Accel
-    m_i2c_write_cmd_3(dev, 0x44, 0x04, 0x00, 30);
-
-    // Exit wake on motion mode
+    // Step 1: Disable Wake-Up on Motion configuration
+    // Command: AA 46 04 00 00 FF FF (disable motion detection)
     m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x00, 0xFF, 0xFF);
 
+    // Step 2: Disable Accelerometer 
+    // Command: AA 44 04 00 00
+    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
+
+    LOG_DBG("Wake-on-motion mode disabled");
     return 0;
 }
 
@@ -552,10 +728,10 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, 200);
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, 200);
 
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, MAX32664C_DEFAULT_CMD_DELAY);
 
     // Set Algorithm mode
     m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, algo_mode, MAX32664C_DEFAULT_CMD_DELAY);
@@ -629,9 +805,6 @@ int max32664c_do_enter_app(const struct device *dev)
 
     gpio_pin_set_dt(&config->reset_gpio, 1);
     k_sleep(K_MSEC(1600));
-
-    // gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
-    // k_sleep(K_MSEC(10));
 
     m_read_op_mode(dev);
 
@@ -724,8 +897,6 @@ static int max32664c_attr_set(const struct device *dev,
 
 static int max32664c_check_app_present(const struct device *dev)
 {
-    // LOG_DBG("Checking MAX32664C app present...");
-
     struct max32664c_data *data = dev->data;
 
     if (data->hub_ver[1] == 0x08 && data->hub_ver[2] == 0x00 && data->hub_ver[3] == 0x00)
@@ -783,8 +954,8 @@ static const struct sensor_driver_api max32664c_driver_api = {
     .channel_get = max32664c_channel_get,
 
 #ifdef CONFIG_SENSOR_ASYNC_API
-    .submit = max32664c_submit,
-    .get_decoder = max32664c_get_decoder,
+    .get_decoder = (sensor_get_decoder_t)max32664c_get_decoder,
+    .submit = (sensor_submit_t)max32664c_submit,
 #endif
 };
 
@@ -804,14 +975,16 @@ static int max32664c_chip_init(const struct device *dev)
 
     max32664c_do_enter_app(dev);
 
-    // uint8_t ver_buf[4] = {0};
+    bool hub_found = false;
+
     if (max32664c_get_ver(dev, data->hub_ver) == 0)
     {
+        hub_found = true;
         LOG_DBG("Hub Version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);
     }
     else
     {
-        // LOG_ERR("MAX32664C not responding\n");
+        LOG_ERR("MAX32664C not responding");
         return -ENODEV;
     }
 
@@ -843,6 +1016,40 @@ static int max32664c_pm_action(const struct device *dev,
     return ret;
 }
 #endif /* CONFIG_PM_DEVICE */
+
+int max32664c_test_motion_detection(const struct device *dev)
+{
+    LOG_INF("Testing MAX32664C motion detection...");
+    
+    struct max32664c_data *data = dev->data;
+    uint8_t original_mode = data->op_mode;
+    
+    // Set wake-on-motion mode
+    max32664c_set_mode_wake_on_motion(dev);
+    data->op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
+    
+    LOG_INF("Motion detection active - move the device now!");
+    LOG_INF("Monitoring for 10 seconds...");
+    
+    // Monitor motion for 10 seconds
+    for (int i = 0; i < 100; i++) {
+        uint8_t hub_stat = max32664c_read_hub_status(dev);
+        if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK) {
+            LOG_INF("Motion event detected! Hub status: 0x%02x", hub_stat);
+            
+            // Trigger the async fetch to decode motion data
+            uint8_t chip_op_mode;
+            max32664c_async_sample_fetch_wake_on_motion(dev, &chip_op_mode);
+        }
+        k_msleep(100);
+    }
+    
+    // Restore original mode
+    data->op_mode = original_mode;
+    LOG_INF("Motion detection test complete");
+    
+    return 0;
+}
 
 #define MAX32664C_DEFINE(inst)                                      \
     static struct max32664c_data max32664c_data_##inst;             \

@@ -1,4 +1,34 @@
 /*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
+/*
 HealthyPi specific common data types
 */
 
@@ -11,7 +41,7 @@ HealthyPi specific common data types
 #define PPG_POINTS_PER_SAMPLE 8
 #define BPT_PPG_POINTS_PER_SAMPLE 32
 
-#define ECG_RECORD_BUFFER_SAMPLES 1920 // Reduced from 3840 to 1920 (128*15 instead of 128*30) - saves 7.68KB 
+#define ECG_RECORD_BUFFER_SAMPLES 3840 // Full 30 seconds at 128 Hz (128*30) - 15.36KB total
 
 enum hpi_ppg_status 
 {
@@ -36,6 +66,25 @@ struct hpi_ecg_bioz_sensor_data_t
     bool _bioZSkipSample;
 
     uint8_t rrint;
+};
+
+struct hpi_gsr_sensor_data_t
+{
+    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];  // Raw BioZ samples from MAX30001
+    uint8_t bioz_num_samples;                      // Number of valid samples in this batch
+    uint8_t bioz_lead_off;                         // Lead-off detection status
+};
+
+/*
+ * Lightweight BioZ-only sample used for internal producer/consumer queues
+ * when ECG decoding is not required. Keeps the copy footprint small.
+ */
+struct hpi_bioz_sample_t
+{
+    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];
+    uint8_t bioz_num_samples;
+    uint8_t bioz_lead_off;
+    int64_t timestamp;
 };
 
 struct hpi_ppg_wr_data_t
@@ -247,4 +296,27 @@ struct hpi_last_update_time_t
 
     uint16_t temp_last_value;
     int64_t temp_last_update_ts;
+
+    uint16_t gsr_last_value; // GSR value * 100 (microsiemens)
+    int64_t gsr_last_update_ts;
+};
+
+struct hpi_gsr_stress_index_t
+{
+    uint8_t stress_level;              // 0-100 stress score
+    uint16_t tonic_level_x100;         // Baseline GSR (SCL) in μS * 100
+    uint16_t phasic_amplitude_x100;    // Current phasic response (SCR) in μS * 100
+    uint8_t peaks_per_minute;          // Number of SCR peaks detected per minute
+    uint16_t mean_peak_amplitude_x100; // Average peak amplitude in μS * 100
+    int64_t last_peak_timestamp;       // Timestamp of last detected peak
+    bool stress_data_ready;            // Flag indicating valid stress data
+};
+
+// Live GSR measurement status (mirrors ECG status concept for timers)
+struct hpi_gsr_status_t
+{
+    uint16_t elapsed_s;    // Seconds since measurement start
+    uint16_t remaining_s;  // Seconds remaining to target duration (0 when complete)
+    uint16_t total_s;      // Total target duration (e.g. 60)
+    bool active;           // Measurement currently active
 };
