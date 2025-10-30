@@ -135,7 +135,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_t *label_sdnn_sub = lv_label_create(scr_hrv);
     lv_label_set_text(label_sdnn_sub, "ms");
     lv_obj_align_to(label_sdnn_sub, label_hrv_sdnn, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-    */
+    
 
     // Bottom signal label
     lv_obj_t *label_signal = lv_label_create(scr_hrv);
@@ -165,10 +165,10 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_anim_set_values(&a, 10, 300);
     lv_anim_start(&a);
 
-    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
+    // hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
 
-    // Add screen to display
-    hpi_show_screen(scr_hrv, m_scroll_dir);
+    // // Add screen to display
+    // hpi_show_screen(scr_hrv, m_scroll_dir);
 }
 
 static void hpi_hrv_disp_do_set_scale(int disp_window_size)

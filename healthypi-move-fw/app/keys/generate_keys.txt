@@ -1,1 +1,0 @@
-https://docs.nordicsemi.com/bundle/ncs-2.7.0/page/nrf/config_and_build/bootloaders/bootloader_signature_keys.html

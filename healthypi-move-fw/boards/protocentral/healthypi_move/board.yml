@@ -1,8 +1,0 @@
-board:
-  name: healthypi_move
-  vendor: protocentral
-  socs:
-  - name: 'nrf5340'
-    variants:
-    - name: 'ns'
-      cpucluster: 'cpuapp'

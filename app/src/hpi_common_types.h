@@ -51,6 +51,12 @@ enum hpi_ppg_status
     HPI_PPG_SCD_ON_SKIN,
 };
 
+struct rtor_msg
+{
+    double rtor;
+  
+};
+
 struct hpi_ecg_bioz_sensor_data_t
 {
     int32_t ecg_samples[ECG_POINTS_PER_SAMPLE];

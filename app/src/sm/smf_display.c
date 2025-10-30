@@ -85,6 +85,8 @@ K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
 
+extern struct kmsgq ppg_wrist_rtor;
+
 /**
  * @brief Signal touch wakeup from sleep state
  * Called by input drivers (touch controller) when touch is detected.
@@ -978,7 +980,7 @@ static void hpi_disp_update_screens(void)
                 LOG_INF("DISPLAY THREAD: Lead disconnected - resetting recording buffer for continuous capture");
                 
                 // Reset the recording buffer without saving incomplete data
-                hpi_data_reset_ecg_record_buffer();
+                //hpi_data_reset_ecg_record_buffer();
                 
                 // Reset UI timer state
                 LOG_INF("DISPLAY THREAD: Resetting UI timer state");
@@ -1365,6 +1367,16 @@ void smf_display_thread(void)
         {
             LOG_ERR("SMF Run error: %d", ret);
             break;
+        }
+
+        struct rtor_msg msg;
+        if(k_msgq_get(&ppg_wrist_rtor, &msg, K_NO_WAIT) == 0)
+        {
+                   //LOG_INF("Inside display smf thread - RR Interval: %.2f ms", (float)msg.rtor);
+                
+
+                   on_new_rr_interval_detected(msg.rtor);
+            
         }
 
         lv_task_handler();

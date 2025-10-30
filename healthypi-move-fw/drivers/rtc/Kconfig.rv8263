@@ -1,8 +1,0 @@
-# Copyright (c) 2022 Brian Bradley
-# SPDX-License-Identifier: Apache-2.0
-
-config RTC_RV8263
-	bool "Microcrystal RV8263 RTC"
-	select I2C
-	help
-	  Enable driver for a Micro Crystal rtc time api
