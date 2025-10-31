@@ -42,8 +42,8 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "ui/move_ui.h"
 
 // State machine parameters
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 160
-#define PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS 160
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
+#define PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS 40
 
 // Timing parameters
 #define OFFSKIN_THRESHOLD_S 20       // Duration for SCD "off-skin" before switching to Probing

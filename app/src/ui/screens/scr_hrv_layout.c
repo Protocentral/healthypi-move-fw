@@ -42,8 +42,8 @@ void hrv_stop_timer_cb(struct k_timer *timer_id)
 {
     hrv_measurement_active = false;
 
-   
-    hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
+    LOG_INF("Transitioning to HRV frequency screen");
+    hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
 }
 
 

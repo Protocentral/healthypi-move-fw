@@ -420,7 +420,7 @@ void hpi_hrv_frequency_update_spectrum(float *rr_intervals, int num_intervals);
 void hpi_hrv_frequency_update_display(void);
 
 // HRV Frequency Compact screen functions (optimized for small round displays)
-void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir);
+void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 //void hpi_hrv_frequency_compact_update_spectrum(float *rr_intervals, int num_intervals);
 void hpi_hrv_frequency_compact_update_display(void);
 
@@ -991,8 +991,6 @@ void hpi_hrv_frequency_compact_update_spectrum(double *rr_intervals, int num_int
 // // User settings variables
 // extern uint16_t m_user_height;
 // extern uint16_t m_user_weight;
-
-
 void on_new_rr_interval_detected(double rr_interval_ms);
 void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir);
 void scr_hrv_measure_btn_event_handler(lv_event_t *e);

@@ -179,6 +179,8 @@ static bool m_lead_on_off = false;
 // @brief GSR Screen variables
 static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
 
+
+
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -245,7 +247,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
 
-    [SCR_SPL_HRV_LAYOUT] = {draw_scr_hrv_layout, gesture_down_scr_spl_hrv},
+    [SCR_SPL_HRV_LAYOUT] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -1375,8 +1377,7 @@ void smf_display_thread(void)
         if(k_msgq_get(&ppg_wrist_rtor, &msg, K_NO_WAIT) == 0)
         {
             LOG_INF("Inside display smf thread - RR Interval: %.2f ms", msg.rtor);
-                
-
+            printk("Inside display smf thread - RR Interval: %.2f ms\n", msg.rtor);
                    on_new_rr_interval_detected(msg.rtor);
             
         }

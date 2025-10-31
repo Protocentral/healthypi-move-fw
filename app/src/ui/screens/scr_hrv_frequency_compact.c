@@ -342,7 +342,7 @@ void gesture_down_scr_spl_hrv(void)
     hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
 }
 
-void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir)
+void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_hrv_frequency_compact = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_hrv_frequency_compact, LV_OBJ_FLAG_SCROLLABLE);

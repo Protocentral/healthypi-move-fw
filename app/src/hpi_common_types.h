@@ -51,11 +51,6 @@ enum hpi_ppg_status
     HPI_PPG_SCD_ON_SKIN,
 };
 
-struct rtor_msg
-{
-    double rtor;
-  
-};
 
 struct hpi_ecg_bioz_sensor_data_t
 {
@@ -325,4 +320,12 @@ struct hpi_gsr_status_t
     uint16_t remaining_s;  // Seconds remaining to target duration (0 when complete)
     uint16_t total_s;      // Total target duration (e.g. 60)
     bool active;           // Measurement currently active
+};
+
+
+
+struct rtor_msg
+{
+    double rtor;
+  
 };
