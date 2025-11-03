@@ -483,7 +483,7 @@ void hpi_hrv_frequency_compact_update_spectrum(double *rr_intervals, int num_int
     
     // Calculate mean
     for (int i = 0; i < num_intervals; i++) {
-        LOG_INF("RR Interval[%d]: %.0f", i, rr_intervals[i]);
+        LOG_INF("RR Interval[%d]: %.2f", i, rr_intervals[i]);
         k_msleep(10); 
         mean_rr += rr_intervals[i];
     }
@@ -516,17 +516,19 @@ void hpi_hrv_frequency_compact_update_spectrum(double *rr_intervals, int num_int
 void hpi_hrv_frequency_compact_update_display(void)
 {
 
-     int lf = (int)lf_power_compact;
-     int hf = (int)hf_power_compact;
-     int ratio = lf / hf;
+    //  int lf = (int)lf_power_compact;
+    //  int hf = (int)hf_power_compact;
+    //  int ratio = lf / hf;
+    float ratio = lf_power_compact / hf_power_compact;
+    
     
 
     // Update power values with compact formatting
     if (label_lf_power_compact != NULL) {
-      //  lv_label_set_text_fmt(label_lf_power_compact, "%.2f", lf_power_compact);
     
-        //LOG_INF("LF Power (Compact): %.2f", lf_power_compact);
-        lv_label_set_text_fmt(label_lf_power_compact,"%d", lf);
+        lv_label_set_text_fmt(label_lf_power_compact,"%d", lf_power_compact);
+        lv_label_set_text_fmt(label_lf_power_compact,".");
+        lv_label_set_text_fmt(label_lf_power_compact,"%d", (int)((lf_power_compact - (int)lf_power_compact)*100));
 
 
     }
@@ -534,7 +536,10 @@ void hpi_hrv_frequency_compact_update_display(void)
     if (label_hf_power_compact != NULL) {
         //lv_label_set_text_fmt(label_hf_power_compact, "%.2f", hf_power_compact);
        // LOG_INF("HF Power (Compact): %.2f", hf_power_compact);
-        lv_label_set_text_fmt(label_hf_power_compact,"%d", hf);
+        //lv_label_set_text_fmt(label_hf_power_compact,"%d", hf);
+       lv_label_set_text_fmt(label_hf_power_compact,"%d", hf_power_compact);
+       lv_label_set_text_fmt(label_hf_power_compact,".");
+       lv_label_set_text_fmt(label_hf_power_compact,"%d", (int)((hf_power_compact - (int)hf_power_compact)*100));
     }
     
     // Update LF/HF ratio
@@ -544,6 +549,8 @@ void hpi_hrv_frequency_compact_update_display(void)
 
        // LOG_INF("LF/HF Ratio (Compact): %d", ratio);
         lv_label_set_text_fmt(label_lf_hf_ratio_compact, "%d", ratio);
+        lv_label_set_text_fmt(label_lf_hf_ratio_compact, ".");
+        lv_label_set_text_fmt(label_lf_hf_ratio_compact, "%d", (int)((ratio - (int)ratio)*10));
     }
     
     // Update stress arc gauge

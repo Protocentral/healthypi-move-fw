@@ -165,6 +165,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_TEMP_UNIT_SELECT,
     SCR_SPL_SLEEP_TIMEOUT_SELECT,
     SCR_SPL_HRV_LAYOUT,
+    SCR_SPL_HRV_PLOT,
     SCR_SPL_LIST_END,
 
     SCR_SPL_BLE,
@@ -511,6 +512,17 @@ extern uint16_t m_user_weight;
 
 
 void hpi_hrv_frequency_compact_update_spectrum(double *rr_intervals, int num_intervals);
+
+/*Hrv Plot ppg*/
+void gesture_down_scr_spl_raw_ppg_hrv(void);
+void hpi_ppg_disp_update_hr_hrv(int hr);
+static void hpi_ppg_disp_add_samples_hrv(int num_samples);
+static void hpi_ppg_disp_do_set_scale_hrv(int disp_window_size);
+static void hpi_ppg_disp_do_set_scale_hrv(int disp_window_size);
+static void hpi_ppg_update_signal_status_hrv(enum hpi_ppg_status scd_state);
+void hpi_disp_ppg_draw_plotPPG_hrv(struct hpi_ppg_wr_data_t ppg_sensor_sample);
+void hpi_ppg_check_signal_timeout_hrv(void);
+void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 /*
  * HealthyPi Move

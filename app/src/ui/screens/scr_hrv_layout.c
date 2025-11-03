@@ -61,7 +61,8 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
             hrv_measurement_active = true;
 
             
-            hpi_load_scr_spl(SCR_SPL_RAW_PPG, SCROLL_UP, (uint8_t)SCR_HR, 0, 0, 0);
+            //hpi_load_scr_spl(SCR_SPL_RAW_PPG, SCROLL_UP, (uint8_t)SCR_HR, 0, 0, 0);
+            hpi_load_scr_spl(SCR_SPL_HRV_PLOT, SCROLL_UP, (uint8_t)SCR_HRV_PPG_PLOT, 0, 0, 0);
          
              
             extern void hrv_reset(void);

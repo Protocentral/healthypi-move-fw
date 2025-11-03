@@ -248,6 +248,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
 
     [SCR_SPL_HRV_LAYOUT] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
+    [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, gesture_down_scr_spl_raw_ppg_hrv},
 };
 
 // Screen state persistence for sleep/wake cycles

@@ -510,7 +510,7 @@ void data_thread(void)
                 }
             }
 
-            if(ppg_wr_sensor_sample.rtor > 500 && ppg_wr_sensor_sample.rtor < 1600)
+            if(ppg_wr_sensor_sample.rtor > 500 && ppg_wr_sensor_sample.rtor < 1500)
             {
                 struct rtor_msg msg;
                 msg.rtor = ppg_wr_sensor_sample.rtor;

@@ -162,6 +162,7 @@ struct max32664c_encoded_data
 	uint8_t spo2_state;
 	
 	uint16_t rtor;
+	//double rtor;
 	uint8_t rtor_confidence;
 
 	uint8_t scd_state;
