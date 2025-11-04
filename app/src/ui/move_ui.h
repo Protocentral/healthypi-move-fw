@@ -114,6 +114,7 @@ enum hpi_disp_screens
 
     //SCR_SPL_PLOT_HRV,
     SCR_HRV_SUMMARY,
+    SCR_HRV_PPG_PLOT,
     SCR_GSR,
 
     SCR_LIST_END,
@@ -523,6 +524,17 @@ static void hpi_ppg_update_signal_status_hrv(enum hpi_ppg_status scd_state);
 void hpi_disp_ppg_draw_plotPPG_hrv(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_check_signal_timeout_hrv(void);
 void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void hpi_hrv_disp_update_timer(int time_left);
+void hpi_hrv_timer_start(void);
+void hpi_hrv_timer_start(void);
+void hpi_hrv_timer_pause(void);
+void hpi_hrv_timer_reset(void);
+
+bool hpi_hrv_timer_is_running(void);
+
+float hpi_get_lf_hf_ratio(void);
+void gesture_down_scr_spl_ppg_for_hrv(void);
+void gesture_handler_for_ppg(lv_event_t *e);
 
 /*
  * HealthyPi Move

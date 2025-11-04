@@ -29,12 +29,15 @@ LOG_MODULE_REGISTER(hpi_disp_scr_hrv_layout, LOG_LEVEL_ERR);
 lv_obj_t *scr_hrv_layout;
 static lv_obj_t *btn_hrv_measure;
 static lv_obj_t *arc_hrv;
+static lv_obj_t *label_hrv_value;
 
 
 // HRV Measurement Control
 static bool hrv_measurement_active = false;
 
 #define HRV_MEASUREMENT_DURATION_MS 30000 
+
+static uint32_t hrv_elapsed_time_ms = 0;
 
 
 // Timer callback function
@@ -44,6 +47,19 @@ void hrv_stop_timer_cb(struct k_timer *timer_id)
 
     LOG_INF("Transitioning to HRV frequency screen");
     hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
+
+    // hrv_elapsed_time_ms += 1000;  // add 1s
+
+    // extern void hpi_hrv_disp_update_timer(int time_left);
+    // hpi_hrv_disp_update_timer(hrv_elapsed_time_ms);
+
+    // if (hrv_elapsed_time_ms >= HRV_MEASUREMENT_DURATION_MS) {
+    //     hrv_measurement_active = false;
+    //    // k_timer_stop(&hrv_stop_timer);
+
+    //     LOG_INF("Transitioning to HRV frequency screen");
+    //     hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
+    // }
 }
 
 
@@ -70,6 +86,9 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 
           
             k_timer_start(&hrv_stop_timer, K_MSEC(HRV_MEASUREMENT_DURATION_MS), K_NO_WAIT);
+           // k_timer_start(&hrv_stop_timer, K_SECONDS(1), K_SECONDS(1));  // periodic every second
+            //hrv_elapsed_time_ms = 0;
+
 
           
             extern void start_hrv_collection(void);
@@ -84,7 +103,18 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
 {
     scr_hrv_layout = lv_obj_create(NULL);
-    // AMOLED optimization: pure black background
+
+    int m_hrv_ratio_int = 0;
+    int m_hrv_ratio_dec = 0;
+    if (hpi_get_lf_hf_ratio() < 0.0){
+        LOG_ERR("Error getting last HRV RMSSD");
+        m_hrv_ratio_int = 0;
+        m_hrv_ratio_dec = 0;
+    }
+    else{
+        m_hrv_ratio_int = (uint8_t)hpi_get_lf_hf_ratio();
+        m_hrv_ratio_dec = (uint8_t)((hpi_get_lf_hf_ratio() - m_hrv_ratio_int) * 100);
+    }
     lv_obj_set_style_bg_color(scr_hrv_layout, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     
 
@@ -119,6 +149,45 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 95);  // Positioned below title
     lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
+
+
+    // CENTRAL ZONE: Main ECG Value/Status (properly spaced from icon)
+    label_hrv_value = lv_label_create(scr_hrv_layout);
+    if (m_hrv_ratio_int == 0) {
+        lv_label_set_text(label_hrv_value, "--");
+    } else {
+       
+       lv_label_set_text_fmt(label_hrv_value, "%d.%02d", m_hrv_ratio_int, abs(m_hrv_ratio_dec));
+    }
+    lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, -10);  // Centered, slightly above middle
+    lv_obj_set_style_text_color(label_hrv_value, lv_color_white(), LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_value, &style_numeric_large, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_hrv_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    // Unit/Status label directly below main value
+    lv_obj_t *label_hrv_unit = lv_label_create(scr_hrv_layout);
+  
+        //lv_label_set_text(label_hrv_unit, "ms^2");
+    lv_label_set_text(label_hrv_unit, "ms^2");
+    lv_obj_align(label_hrv_unit, LV_ALIGN_CENTER, 0, 35);  // Below main value with gap
+    lv_obj_set_style_text_color(label_hrv_unit, lv_color_hex(0x8000FF), LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_hrv_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    
+
+    // // Status info - centered below unit with proper spacing
+    // lv_obj_t *label_hrv_status = lv_label_create(scr_hrv_layout);
+    // if (m_hrv_hr == 0) {
+    //     lv_label_set_text(label_ecg_status, "Electrocardiogram");
+    // } else {
+    //     char last_meas_str[25];
+    //     hpi_helper_get_relative_time_str(m_ecg_hr_last_update, last_meas_str, sizeof(last_meas_str));
+    //     lv_label_set_text(label_ecg_status, last_meas_str);
+    // }
+    // lv_obj_align(label_ecg_status, LV_ALIGN_CENTER, 0, 80);  // Centered, below unit with gap
+    // lv_obj_set_style_text_color(label_ecg_status, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    // lv_obj_add_style(label_ecg_status, &style_caption, LV_PART_MAIN);
+    // lv_obj_set_style_text_align(label_ecg_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
    
     // --- MEASURE BUTTON ---
     btn_hrv_measure = hpi_btn_create_primary(scr_hrv_layout);

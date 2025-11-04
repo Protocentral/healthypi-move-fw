@@ -250,6 +250,14 @@ struct hpi_ecg_status_t
     uint8_t hr;
 };
 
+
+struct hpi_hrv_status_t
+{
+    int64_t ts_complete_hrv;
+    uint8_t status_hrv;
+    uint16_t progress_timer_hrv;
+    uint8_t hr_hrv;
+};
 struct hpi_ecg_lead_on_off_t
 {
     bool lead_on_off;

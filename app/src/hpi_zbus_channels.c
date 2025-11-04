@@ -101,6 +101,7 @@ ZBUS_CHAN_DEFINE(ecg_stat_chan, /* Name */
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
 
+
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 ZBUS_CHAN_DEFINE(gsr_stress_chan, /* Name */
                  struct hpi_gsr_stress_index_t,

@@ -48,13 +48,14 @@ static lv_chart_series_t *ser_ppg_hrv;
 
 // GUI Labels
 static lv_obj_t *label_ppg_hr_hrv;
-static lv_obj_t *label_ppg_spo2_hrv;
-static lv_obj_t *label_status_hrv;
+
+
 static lv_obj_t *label_ppg_no_signal_hrv;
 static lv_obj_t *arc_hrv_zone;
-static lv_obj_t *label_timer_hrv;
+K_MUTEX_DEFINE(timer_state_mutex_for_hrv);
 
 static int parent_screen = 0;
+static uint32_t batch_count = 0;
 
 static float y_max_ppg_hrv = 0;
 static float y_min_ppg_hrv = 10000;
@@ -72,10 +73,7 @@ static uint32_t last_ppg_data_time = 0;
 static enum hpi_ppg_status last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
 #define PPG_SIGNAL_TIMEOUT_MS 3000  // Show "No Signal" if no data for 3 seconds
 
-// Timer control variables for lead-based automatic start/stop
-static bool timer_running = false;
-static bool timer_paused = true;  // Start paused, wait for lead ON
-static bool lead_on_detected = false;
+
 
 // Performance optimization variables - LVGL 9.2 optimized
 static uint32_t sample_counter = 0;
@@ -91,53 +89,49 @@ extern lv_style_t style_scr_black;
 #define PPG_SIGNAL_IR 1
 #define PPG_SIGNAL_GREEN 2
 
-uint8_t ppg_disp_signal_type = PPG_SIGNAL_RED;
+uint8_t ppg_disp_signal_type_hrv = PPG_SIGNAL_RED;
 
 LOG_MODULE_REGISTER(ppg_scr_hrv);
 
-void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
+
+lv_obj_t * label_hrv_timer;
+static bool hrv_timer_running = false;
+static bool hrv_timer_paused = true;
+static bool hrv_lead_on_detected = false;
+static bool hrv_measurement_active = false;
+lv_obj_t *label_hrv_bpm;
+lv_obj_t * label_hrv_info;
+
+void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,
+                              uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
-    parent_screen = arg1;
+    // Create a new HRV PPG screen
+    scr_raw_ppg_hrv = lv_obj_create(NULL);
 
-    scr_ppg_outgauge_hrv; = lv_obj_create(NULL);
-    // AMOLED OPTIMIZATION: Pure black background for power efficiency
-    lv_obj_set_style_bg_color(scr_ppg_outgauge_hrv, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_clear_flag(scr_ppg_outgauge_hrv, LV_OBJ_FLAG_SCROLLABLE);
+    // AMOLED optimization: pure black background
+    lv_obj_set_style_bg_color(scr_raw_ppg_hrv, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_clear_flag(scr_raw_ppg_hrv, LV_OBJ_FLAG_SCROLLABLE);
 
-    // CIRCULAR AMOLED-OPTIMIZED ECG MEASUREMENT SCREEN
-    // Display center: (195, 195), Usable radius: ~185px
-    // Orange/amber theme for ECG measurement consistency
-
-    // Get ECG/HR data
-    uint16_t hr = 0;
-    int64_t hr_last_update = 0;
-    if (hpi_sys_get_last_hr_update(&hr, &hr_last_update) != 0) {
-        hr = 0;
-        hr_last_update = 0;
-    }
-
-    // OUTER RING: ECG Timer Countdown Arc (Radius 170-185px) - Orange theme for measurement
-
-    arc_hrv_zone = lv_arc_create(scr_ppg_outgauge_hrv);
-    lv_obj_set_size(arc_hrv_zone, 370, 370);  // 185px radius
+    // ---------------- TIMER ARC ----------------
+    arc_hrv_zone = lv_arc_create(scr_raw_ppg_hrv);
+    lv_obj_set_size(arc_hrv_zone, 370, 370);  // Circular display zone
     lv_obj_center(arc_hrv_zone);
-    lv_arc_set_range(arc_hrv_zone, 0, 30);  // Timer range: 0-30 seconds
-    
-    // Background arc: Full 270° track (gray)
-    lv_arc_set_bg_angles(arc_hrv_zone, 135, 45);  // Full background arc
-    lv_arc_set_value(arc_hrv_zone, 30);  // Start at full (30 seconds), will countdown to 0
-    
-    // Style the progress arc - orange theme for ECG measurement
-    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
+    lv_arc_set_range(arc_hrv_zone, 0, 30);    // 0–30s HRV measurement duration
+
+    // Configure background and progress arcs
+    lv_arc_set_bg_angles(arc_hrv_zone, 135, 45);  // Full circle with 270° sweep
+    lv_arc_set_value(arc_hrv_zone, 30);           // Start at full (30s)
+
+    // HRV theme: blue gradient
+    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x000000), LV_PART_MAIN);    // background
     lv_obj_set_style_arc_width(arc_hrv_zone, 8, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0xFF8C00), LV_PART_INDICATOR);  // Orange progress
+    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x666666), LV_PART_INDICATOR); // blue progress
     lv_obj_set_style_arc_width(arc_hrv_zone, 6, LV_PART_INDICATOR);
-    lv_obj_remove_style(arc_hrv_zone, NULL, LV_PART_KNOB);  // Remove knob
+    lv_obj_remove_style(arc_hrv_zone, NULL, LV_PART_KNOB);
     lv_obj_clear_flag(arc_hrv_zone, LV_OBJ_FLAG_CLICKABLE);
 
-    // Screen title - properly positioned to avoid arc overlap
-    // MID-UPPER RING: Timer container with icon (following design pattern)
-    lv_obj_t *cont_timer = lv_obj_create(scr_ppg_outgauge_hrv);
+    // ---------------- TIMER CONTAINER ----------------
+    lv_obj_t *cont_timer = lv_obj_create(scr_raw_ppg_hrv);
     lv_obj_set_size(cont_timer, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_align(cont_timer, LV_ALIGN_TOP_MID, 0, 85);
     lv_obj_set_style_bg_opa(cont_timer, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -146,91 +140,100 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint3
     lv_obj_set_flex_flow(cont_timer, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(cont_timer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Timer Icon
+    // Timer icon
     LV_IMG_DECLARE(timer_32);
     lv_obj_t *img_timer = lv_img_create(cont_timer);
     lv_img_set_src(img_timer, &timer_32);
-    lv_obj_set_style_img_recolor(img_timer, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange theme
+    lv_obj_set_style_img_recolor(img_timer, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_timer, LV_OPA_COVER, LV_PART_MAIN);
 
     // Timer value
-    label_timer_hrv = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer_hrv, "30");
-    lv_obj_add_style(label_timer_hrv, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_timer_hrv, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_pad_left(label_timer_hrv, 8, LV_PART_MAIN);
+    label_hrv_timer = lv_label_create(cont_timer);
+    lv_label_set_text(label_hrv_timer, "30");
+    lv_obj_add_style(label_hrv_timer, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_hrv_timer, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_hrv_timer, 8, LV_PART_MAIN);
 
     // Timer unit
     lv_obj_t *label_timer_unit = lv_label_create(cont_timer);
     lv_label_set_text(label_timer_unit, "s");
     lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange accent
+    lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
-    // Initialize timer state - start paused, waiting for lead ON detection
-    timer_running = false;
-    timer_paused = true;
-    lead_on_detected = false;
+    // Initialize timer state
+    hrv_timer_running = false;
+    hrv_timer_paused  = true;
+    hrv_measurement_active = false;
 
+    // ---------------- PPG CHART ----------------
+    chart_ppg_hrv = lv_chart_create(scr_raw_ppg_hrv);
+    lv_obj_set_size(chart_ppg_hrv, 340, 100);
+    lv_obj_align(chart_ppg_hrv, LV_ALIGN_CENTER, 0, -10);
 
-
-    scr_raw_ppg_hrv = lv_obj_create(NULL);
-    lv_obj_clear_flag(scr_raw_ppg_hrv, LV_OBJ_FLAG_SCROLLABLE); /// Flags
-
-    lv_obj_t *cont_col_hrv = lv_obj_create(scr_raw_ppg);
-    lv_obj_set_size(cont_col_hrv, lv_pct(100), lv_pct(100));
-    // lv_obj_set_width(cont_col, lv_pct(100));
-    lv_obj_align_to(cont_col_hrv, NULL, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_flex_flow(cont_col_hrv, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col_hrv, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col_hrv, -1, LV_PART_SCROLLBAR);
-    lv_obj_add_style(cont_col_hrv, &style_scr_black, 0);
-
-    lv_obj_t *label_signal_hrv = lv_label_create(cont_col);
-    lv_label_set_text(label_signal_hrv, "PPG");
-    lv_obj_align(label_signal_hrv, LV_ALIGN_TOP_MID, 0, 5);
-
-    chart_ppg_hrv = lv_chart_create(cont_col);
-    /* Match SpO2 measure chart styling */
-    lv_obj_set_size(chart_ppg_hrv, 390, 140);
-    lv_obj_set_style_bg_color(chart_ppg_hrv, lv_color_black(), LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(chart_ppg_hrv, 0, LV_PART_MAIN);
-    lv_obj_set_style_border_width(chart_ppg_hrv, 0, LV_PART_MAIN);
+    lv_chart_set_type(chart_ppg_hrv, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(chart_ppg_hrv, PPG_RAW_WINDOW_SIZE);
-    lv_chart_set_div_line_count(chart_ppg_hrv, 0, 0);
     lv_chart_set_update_mode(chart_ppg_hrv, LV_CHART_UPDATE_MODE_CIRCULAR);
-    lv_obj_align(chart_ppg_hrv, LV_ALIGN_CENTER, 0, -35);
-    
-    // Set initial Y-axis range suitable for PPG data (typically 0-65535 for raw values)
-    // Start with a reasonable range around typical PPG baseline
-    lv_chart_set_range(chart_ppg_hrv, LV_CHART_AXIS_PRIMARY_Y, 0, 65535);
+    lv_chart_set_range(chart_ppg_hrv, LV_CHART_AXIS_PRIMARY_Y, -5000, 5000);
+    lv_chart_set_div_line_count(chart_ppg_hrv, 0, 0);
 
-    ser_ppg_hrv= lv_chart_add_series(chart_ppg_hrv, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_ppg_hrv, 6, LV_PART_ITEMS);
+    // Style chart (transparent for AMOLED)
+    lv_obj_set_style_bg_opa(chart_ppg_hrv, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(chart_ppg_hrv, 0, LV_PART_MAIN);
+    lv_obj_set_style_outline_width(chart_ppg_hrv, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(chart_ppg_hrv, 5, LV_PART_MAIN);
 
-    // Draw BPM container
-    lv_obj_t *cont_hr = lv_obj_create(cont_col_hrv);
-    lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_hr, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    // Add HRV PPG data series
+    ser_ppg_hrv = lv_chart_add_series(chart_ppg_hrv, lv_color_hex(0xFFFFFF), LV_CHART_AXIS_PRIMARY_Y);
 
-    lv_obj_t *img_heart = lv_img_create(cont_hr);
+    // Configure line style
+    lv_obj_set_style_line_width(chart_ppg_hrv, 3, LV_PART_ITEMS);
+    lv_obj_set_style_line_color(chart_ppg_hrv, lv_color_hex(0xFFFFFF), LV_PART_ITEMS);
+    lv_obj_set_style_line_opa(chart_ppg_hrv, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_line_rounded(chart_ppg_hrv, false, LV_PART_ITEMS);
+
+    // Disable points for smoother plot
+    lv_obj_set_style_width(chart_ppg_hrv, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_height(chart_ppg_hrv, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(chart_ppg_hrv, LV_OPA_TRANSP, LV_PART_INDICATOR);
+    lv_obj_set_style_border_opa(chart_ppg_hrv, LV_OPA_TRANSP, LV_PART_INDICATOR);
+
+    lv_obj_add_flag(chart_ppg_hrv, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_clear_flag(chart_ppg_hrv, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(chart_ppg_hrv, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+    lv_chart_set_all_value(chart_ppg_hrv, ser_ppg_hrv, 0);
+
+    // ---------------- HR LABEL BELOW CHART ----------------
+    lv_obj_t *cont_hrv = lv_obj_create(scr_raw_ppg_hrv);
+    lv_obj_set_size(cont_hrv, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_hrv, LV_ALIGN_CENTER, 0, 75);
+    lv_obj_set_style_bg_opa(cont_hrv, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_hrv, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_hrv, 0, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_hrv, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_hrv, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // Heart Icon (blue accent)
+    lv_obj_t *img_heart = lv_img_create(cont_hrv);
     lv_img_set_src(img_heart, &img_heart_48px);
+    lv_obj_set_style_img_recolor(img_heart, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_img_recolor_opa(img_heart, LV_OPA_COVER, LV_PART_MAIN);
 
-    label_ppg_hr_hrv = lv_label_create(cont_hr);
-    lv_label_set_text(label_ppg_hr_hrv, "00");
-    lv_obj_add_style(label_ppg_hr_hrv, &style_white_medium, 0);
-    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_sub, " bpm");
+    // HRV Value
+    //label_hrv_bpm = lv_label_create(cont_hrv);
+    label_ppg_hr_hrv = lv_label_create(cont_hrv);
+    lv_label_set_text(label_ppg_hr_hrv, "--");
+    lv_obj_add_style(label_ppg_hr_hrv, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_ppg_hr_hrv, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_ppg_hr_hrv, 8, LV_PART_MAIN);
 
-    // PPG Sensor Status label
-    label_status_hrv = lv_label_create(scr_raw_ppg);
-    lv_label_set_text(label_status_hrv, "--");
-    lv_obj_align_to(label_status_hrv, chart_ppg_hrv, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
-    lv_obj_set_style_text_align(label_status_hrv, LV_TEXT_ALIGN_CENTER, 0);
+    // BPM unit
+    lv_obj_t *label_bpm_unit = lv_label_create(cont_hrv);
+    lv_label_set_text(label_bpm_unit, "BPM");
+    lv_obj_add_style(label_bpm_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_bpm_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
-    // Create "No Signal" overlay label (initially hidden)
-    label_ppg_no_signal_hrv = lv_label_create(scr_raw_ppg);
+     // Create "No Signal" overlay label (initially hidden)
+    label_ppg_no_signal_hrv = lv_label_create(scr_raw_ppg_hrv);
     lv_label_set_text(label_ppg_no_signal_hrv, "No Signal");
     lv_obj_align(label_ppg_no_signal_hrv, LV_ALIGN_CENTER, 0, -30);
     lv_obj_set_style_text_color(label_ppg_no_signal_hrv, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
@@ -249,15 +252,22 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint3
     // Reset autoscale state to ensure first update happens
     hpi_ppg_autoscale_reset();
 
+
+    // Gesture handler
+        lv_obj_add_event_cb(scr_raw_ppg_hrv, gesture_handler_for_ppg, LV_EVENT_GESTURE, NULL);
+
+    // ---------------- SCREEN HANDOVER ----------------
     hpi_disp_set_curr_screen(SCR_SPL_HRV_PLOT);
     hpi_show_screen(scr_raw_ppg_hrv, m_scroll_dir);
 }
 
-void gesture_down_scr_spl_raw_ppg_hrv(void)
-{
-    /* Return to parent screen on gesture down */
-    hpi_load_screen(parent_screen, SCROLL_DOWN);
-}
+
+
+// void gesture_down_scr_spl_raw_ppg_hrv(void)
+// {
+//     /* Return to parent screen on gesture down */
+//     hpi_load_screen(parent_screen, SCROLL_DOWN);
+// }
 
 void hpi_ppg_disp_update_hr_hrv(int hr)
 {
@@ -285,7 +295,7 @@ static void hpi_ppg_disp_add_samples_hrv(int num_samples)
 /* Delegate autoscale to shared helper to keep behavior consistent across screens */
 static void hpi_ppg_disp_do_set_scale_hrv(int disp_window_size)
 {
-    hpi_ppg_disp_do_set_scale_shared(chart_ppg_hrv, &y_min_ppg_hrv, &y_max_ppg_hrv, &gx_hrv disp_window_size);
+    hpi_ppg_disp_do_set_scale_shared(chart_ppg_hrv, &y_min_ppg_hrv, &y_max_ppg_hrv, &gx_hrv, disp_window_size);
 }
 
 /* Update "No Signal" label visibility based on data presence and SCD status */
@@ -328,7 +338,7 @@ void hpi_disp_ppg_draw_plotPPG_hrv(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     last_scd_state = ppg_sensor_sample.scd_state;
 
     // Update signal status based on SCD state
-    hpi_ppg_update_signal_status(ppg_sensor_sample.scd_state);
+    hpi_ppg_update_signal_status_hrv(ppg_sensor_sample.scd_state);
 
     uint32_t *data_ppg = ppg_sensor_sample.raw_green;
 
@@ -366,6 +376,7 @@ void hpi_disp_ppg_draw_plotPPG_hrv(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     {
         lv_chart_set_next_value(chart_ppg_hrv, ser_ppg_hrv, data_ppg[i]);
         hpi_ppg_disp_add_samples_hrv(1);
+        sample_counter++;
     }
     
     // Call autoscale once per batch, not per sample, for better performance
@@ -378,4 +389,145 @@ void hpi_ppg_check_signal_timeout_hrv(void)
     // Use the last known SCD state for timeout checks
     // This way we only show timeout, not incorrectly assuming "no skin contact"
     hpi_ppg_update_signal_status_hrv(last_scd_state);
+}
+void hpi_hrv_disp_update_timer(int time_left)
+{
+    if (label_hrv_timer == NULL)
+        return;
+
+    // Optimize timer updates with caching
+    static int last_time = -1;
+    static char time_buf[8];
+    
+    if (time_left != last_time) { // Only update if changed
+        // Check if in stabilization phase (time > 30s means we're stabilizing)
+        bool is_stabilizing = (time_left > 30);
+        
+        if (is_stabilizing) {
+            // Show stabilization countdown (35s = 5s stabilizing, 30s = starting recording)
+            int stabilization_time = time_left - 30;
+            
+            // Update timer label with stabilization time
+            if (stabilization_time < 10) {
+                time_buf[0] = '0' + stabilization_time;
+                time_buf[1] = '\0';
+            } else {
+                time_buf[0] = '0' + (stabilization_time / 10);
+                time_buf[1] = '0' + (stabilization_time % 10);
+                time_buf[2] = '\0';
+            }
+            lv_label_set_text(label_hrv_timer, time_buf);
+            
+          
+            
+            // Arc stays at 0 during stabilization
+            if (arc_hrv_zone != NULL) {
+                lv_arc_set_value(arc_hrv_zone, 0);
+                lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x4A90E2), LV_PART_INDICATOR);  // Blue during stabilization
+            }
+        } else {
+            
+            
+            // Use direct integer to string for better performance
+            if (time_left < 10) {
+                time_buf[0] = '0' + time_left;
+                time_buf[1] = '\0';
+            } else if (time_left < 100) {
+                time_buf[0] = '0' + (time_left / 10);
+                time_buf[1] = '0' + (time_left % 10);
+                time_buf[2] = '\0';
+            } else {
+                time_buf[0] = '0' + (time_left / 100);
+                time_buf[1] = '0' + ((time_left / 10) % 10);
+                time_buf[2] = '0' + (time_left % 10);
+                time_buf[3] = '\0';
+            }
+            
+            lv_label_set_text(label_hrv_timer, time_buf);
+            
+            // Update the progress arc to show progress towards completion
+            if (arc_hrv_zone != NULL) {
+                // Show progress: empty at start (30s), full at end (0s)
+                int arc_value = (time_left < 0) ? 30 : ((time_left > 30) ? 0 : (30 - time_left));
+                lv_arc_set_value(arc_hrv_zone, arc_value);
+                
+                // Change arc color based on timer state: Orange when running, gray when paused
+                // Thread-safe access to timer_paused
+                k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+                bool is_paused = hrv_timer_paused;
+                k_mutex_unlock(&timer_state_mutex_for_hrv);
+                
+                if (is_paused) {
+                    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x666666), LV_PART_INDICATOR);  // Gray when paused
+                } else {
+                    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Orange when running
+                }
+            }
+        }
+        
+        last_time = time_left;
+    }
+}
+
+void hpi_hrv_timer_start(void)
+{
+    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+    hrv_timer_running = true;
+    hrv_timer_paused = false;
+    k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+    
+}
+static void hrv_chart_reset_performance_counters(void)
+{
+    sample_counter = 0;
+    batch_count = 0;
+    // Initialize for proper range detection
+    y_max_ppg_hrv = -10000;
+    y_min_ppg_hrv = 10000;
+}
+
+void hpi_hrv_timer_pause(void)
+{
+    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+    hrv_timer_paused = true;
+    k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+    
+}
+
+void hpi_hrv_timer_reset(void)
+{
+    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+    hrv_timer_running = false;
+    hrv_timer_paused = true;
+    hrv_lead_on_detected = false;
+    k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+   
+}
+
+bool hpi_hrv_timer_is_running(void)
+{
+    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+    bool is_running = hrv_timer_running && !hrv_timer_paused;
+    k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+    
+    return is_running;
+}
+
+void gesture_handler_for_ppg(lv_event_t *e)
+{
+    lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
+    if (dir == LV_DIR_BOTTOM) {
+        gesture_down_scr_spl_ppg_for_hrv();
+    }
+}
+
+void gesture_down_scr_spl_ppg_for_hrv(void)
+{
+    printk("Exit HRV Frequency Compact\n");
+    hpi_hrv_timer_reset();
+    hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
 }

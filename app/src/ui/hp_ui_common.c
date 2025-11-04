@@ -530,8 +530,9 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
         draw_scr_bpt(m_scroll_dir);
         break;
     case SCR_HRV_SUMMARY:
-        //draw_scr_hrv_frequency_compact(m_scroll_dir);
+        //draw_scr_hrv_frequency_compact(m_scroll_dir,0,0,0,0);
         draw_scr_hrv_layout(m_scroll_dir);
+        //draw_scr_spl_raw_ppg_hrv(m_scroll_dir,0,0,0,0);
         break;
     
 

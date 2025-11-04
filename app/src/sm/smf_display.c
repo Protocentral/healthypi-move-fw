@@ -86,6 +86,7 @@ K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
 
 extern struct kmsgq ppg_wrist_rtor;
+K_SEM_DEFINE(sem_hrv_plot_complete, 0, 1);
 
 /**
  * @brief Signal touch wakeup from sleep state
@@ -176,6 +177,13 @@ static int m_disp_ecg_timer = 0;
 static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
 
+// @brief HRV screen variables
+
+
+static int m_disp_hrv_timer = 0;
+
+
+
 // @brief GSR Screen variables
 static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
 
@@ -248,7 +256,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
 
     [SCR_SPL_HRV_LAYOUT] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
-    [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, gesture_down_scr_spl_raw_ppg_hrv},
+    [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, gesture_down_scr_spl_ppg_for_hrv},
+   // [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, NULL},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -304,6 +313,7 @@ int hpi_disp_reset_all_last_updated(void)
     m_disp_bp_dia = 0;
     m_disp_ecg_hr = 0;
     m_disp_ecg_timer = 0;
+    m_disp_hrv_timer = 0;
 
     m_disp_hr_updated_ts = 0;
     m_disp_spo2_last_refresh_ts = 0;
@@ -818,6 +828,14 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
         /* Update the HR label on raw PPG screen if available */
         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
     }
+    else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_PLOT)
+    {
+        /* Forward samples to the HRV plotting function */
+        lv_disp_trig_activity(NULL);
+         hpi_disp_ppg_draw_plotPPG_hrv(ppg_sensor_sample);
+        /* Update the HR and HRV labels on HRV screen if available */
+        hpi_ppg_disp_update_hr_hrv(ppg_sensor_sample.hr);
+    }
 }
 
 static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample)
@@ -930,6 +948,14 @@ static void hpi_disp_update_screens(void)
 
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
+        lv_disp_trig_activity(NULL);
+        break;
+    case SCR_SPL_HRV_PLOT:
+       
+        hpi_hrv_disp_update_timer(m_disp_hrv_timer);
+
+        hpi_ppg_check_signal_timeout_hrv();
+        
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_ECG_SCR2:
@@ -1377,8 +1403,8 @@ void smf_display_thread(void)
         struct rtor_msg msg;
         if(k_msgq_get(&ppg_wrist_rtor, &msg, K_NO_WAIT) == 0)
         {
-            LOG_INF("Inside display smf thread - RR Interval: %.2f ms", msg.rtor);
-            printk("Inside display smf thread - RR Interval: %.2f ms\n", msg.rtor);
+            //LOG_INF("Inside display smf thread - RR Interval: %.2f ms", msg.rtor);
+           // printk("Inside display smf thread - RR Interval: %.2f ms\n", msg.rtor);
                    on_new_rr_interval_detected(msg.rtor);
             
         }
@@ -1462,6 +1488,22 @@ static void disp_ecg_timer_listener(const struct zbus_channel *chan)
     m_disp_ecg_timer = ecg_status->progress_timer;
 }
 ZBUS_LISTENER_DEFINE(disp_ec, disp_ecg_timer_listener);
+
+static void disp_hrv_timer_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
+    m_disp_hrv_timer = hrv_status->progress_timer_hrv;
+}
+ZBUS_LISTENER_DEFINE(disp_hrv_timer_lis, disp_hrv_timer_listener);
+
+
+static void disp_hrv_stat_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
+    m_disp_hrv_timer = hrv_status->progress_timer_hrv;
+    // LOG_DBG("ZB HRV Timer: %d", *hrv_timer);
+}
+ZBUS_LISTENER_DEFINE(disp_hrv_stat_lis, disp_hrv_stat_listener);
 
 static void disp_ecg_stat_listener(const struct zbus_channel *chan)
 {
