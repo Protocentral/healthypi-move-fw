@@ -22,6 +22,7 @@
 
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
+#include "stdlib.h"
 
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv_layout, LOG_LEVEL_ERR);
