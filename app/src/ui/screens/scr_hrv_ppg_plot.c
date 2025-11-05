@@ -183,7 +183,7 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,
     lv_obj_set_style_pad_all(chart_ppg_hrv, 5, LV_PART_MAIN);
 
     // Add HRV PPG data series
-    ser_ppg_hrv = lv_chart_add_series(chart_ppg_hrv, lv_color_hex(0xFFFFFF), LV_CHART_AXIS_PRIMARY_Y);
+    ser_ppg_hrv = lv_chart_add_series(chart_ppg_hrv, lv_color_hex(0x8B0000), LV_CHART_AXIS_PRIMARY_Y);
 
     // Configure line style
     lv_obj_set_style_line_width(chart_ppg_hrv, 3, LV_PART_ITEMS);
@@ -215,11 +215,11 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,
     // Heart Icon (blue accent)
     lv_obj_t *img_heart = lv_img_create(cont_hrv);
     lv_img_set_src(img_heart, &img_heart_48px);
-    lv_obj_set_style_img_recolor(img_heart, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_img_recolor(img_heart, lv_color_hex(0x8B0000), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_heart, LV_OPA_COVER, LV_PART_MAIN);
 
     // HRV Value
-    //label_hrv_bpm = lv_label_create(cont_hrv);
+    
     label_ppg_hr_hrv = lv_label_create(cont_hrv);
     lv_label_set_text(label_ppg_hr_hrv, "--");
     lv_obj_add_style(label_ppg_hr_hrv, &style_body_medium, LV_PART_MAIN);
@@ -254,20 +254,13 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,
 
 
     // Gesture handler
-        lv_obj_add_event_cb(scr_raw_ppg_hrv, gesture_handler_for_ppg, LV_EVENT_GESTURE, NULL);
+    lv_obj_add_event_cb(scr_raw_ppg_hrv, gesture_handler_for_ppg, LV_EVENT_GESTURE, NULL);
 
-    // ---------------- SCREEN HANDOVER ----------------
+   
     hpi_disp_set_curr_screen(SCR_SPL_HRV_PLOT);
     hpi_show_screen(scr_raw_ppg_hrv, m_scroll_dir);
 }
 
-
-
-// void gesture_down_scr_spl_raw_ppg_hrv(void)
-// {
-//     /* Return to parent screen on gesture down */
-//     hpi_load_screen(parent_screen, SCROLL_DOWN);
-// }
 
 void hpi_ppg_disp_update_hr_hrv(int hr)
 {
@@ -399,44 +392,23 @@ void hpi_hrv_disp_update_timer(int time_left)
     static int last_time = -1;
     static char time_buf[8];
     
-    if (time_left != last_time) { // Only update if changed
-        // Check if in stabilization phase (time > 30s means we're stabilizing)
-        bool is_stabilizing = (time_left > 30);
-        
-        if (is_stabilizing) {
-            // Show stabilization countdown (35s = 5s stabilizing, 30s = starting recording)
-            int stabilization_time = time_left - 30;
+    if (time_left != last_time)
+    { 
             
-            // Update timer label with stabilization time
-            if (stabilization_time < 10) {
-                time_buf[0] = '0' + stabilization_time;
-                time_buf[1] = '\0';
-            } else {
-                time_buf[0] = '0' + (stabilization_time / 10);
-                time_buf[1] = '0' + (stabilization_time % 10);
-                time_buf[2] = '\0';
-            }
-            lv_label_set_text(label_hrv_timer, time_buf);
-            
-          
-            
-            // Arc stays at 0 during stabilization
-            if (arc_hrv_zone != NULL) {
-                lv_arc_set_value(arc_hrv_zone, 0);
-                lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x4A90E2), LV_PART_INDICATOR);  // Blue during stabilization
-            }
-        } else {
-            
-            
-            // Use direct integer to string for better performance
-            if (time_left < 10) {
+         // Use direct integer to string for better performance
+            if (time_left < 10) 
+            {
                 time_buf[0] = '0' + time_left;
                 time_buf[1] = '\0';
-            } else if (time_left < 100) {
+            } 
+            else if (time_left < 100) 
+            {
                 time_buf[0] = '0' + (time_left / 10);
                 time_buf[1] = '0' + (time_left % 10);
                 time_buf[2] = '\0';
-            } else {
+            } 
+            else 
+            {
                 time_buf[0] = '0' + (time_left / 100);
                 time_buf[1] = '0' + ((time_left / 10) % 10);
                 time_buf[2] = '0' + (time_left % 10);
@@ -458,11 +430,11 @@ void hpi_hrv_disp_update_timer(int time_left)
                 k_mutex_unlock(&timer_state_mutex_for_hrv);
                 
                 if (is_paused) {
-                    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x666666), LV_PART_INDICATOR);  // Gray when paused
+                    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Gray when paused
                 } else {
-                    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Orange when running
+                    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x830000), LV_PART_INDICATOR);  // Orange when running
                 }
-            }
+            
         }
         
         last_time = time_left;

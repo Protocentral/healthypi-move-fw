@@ -123,6 +123,9 @@ static struct hpi_last_update_time_t g_hpi_last_update = {
 
     .gsr_last_update_ts = 0,
     .gsr_last_value = 0,
+
+    .hrv_last_lf_hf_value = 0,
+    .hrv_last_lf_hf_update_ts = 0,
 };
 
 K_MUTEX_DEFINE(mutex_hpi_last_update_time);
@@ -388,6 +391,9 @@ static int hpi_sys_load_update_time(void)
         .bp_sys_last_value = 0,
         .bp_dia_last_value = 0,
         .ecg_last_hr = 0,
+
+        .hrv_last_lf_hf_value = 0,
+        .hrv_last_lf_hf_update_ts = 0,
     };
 
     struct fs_file_t m_file;
@@ -435,9 +441,20 @@ static int hpi_sys_load_update_time(void)
 
     g_hpi_last_update.gsr_last_update_ts = m_hpi_last_update_time.gsr_last_update_ts;
     g_hpi_last_update.gsr_last_value = m_hpi_last_update_time.gsr_last_value;
+
+    g_hpi_last_update.hrv_last_lf_hf_value = m_hpi_last_update_time.hrv_last_lf_hf_value;
+    g_hpi_last_update.hrv_last_lf_hf_update_ts = m_hpi_last_update_time.hrv_last_lf_hf_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
 
     return ret;
+}
+
+void hpi_sys_set_last_lf_hf_update(uint16_t hrv_last_lf_hf_value, int64_t hrv_last_lf_hf_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.hrv_last_lf_hf_value = hrv_last_lf_hf_value;
+    g_hpi_last_update.hrv_last_lf_hf_update_ts = hrv_last_lf_hf_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
 }
 
 void hpi_sys_set_last_hr_update(uint16_t hr_last_value, int64_t hr_last_update_ts)
@@ -470,6 +487,16 @@ void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts)
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     g_hpi_last_update.ecg_last_update_ts = ecg_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+}
+
+int hpi_sys_get_last_lf_hf_update(uint16_t *hrv_last_lf_hf_value, int64_t *hrv_last_lf_hf_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    *hrv_last_lf_hf_value = g_hpi_last_update.hrv_last_lf_hf_value;
+    *hrv_last_lf_hf_update_ts = g_hpi_last_update.hrv_last_lf_hf_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    return 0;
 }
 
 int hpi_sys_get_last_hr_update(uint16_t *hr_last_value, int64_t *hr_last_update_ts)

@@ -951,10 +951,13 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_PLOT:
-       
-        hpi_hrv_disp_update_timer(m_disp_hrv_timer);
+       extern uint32_t hrv_elapsed_time_ms;
+        //hpi_hrv_disp_update_timer(m_disp_hrv_timer);
+        hpi_hrv_disp_update_timer(hrv_elapsed_time_ms / 1000);
+        
 
         hpi_ppg_check_signal_timeout_hrv();
+        
         
         lv_disp_trig_activity(NULL);
         break;

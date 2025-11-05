@@ -21,6 +21,7 @@
 #include "hpi_common_types.h"
 
 #include "ui/move_ui.h"
+#include "hpi_sys.h"
 
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv_layout, LOG_LEVEL_ERR);
@@ -31,39 +32,41 @@ static lv_obj_t *btn_hrv_measure;
 static lv_obj_t *arc_hrv;
 static lv_obj_t *label_hrv_value;
 
+int64_t m_hrv_last_update = 0;
 
 // HRV Measurement Control
 static bool hrv_measurement_active = false;
 
 #define HRV_MEASUREMENT_DURATION_MS 30000 
 
-static uint32_t hrv_elapsed_time_ms = 0;
-
+void hrv_stop_timer_cb(struct k_timer *timer_id);
+uint32_t hrv_elapsed_time_ms = 30000;
+K_TIMER_DEFINE(hrv_stop_timer, hrv_stop_timer_cb, NULL);      
 
 // Timer callback function
 void hrv_stop_timer_cb(struct k_timer *timer_id)
 {
-    hrv_measurement_active = false;
+    // hrv_measurement_active = false;
 
-    LOG_INF("Transitioning to HRV frequency screen");
-    hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
+    // LOG_INF("Transitioning to HRV frequency screen");
+    // hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
 
-    // hrv_elapsed_time_ms += 1000;  // add 1s
+     hrv_elapsed_time_ms -= 1000;  // add 1s
 
     // extern void hpi_hrv_disp_update_timer(int time_left);
     // hpi_hrv_disp_update_timer(hrv_elapsed_time_ms);
 
-    // if (hrv_elapsed_time_ms >= HRV_MEASUREMENT_DURATION_MS) {
-    //     hrv_measurement_active = false;
-    //    // k_timer_stop(&hrv_stop_timer);
-
-    //     LOG_INF("Transitioning to HRV frequency screen");
-    //     hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
-    // }
+    if ( (HRV_MEASUREMENT_DURATION_MS - hrv_elapsed_time_ms)  >= HRV_MEASUREMENT_DURATION_MS) {
+        hrv_measurement_active = false;
+        k_timer_stop(&hrv_stop_timer);
+        hrv_elapsed_time_ms = 30000;
+        LOG_INF("Transitioning to HRV frequency screen");
+        hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
+    }
 }
 
 
-K_TIMER_DEFINE(hrv_stop_timer, hrv_stop_timer_cb, NULL);             
+//K_TIMER_DEFINE(hrv_stop_timer, hrv_stop_timer_cb, NULL);             
 
 
 void scr_hrv_measure_btn_event_handler(lv_event_t *e)
@@ -85,9 +88,9 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
             hrv_reset();
 
           
-            k_timer_start(&hrv_stop_timer, K_MSEC(HRV_MEASUREMENT_DURATION_MS), K_NO_WAIT);
-           // k_timer_start(&hrv_stop_timer, K_SECONDS(1), K_SECONDS(1));  // periodic every second
-            //hrv_elapsed_time_ms = 0;
+            //k_timer_start(&hrv_stop_timer, K_MSEC(HRV_MEASUREMENT_DURATION_MS), K_NO_WAIT);
+            k_timer_start(&hrv_stop_timer, K_SECONDS(1), K_SECONDS(1));  // periodic every second
+            // hrv_elapsed_time_ms = 0;
 
 
           
@@ -120,6 +123,15 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
 
     lv_obj_clear_flag(scr_hrv_layout, LV_OBJ_FLAG_SCROLLABLE);
 
+    uint16_t heart_rate = 0;
+    if(hpi_sys_get_last_lf_hf_update(&heart_rate, &m_hrv_last_update) != 0){
+        LOG_ERR("Error getting last HRV LF/HF update");
+       
+        m_hrv_last_update = 0;
+    }
+    LOG_INF("Last HRV LF/HF update timestamp: %lld", m_hrv_last_update);
+  
+
     // --- SINGLE BIG WHITE ARC ---
     arc_hrv = lv_arc_create(scr_hrv_layout);
     lv_obj_set_size(arc_hrv, 370, 370);      // Large radius like GSR
@@ -151,7 +163,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
 
-    // CENTRAL ZONE: Main ECG Value/Status (properly spaced from icon)
+    // CENTRAL ZONE: Main HRV Value/Status (properly spaced from icon)
     label_hrv_value = lv_label_create(scr_hrv_layout);
     if (m_hrv_ratio_int == 0) {
         lv_label_set_text(label_hrv_value, "--");
@@ -168,26 +180,32 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_t *label_hrv_unit = lv_label_create(scr_hrv_layout);
   
         //lv_label_set_text(label_hrv_unit, "ms^2");
-    lv_label_set_text(label_hrv_unit, "ms^2");
+    if(m_hrv_ratio_int == 0){
+        lv_label_set_text(label_hrv_unit, "--");
+    }
+    else{
+        lv_label_set_text(label_hrv_unit, "ms^2");
+    }
+    
     lv_obj_align(label_hrv_unit, LV_ALIGN_CENTER, 0, 35);  // Below main value with gap
     lv_obj_set_style_text_color(label_hrv_unit, lv_color_hex(0x8000FF), LV_PART_MAIN);
-    lv_obj_add_style(label_hrv_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_unit, &style_numeric_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_hrv_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     
 
-    // // Status info - centered below unit with proper spacing
-    // lv_obj_t *label_hrv_status = lv_label_create(scr_hrv_layout);
-    // if (m_hrv_hr == 0) {
-    //     lv_label_set_text(label_ecg_status, "Electrocardiogram");
-    // } else {
-    //     char last_meas_str[25];
-    //     hpi_helper_get_relative_time_str(m_ecg_hr_last_update, last_meas_str, sizeof(last_meas_str));
-    //     lv_label_set_text(label_ecg_status, last_meas_str);
-    // }
-    // lv_obj_align(label_ecg_status, LV_ALIGN_CENTER, 0, 80);  // Centered, below unit with gap
-    // lv_obj_set_style_text_color(label_ecg_status, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-    // lv_obj_add_style(label_ecg_status, &style_caption, LV_PART_MAIN);
-    // lv_obj_set_style_text_align(label_ecg_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+   lv_obj_t *label_hrv_status = lv_label_create(scr_hrv_layout);
+    if (m_hrv_ratio_int == 0) {
+        lv_label_set_text(label_hrv_status, "HeartRateVariability");
+    } else {
+        char last_meas_str[25];
+        hpi_helper_get_relative_time_str(m_hrv_last_update, last_meas_str, sizeof(last_meas_str));
+        lv_label_set_text(label_hrv_status, last_meas_str);
+    }
+    lv_obj_align(label_hrv_status, LV_ALIGN_CENTER, 0, 80);  // Centered, below unit with gap
+    lv_obj_set_style_text_color(label_hrv_status, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_status, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_hrv_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
    
     // --- MEASURE BUTTON ---
     btn_hrv_measure = hpi_btn_create_primary(scr_hrv_layout);

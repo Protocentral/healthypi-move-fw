@@ -37,7 +37,7 @@
 
 #define FILTERORDER 161 /* DC Removal Numerator Coeff*/
 #define NRCOEFF (0.992)
-#define HRV_LIMIT 20
+#define HRV_LIMIT 256
 
 void calculate_pnn_rmssd(unsigned int array[], float *pnn50, float *rmssd);
 float calculate_sdnn(unsigned int array[]);
