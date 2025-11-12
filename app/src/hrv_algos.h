@@ -37,14 +37,19 @@
 
 #define FILTERORDER 161 /* DC Removal Numerator Coeff*/
 #define NRCOEFF (0.992)
-#define HRV_LIMIT 256
+#define HRV_LIMIT 30
 
-void calculate_pnn_rmssd(unsigned int array[], float *pnn50, float *rmssd);
-float calculate_sdnn(unsigned int array[]);
-float calculate_mean(unsigned int array[]);
-int calculate_hrvmin(unsigned int array[]);
-int calculate_hrvmax(unsigned int array[]);
-//struct calculate_hrv(uint8_t heart_rate);
-
-void calculate_hrv (int32_t heart_rate, int32_t *hrv_max, int32_t *hrv_min, float *mean, float *sdnn, float *pnn, float *rmssd, bool *hrv_ready_flag);
-
+void hrv_reset(void);
+int hrv_get_sample_count(void);
+bool hrv_is_ready(void);
+static void hrv_add_sample(double rr_interval);
+void start_hrv_collection(void);
+void stop_hrv_collection(void);
+void on_new_rr_interval_detected(double rr_interval);
+float hrv_calculate_mean(void);
+float hrv_calculate_sdnn(void);
+float hrv_calculate_rmssd(void);
+float hrv_calculate_pnn50(void);
+uint32_t hrv_calculate_min(void);
+uint32_t hrv_calculate_max(void);
+int hrv_get_rr_intervals(double *buffer, int buffer_size);

@@ -163,6 +163,7 @@ struct hpi_hr_t
 {
     int64_t timestamp;
     uint16_t hr;
+    uint16_t rr_interval;
     bool hr_ready_flag;
 };
 

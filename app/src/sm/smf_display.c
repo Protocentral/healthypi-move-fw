@@ -85,6 +85,7 @@ K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
 
+extern int past_value;
 extern struct kmsgq ppg_wrist_rtor;
 K_SEM_DEFINE(sem_hrv_plot_complete, 0, 1);
 
@@ -255,9 +256,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
 
-    [SCR_SPL_HRV_LAYOUT] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
+    [SCR_SPL_HRV_FREQUENCY] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
     [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, gesture_down_scr_spl_ppg_for_hrv},
-   // [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, NULL},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -830,11 +830,16 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
     }
     else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_PLOT)
     {
+        //LOG_INF("HRV PPG Sample RTOR: %d", ppg_sensor_sample.rtor);
+        //on_new_rr_interval_detected(ppg_sensor_sample.rtor);
         /* Forward samples to the HRV plotting function */
-        lv_disp_trig_activity(NULL);
-         hpi_disp_ppg_draw_plotPPG_hrv(ppg_sensor_sample);
+         lv_disp_trig_activity(NULL);
+        hpi_disp_ppg_draw_plotPPG_hrv(ppg_sensor_sample);
         /* Update the HR and HRV labels on HRV screen if available */
         hpi_ppg_disp_update_hr_hrv(ppg_sensor_sample.hr);
+        hpi_ppg_disp_update_rr_interval_hrv(ppg_sensor_sample.rtor);
+
+       
     }
 }
 
@@ -951,9 +956,9 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_PLOT:
-       extern uint32_t hrv_elapsed_time_ms;
-        hpi_hrv_disp_update_timer(hrv_elapsed_time_ms / 1000);
-        hpi_ppg_check_signal_timeout_hrv();
+       // hpi_hrv_disp_update_timer(hrv_elapsed_time_ms / 1000);
+       hpi_hrv_disp_update_timer(past_value);
+       // hpi_ppg_check_signal_timeout_hrv();
          lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_ECG_SCR2:
@@ -1398,14 +1403,14 @@ void smf_display_thread(void)
             break;
         }
 
-        struct rtor_msg msg;
-        if(k_msgq_get(&ppg_wrist_rtor, &msg, K_NO_WAIT) == 0)
-        {
-            //LOG_INF("Inside display smf thread - RR Interval: %.2f ms", msg.rtor);
-           // printk("Inside display smf thread - RR Interval: %.2f ms\n", msg.rtor);
-                   on_new_rr_interval_detected(msg.rtor);
+        // struct rtor_msg msg;
+        // if(k_msgq_get(&ppg_wrist_rtor, &msg, K_NO_WAIT) == 0)
+        // {
+        //     //LOG_INF("Inside display smf thread - RR Interval: %.2f ms", msg.rtor);
+        //    // printk("Inside display smf thread - RR Interval: %.2f ms\n", msg.rtor);
+        //            on_new_rr_interval_detected(msg.rtor);
             
-        }
+        // }
 
         lv_task_handler();
         k_msleep(20);

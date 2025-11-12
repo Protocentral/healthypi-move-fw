@@ -49,7 +49,10 @@
         "ostream": "c",
         "system_error": "c",
         "max32664_updater.h": "c",
-        "hpi_sys.h": "c"
+        "hpi_sys.h": "c",
+        "arm_math.h": "c",
+        "math.h": "c",
+        "transform_functions.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

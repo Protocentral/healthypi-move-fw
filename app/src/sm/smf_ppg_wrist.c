@@ -42,8 +42,8 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 #include "ui/move_ui.h"
 
 // State machine parameters
-#define PPG_WRIST_SAMPLING_INTERVAL_MS 40
-#define PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS 40
+#define PPG_WRIST_SAMPLING_INTERVAL_MS 160
+#define PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS 160
 
 // Timing parameters
 #define OFFSKIN_THRESHOLD_S 20       // Duration for SCD "off-skin" before switching to Probing
@@ -333,6 +333,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             m_curr_scd_state = ppg_sensor_sample.scd_state;
             if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
             {
+                
                 k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
             }
         }

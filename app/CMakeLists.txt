@@ -13,6 +13,8 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(healthypi_move)
 
+
+
 FILE(GLOB app_sources   src/*.c 
                         src/images/*.c 
                         src/ui/*.c 
@@ -52,7 +54,25 @@ zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+
+# # Collect all C source files recursively from CMSIS-DSP
+# file(GLOB_RECURSE CMSIS_DSP_SOURCES
+#     ${CMSIS_DSP_PATH}/Source/TransformFunctions/*.c
+# )
+
+# # Add them all to your app target
+# target_sources(app PRIVATE ${CMSIS_DSP_SOURCES})
+
+
+
+
+
+
+
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
+
+
+
 
 # This places images in the external flash memory
 

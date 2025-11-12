@@ -508,6 +508,7 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
     // CRITICAL: Set global transition flag to suspend ALL screen updates
     // This protects the entire screen loading process across all screens
+   
     screen_transition_in_progress = true;
     
     switch (m_screen)

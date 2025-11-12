@@ -48,6 +48,7 @@ static lv_chart_series_t *ser_ppg_hrv;
 
 // GUI Labels
 static lv_obj_t *label_ppg_hr_hrv;
+static lv_obj_t *label_rr_interval_hrv;
 
 
 static lv_obj_t *label_ppg_no_signal_hrv;
@@ -95,6 +96,7 @@ LOG_MODULE_REGISTER(ppg_scr_hrv);
 
 
 lv_obj_t * label_hrv_timer;
+lv_obj_t * label_hrv_intervals_collected;
 static bool hrv_timer_running = false;
 static bool hrv_timer_paused = true;
 static bool hrv_lead_on_detected = false;
@@ -149,14 +151,20 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,
 
     // Timer value
     label_hrv_timer = lv_label_create(cont_timer);
-    lv_label_set_text(label_hrv_timer, "30");
+    lv_label_set_text(label_hrv_timer, "0");
     lv_obj_add_style(label_hrv_timer, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_hrv_timer, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_pad_left(label_hrv_timer, 8, LV_PART_MAIN);
 
+    label_hrv_intervals_collected = lv_label_create(cont_timer);
+    lv_label_set_text(label_hrv_intervals_collected, "/30");
+    lv_obj_add_style(label_hrv_intervals_collected, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_hrv_intervals_collected, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_hrv_intervals_collected, 4, LV_PART_MAIN);
+
     // Timer unit
     lv_obj_t *label_timer_unit = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer_unit, "s");
+    lv_label_set_text(label_timer_unit, "Collected");
     lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
@@ -232,6 +240,31 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,
     lv_obj_add_style(label_bpm_unit, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpm_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
+
+
+    // ---------------- RR INTERVAL LABEL BELOW CHART ----------------
+    lv_obj_t *cont_hrv_rr = lv_obj_create(scr_raw_ppg_hrv);
+    lv_obj_set_size(cont_hrv_rr, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_hrv_rr, LV_ALIGN_CENTER, 0, 115);
+    lv_obj_set_style_bg_opa(cont_hrv_rr, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_hrv_rr, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_hrv_rr, 0, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_hrv_rr, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_hrv_rr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // // RR Interval Value
+
+    // label_rr_interval_hrv = lv_label_create(cont_hrv_rr);
+    // lv_label_set_text(label_rr_interval_hrv, "--");
+    // lv_obj_add_style(label_rr_interval_hrv, &style_body_medium, LV_PART_MAIN);
+    // lv_obj_set_style_text_color(label_rr_interval_hrv, lv_color_white(), LV_PART_MAIN);
+    // lv_obj_set_style_pad_left(label_rr_interval_hrv, 8, LV_PART_MAIN);
+
+    // lv_obj_t * label_rr_unit = lv_label_create(cont_hrv_rr);
+    // lv_label_set_text(label_rr_unit, "ms");
+    // lv_obj_add_style(label_rr_unit, &style_caption, LV_PART_MAIN);
+    // lv_obj_set_style_text_color(label_rr_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
      // Create "No Signal" overlay label (initially hidden)
     label_ppg_no_signal_hrv = lv_label_create(scr_raw_ppg_hrv);
     lv_label_set_text(label_ppg_no_signal_hrv, "No Signal");
@@ -261,6 +294,23 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,
     hpi_show_screen(scr_raw_ppg_hrv, m_scroll_dir);
 }
 
+void hpi_ppg_disp_update_rr_interval_hrv(int rr_interval)
+{
+    if (label_rr_interval_hrv == NULL)
+        return;
+
+    char buf[32];
+    // if (rr_interval == 0)
+    // {
+    //     sprintf(buf, "--");
+    // }
+    // else
+    // {
+        sprintf(buf, "%d", rr_interval);
+    // }
+   // LOG_INF("RR INTERVAL HRV: %s ms", buf);
+    lv_label_set_text(label_rr_interval_hrv, buf);
+}
 
 void hpi_ppg_disp_update_hr_hrv(int hr)
 {
@@ -276,7 +326,7 @@ void hpi_ppg_disp_update_hr_hrv(int hr)
     {
         sprintf(buf, "%d", hr);
     }
-
+   // LOG_INF("HEART RATE HRV: %s", buf);
     lv_label_set_text(label_ppg_hr_hrv, buf);
 }
 

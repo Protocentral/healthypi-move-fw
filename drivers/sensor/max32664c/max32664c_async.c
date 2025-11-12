@@ -335,7 +335,7 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
                 uint16_t rtor_val = (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 rtor_val |= (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 5 + MAX32664C_SENSOR_DATA_OFFSET];
 
-                *rtor = (rtor_val / 10);
+                *rtor = (rtor_val / 10);;
 
                 *rtor_conf = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 6 + MAX32664C_SENSOR_DATA_OFFSET];
 

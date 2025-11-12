@@ -48,6 +48,7 @@
 #include "fs_module.h"
 #include "trends.h"
 #include "log_module.h"
+#include "ui/move_ui.h"
 
 LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 
@@ -66,9 +67,11 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 #define NUM_HOURS 24
 #define MAX_POINTS_PER_HOUR 60
 #define MAX_POINTS_SPO2_PER_HOUR 10
+#define RR_MEASUREMENT_DURATION_MS 30000
 
 // Store raw HR values for the current minute
 static uint16_t m_hr_curr_minute[60] = {0};   // Assumed max 60 points per minute
+static uint16_t m_rr_curr_minute[60] = {0};   // Assumed max 60 points per minute
 static uint16_t m_temp_curr_minute[13] = {0}; // Assumed max 10 points per minute
 
 static uint16_t m_spo2 = 0;
@@ -78,6 +81,7 @@ static uint8_t m_trends_curr_minute_counter = 0;
 
 static uint8_t m_trends_temp_minute_sample_counter = 0;
 static uint8_t m_trends_hr_minute_sample_counter = 0;
+static uint8_t m_trends_rr_minute_sample_counter = 0;
 
 // Static buffers to avoid large stack allocations (51KB total)
 // These replace the problematic stack arrays in hpi_trend_load_trend()
@@ -409,7 +413,15 @@ static void trend_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_hr_curr_minute[m_trends_hr_minute_sample_counter] = hpi_hr->hr;
     m_trends_hr_minute_sample_counter++;
-    LOG_DBG("ZB HR: %d", hpi_hr->hr);
+    //LOG_DBG("ZB HR: %d", hpi_hr->hr);
+  
+    if(hpi_hr -> rr_interval > 0 )
+    {
+       on_new_rr_interval_detected(hpi_hr->rr_interval);
+    }
+    
+  
+
 }
 ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
 

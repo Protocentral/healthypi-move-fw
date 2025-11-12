@@ -65,6 +65,7 @@ K_SEM_DEFINE(sem_gsr_start, 0, 1);
 K_SEM_DEFINE(sem_gsr_cancel, 0, 1);
 
 // GSR Measurement Timing (60 seconds for reliable stress index)
+extern bool hrv_active;
 #define GSR_MEASUREMENT_DURATION_S 60
 static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
@@ -701,6 +702,10 @@ static void st_ecg_idle_entry(void *o)
     }
 }static void st_ecg_idle_run(void *o)
 {
+    if(hrv_active)
+        return;
+
+
     // LOG_DBG("ECG/BioZ SM Idle Run");
     if (k_sem_take(&sem_ecg_start, K_NO_WAIT) == 0)
     {
