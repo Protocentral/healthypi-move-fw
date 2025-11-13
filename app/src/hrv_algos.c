@@ -14,11 +14,11 @@ LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
 K_MUTEX_DEFINE(hrv_mutex);
 
 static bool collecting = false;
-static double rr_interval_buffer[HRV_LIMIT];
+static uint16_t rr_interval_buffer[HRV_LIMIT];
 
 //HRV calculation state
 typedef struct {
-    double rr_intervals[HRV_LIMIT];
+    uint16_t rr_intervals[HRV_LIMIT];
     int sample_count;
     int buffer_index;
     bool buffer_full;
@@ -185,7 +185,7 @@ float hrv_calculate_pnn50(void)
         return 0.0f;
     }
     
-    return (float)count_over_50ms / total_differences;
+    return ((float)count_over_50ms * 100) / total_differences;
 }
 
 /**
@@ -269,7 +269,7 @@ bool hrv_is_ready(void)
  * @param buffer_size Size of the buffer
  * @return Number of samples copied
  */
-int hrv_get_rr_intervals(double *buffer, int buffer_size)
+int hrv_get_rr_intervals(uint16_t *buffer, int buffer_size)
 {
     if (!buffer || buffer_size <= 0) {
         return 0;
@@ -291,9 +291,9 @@ int hrv_get_rr_intervals(double *buffer, int buffer_size)
  */
 
 //void update_hrv_screens_with_new_data(double rr_interval)
-void on_new_rr_interval_detected(double rr_interval)
+void on_new_rr_interval_detected(uint16_t rr_interval)
 {
-    LOG_INF("New RR interval detected : %.0f ms", rr_interval);
+    LOG_INF("New RR interval detected : %d ms", rr_interval);
 
   
     if (!collecting) 

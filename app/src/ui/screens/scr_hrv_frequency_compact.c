@@ -5,27 +5,37 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
-
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
-
 #include "arm_math.h"
+#include "arm_const_structs.h"
+#include <string.h>
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv_frequency_compact, LOG_LEVEL_DBG);
 
- #define M_PI 3.14159265358979323846
-#define N_SAMPLES      30     
-#define FS             6.25f    
-#define HRV_LIMIT   30
+#define MAX_RR_INTERVALS 30        // Maximum RR intervals to process
+#define INTERP_FS 4.0f             // Interpolation sampling frequency (Hz)
+#define FFT_SIZE 64                // Must be power of 2
+#define WELCH_OVERLAP 0.5f         // 50% overlap for Welch method
 
-static float rr_buffer[N_SAMPLES];     
-static float fft_input[N_SAMPLES];
-static float fft_output[N_SAMPLES]; 
-static float psd[N_SAMPLES / 2 + 1 ];
-static float mag[N_SAMPLES / 2 + 1 ];
-static arm_rfft_fast_instance_f32 fft_instance;
+// Frequency band definitions (Hz)
+#define LF_LOW   0.04f
+#define LF_HIGH  0.15f
+#define HF_LOW   0.15f
+#define HF_HIGH  0.4f
 
-void my_fft_dft(float *input, int N, float Fs, float *psd);
+// Required buffer sizes to process LF and HF power
+
+float32_t rr_time[MAX_RR_INTERVALS + 1]; // Time taken to collect samples (cumulative time processed from RR intervals)
+float32_t rr_values[MAX_RR_INTERVALS + 1]; // RR intervals in seconds
+float32_t interp_signal[FFT_SIZE * 4];  // Larger buffer for interpolated signal
+float32_t fft_input[FFT_SIZE * 2];      // Complex FFT input
+float32_t fft_output[FFT_SIZE * 2];     // Complex FFT output
+float32_t psd[FFT_SIZE];                // Power spectral density
+float32_t window[FFT_SIZE];             // Hanning window
+
+
+// GUI Screen object
 lv_obj_t *scr_hrv_frequency_compact;
 
 // GUI Labels - minimal set
@@ -50,9 +60,9 @@ static float stress_score_compact = 0.0f;
 // Simplified stress assessment for compact display
 static int get_stress_percentage(float lf, float hf) {
     if (hf <= 0) return 100;
-    //float ratio = lf / hf;
-    //int stress_pct = (int)((ratio / 4.0f) * 100);
-    int stress_pct = lf/ (lf + hf) * 100;
+    float ratio = lf / hf;
+    int stress_pct = (int)((ratio / 4.0f) * 100);
+    //int stress_pct = lf/ (lf + hf) * 100;
     return stress_pct > 100 ? 100 : stress_pct;
 }
 
@@ -81,46 +91,6 @@ void gesture_down_scr_spl_hrv(void)
     printk("Exit HRV Frequency Compact\n");
     hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
 }
-
-// void hpi_hrv_frequency_compact_update_spectrum(double *rr_intervals, int num_intervals)
-// {
-//     LOG_INF("Updating HRV Frequency Compact Spectrum with %d intervals", num_intervals);
-
-//     // Calculate simplified power estimates
-//     double variance_total = 0.0;                              
-//     double mean_rr = 0.0;
-    
-//     // Calculate mean
-//     for (int i = 0; i < num_intervals; i++) {
-//         LOG_INF("RR Interval[%d]: %.2f", i, rr_intervals[i]);
-//         k_msleep(10); 
-//         mean_rr += rr_intervals[i];
-//     }
-//     mean_rr /= num_intervals;
-//     LOG_INF("Mean RR: %lf", mean_rr);
-    
-//     // Calculate variance
-//     for (int i = 0; i < num_intervals; i++) {
-//         double diff = rr_intervals[i] - mean_rr;
-//         variance_total += diff * diff;
-       
-//     }
-//     variance_total /= (num_intervals - 1);
-//     LOG_INF("Total Variance: %lf", variance_total);
-
-//     // Simplified power distribution
-//     lf_power_compact = variance_total * 0.65;
-//     hf_power_compact = variance_total * 0.35;
-    
-//     LOG_INF("LF Power (Compact): %lf", lf_power_compact);
-//     LOG_INF("HF Power (Compact): %lf", hf_power_compact);
-//     LOG_INF("LF/HF Ratio (Compact): %lf", lf_power_compact / hf_power_compact);
-//     stress_score_compact = get_stress_percentage(lf_power_compact, hf_power_compact);
-//     LOG_INF("Stress Score (Compact): %lf", stress_score_compact);
-    
-//     hpi_hrv_frequency_compact_update_display();
-// }
-
 
 void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
@@ -212,7 +182,7 @@ void hpi_hrv_frequency_compact_update_display(void)
     ratio = lf_power_compact / hf_power_compact;
 
     int lf_int = (int)lf_power_compact;
-    int lf_dec = (int)((lf_power_compact - lf_int) * 100);  // 2 decimal digits
+    int lf_dec = (int)((lf_power_compact - lf_int) * 100);  
 
     int hf_int = (int)hf_power_compact;
     int hf_dec = (int)((hf_power_compact - hf_int) * 100);
@@ -256,218 +226,207 @@ void hpi_hrv_frequency_compact_update_display(void)
     
    
 }
-
-void apply_hamming_window(float *data, int n)
-{
-    for (int i = 0; i < n; i++) {
-       
-        float w = 0.54f - 0.46f * cosf(2.0f * (float)M_PI * i / (n - 1));
-        data[i] *= w;
-    }
-}
-
-void compute_psd(float32_t *mag, float32_t *psd, uint16_t len)
-{
-    // uint16_t half_len = len / 2;
-    // for (uint16_t i = 0; i < half_len; i++) {
-    //     float32_t real = fft_output[2 * i];
-    //     float32_t imag = fft_output[2 * i + 1];
-    //     psd[i] = (real * real) + (imag * imag);
-    // }
-    
-for(int i = 0; i <= len/2; i++) {
-    psd[i] = (mag[i] * mag[i]) / len;  // Normalized power
-}
-
-}
-
-
-float32_t integrate_power_band(float32_t *psd, uint16_t len,
-                                      float32_t fs, float32_t fmin, float32_t fmax)
-{
-    float32_t df = fs / len;
-    uint16_t start = (uint16_t)(fmin / df);
-    uint16_t end   = (uint16_t)(fmax / df);
-    if (start == 0)
-        start = 1; 
-    if (end >= len)
-        end = len - 1;
-   // if (end > len / 2) end = len / 2;
-
-    float32_t power = 0.0f;
-    for (uint16_t i = start; i <= end; i++) {
-        power += psd[i];
-    }
-    return power * df;
-}
-
-void compute_magnitude_spectrum(float32_t *pOut, uint16_t N, float32_t *mag)
-{   
-    
-    mag[0] = fabsf(pOut[0]);            
-    mag[N/2] = fabsf(pOut[1]);           
-
-    for(int i = 1; i < N/2; i++) {
-        float32_t real = pOut[2*i];
-        float32_t imag = pOut[2*i + 1];
-        mag[i] = sqrtf(real*real + imag*imag);
-    
-
-    }
-}
-// void resample_rr_intervals(float *rr_intervals, int num_intervals, 
-//                            float *resampled, int n_resampled, float *mean_rr)
-// {
-//     // Calculate total duration and mean RR
-//     float total_duration = 0.0f;
-//     *mean_rr = 0.0f;
-//     for (int i = 0; i < num_intervals; i++) {
-//         total_duration += rr_intervals[i];
-//         *mean_rr += rr_intervals[i];
-//     }
-//     *mean_rr /= num_intervals;
-    
-//     // Effective sampling rate in Hz (convert from milliseconds)
-//     float fs_effective = 1000.0f / (*mean_rr);  // Hz
-//     float dt = 1.0f / fs_effective;  // seconds
-    
-//     // Linear interpolation to regular grid
-//     float t = 0.0f;
-//     float cumsum = 0.0f;
-//     int rr_idx = 0;
-    
-//     for (int i = 0; i < n_resampled; i++) {
-//         // Find position in original RR series
-//         while (rr_idx < num_intervals - 1 && cumsum + rr_intervals[rr_idx] < t) {
-//             cumsum += rr_intervals[rr_idx];
-//             rr_idx++;
-//         }
-        
-//         // Linear interpolation
-//         float alpha = (t - cumsum) / rr_intervals[rr_idx];
-//         float rr_prev = (rr_idx > 0) ? rr_intervals[rr_idx - 1] : rr_intervals[rr_idx];
-//         resampled[i] = rr_intervals[rr_idx] * (1.0f - alpha) + rr_prev * alpha;
-        
-//         t += dt;
-//     }
-// }
-
-void hpi_hrv_frequency_compact_update_spectrum(double *rr_intervals, int num_intervals)
-{
-    // #define FFT_SIZE 256
-    // static float resampled[FFT_SIZE];
-    // static float fft_out[FFT_SIZE];
-    // static float mag[FFT_SIZE/2 + 1];
-    // static float psd[FFT_SIZE/2 + 1];
-    
-    // float mean_rr = 0.0f;
-    
-    // // Resample to regular grid
-    // resample_rr_intervals((float *)rr_intervals, num_intervals, 
-    //                       resampled, FFT_SIZE, &mean_rr);
-    
-    // float fs_effective = 1000.0f / mean_rr;  // Actual sampling rate in Hz
-    
-    // LOG_INF("Mean RR: %.2f ms, Effective Fs: %.3f Hz", mean_rr, fs_effective);
-    
-    // // Detrend: subtract mean
-    // float mean_val = 0.0f;
-    // for (int i = 0; i < FFT_SIZE; i++) {
-    //     mean_val += resampled[i];
-    // }
-    // mean_val /= FFT_SIZE;
-    // for (int i = 0; i < FFT_SIZE; i++) {
-    //     resampled[i] -= mean_val;
-    // }
-    
-    int n = (num_intervals > N_SAMPLES) ? N_SAMPLES : num_intervals;
-    for (int i = 0; i < n; i++) 
-    rr_buffer[i] = (float)rr_intervals[i];
-   // memcpy(rr_buffer, rr_intervals, num_intervals * sizeof(float));
-
-    for(int i = 0; i < n; i++)
-    {
-        LOG_INF("RR_intervals at index %d is %2f", i, rr_buffer[i]);
-        k_msleep(10);
-    }
-
-    
-   apply_hamming_window(rr_buffer, num_intervals);
- 
-    arm_rfft_fast_init_f32(&fft_instance, num_intervals);
-
-    arm_rfft_fast_f32(&fft_instance, rr_buffer, fft_output, 0);
-
-    compute_magnitude_spectrum(fft_output,num_intervals, mag);
-
-    compute_psd(mag, psd, num_intervals);
-
-    //my_fft_dft(rr_buffer, num_intervals, FS, psd);
-
-    
-    //compute_psd(fft_output, psd, num_intervals);
-
-
-   
-    lf_power_compact = integrate_power_band(psd, num_intervals, FS, 0.04f, 0.15f);
-    hf_power_compact = integrate_power_band(psd, num_intervals, FS, 0.15f, 0.4f);
-    float lf_hf_ratio = (hf_power_compact > 0.0f) ? (lf_power_compact / hf_power_compact) : 0.0f;
-     stress_score_compact = get_stress_percentage(lf_power_compact, hf_power_compact);
-
-// // Apply Hamming window
-//     apply_hamming_window(resampled, FFT_SIZE);
-    
-//     // Perform FFT
-   
-//     arm_rfft_fast_init_f32(&fft_instance, FFT_SIZE);
-//     arm_rfft_fast_f32(&fft_instance, resampled, fft_out, 0);
-    
-//     // Compute magnitude spectrum
-//     compute_magnitude_spectrum(fft_out, FFT_SIZE, mag);
-    
-//     // Compute PSD with proper normalization
-//     for (int i = 0; i < FFT_SIZE/2; i++) {
-//         psd[i] = (mag[i] * mag[i]) / (fs_effective * FFT_SIZE);
-//     }
-    
-//     // Integrate power bands using correct sampling rate
-//     lf_power_compact = integrate_power_band(psd, FFT_SIZE/2, fs_effective, 0.04f, 0.15f);
-//     hf_power_compact = integrate_power_band(psd, FFT_SIZE/2, fs_effective, 0.15f, 0.4f);
-//     stress_score_compact = get_stress_percentage(lf_power_compact, hf_power_compact);
-    
-
-    LOG_INF("HRV Frequency Analysis Results:");
-    LOG_INF("LF Power = %.6f", (double)lf_power_compact);
-    LOG_INF("HF Power = %.6f", (double)hf_power_compact);
-    LOG_INF("LF/HF Ratio = %.3f", (double)lf_hf_ratio);
-    LOG_INF("Stress Score = %.1f%%", (double)stress_score_compact);
-   
-    hpi_hrv_frequency_compact_update_display();
-}
-// void my_fft_dft(float *input, int N, float Fs, float *psd)
-// {
-//     static float real[256],imag[256];
-//     for (int k = 0; k < N/2; k++) {
-  
-//         real[k] = 0;
-//         imag[k] = 0;
-//         for (int n = 0; n < N; n++) {
-//             float angle = 2.0f * M_PI * k * n / N;
-//             real[k] += input[n] * cosf(angle);
-//             imag[k] -= input[n] * sinf(angle);
-//         }
-//         psd[k] = (real[k] * real[k]) + (imag[k] * imag[k]); // Power Spectrum
-
-//         // Frequency for this bin
-//         float freq = (Fs * k) / N;
-//         LOG_INF("Bin %2d: Freq = %f Hz | Complex number -> real_part - %f + Imaginary part - %f | Power = %.5f", k, freq, real[k], imag[k], psd[k]);
-//     }
-// }
-
-
 float hpi_get_lf_hf_ratio(void) {
    
     float lf_hf =  lf_power_compact / hf_power_compact;
     return lf_hf;
 
 }
+
+
+ /* Linear interpolation for RR intervals */
+ 
+static float32_t linear_interp(float32_t x, float32_t x0, float32_t x1, 
+                                float32_t y0, float32_t y1) {
+    if (x1 == x0) return y0;
+    return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
+}
+
+/* Interpolate RR intervals to evenly sampled signal */
+
+static uint32_t interpolate_rr_intervals(uint16_t *rr_ms, uint32_t num_intervals,float32_t fs,float32_t *rr_time, float32_t *rr_values,
+    float32_t *interp_signal,uint32_t max_interp_samples)
+ {
+    //Convert RR intervals to seconds and create time vector
+    rr_time[0] = 0.0f;
+    rr_values[0] = rr_ms[0] / 1000.0f;
+    
+    for (uint32_t i = 0; i < num_intervals; i++)
+     {
+        rr_values[i + 1] = rr_ms[i] / 1000.0f;
+        rr_time[i + 1] = rr_time[i] + rr_values[i + 1];
+     }    
+
+    // Calculate number of interpolated samples
+    float32_t total_time = rr_time[num_intervals];
+    uint32_t num_samples = (uint32_t)(total_time * fs);
+  
+    
+    if (num_samples > max_interp_samples) {
+        num_samples = max_interp_samples;
+    }
+    
+    // Interpolate using linear interpolation (simple and fast)
+    float32_t dt = 1.0f / fs;
+    uint32_t idx = 0;
+    
+    for (uint32_t i = 0; i < num_samples; i++)
+    {
+        float32_t t = i * dt;
+        
+        // Find the interval containing time t
+        while (idx < num_intervals && rr_time[idx + 1] < t) 
+            idx++;
+        
+        
+        if (idx >= num_intervals) 
+            break;
+        
+        
+        // Linear interpolation
+        interp_signal[i] = linear_interp(t, rr_time[idx], rr_time[idx + 1],rr_values[idx], rr_values[idx + 1]);
+    }
+    
+    return num_samples;
+}
+
+/* Create Hanning window using CMSIS-DSP */
+
+static void create_hanning_window(float32_t *window, uint32_t size) {
+    for (uint32_t i = 0; i < size; i++) {
+        window[i] = 0.5f - 0.5f * arm_cos_f32(2.0f * PI * i / (size - 1));
+    }
+}
+
+/* Remove mean from signal using CMSIS-DSP */
+static void remove_mean(float32_t *signal, uint32_t length)
+ {
+        float32_t sum = 0.0f;
+
+        for (uint32_t i = 0; i < length; i++) 
+        {
+            sum += signal[i];
+        }
+
+        float32_t mean = sum / length;
+
+        for (uint32_t i = 0; i < length; i++) {
+            signal[i] -= mean;
+        }
+
+}
+
+/* Calculate PSD using Welch's method with CMSIS-DSP FFT */
+
+static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t *window, float32_t *fft_input,float32_t *fft_output, 
+    float32_t *psd,uint32_t fft_size, float32_t fs) 
+{
+    // Initialize PSD to zero
+    memset(psd, 0, sizeof(float32_t) * fft_size);
+    
+    // Calculate step size for 50% overlap
+    uint32_t step = fft_size / 2;
+    uint32_t num_segments = 0;
+    
+    // FFT instance (use appropriate size from arm_const_structs.h)
+    const arm_cfft_instance_f32 *fft_instance;
+    
+    // Select appropriate FFT instance based on size
+    switch(fft_size) {
+        case 64 : fft_instance = &arm_cfft_sR_f32_len64; break;
+        case 256:  fft_instance = &arm_cfft_sR_f32_len256; break;
+        case 512:  fft_instance = &arm_cfft_sR_f32_len512; break;
+        case 1024: fft_instance = &arm_cfft_sR_f32_len1024; break;
+        default:   return; // Unsupported FFT size
+    }
+    
+    // Process overlapping segments
+    for (uint32_t start = 0; start + fft_size <= signal_len; start += step) 
+    {
+        // Copy segment and apply window
+
+        for (uint32_t i = 0; i < fft_size; i++) {
+            float32_t windowed = signal[start + i] * window[i];
+            fft_input[2 * i] = windowed;      // Real part
+            fft_input[2 * i + 1] = 0.0f;      // Imaginary part
+        }
+        
+        // Perform FFT
+        arm_copy_f32(fft_input, fft_output, fft_size * 2);
+        arm_cfft_f32(fft_instance, fft_output, 0, 1);
+        
+        // Calculate magnitude squared and accumulate
+        for (uint32_t i = 0; i < fft_size; i++) {
+            float32_t real = fft_output[2 * i];
+            float32_t imag = fft_output[2 * i + 1];
+            psd[i] += (real * real + imag * imag);
+        }
+        
+        num_segments++;
+    }
+    
+    // Average the PSD and normalize
+    if (num_segments > 0) {
+        LOG_INF("Number of segments: %d", num_segments);
+        float32_t scale = 1.0f / (num_segments * fs * fft_size);
+        arm_scale_f32(psd, scale, psd, fft_size);
+    }
+}
+
+/* Integrate power in frequency band using trapezoidal rule */
+
+static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,
+                                      float32_t fs, float32_t f_low, 
+                                      float32_t f_high) {
+    float32_t df = fs / fft_size;
+    uint32_t idx_low = (uint32_t)(f_low / df);
+    uint32_t idx_high = (uint32_t)(f_high / df);
+    
+    // Clamp indices
+    if (idx_high >= fft_size / 2) idx_high = fft_size / 2 - 1;
+    if (idx_low > idx_high) return 0.0f;
+    
+    // Trapezoidal integration
+    float32_t power = 0.0f;
+    for (uint32_t i = idx_low; i < idx_high; i++) {
+        power += (psd[i] + psd[i + 1]) * 0.5f * df;
+    }
+    
+    // Convert from s^2 to ms^2
+    power *= 1000000.0f;
+    
+    return power;
+}
+
+ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals)
+ {
+   
+    LOG_INF("Updating HRV Frequency Compact Spectrum with %d intervals", num_intervals);
+
+    // Interpolate RR intervals
+
+    uint32_t num_interp_samples = interpolate_rr_intervals(rr_intervals, num_intervals,INTERP_FS,rr_time,rr_values,
+        interp_signal,FFT_SIZE * 4);
+
+    // Remove mean
+    remove_mean(interp_signal, num_interp_samples);
+
+     // Create Hanning window
+    create_hanning_window(window, FFT_SIZE);
+
+    // Calculate PSD using Welch's method
+    calculate_psd_welch(interp_signal, num_interp_samples, window, fft_input, fft_output, psd, FFT_SIZE, INTERP_FS);
+
+    // Integrate power in LF, HF bands    
+    lf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS, LF_LOW, LF_HIGH);
+    hf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS,HF_LOW, HF_HIGH);
+    stress_score_compact = get_stress_percentage(lf_power_compact, hf_power_compact);
+
+    LOG_INF("LF Power (Compact): %f", lf_power_compact);
+    LOG_INF("HF Power (Compact): %f", hf_power_compact);
+    LOG_INF("LF/HF Ratio (Compact): %f", lf_power_compact/hf_power_compact);
+    LOG_INF("Stress Score (Compact): %f", stress_score_compact);
+
+    // Update display
+     hpi_hrv_frequency_compact_update_display();
+ }

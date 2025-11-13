@@ -52,7 +52,8 @@
         "hpi_sys.h": "c",
         "arm_math.h": "c",
         "math.h": "c",
-        "transform_functions.h": "c"
+        "transform_functions.h": "c",
+        "arm_math_types.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",

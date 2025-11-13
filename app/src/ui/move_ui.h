@@ -511,7 +511,7 @@ extern uint16_t m_user_height;
 extern uint16_t m_user_weight;
 
 
-void hpi_hrv_frequency_compact_update_spectrum(double *rr_intervals, int num_intervals);
+void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals);
 
 /*Hrv Plot ppg*/
 void gesture_down_scr_spl_raw_ppg_hrv(void);
@@ -536,7 +536,7 @@ void gesture_down_scr_spl_ppg_for_hrv(void);
 void gesture_handler_for_ppg(lv_event_t *e);
 
 
-void on_new_rr_interval_detected(double rr_interval);
+void on_new_rr_interval_detected(uint16_t rr_interval);
 void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir);
 void scr_hrv_measure_btn_event_handler(lv_event_t *e);
 void hrv_measure_timer_handler(struct k_timer *timer_id);
