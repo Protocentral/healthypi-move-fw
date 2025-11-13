@@ -56,13 +56,15 @@ static float lf_power_compact = 0.0f;
 static float hf_power_compact = 0.0f;
 static float stress_score_compact = 0.0f;
 
-
+static void lvgl_update_cb(void *user_data)
+{
+    hpi_hrv_frequency_compact_update_display();
+}
 // Simplified stress assessment for compact display
 static int get_stress_percentage(float lf, float hf) {
     if (hf <= 0) return 100;
     float ratio = lf / hf;
     int stress_pct = (int)((ratio / 4.0f) * 100);
-    //int stress_pct = lf/ (lf + hf) * 100;
     return stress_pct > 100 ? 100 : stress_pct;
 }
 
@@ -350,6 +352,11 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
             fft_input[2 * i] = windowed;      // Real part
             fft_input[2 * i + 1] = 0.0f;      // Imaginary part
         }
+
+        LOG_INF("signal=%p, window=%p, fft_input=%p, fft_output=%p, psd=%p",
+        signal, window, fft_input, fft_output, psd);
+
+
         
         // Perform FFT
         arm_copy_f32(fft_input, fft_output, fft_size * 2);
@@ -422,11 +429,17 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,
     hf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS,HF_LOW, HF_HIGH);
     stress_score_compact = get_stress_percentage(lf_power_compact, hf_power_compact);
 
+    LOG_INF("labels: lf=%p hf=%p ratio=%p stress=%p arc=%p",
+       label_lf_power_compact, label_hf_power_compact,
+       label_lf_hf_ratio_compact, label_stress_level_compact, arc_stress_gauge);
+
+     // Update display
+   //  hpi_hrv_frequency_compact_update_display();
+
     LOG_INF("LF Power (Compact): %f", lf_power_compact);
     LOG_INF("HF Power (Compact): %f", hf_power_compact);
     LOG_INF("LF/HF Ratio (Compact): %f", lf_power_compact/hf_power_compact);
     LOG_INF("Stress Score (Compact): %f", stress_score_compact);
 
-    // Update display
-     hpi_hrv_frequency_compact_update_display();
+    lv_async_call(lvgl_update_cb, NULL);
  }

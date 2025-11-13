@@ -48,51 +48,11 @@ static bool hrv_measurement_active = false;
 
 bool hrv_active = false;
 int past_value = 0;
-void hrv_check_and_transition(void);
+
 K_TIMER_DEFINE(hrv_check_timer, hrv_check_and_transition, NULL);
 
-
-// static void hrv_show_summary_work_handler(struct k_work *work)
-// {
-    
-//     LOG_INF("Transitioning to HRV frequency screen (safe LVGL context)");
-    
-//     stop_hrv_collection();
-//     hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
-// }
-
-// K_WORK_DEFINE(hrv_check_work, hrv_show_summary_work_handler);
-//#define HRV_MEASUREMENT_DURATION_MS 30000 
-
-// void hrv_stop_timer_cb(struct k_timer *timer_id);
  uint32_t hrv_elapsed_time_ms = 30000;
-
-// K_TIMER_DEFINE(hrv_stop_timer, hrv_stop_timer_cb, NULL);      
-
-// // Timer callback function
-// void hrv_stop_timer_cb(struct k_timer *timer_id)
-// {
-//     // hrv_measurement_active = false;
-
-//     // LOG_INF("Transitioning to HRV frequency screen");
-//     // hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
-
-//      hrv_elapsed_time_ms -= 1000;  // add 1s
-
-//     // extern void hpi_hrv_disp_update_timer(int time_left);
-//     // hpi_hrv_disp_update_timer(hrv_elapsed_time_ms);
-
-//     if ( (HRV_MEASUREMENT_DURATION_MS - hrv_elapsed_time_ms)  >= HRV_MEASUREMENT_DURATION_MS) {
-//         hrv_measurement_active = false;
-//         k_timer_stop(&hrv_stop_timer);
-//         hrv_elapsed_time_ms = 30000;
-//         LOG_INF("Transitioning to HRV frequency screen");
-//         hpi_load_scr_spl(SCR_SPL_HRV_LAYOUT, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
-//     }
-// }
-
-
-//K_TIMER_DEFINE(hrv_stop_timer, hrv_stop_timer_cb, NULL);     
+   
 
 void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 {
@@ -114,13 +74,7 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
             extern void hrv_reset(void);
             hrv_reset();
 
-          
-            //k_timer_start(&hrv_stop_timer, K_MSEC(HRV_MEASUREMENT_DURATION_MS), K_NO_WAIT);
-           // k_timer_start(&hrv_stop_timer, K_SECONDS(1), K_SECONDS(1));  // periodic every second
-            // hrv_elapsed_time_ms = 0;
-            
-
-            k_timer_start(&hrv_check_timer, K_SECONDS(1), K_SECONDS(1));  // periodic check every 1 sec
+            k_timer_start(&hrv_check_timer, K_SECONDS(1), K_SECONDS(1));  
 
           
             extern void start_hrv_collection(void);
@@ -143,7 +97,6 @@ void hrv_check_and_transition(void)
     if (current_count >= 30)
     {
      
-        // LOG_INF("30 RR intervals collected. Moving to HRV summary screen...");
         hrv_measurement_active = false;
 
         stop_hrv_collection();

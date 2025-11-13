@@ -510,10 +510,8 @@ void disp_screen_event(lv_event_t *e);
 extern uint16_t m_user_height;
 extern uint16_t m_user_weight;
 
-
+/*HRV SCREEN FUNCTIONS*/
 void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals);
-
-/*Hrv Plot ppg*/
 void gesture_down_scr_spl_raw_ppg_hrv(void);
 void hpi_ppg_disp_update_hr_hrv(int hr);
 static void hpi_ppg_disp_add_samples_hrv(int num_samples);
@@ -528,21 +526,14 @@ void hpi_hrv_timer_start(void);
 void hpi_hrv_timer_start(void);
 void hpi_hrv_timer_pause(void);
 void hpi_hrv_timer_reset(void);
-
 bool hpi_hrv_timer_is_running(void);
-
 float hpi_get_lf_hf_ratio(void);
 void gesture_down_scr_spl_ppg_for_hrv(void);
 void gesture_handler_for_ppg(lv_event_t *e);
-
-
-void on_new_rr_interval_detected(uint16_t rr_interval);
 void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir);
 void scr_hrv_measure_btn_event_handler(lv_event_t *e);
 void hrv_measure_timer_handler(struct k_timer *timer_id);
 void gesture_down_scr_spl_hrv(void);
 void hpi_ppg_disp_update_rr_interval_hrv(int rr_interval);
-
 void hrv_check_and_transition(void);
-
 static void hrv_update_display(void);
