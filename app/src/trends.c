@@ -49,6 +49,7 @@
 #include "trends.h"
 #include "log_module.h"
 #include "ui/move_ui.h"
+#include "hrv_algos.h"
 
 LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 
@@ -413,7 +414,7 @@ static void trend_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_hr_curr_minute[m_trends_hr_minute_sample_counter] = hpi_hr->hr;
     m_trends_hr_minute_sample_counter++;
-    LOG_DBG("ZB HR: %d", hpi_hr->hr);
+    //LOG_DBG("ZB HR: %d", hpi_hr->hr);
   
     if(hpi_hr -> rr_interval > 0 )
     {
