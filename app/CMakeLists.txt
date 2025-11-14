@@ -53,22 +53,6 @@ endif()
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-
-# # Collect all C source files recursively from CMSIS-DSP
-# file(GLOB_RECURSE CMSIS_DSP_SOURCES
-#     ${CMSIS_DSP_PATH}/Source/TransformFunctions/*.c
-# )
-
-# # Add them all to your app target
-# target_sources(app PRIVATE ${CMSIS_DSP_SOURCES})
-
-
-
-
-
-
-
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 
