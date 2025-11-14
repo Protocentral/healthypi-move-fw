@@ -66,6 +66,7 @@ K_SEM_DEFINE(sem_gsr_cancel, 0, 1);
 
 // GSR Measurement Timing (60 seconds for reliable stress index)
 extern bool hrv_active;
+
 #define GSR_MEASUREMENT_DURATION_S 60
 static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
