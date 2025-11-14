@@ -439,11 +439,13 @@ static int hpi_sys_load_update_time(void)
     g_hpi_last_update.steps_last_update_ts = m_hpi_last_update_time.steps_last_update_ts;
     g_hpi_last_update.steps_last_value = m_hpi_last_update_time.steps_last_value;
 
+    g_hpi_last_update.hrv_last_lf_hf_value = m_hpi_last_update_time.hrv_last_lf_hf_value;
+    g_hpi_last_update.hrv_last_lf_hf_update_ts = m_hpi_last_update_time.hrv_last_lf_hf_update_ts;
+
     g_hpi_last_update.gsr_last_update_ts = m_hpi_last_update_time.gsr_last_update_ts;
     g_hpi_last_update.gsr_last_value = m_hpi_last_update_time.gsr_last_value;
 
-    g_hpi_last_update.hrv_last_lf_hf_value = m_hpi_last_update_time.hrv_last_lf_hf_value;
-    g_hpi_last_update.hrv_last_lf_hf_update_ts = m_hpi_last_update_time.hrv_last_lf_hf_update_ts;
+  
     k_mutex_unlock(&mutex_hpi_last_update_time);
 
     return ret;
