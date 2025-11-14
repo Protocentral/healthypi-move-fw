@@ -830,8 +830,6 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
     }
     else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_PLOT)
     {
-        //LOG_INF("HRV PPG Sample RTOR: %d", ppg_sensor_sample.rtor);
-        //on_new_rr_interval_detected(ppg_sensor_sample.rtor);
         /* Forward samples to the HRV plotting function */
          lv_disp_trig_activity(NULL);
         hpi_disp_ppg_draw_plotPPG_hrv(ppg_sensor_sample);
@@ -956,9 +954,9 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_PLOT:
-       // hpi_hrv_disp_update_timer(hrv_elapsed_time_ms / 1000);
+      
        hpi_hrv_disp_update_timer(past_value);
-       // hpi_ppg_check_signal_timeout_hrv();
+       hpi_ppg_check_signal_timeout_hrv();
          lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_ECG_SCR2:
