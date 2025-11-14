@@ -1,7 +1,6 @@
  /*
  * HealthyPi Move HRV Screen
  * 
- * SPDX-License-Identifier: MIT
  *
  * HRV (Heart Rate Variability) display with start button
  */
@@ -17,9 +16,7 @@
 #include <zephyr/smf.h>
 #include <app_version.h>
 #include <zephyr/logging/log.h>
-
 #include "hpi_common_types.h"
-
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
 #include "stdlib.h"
@@ -32,6 +29,10 @@ bool battery_monitor_enabled = true;
 int m_hrv_ratio_int = 0;
 int m_hrv_ratio_dec = 0;
 float ratio = 0.0f;
+static bool hrv_measurement_active = false;
+bool hrv_active = false;
+int past_value = 0;
+int64_t m_hrv_last_update = 0;
 
 // GUI Objects
 lv_obj_t *scr_hrv_layout;
@@ -41,18 +42,8 @@ static lv_obj_t *label_hrv_value;
 static lv_obj_t *label_hrv_unit;
 static lv_obj_t *label_hrv_status;
 
-int64_t m_hrv_last_update = 0;
-
-// HRV Measurement Control
-static bool hrv_measurement_active = false;
-
-bool hrv_active = false;
-int past_value = 0;
 
 K_TIMER_DEFINE(hrv_check_timer, hrv_check_and_transition, NULL);
-
- uint32_t hrv_elapsed_time_ms = 30000;
-   
 
 void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 {
@@ -104,39 +95,32 @@ void hrv_check_and_transition(void)
         k_timer_stop(&hrv_check_timer);
 
         past_value = 0;
-;
+
     }
 }
-
-
-
-
 
 // Draw HRV screen
 void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
 {
  
     scr_hrv_layout = lv_obj_create(NULL);
-
     lv_obj_set_style_bg_color(scr_hrv_layout, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_hrv_layout, LV_OBJ_FLAG_SCROLLABLE);
 
-
     // --- SINGLE BIG WHITE ARC ---
     arc_hrv = lv_arc_create(scr_hrv_layout);
-    lv_obj_set_size(arc_hrv, 370, 370);      // Large radius like GSR
+    lv_obj_set_size(arc_hrv, 370, 370);      
     lv_obj_center(arc_hrv);
-    lv_arc_set_range(arc_hrv, 0, 100);       // HRV range
-    lv_arc_set_bg_angles(arc_hrv, 135, 45);  // Background track full 270°
-    lv_arc_set_angles(arc_hrv, 135, 135);    // Start position
+    lv_arc_set_range(arc_hrv, 0, 100);      
+    lv_arc_set_bg_angles(arc_hrv, 135, 45);  
+    lv_arc_set_angles(arc_hrv, 135, 135);   
     lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc_hrv, 8, LV_PART_MAIN);
     lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_INDICATOR); // Progress purple
     lv_obj_set_style_arc_width(arc_hrv, 6, LV_PART_INDICATOR);
-    lv_obj_remove_style(arc_hrv, NULL, LV_PART_KNOB); // Remove knob
+    lv_obj_remove_style(arc_hrv, NULL, LV_PART_KNOB);
     lv_obj_clear_flag(arc_hrv, LV_OBJ_FLAG_CLICKABLE);
      
-
 
     // --- TITLE ---
     lv_obj_t *label_title = lv_label_create(scr_hrv_layout);
@@ -156,7 +140,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     // CENTRAL ZONE: Main HRV Value/Status (properly spaced from icon)
     label_hrv_value = lv_label_create(scr_hrv_layout);
     lv_label_set_text(label_hrv_value, "--");
-    lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, -10);  // Centered, slightly above middle
+    lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, -10); 
     lv_obj_set_style_text_color(label_hrv_value, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_hrv_value, &style_numeric_large, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_hrv_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -164,7 +148,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     // Unit/Status label directly below main value
     label_hrv_unit = lv_label_create(scr_hrv_layout);
     lv_label_set_text(label_hrv_unit, "--"); 
-    lv_obj_align(label_hrv_unit, LV_ALIGN_CENTER, 0, 35);  // Below main value with gap
+    lv_obj_align(label_hrv_unit, LV_ALIGN_CENTER, 0, 35);  
     lv_obj_set_style_text_color(label_hrv_unit, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_add_style(label_hrv_unit, &style_numeric_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_hrv_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -172,7 +156,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
 
     label_hrv_status = lv_label_create(scr_hrv_layout);
     lv_label_set_text(label_hrv_status, "HeartRateVariability");
-    lv_obj_align(label_hrv_status, LV_ALIGN_CENTER, 0, 80);  // Centered, below unit with gap
+    lv_obj_align(label_hrv_status, LV_ALIGN_CENTER, 0, 80); 
     lv_obj_set_style_text_color(label_hrv_status, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     lv_obj_add_style(label_hrv_status, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_hrv_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -196,7 +180,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_add_event_cb(btn_hrv_measure, scr_hrv_measure_btn_event_handler, LV_EVENT_CLICKED, NULL);
 
     hrv_update_display();
-    // --- SHOW SCREEN ---
+
     hpi_disp_set_curr_screen(SCR_HRV_SUMMARY);
     hpi_show_screen(scr_hrv_layout, m_scroll_dir);
 }
