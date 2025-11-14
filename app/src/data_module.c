@@ -496,7 +496,7 @@ void data_thread(void)
                     }
                    
                    // if((k_uptime_seconds() - hr_zbus_last_pub_time) >= 0)
-                   // {
+                   
                         struct hpi_hr_t hr_chan_value = {
                             .timestamp = hw_get_sys_time_ts(),
                             .hr = ppg_wr_sensor_sample.hr,
@@ -505,7 +505,7 @@ void data_thread(void)
                         };
                         zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
                         hr_zbus_last_pub_time = k_uptime_seconds();
-                   // }
+                
                 }
             }
 
