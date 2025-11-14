@@ -33,7 +33,6 @@
 #include <stdio.h>
 #include <math.h>
 #include <arm_math.h>
-
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 #include <time.h>
@@ -41,14 +40,12 @@
 LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 
 #include "max30001.h"
-
 #include "hw_module.h"
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ble_module.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
-
 #include "log_module.h"
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
@@ -497,7 +494,7 @@ void data_thread(void)
                     {
                         hr_zbus_last_pub_time = k_uptime_seconds();
                     }
-                    //if ((k_uptime_seconds() - hr_zbus_last_pub_time) > 2)
+                   
                    // if((k_uptime_seconds() - hr_zbus_last_pub_time) >= 0)
                    // {
                         struct hpi_hr_t hr_chan_value = {
@@ -512,31 +509,7 @@ void data_thread(void)
                 }
             }
 
-            // if(ppg_wr_sensor_sample.rtor > 500 && ppg_wr_sensor_sample.rtor < 1500)
-            // {
-            //     LOG_INF("PPG wrist RTOR: %d ms", ppg_wr_sensor_sample.rtor);
-            //     on_new_rr_interval_detected(ppg_wr_sensor_sample.rtor);
-            // }
-           // if(ppg_wr_sensor_sample.rtor > 500 && ppg_wr_sensor_sample.rtor < 1500)
-            // if(ppg_wr_sensor_sample.rtor > 0 && ppg_wr_sensor_sample.rtor < 2000)
-            // {
-            //     struct rtor_msg msg;
-            //     msg.rtor = ppg_wr_sensor_sample.rtor;
-            //     //LOG_INF("RTOR Interval inside data thread: %.2f ms", msg.rtor);
-            //     int ret = k_msgq_put(&ppg_wrist_rtor, &msg, K_NO_WAIT);
-            //     //LOG_INF("Message sent to Message queue");
-            //     if (ret != 0)
-            //     {
-            //         static uint32_t rtor_drops = 0;
-            //         rtor_drops++;
-            //         if ((rtor_drops % 10) == 0)
-            //         {
-            //             LOG_WRN("PPG wrist RTOR queue full - dropped %u RTOR samples", rtor_drops);
-            //         }
-            //     }
-
-                
-            //  }
+            
         }
 
         // Sleep longer if no data was processed to reduce CPU usage
