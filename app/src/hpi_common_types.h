@@ -336,8 +336,8 @@ struct hpi_gsr_status_t
 
 
 
-// struct rtor_msg
-// {
-//     double rtor;
+struct rtor_msg
+{
+    double rtor;
   
-// };
+};
