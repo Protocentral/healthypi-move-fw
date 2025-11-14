@@ -537,3 +537,12 @@ void gesture_down_scr_spl_hrv(void);
 void hpi_ppg_disp_update_rr_interval_hrv(int rr_interval);
 void hrv_check_and_transition(void);
 static void hrv_update_display(void);
+static float32_t linear_interp(float32_t x, float32_t x0, float32_t x1, float32_t y0, float32_t y1);
+static uint32_t interpolate_rr_intervals(uint16_t *rr_ms, uint32_t num_intervals,float32_t fs,float32_t *rr_time, float32_t *rr_values,
+    float32_t *interp_signal,uint32_t max_interp_samples);
+static void create_hanning_window(float32_t *window, uint32_t size);
+static void remove_mean(float32_t *signal, uint32_t length);
+static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t *window, float32_t *fft_input,float32_t *fft_output, 
+    float32_t *psd,uint32_t fft_size, float32_t fs) ;
+static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_t fs, float32_t f_low, float32_t f_high);
+
