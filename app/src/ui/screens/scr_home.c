@@ -66,7 +66,7 @@ static lv_obj_t *ui_home_label_hour = NULL;
 static lv_obj_t *ui_home_label_min = NULL;
 static lv_obj_t *ui_home_label_date = NULL;
 static lv_obj_t *ui_home_label_ampm = NULL;
-static lv_obj_t *label_home_batt_val = NULL;  // Renamed to avoid conflicts with other screens
+static lv_obj_t *label_home_batt_val = NULL;  
 
 // LVGL delete event callback - called when LVGL auto-deletes this screen
 static void scr_home_delete_event_cb(lv_event_t *e)
@@ -419,7 +419,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     // Initialize with current battery level from fuel gauge
     uint8_t current_batt_level = battery_get_level();
     const char* battery_symbol = hpi_get_battery_symbol(current_batt_level, false);
-    lv_color_t battery_color = hpi_get_battery_color(current_batt_level, false);
+    lv_color_t battery_color = hpi_get_battery_color(current_batt_level, false);// 
     lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, current_batt_level);
     lv_obj_align(label_home_batt_val, LV_ALIGN_CENTER, 0, -140);  // Top center, within circle
     lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN | LV_STATE_DEFAULT);

@@ -111,6 +111,10 @@ enum hpi_disp_screens
     SCR_ECG,
     SCR_TEMP,
     SCR_BPT,
+
+    //SCR_SPL_PLOT_HRV,
+    SCR_HRV_SUMMARY,
+    SCR_HRV_PPG_PLOT,
     SCR_GSR,
 
     SCR_LIST_END,
@@ -140,7 +144,8 @@ enum hpi_disp_spl_screens
 
     SCR_SPL_FI_SENS_WEAR,
 
-    SCR_SPL_PLOT_HRV,
+   
+    SCR_SPL_HRV_FREQUENCY,
     SCR_SPL_SPO2_SELECT,
     SCR_SPL_SPO2_SCR2,
     SCR_SPL_SPO2_MEASURE,
@@ -160,7 +165,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_TIME_FORMAT_SELECT,
     SCR_SPL_TEMP_UNIT_SELECT,
     SCR_SPL_SLEEP_TIMEOUT_SELECT,
-
+    SCR_SPL_HRV_PLOT,
     SCR_SPL_LIST_END,
 
     SCR_SPL_BLE,
@@ -404,6 +409,22 @@ void hpi_disp_hrv_scatter_draw_plot_rtor(float rtor, float prev_rtor);
 void hpi_disp_hrv_scatter_update_rtor(int rtor);
 void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
 
+// HRV Summary screen functions
+void draw_scr_hrv_summary(enum scroll_dir m_scroll_dir);
+void hpi_hrv_summary_update_metrics(float sdnn, float rmssd, float pnn50, float mean_rr);
+void hpi_hrv_summary_draw_rr_plot(float rr_interval);
+void hpi_hrv_summary_set_update_enabled(bool enabled);
+
+// HRV Frequency Analysis screen functions
+void draw_scr_hrv_frequency(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void hpi_hrv_frequency_update_spectrum(float *rr_intervals, int num_intervals);
+void hpi_hrv_frequency_update_display(void);
+
+// HRV Frequency Compact screen functions (optimized for small round displays)
+void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+//void hpi_hrv_frequency_compact_update_spectrum(float *rr_intervals, int num_intervals);
+void hpi_hrv_frequency_compact_update_display(void);
+
 // Settings screen functions
 void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
@@ -488,3 +509,32 @@ void disp_screen_event(lv_event_t *e);
 // User settings variables
 extern uint16_t m_user_height;
 extern uint16_t m_user_weight;
+
+/*HRV SCREEN FUNCTIONS*/
+void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals);
+void gesture_down_scr_spl_raw_ppg_hrv(void);
+void hpi_ppg_disp_update_hr_hrv(int hr);
+static void hpi_ppg_disp_add_samples_hrv(int num_samples);
+static void hpi_ppg_disp_do_set_scale_hrv(int disp_window_size);
+static void hpi_ppg_disp_do_set_scale_hrv(int disp_window_size);
+static void hpi_ppg_update_signal_status_hrv(enum hpi_ppg_status scd_state);
+void hpi_disp_ppg_draw_plotPPG_hrv(struct hpi_ppg_wr_data_t ppg_sensor_sample);
+void hpi_ppg_check_signal_timeout_hrv(void);
+void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void hpi_hrv_disp_update_timer(int time_left);
+void hpi_hrv_timer_start(void);
+void hpi_hrv_timer_start(void);
+void hpi_hrv_timer_pause(void);
+void hpi_hrv_timer_reset(void);
+bool hpi_hrv_timer_is_running(void);
+float hpi_get_lf_hf_ratio(void);
+void gesture_down_scr_spl_ppg_for_hrv(void);
+void gesture_handler_for_ppg(lv_event_t *e);
+void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir);
+void scr_hrv_measure_btn_event_handler(lv_event_t *e);
+void hrv_measure_timer_handler(struct k_timer *timer_id);
+void gesture_down_scr_spl_hrv(void);
+void hpi_ppg_disp_update_rr_interval_hrv(int rr_interval);
+void hrv_check_and_transition(void);
+static void hrv_update_display(void);
+

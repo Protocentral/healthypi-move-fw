@@ -21,12 +21,12 @@ mcuboot_pad:
   size: 0x200
 mcuboot_primary:
   address: 0x10000
-  end_address: 0xe4000
+  end_address: 0xeA000
   orig_span: &id001
   - mcuboot_pad
   - app
   region: flash_primary
-  size: 0xd4000
+  size: 0xdA000
   span: *id001
 mcuboot_primary_1:
   address: 0x0

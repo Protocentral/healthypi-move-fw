@@ -51,6 +51,7 @@ enum hpi_ppg_status
     HPI_PPG_SCD_ON_SKIN,
 };
 
+
 struct hpi_ecg_bioz_sensor_data_t
 {
     int32_t ecg_samples[ECG_POINTS_PER_SAMPLE];
@@ -162,6 +163,7 @@ struct hpi_hr_t
 {
     int64_t timestamp;
     uint16_t hr;
+    uint16_t rr_interval;
     bool hr_ready_flag;
 };
 
@@ -249,6 +251,14 @@ struct hpi_ecg_status_t
     uint8_t hr;
 };
 
+
+struct hpi_hrv_status_t
+{
+    int64_t ts_complete_hrv;
+    uint8_t status_hrv;
+    uint16_t progress_timer_hrv;
+    uint8_t hr_hrv;
+};
 struct hpi_ecg_lead_on_off_t
 {
     bool lead_on_off;
@@ -299,6 +309,9 @@ struct hpi_last_update_time_t
 
     uint16_t gsr_last_value; // GSR value * 100 (microsiemens)
     int64_t gsr_last_update_ts;
+
+    uint16_t hrv_last_lf_hf_value;
+    int64_t hrv_last_lf_hf_update_ts;
 };
 
 struct hpi_gsr_stress_index_t
@@ -319,4 +332,12 @@ struct hpi_gsr_status_t
     uint16_t remaining_s;  // Seconds remaining to target duration (0 when complete)
     uint16_t total_s;      // Total target duration (e.g. 60)
     bool active;           // Measurement currently active
+};
+
+
+
+struct rtor_msg
+{
+    double rtor;
+  
 };

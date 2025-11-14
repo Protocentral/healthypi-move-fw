@@ -46,6 +46,7 @@
 
 lv_obj_t *scr_hrv;
 
+static bool chart_hrv_update = true;
 // GUI Charts
 static lv_obj_t *chart_hrv;
 static lv_chart_series_t *ser_hrv;
@@ -54,7 +55,7 @@ static lv_chart_series_t *ser_hrv;
 static lv_obj_t *label_hrv_rri;
 static lv_obj_t *label_hrv_sdnn;
 
-static bool chart_hrv_update = true;
+
 
 static float y_max_hrv = 0;
 static float y_min_hrv = 10000;
@@ -131,17 +132,44 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_add_style(label_hrv_sdnn, &style_numeric_large, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_hrv_sdnn, lv_color_white(), LV_PART_MAIN);
 
-    // SDNN caption
-    lv_obj_t *label_sdnn_caption = lv_label_create(scr_hrv);
-    lv_label_set_text(label_sdnn_caption, "SDNN (ms)");
-    lv_obj_align_to(label_sdnn_caption, label_hrv_sdnn, LV_ALIGN_OUT_TOP_MID, 0, -5);
-    lv_obj_add_style(label_sdnn_caption, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_sdnn_caption, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    // SDNN bpm label
+    lv_obj_t *label_sdnn_sub = lv_label_create(scr_hrv);
+    lv_label_set_text(label_sdnn_sub, "ms");
+    lv_obj_align_to(label_sdnn_sub, label_hrv_sdnn, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    
 
-    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
+    // Bottom signal label
+    lv_obj_t *label_signal = lv_label_create(scr_hrv);
+    lv_label_set_text(label_signal, "HRV");
+    lv_obj_align(label_signal, LV_ALIGN_BOTTOM_MID, 0, -5);
 
-    // Add screen to display
-    hpi_show_screen(scr_hrv, m_scroll_dir);
+    lv_obj_t *obj = lv_obj_create(scr_hrv);
+    lv_obj_set_style_bg_color(obj, lv_palette_main(LV_PALETTE_DEEP_PURPLE), 0);
+    lv_obj_set_style_radius(obj, LV_RADIUS_CIRCLE, 0);
+
+    lv_obj_align(obj, LV_ALIGN_LEFT_MID, 10, 0);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, obj);
+    lv_anim_set_values(&a, 70, 200);
+    lv_anim_set_time(&a, 1000);
+    lv_anim_set_playback_delay(&a, 100);
+    lv_anim_set_playback_time(&a, 400);
+    lv_anim_set_repeat_delay(&a, 500);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_set_path_cb(&a, lv_anim_path_bounce);
+
+    lv_anim_set_exec_cb(&a, anim_size_cb);
+    lv_anim_start(&a);
+    lv_anim_set_exec_cb(&a, anim_x_cb);
+    lv_anim_set_values(&a, 10, 300);
+    lv_anim_start(&a);
+
+    // hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
+
+    // // Add screen to display
+    // hpi_show_screen(scr_hrv, m_scroll_dir);
 }
 
 static void hpi_hrv_disp_do_set_scale(int disp_window_size)

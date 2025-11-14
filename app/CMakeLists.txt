@@ -13,6 +13,8 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(healthypi_move)
 
+
+
 FILE(GLOB app_sources   src/*.c 
                         src/images/*.c 
                         src/ui/*.c 
@@ -51,8 +53,10 @@ endif()
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
+
+
+
 
 # This places images in the external flash memory
 

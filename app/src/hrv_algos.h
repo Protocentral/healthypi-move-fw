@@ -37,19 +37,20 @@
 
 #define FILTERORDER 161 /* DC Removal Numerator Coeff*/
 #define NRCOEFF (0.992)
-#define HRV_LIMIT 20
 
-void calculate_pnn_rmssd(unsigned int array[], float *pnn50, float *rmssd);
-float calculate_sdnn(unsigned int array[]);
-float calculate_mean(unsigned int array[]);
-int calculate_hrvmin(unsigned int array[]);
-int calculate_hrvmax(unsigned int array[]);
-//struct calculate_hrv(uint8_t heart_rate);
-void calculate_hrv (int32_t heart_rate, int32_t *hrv_max, int32_t *hrv_min, float *mean, float *sdnn, float *pnn, float *rmssd, bool *hrv_ready_flag);
+#define HRV_LIMIT 30
 
-// GSR Stress Index calculation
-#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
-#include "hpi_common_types.h"  // for struct hpi_gsr_stress_index_t
-void calculate_gsr_stress_index(uint16_t gsr_value_x100, struct hpi_gsr_stress_index_t *stress_index);
-void reset_gsr_stress_index(void);
-#endif
+void hrv_reset(void);
+int hrv_get_sample_count(void);
+bool hrv_is_ready(void);
+static void hrv_add_sample(double rr_interval);
+void start_hrv_collection(void);
+void stop_hrv_collection(void);
+void on_new_rr_interval_detected(uint16_t rr_interval);
+float hrv_calculate_mean(void);
+float hrv_calculate_sdnn(void);
+float hrv_calculate_rmssd(void);
+float hrv_calculate_pnn50(void);
+uint32_t hrv_calculate_min(void);
+uint32_t hrv_calculate_max(void);
+int hrv_get_rr_intervals(uint16_t *buffer, int buffer_size);

@@ -33,7 +33,6 @@
 #include <stdio.h>
 #include <math.h>
 #include <arm_math.h>
-
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 #include <time.h>
@@ -41,15 +40,12 @@
 LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 
 #include "max30001.h"
-
 #include "hw_module.h"
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ble_module.h"
-#include "algos.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
-
 #include "log_module.h"
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
@@ -120,6 +116,9 @@ extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_ppg_fi;
 extern struct k_msgq q_plot_hrv;
 extern struct k_msgq q_plot_gsr;
+
+K_MSGQ_DEFINE(ppg_wrist_rtor, sizeof(struct rtor_msg), 16, 2);
+
 
 void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_t raw_ir, int32_t temp, uint8_t hr,
               uint8_t bpt_status, uint8_t spo2, bool _bioZSkipSample)
@@ -495,18 +494,22 @@ void data_thread(void)
                     {
                         hr_zbus_last_pub_time = k_uptime_seconds();
                     }
-                    if ((k_uptime_seconds() - hr_zbus_last_pub_time) > 2)
-                    {
+                   
+                   // if((k_uptime_seconds() - hr_zbus_last_pub_time) >= 0)
+                   
                         struct hpi_hr_t hr_chan_value = {
                             .timestamp = hw_get_sys_time_ts(),
                             .hr = ppg_wr_sensor_sample.hr,
                             .hr_ready_flag = true,
+                            .rr_interval = ppg_wr_sensor_sample.rtor
                         };
                         zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
                         hr_zbus_last_pub_time = k_uptime_seconds();
-                    }
+                
                 }
             }
+
+            
         }
 
         // Sleep longer if no data was processed to reduce CPU usage
@@ -525,3 +528,5 @@ void data_thread(void)
 #define DATA_THREAD_PRIORITY 5 // Higher priority to process samples faster
 
 K_THREAD_DEFINE(data_thread_id, DATA_THREAD_STACKSIZE, data_thread, NULL, NULL, NULL, DATA_THREAD_PRIORITY, 0, 1000);
+
+

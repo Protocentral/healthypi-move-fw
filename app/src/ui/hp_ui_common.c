@@ -59,6 +59,12 @@ LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 #define COLOR_CRITICAL_RED    0xFF3B30
 #define COLOR_TEXT_SECONDARY  0xE5E5E7
 
+#define HPI_BATTERY_LEVEL_FULL 90
+#define HPI_BATTERY_LEVEL_HIGH 70
+#define HPI_BATTERY_LEVEL_MEDIUM 40
+#define HPI_BATTERY_LEVEL_LOW 15
+
+
 // LVGL Styles
 static lv_style_t style_btn;
 /* Black button styles (global) */
@@ -82,6 +88,8 @@ lv_style_t style_red_medium;
 lv_style_t style_lbl_red_small;
 
 lv_style_t style_white_medium;
+lv_style_t style_white_small;
+lv_style_t style_white_large;
 
 lv_style_t style_scr_container;
 
@@ -495,11 +503,12 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
         lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
     }
 }
-
+extern volatile bool screen_transition_in_progress;
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 {
     // CRITICAL: Set global transition flag to suspend ALL screen updates
     // This protects the entire screen loading process across all screens
+   
     screen_transition_in_progress = true;
     
     switch (m_screen)
@@ -521,7 +530,9 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_BPT:
         draw_scr_bpt(m_scroll_dir);
         break;
-
+    case SCR_HRV_SUMMARY:
+        draw_scr_hrv_layout(m_scroll_dir);
+        break;
     case SCR_TEMP:
         draw_scr_temp(m_scroll_dir);
         break;
