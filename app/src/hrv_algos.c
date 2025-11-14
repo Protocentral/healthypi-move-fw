@@ -6,12 +6,18 @@
 #include <math.h>
 #include <string.h>
 #include "hrv_algos.h"
+#include "ui/move_ui.h"
 
 LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
 
-// HRV calculation state
+K_MUTEX_DEFINE(hrv_mutex);
+
+static bool collecting = false;
+static uint16_t rr_interval_buffer[HRV_LIMIT];
+
+//HRV calculation state
 typedef struct {
-    uint32_t rr_intervals[HRV_LIMIT];
+    uint16_t rr_intervals[HRV_LIMIT];
     int sample_count;
     int buffer_index;
     bool buffer_full;
@@ -34,8 +40,9 @@ static hrv_state_t hrv_state = {
  * @brief Add a new RR interval to the circular buffer
  * @param rr_interval RR interval in milliseconds
  */
-static void hrv_add_sample(uint32_t rr_interval)
+static void hrv_add_sample(double rr_interval)
 {
+    k_mutex_lock(&hrv_mutex, K_FOREVER);
     hrv_state.rr_intervals[hrv_state.buffer_index] = rr_interval;
     hrv_state.buffer_index = (hrv_state.buffer_index + 1) % HRV_LIMIT;
     
@@ -47,13 +54,37 @@ static void hrv_add_sample(uint32_t rr_interval)
     
     // Invalidate cached values when new data is added
     hrv_state.mean_valid = false;
+    k_mutex_unlock(&hrv_mutex);
 }
+
+void start_hrv_collection(void)
+{
+    k_mutex_lock(&hrv_mutex, K_FOREVER);
+    if (!collecting) {
+        collecting = true;
+        hrv_reset();
+        LOG_INF("HRV 30 intervals collection started...");
+    }
+    k_mutex_unlock(&hrv_mutex);
+}
+
+void stop_hrv_collection(void)
+{
+   
+    if (collecting) {
+        LOG_INF("HRV 30 intervals collection stopped.");
+        collecting = false;
+       
+    }
+
+}
+
 
 /**
  * @brief Calculate mean RR interval with caching
  * @return Mean RR interval in milliseconds
  */
-static float hrv_calculate_mean(void)
+float hrv_calculate_mean(void)
 {
     if (hrv_state.mean_valid) {
         return hrv_state.cached_mean;
@@ -80,7 +111,7 @@ static float hrv_calculate_mean(void)
  * @brief Calculate SDNN (Standard Deviation of NN intervals)
  * @return SDNN value in milliseconds
  */
-static float hrv_calculate_sdnn(void)
+float hrv_calculate_sdnn(void)
 {
     if (hrv_state.sample_count < 2) {
         return 0.0f;
@@ -102,7 +133,7 @@ static float hrv_calculate_sdnn(void)
  * @brief Calculate RMSSD (Root Mean Square of Successive Differences)
  * @return RMSSD value in milliseconds
  */
-static float hrv_calculate_rmssd(void)
+float hrv_calculate_rmssd(void)
 {
     if (hrv_state.sample_count < 2) {
         return 0.0f;
@@ -130,7 +161,7 @@ static float hrv_calculate_rmssd(void)
  * @brief Calculate pNN50 (percentage of successive RR intervals that differ by more than 50ms)
  * @return pNN50 value as a percentage (0.0 to 1.0)
  */
-static float hrv_calculate_pnn50(void)
+float hrv_calculate_pnn50(void)
 {
     if (hrv_state.sample_count < 2) {
         return 0.0f;
@@ -153,14 +184,14 @@ static float hrv_calculate_pnn50(void)
         return 0.0f;
     }
     
-    return (float)count_over_50ms / total_differences;
+    return ((float)count_over_50ms * 100) / total_differences;
 }
 
 /**
  * @brief Find minimum RR interval in the buffer
  * @return Minimum RR interval in milliseconds
  */
-static uint32_t hrv_calculate_min(void)
+uint32_t hrv_calculate_min(void)
 {
     if (hrv_state.sample_count == 0) {
         return 0;
@@ -182,7 +213,7 @@ static uint32_t hrv_calculate_min(void)
  * @brief Find maximum RR interval in the buffer
  * @return Maximum RR interval in milliseconds
  */
-static uint32_t hrv_calculate_max(void)
+uint32_t hrv_calculate_max(void)
 {
     if (hrv_state.sample_count == 0) {
         return 0;
@@ -205,8 +236,10 @@ static uint32_t hrv_calculate_max(void)
  */
 void hrv_reset(void)
 {
+    k_mutex_lock(&hrv_mutex, K_FOREVER);
     memset(&hrv_state, 0, sizeof(hrv_state_t));
     LOG_DBG("HRV calculation state reset");
+    k_mutex_unlock(&hrv_mutex);
 }
 
 /**
@@ -215,7 +248,9 @@ void hrv_reset(void)
  */
 int hrv_get_sample_count(void)
 {
-    return hrv_state.sample_count;
+    int count;
+    count = hrv_state.sample_count;
+    return count;
 }
 
 /**
@@ -228,55 +263,12 @@ bool hrv_is_ready(void)
 }
 
 /**
- * @brief Main HRV calculation function
- * @param rr_interval New RR interval in milliseconds
- * @param hrv_max Pointer to store maximum RR interval
- * @param hrv_min Pointer to store minimum RR interval  
- * @param mean Pointer to store mean RR interval
- * @param sdnn Pointer to store SDNN value
- * @param pnn50 Pointer to store pNN50 value
- * @param rmssd Pointer to store RMSSD value
- * @param hrv_ready_flag Pointer to store readiness flag
- */
-void calculate_hrv(int32_t rr_interval, int32_t *hrv_max, int32_t *hrv_min, 
-                   float *mean, float *sdnn, float *pnn50, float *rmssd, 
-                   bool *hrv_ready_flag)
-{
-    // Validate input parameters
-    if (!hrv_max || !hrv_min || !mean || !sdnn || !pnn50 || !rmssd || !hrv_ready_flag) {
-        LOG_ERR("Invalid NULL pointer in calculate_hrv");
-        return;
-    }
-    
-    // Validate RR interval range (typical human range: 300-2000ms)
-    if (rr_interval < 300 || rr_interval > 2000) {
-        LOG_WRN("RR interval %d ms out of typical range", rr_interval);
-    }
-    
-    // Add new sample to buffer
-    hrv_add_sample((uint32_t)rr_interval);
-    
-    // Calculate metrics
-    *mean = hrv_calculate_mean();
-    *sdnn = hrv_calculate_sdnn();
-    *rmssd = hrv_calculate_rmssd();
-    *pnn50 = hrv_calculate_pnn50();
-    *hrv_max = (int32_t)hrv_calculate_max();
-    *hrv_min = (int32_t)hrv_calculate_min();
-    *hrv_ready_flag = hrv_is_ready();
-    
-    LOG_DBG("HRV: RR=%d, Mean=%.1f, SDNN=%.1f, RMSSD=%.1f, pNN50=%.3f, Ready=%s",
-            rr_interval, *mean, *sdnn, *rmssd, *pnn50, 
-            *hrv_ready_flag ? "true" : "false");
-}
-
-/**
  * @brief Get raw RR interval buffer for frequency domain analysis
  * @param buffer Pointer to buffer to copy RR intervals to
  * @param buffer_size Size of the buffer
  * @return Number of samples copied
  */
-int hrv_get_rr_intervals(float *buffer, int buffer_size)
+int hrv_get_rr_intervals(uint16_t *buffer, int buffer_size)
 {
     if (!buffer || buffer_size <= 0) {
         return 0;
@@ -286,7 +278,7 @@ int hrv_get_rr_intervals(float *buffer, int buffer_size)
     int samples_to_copy = (count < buffer_size) ? count : buffer_size;
     
     for (int i = 0; i < samples_to_copy; i++) {
-        buffer[i] = (float)hrv_state.rr_intervals[i];
+        buffer[i] = hrv_state.rr_intervals[i];
     }
     
     return samples_to_copy;
@@ -296,49 +288,48 @@ int hrv_get_rr_intervals(float *buffer, int buffer_size)
  * @brief Update HRV screens with new RR interval data
  * @param rr_interval New RR interval in milliseconds
  */
-void update_hrv_screens_with_new_data(float rr_interval)
+
+//void update_hrv_screens_with_new_data(double rr_interval)
+void on_new_rr_interval_detected(uint16_t rr_interval)
 {
-    // Calculate HRV metrics using optimized algorithm
-    int32_t hrv_max, hrv_min;
-    float mean, sdnn, pnn50, rmssd;
-    bool hrv_ready;
+    LOG_INF("New RR interval detected : %d ms", rr_interval);
 
-    calculate_hrv((int32_t)rr_interval, &hrv_max, &hrv_min, &mean, &sdnn, &pnn50, &rmssd, &hrv_ready);
+  
+    if (!collecting) 
+    return;
 
-    if (hrv_ready) {
-        // Update HRV Summary Screen
-        extern void hpi_hrv_summary_update_metrics(float sdnn, float rmssd, float pnn50, float mean_rr);
-        extern void hpi_hrv_summary_draw_rr_plot(float rr_interval);
+
+    hrv_add_sample(rr_interval);
+
+    bool should_process = false;
+    
+    k_mutex_lock(&hrv_mutex, K_FOREVER);
+    if (collecting && hrv_state.sample_count >= HRV_LIMIT) {
+        collecting = false;
+        should_process = true;
+    }
+    k_mutex_unlock(&hrv_mutex);
+
+    if (should_process) {
         
-        hpi_hrv_summary_update_metrics(sdnn, rmssd, pnn50, mean);
-        hpi_hrv_summary_draw_rr_plot(rr_interval);
+        int sample_count = hrv_get_rr_intervals(rr_interval_buffer, HRV_LIMIT);
 
-        // Update HRV Frequency Screen (less frequently for performance)
-        static int freq_update_counter = 0;
-        if (++freq_update_counter >= 10) {
-            static float rr_buffer[HRV_LIMIT];
-            int sample_count = hrv_get_rr_intervals(rr_buffer, HRV_LIMIT);
-            
-            if (sample_count >= HRV_LIMIT) {
-                extern void hpi_hrv_frequency_compact_update_spectrum(float *rr_intervals, int num_intervals);
-                hpi_hrv_frequency_compact_update_spectrum(rr_buffer, sample_count);
-            }
-            freq_update_counter = 0;
-        }
+       
+        float mean = hrv_calculate_mean();
+        float sdnn = hrv_calculate_sdnn();
+        float rmssd = hrv_calculate_rmssd();
+        float pnn50 = hrv_calculate_pnn50();    
+        float hrv_min = (float)hrv_calculate_min();
+        float hrv_max = (float)hrv_calculate_max();
+       
+
+        LOG_INF("HRV 30 interval Collection Complete: \nSamples=%d\nMean=%.1f\nSDNN=%.1f\nRMSSD=%.1f\npNN50=%.3f\nMAX=%.2f\nMIN=%.2f",sample_count, mean, sdnn, rmssd, pnn50, hrv_max, hrv_min);
+
+        hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
+
+        hpi_hrv_frequency_compact_update_spectrum(rr_interval_buffer, sample_count);
+      
     }
 }
 
-/**
- * @brief Callback for new RR interval detection from sensor
- * @param rr_ms RR interval in milliseconds
- */
-void on_new_rr_interval_detected(float rr_ms)
-{
 
-    
-    hpi_disp_hrv_update_rtor((int)rr_ms);
-    hpi_disp_hrv_draw_plot_rtor(rr_ms);
-
-    // Update new optimized HRV screens
-    update_hrv_screens_with_new_data(rr_ms);
-}

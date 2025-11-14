@@ -1,8 +1,44 @@
+# Ashwin Whitchurch
 # ProtoCentral Electronics (info@protocentral.com)
 # SPDX-License-Identifier: Apache-2.0
 
-description: MAX30208 Temperature Sensor
+description: Zephyr driver for the MAX30208 Temperature Sensor
 
 compatible: "maxim,max30208"
 
 include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+    gpio0-gpios:
+        type: phandle-array
+        required: false
+        description: |
+            Phandle-array to the MCU GPIO connected to MAX30208 GPIO0. Used for
+            input/interrupt or output control.
+
+    gpio0-mode:
+        type: int
+        required: false
+        description: |
+            Two-bit mode value for GPIO0 to be written to GPIO_SETUP register.
+            0: HiZ input
+            1: Open-drain output
+            2: Input with 1MΩ pulldown (default)
+            3: Interrupt
+
+    gpio1-gpios:
+        type: phandle-array
+        required: false
+        description: |
+            Phandle-array to the MCU GPIO connected to MAX30208 GPIO1. Used for
+            input/convert-trigger or output control.
+
+    gpio1-mode:
+        type: int
+        required: false
+        description: |
+            Two-bit mode value for GPIO1 to be written to GPIO_SETUP register.
+            0: HiZ input
+            1: Open-drain output
+            2: Input with 1MΩ pulldown (default)
+            3: Convert trigger

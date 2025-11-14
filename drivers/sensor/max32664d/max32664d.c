@@ -166,13 +166,27 @@ uint8_t max32664d_read_hub_status(const struct device *dev)
 	uint8_t rd_buf[2] = {0x00, 0x00};
 	uint8_t wr_buf[2] = {0x00, 0x00};
 
+	/* Ensure MFIO is an output while we toggle it for I2C access. Some
+	 * board configurations leave MFIO configured as input so explicitly
+	 * set it here and restore to input afterwards to match existing
+	 * driver expectations. */
+	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 	gpio_pin_set_dt(&config->mfio_gpio, 0);
 	k_sleep(K_USEC(300));
 
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	int rc = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	if (rc != 0) {
+		LOG_ERR("i2c write failed while reading hub status: %d", rc);
+	}
+	rc = i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	if (rc != 0) {
+		LOG_ERR("i2c read failed while reading hub status: %d", rc);
+	}
+
 	k_sleep(K_USEC(300));
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
+	/* Restore as input so hub can drive the line if needed */
+	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
 
 	// printk("Stat %x | ", rd_buf[1]);
 

@@ -35,9 +35,11 @@ jobs:
           west build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
           if [ "${{ env.IS_RELEASE }}" = "true" ]; then
             mv build/merged.hex healthypi_move_${{ github.ref_name }}.hex
+            mv build/merged_CPUNET.hex healthypi_move_cpunet_${{ github.ref_name }}.hex || true
             mv build/dfu_application.zip healthypi_move_update_${{ github.ref_name }}.zip
           else
             mv build/merged.hex healthypi_move_dev_${{ github.ref_name }}.hex
+            mv build/merged_CPUNET.hex healthypi_move_dev_cpunet_${{ github.ref_name }}.hex || true
             mv build/dfu_application.zip healthypi_move_dev_update_${{ github.ref_name }}.zip
           fi
 

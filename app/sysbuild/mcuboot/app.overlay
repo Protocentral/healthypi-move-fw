@@ -1,5 +1,6 @@
 / {
 	chosen {
 		zephyr,code-partition = &boot_partition;
+		nordic,pm-ext-flash = &w25q01jv;
 	};
 };

@@ -1,0 +1,48 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - '**'  # Trigger on all branches
+  pull_request:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container: ghcr.io/zephyrproject-rtos/ci:v0.26.2 
+    env:
+      CMAKE_PREFIX_PATH: /opt/toolchains
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: healthypi_move
+
+      - name: Initialize
+        working-directory: healthypi_move
+        run: |
+          pip install ecdsa
+          west init -l .
+          west update -o=--depth=1 -n
+
+      - name: Build firmware
+        working-directory: healthypi_move
+        run: |
+          west build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            healthypi_move/build/merged.hex
+            healthypi_move/build/merged_CPUNET.hex
+            healthypi_move/build/dfu_application.zip
+          retention-days: 30

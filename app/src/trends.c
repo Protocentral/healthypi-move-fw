@@ -1,7 +1,38 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/littlefs.h>
@@ -17,6 +48,8 @@
 #include "fs_module.h"
 #include "trends.h"
 #include "log_module.h"
+#include "ui/move_ui.h"
+#include "hrv_algos.h"
 
 LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 
@@ -35,9 +68,11 @@ LOG_MODULE_REGISTER(trends_module, LOG_LEVEL_DBG);
 #define NUM_HOURS 24
 #define MAX_POINTS_PER_HOUR 60
 #define MAX_POINTS_SPO2_PER_HOUR 10
+#define RR_MEASUREMENT_DURATION_MS 30000
 
 // Store raw HR values for the current minute
 static uint16_t m_hr_curr_minute[60] = {0};   // Assumed max 60 points per minute
+static uint16_t m_rr_curr_minute[60] = {0};   // Assumed max 60 points per minute
 static uint16_t m_temp_curr_minute[13] = {0}; // Assumed max 10 points per minute
 
 static uint16_t m_spo2 = 0;
@@ -47,6 +82,12 @@ static uint8_t m_trends_curr_minute_counter = 0;
 
 static uint8_t m_trends_temp_minute_sample_counter = 0;
 static uint8_t m_trends_hr_minute_sample_counter = 0;
+static uint8_t m_trends_rr_minute_sample_counter = 0;
+
+// Static buffers to avoid large stack allocations (51KB total)
+// These replace the problematic stack arrays in hpi_trend_load_trend()
+static struct hpi_hr_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
+static struct hpi_hr_trend_point_t trend_point_all[1440];
 
 // Time variables
 static struct tm m_trend_sys_time_tm;
@@ -220,11 +261,6 @@ void hpi_trend_record_thread(void)
 
 int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, struct hpi_minutely_trend_point_t *minutely_trend_points, int *num_points, enum trend_type m_trend_type)
 {
-
-    // Trend buffers
-    struct hpi_hr_trend_point_t trend_day_points[NUM_HOURS][MAX_POINTS_PER_HOUR];
-    struct hpi_hr_trend_point_t trend_point_all[1440];
-
     struct fs_file_t file;
     int ret = 0;
 
@@ -236,6 +272,10 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
     int64_t day_ts = hpi_trend_get_day_start_ts(&m_trend_time_ts);
 
     fs_file_t_init(&file);
+
+    // Clear static buffers before use
+    memset(trend_day_points, 0, sizeof(trend_day_points));
+    memset(trend_point_all, 0, sizeof(trend_point_all));
 
     if (m_trend_type == TREND_HR)
     {
@@ -374,7 +414,15 @@ static void trend_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_hr_curr_minute[m_trends_hr_minute_sample_counter] = hpi_hr->hr;
     m_trends_hr_minute_sample_counter++;
-    LOG_DBG("ZB HR: %d", hpi_hr->hr);
+    //LOG_DBG("ZB HR: %d", hpi_hr->hr);
+  
+    if(hpi_hr -> rr_interval > 0 )
+    {
+       on_new_rr_interval_detected(hpi_hr->rr_interval);
+    }
+    
+  
+
 }
 ZBUS_LISTENER_DEFINE(trend_hr_lis, trend_hr_listener);
 

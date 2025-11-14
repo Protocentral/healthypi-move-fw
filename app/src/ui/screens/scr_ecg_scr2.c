@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -5,9 +35,15 @@
 #include <stdio.h>
 // #include <zephyr/zbus/zbus.h>  // Commented out - requires CONFIG_ZBUS
 
+LOG_MODULE_REGISTER(scr_ecg_scr2, LOG_LEVEL_DBG);
+
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "hw_module.h"
+#include "hpi_sys.h"
+
+// Mutex for thread-safe timer state access
+K_MUTEX_DEFINE(timer_state_mutex);
 
 static lv_obj_t *scr_ecg_scr2;
 // static lv_obj_t *btn_ecg_cancel;  // Commented out - not used
@@ -17,18 +53,39 @@ static lv_obj_t *label_ecg_hr;
 static lv_obj_t *label_timer;
 static lv_obj_t *label_ecg_lead_off;
 static lv_obj_t *label_info;
+static lv_obj_t *arc_ecg_zone;  // Progress arc for measurement duration
 
 static bool chart_ecg_update = true;
-static float y_max_ecg = 0;
+static float y_max_ecg = -10000;
 static float y_min_ecg = 10000;
 
 // static bool ecg_plot_hidden = false;
 
 static float gx = 0;
 
+// Timer control variables for lead-based automatic start/stop
+static bool timer_running = false;
+static bool timer_paused = true;  // Start paused, wait for lead ON
+static bool lead_on_detected = false;
+
+// Performance optimization variables - LVGL 9.2 optimized
+static uint32_t sample_counter = 0;
+static const uint32_t RANGE_UPDATE_INTERVAL = 128; // Update range every 64 samples - Less frequent for better performance
+
+// High-performance batch processing buffer - aligned for LVGL 9.2
+static int32_t batch_data[32] __attribute__((aligned(4))); // Batch buffer for efficiency
+static uint32_t batch_count = 0;
+
+// LVGL 9.2 Chart performance configuration flags
+static bool chart_auto_refresh_enabled = true;
+
+// Function declarations for LVGL 9.2 optimized chart management
+static void ecg_chart_enable_performance_mode(bool enable);
+static void ecg_chart_reset_performance_counters(void);
+
 // Externs
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
@@ -39,6 +96,7 @@ extern lv_style_t style_bg_red;
 extern struct k_sem sem_ecg_cancel;
 
 // Commented out - unused function
+                  
 /*
 static void btn_ecg_cancel_handler(lv_event_t *e)
 {
@@ -54,121 +112,202 @@ static void btn_ecg_cancel_handler(lv_event_t *e)
 void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_ecg_scr2 = lv_obj_create(NULL);
-    lv_obj_add_style(scr_ecg_scr2, &style_scr_black, 0);
+    // AMOLED OPTIMIZATION: Pure black background for power efficiency
+    lv_obj_set_style_bg_color(scr_ecg_scr2, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_ecg_scr2, LV_OBJ_FLAG_SCROLLABLE);
-    // draw_scr_common(scr_ecg_scr2);
 
-    /*Create a container with COLUMN flex direction*/
-    lv_obj_t *cont_col = lv_obj_create(scr_ecg_scr2);
-    lv_obj_set_size(cont_col, lv_pct(100), lv_pct(100));
-    lv_obj_align_to(cont_col, NULL, LV_ALIGN_TOP_MID, 0, 25);
-    lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_right(cont_col, -1, LV_PART_SCROLLBAR);
-    lv_obj_set_style_pad_top(cont_col, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(cont_col, 1, LV_PART_MAIN);
-    lv_obj_add_style(cont_col, &style_scr_black, 0);
-    // lv_obj_add_style(cont_col, &style_bg_red, 0);
+    // CIRCULAR AMOLED-OPTIMIZED ECG MEASUREMENT SCREEN
+    // Display center: (195, 195), Usable radius: ~185px
+    // Orange/amber theme for ECG measurement consistency
 
-    // Draw countdown timer container
-    lv_obj_t *cont_timer = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_timer, lv_pct(100), LV_SIZE_CONTENT);
+    // Get ECG/HR data
+    uint16_t hr = 0;
+    int64_t hr_last_update = 0;
+    if (hpi_sys_get_last_hr_update(&hr, &hr_last_update) != 0) {
+        hr = 0;
+        hr_last_update = 0;
+    }
+
+    // OUTER RING: ECG Timer Countdown Arc (Radius 170-185px) - Orange theme for measurement
+    arc_ecg_zone = lv_arc_create(scr_ecg_scr2);
+    lv_obj_set_size(arc_ecg_zone, 370, 370);  // 185px radius
+    lv_obj_center(arc_ecg_zone);
+    lv_arc_set_range(arc_ecg_zone, 0, 30);  // Timer range: 0-30 seconds
+    
+    // Background arc: Full 270° track (gray)
+    lv_arc_set_bg_angles(arc_ecg_zone, 135, 45);  // Full background arc
+    lv_arc_set_value(arc_ecg_zone, 30);  // Start at full (30 seconds), will countdown to 0
+    
+    // Style the progress arc - orange theme for ECG measurement
+    lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
+    lv_obj_set_style_arc_width(arc_ecg_zone, 8, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0xFF8C00), LV_PART_INDICATOR);  // Orange progress
+    lv_obj_set_style_arc_width(arc_ecg_zone, 6, LV_PART_INDICATOR);
+    lv_obj_remove_style(arc_ecg_zone, NULL, LV_PART_KNOB);  // Remove knob
+    lv_obj_clear_flag(arc_ecg_zone, LV_OBJ_FLAG_CLICKABLE);
+
+    // Screen title - properly positioned to avoid arc overlap
+    // MID-UPPER RING: Timer container with icon (following design pattern)
+    lv_obj_t *cont_timer = lv_obj_create(scr_ecg_scr2);
+    lv_obj_set_size(cont_timer, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_timer, LV_ALIGN_TOP_MID, 0, 85);
+    lv_obj_set_style_bg_opa(cont_timer, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_timer, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_timer, 0, LV_PART_MAIN);
     lv_obj_set_flex_flow(cont_timer, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_timer, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_timer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(cont_timer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Draw Countdown Timer
+    // Timer Icon
     LV_IMG_DECLARE(timer_32);
     lv_obj_t *img_timer = lv_img_create(cont_timer);
     lv_img_set_src(img_timer, &timer_32);
+    lv_obj_set_style_img_recolor(img_timer, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange theme
+    lv_obj_set_style_img_recolor_opa(img_timer, LV_OPA_COVER, LV_PART_MAIN);
 
+    // Timer value
     label_timer = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer, "00");
-    lv_obj_add_style(label_timer, &style_white_medium, 0);
-    lv_obj_t *label_timer_sub = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer_sub, " secs");
-    lv_obj_add_style(label_timer_sub, &style_white_medium, 0);
+    lv_label_set_text(label_timer, "30");
+    lv_obj_add_style(label_timer, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_timer, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_timer, 8, LV_PART_MAIN);
 
-    /*label_info = lv_label_create(cont_col);
-    lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Touch the bezel to start");
-    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(label_info, &style_white_medium, 0);*/
+    // Timer unit
+    lv_obj_t *label_timer_unit = lv_label_create(cont_timer);
+    lv_label_set_text(label_timer_unit, "s");
+    lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange accent
 
-    /*btn_ecg_cancel = lv_btn_create(cont_col);
-    lv_obj_add_event_cb(btn_ecg_cancel, btn_ecg_cancel_handler, LV_EVENT_ALL, NULL);
-    // lv_obj_set_height(btn_ecg_cancel, 85);
+    // Initialize timer state - start paused, waiting for lead ON detection
+    timer_running = false;
+    timer_paused = true;
+    lead_on_detected = false;
 
-    lv_obj_t *label_btn = lv_label_create(btn_ecg_cancel);
-    lv_label_set_text(label_btn, LV_SYMBOL_CLOSE);
-    lv_obj_center(label_btn);*/
-
-    // Create optimized ECG Chart for LVGL 9
-    chart_ecg = lv_chart_create(cont_col);
-    lv_obj_set_size(chart_ecg, 390, 140);
+    // CENTRAL ZONE: ECG Chart (positioned in center area)
+    chart_ecg = lv_chart_create(scr_ecg_scr2);
+    lv_obj_set_size(chart_ecg, 340, 100);  // Smaller chart for circular design
+    lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -10);  // Centered position
     
-    // Set chart type and properties for efficiency
+    // Configure chart type and fundamental properties
     lv_chart_set_type(chart_ecg, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(chart_ecg, ECG_DISP_WINDOW_SIZE);
-    lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);
+    lv_chart_set_update_mode(chart_ecg, LV_CHART_UPDATE_MODE_CIRCULAR);  // ECG-like behavior
     
-    // Optimize visual settings for performance
-    lv_obj_set_style_bg_color(chart_ecg, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(chart_ecg, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(chart_ecg, 5, LV_PART_MAIN);
+    // Set Y-axis range for ECG data - start with reasonable defaults
+    lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -5000, 5000);
     
-    // Disable grid lines for better performance
+    // Disable division lines for clean ECG display
     lv_chart_set_div_line_count(chart_ecg, 0, 0);
     
-    // Create series with optimized settings
-    ser_ecg = lv_chart_add_series(chart_ecg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
+    // Configure main chart background (transparent for AMOLED)
+    lv_obj_set_style_bg_opa(chart_ecg, LV_OPA_TRANSP, LV_PART_MAIN);  // Transparent background
+    lv_obj_set_style_border_width(chart_ecg, 0, LV_PART_MAIN);        // No border
+    lv_obj_set_style_outline_width(chart_ecg, 0, LV_PART_MAIN);       // No outline
+    lv_obj_set_style_pad_all(chart_ecg, 5, LV_PART_MAIN);             // Minimal padding
     
-    // Optimize line rendering for real-time data
-    lv_obj_set_style_line_width(chart_ecg, 2, LV_PART_ITEMS);
-    lv_obj_set_style_line_rounded(chart_ecg, false, LV_PART_ITEMS);
-    lv_obj_set_style_line_opa(chart_ecg, LV_OPA_COVER, LV_PART_ITEMS);
+    // Create series for ECG data
+    ser_ecg = lv_chart_add_series(chart_ecg, lv_color_hex(0xFF8C00), LV_CHART_AXIS_PRIMARY_Y);
     
-    // Set initial range for ECG data (will be auto-adjusted)
-    lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
+    // Configure line series styling - orange theme
+    lv_obj_set_style_line_width(chart_ecg, 3, LV_PART_ITEMS);         // Increased line width for better visibility
+    lv_obj_set_style_line_color(chart_ecg, lv_color_hex(0xFF8C00), LV_PART_ITEMS);
+    lv_obj_set_style_line_opa(chart_ecg, LV_OPA_COVER, LV_PART_ITEMS); // Full opacity for medical clarity
+    lv_obj_set_style_line_rounded(chart_ecg, false, LV_PART_ITEMS);   // Sharp lines for precision
     
-    // Position the chart
-    lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -35);
+    // Disable points completely
+    lv_obj_set_style_width(chart_ecg, 0, LV_PART_INDICATOR);          // No point width
+    lv_obj_set_style_height(chart_ecg, 0, LV_PART_INDICATOR);         // No point height
+    lv_obj_set_style_bg_opa(chart_ecg, LV_OPA_TRANSP, LV_PART_INDICATOR); // Transparent points
+    lv_obj_set_style_border_opa(chart_ecg, LV_OPA_TRANSP, LV_PART_INDICATOR); // No point borders
     
-    // Pre-fill series with zero values for smoother startup
-    for (int i = 0; i < ECG_DISP_WINDOW_SIZE; i++) {
-        lv_chart_set_next_value(chart_ecg, ser_ecg, 0);
-    }
+    // Performance optimizations for real-time ECG display
+    lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_IGNORE_LAYOUT);           // Skip layout calculations
+    lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_SCROLLABLE);            // Disable scrolling
+    lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_CLICK_FOCUSABLE);       // No focus events
+    
+    // Initialize chart with baseline values
+    lv_chart_set_all_value(chart_ecg, ser_ecg, 0);
+    
+    // HR Container below chart (following design pattern)
+    lv_obj_t *cont_hr = lv_obj_create(scr_ecg_scr2);
+    lv_obj_set_size(cont_hr, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_hr, LV_ALIGN_CENTER, 0, 75);  // Below chart
+    lv_obj_set_style_bg_opa(cont_hr, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_hr, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_hr, 0, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Draw Lead off label
-    label_ecg_lead_off = lv_label_create(cont_col);
+    // Heart Icon
+        lv_obj_t *img_heart = lv_img_create(cont_hr);
+    lv_img_set_src(img_heart, &img_heart_48px);
+    lv_obj_set_style_img_recolor(img_heart, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    lv_obj_set_style_img_recolor_opa(img_heart, LV_OPA_COVER, LV_PART_MAIN);
+
+    // HR Value
+    label_ecg_hr = lv_label_create(cont_hr);
+    if (hr == 0) {
+        lv_label_set_text(label_ecg_hr, "--");
+    } else {
+        lv_label_set_text_fmt(label_ecg_hr, "%d", hr);
+    }
+    lv_obj_add_style(label_ecg_hr, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_ecg_hr, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_ecg_hr, 8, LV_PART_MAIN);
+
+    // HR Unit
+    lv_obj_t *label_hr_unit = lv_label_create(cont_hr);
+    lv_label_set_text(label_hr_unit, "BPM");
+    lv_obj_add_style(label_hr_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_hr_unit, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+
+    // Lead off status label (positioned at bottom)
+    label_ecg_lead_off = lv_label_create(scr_ecg_scr2);
     lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_ecg_lead_off, 300);
-    lv_label_set_text(label_ecg_lead_off, "--");
-    lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(label_ecg_lead_off, "Place fingers on electrodes\nTimer will start automatically");
+    lv_obj_align(label_ecg_lead_off, LV_ALIGN_CENTER, 0, 0);  // Centered overlay on chart
+    lv_obj_add_style(label_ecg_lead_off, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_ecg_lead_off, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_ecg_lead_off, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    
+    // Set reference for lead on/off handler
+    label_info = label_ecg_lead_off;
 
-    // Draw BPM container
-    lv_obj_t *cont_hr = lv_obj_create(cont_col);
-    lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
-    lv_obj_add_style(cont_hr, &style_scr_black, 0);
-    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-
-    lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_35);
-
-    label_ecg_hr = lv_label_create(cont_hr);
-    lv_label_set_text(label_ecg_hr, "00");
-    lv_obj_add_style(label_ecg_hr, &style_white_medium, 0);
-    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_sub, " bpm");
+    // Initialize performance optimization system
+    ecg_chart_reset_performance_counters();
+    ecg_chart_enable_performance_mode(true);  // Start in high-performance mode
 
     hpi_disp_set_curr_screen(SCR_SPL_ECG_SCR2);
     hpi_show_screen(scr_ecg_scr2, m_scroll_dir);
 }
 
-// Simplified scaling function - now handled more efficiently in main plot function
+// LVGL 9.2 optimized chart management functions
+static void ecg_chart_enable_performance_mode(bool enable)
+{
+    if (chart_ecg == NULL) return;
+    
+    if (enable) {
+        // Enable performance optimizations
+        lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_IGNORE_LAYOUT);
+        chart_auto_refresh_enabled = false;
+    } else {
+        // Restore normal operation
+        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_IGNORE_LAYOUT);
+        chart_auto_refresh_enabled = true;
+        lv_chart_refresh(chart_ecg);
+    }
+}
+
+static void ecg_chart_reset_performance_counters(void)
+{
+    sample_counter = 0;
+    batch_count = 0;
+    // Initialize for proper range detection
+    y_max_ecg = -10000;
+    y_min_ecg = 10000;
+}
+
+// Simplified scaling function - LVGL 9.2 optimized
 void hpi_ecg_disp_do_set_scale(int disp_window_size)
 {
     // This function is now simplified as range updating is handled 
@@ -188,20 +327,29 @@ void hpi_ecg_disp_add_samples(int num_samples)
 
 void hpi_ecg_disp_update_hr(int hr)
 {
-    if (label_ecg_hr == NULL)
+    // Check if we're on the ECG measurement screen (scr2) before updating
+    if (hpi_disp_get_curr_screen() != SCR_SPL_ECG_SCR2 || label_ecg_hr == NULL)
         return;
 
-    char buf[32];
-    if (hr == 0)
-    {
-        sprintf(buf, "--");
+    // Use standard sprintf for reliability - avoid custom conversion that can cause font issues
+    static char hr_buf[8]; // Static buffer to avoid repeated allocations
+    static int last_hr = -1; // Cache last value to avoid unnecessary updates
+    
+    if (hr != last_hr) { // Only update if value changed
+        if (hr == 0)
+        {
+            // Use standard dashes - the inter_semibold_24 font used by style_white_medium has hyphens
+            strcpy(hr_buf, "--");
+        }
+        else
+        {
+            // Use standard sprintf for proper character encoding
+            snprintf(hr_buf, sizeof(hr_buf), "%d", hr);
+        }
+        
+        lv_label_set_text(label_ecg_hr, hr_buf);
+        last_hr = hr;
     }
-    else
-    {
-        sprintf(buf, "%d", hr);
-    }
-
-    lv_label_set_text(label_ecg_hr, buf);
 }
 
 void hpi_ecg_disp_update_timer(int time_left)
@@ -209,94 +357,243 @@ void hpi_ecg_disp_update_timer(int time_left)
     if (label_timer == NULL)
         return;
 
-    lv_label_set_text_fmt(label_timer, "%d", time_left);
+    // Optimize timer updates with caching
+    static int last_time = -1;
+    static char time_buf[8];
+    
+    if (time_left != last_time) { // Only update if changed
+        // Check if in stabilization phase (time > 30s means we're stabilizing)
+        bool is_stabilizing = (time_left > 30);
+        
+        if (is_stabilizing) {
+            // Show stabilization countdown (35s = 5s stabilizing, 30s = starting recording)
+            int stabilization_time = time_left - 30;
+            
+            // Update timer label with stabilization time
+            if (stabilization_time < 10) {
+                time_buf[0] = '0' + stabilization_time;
+                time_buf[1] = '\0';
+            } else {
+                time_buf[0] = '0' + (stabilization_time / 10);
+                time_buf[1] = '0' + (stabilization_time % 10);
+                time_buf[2] = '\0';
+            }
+            lv_label_set_text(label_timer, time_buf);
+            
+            // Show stabilization message
+            if (label_info != NULL) {
+                lv_label_set_text(label_info, "Signal stabilizing...\nPlease hold still");
+                lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Arc stays at 0 during stabilization
+            if (arc_ecg_zone != NULL) {
+                lv_arc_set_value(arc_ecg_zone, 0);
+                lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0x4A90E2), LV_PART_INDICATOR);  // Blue during stabilization
+            }
+        } else {
+            // Normal recording mode
+            
+            // Hide the info label when recording (leads are on)
+            if (label_info != NULL && time_left > 0) {
+                lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Use direct integer to string for better performance
+            if (time_left < 10) {
+                time_buf[0] = '0' + time_left;
+                time_buf[1] = '\0';
+            } else if (time_left < 100) {
+                time_buf[0] = '0' + (time_left / 10);
+                time_buf[1] = '0' + (time_left % 10);
+                time_buf[2] = '\0';
+            } else {
+                time_buf[0] = '0' + (time_left / 100);
+                time_buf[1] = '0' + ((time_left / 10) % 10);
+                time_buf[2] = '0' + (time_left % 10);
+                time_buf[3] = '\0';
+            }
+            
+            lv_label_set_text(label_timer, time_buf);
+            
+            // Update the progress arc to show progress towards completion
+            if (arc_ecg_zone != NULL) {
+                // Show progress: empty at start (30s), full at end (0s)
+                int arc_value = (time_left < 0) ? 30 : ((time_left > 30) ? 0 : (30 - time_left));
+                lv_arc_set_value(arc_ecg_zone, arc_value);
+                
+                // Change arc color based on timer state: Orange when running, gray when paused
+                // Thread-safe access to timer_paused
+                k_mutex_lock(&timer_state_mutex, K_FOREVER);
+                bool is_paused = timer_paused;
+                k_mutex_unlock(&timer_state_mutex);
+                
+                if (is_paused) {
+                    lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0x666666), LV_PART_INDICATOR);  // Gray when paused
+                } else {
+                    lv_obj_set_style_arc_color(arc_ecg_zone, lv_color_hex(0xFF8C00), LV_PART_INDICATOR);  // Orange when running
+                }
+            }
+        }
+        
+        last_time = time_left;
+    }
 }
 
-static bool prev_lead_off_status = true;
-static uint32_t sample_counter = 0;
-static const uint32_t RANGE_UPDATE_INTERVAL = 100; // Update range every 100 samples
+void hpi_ecg_timer_start(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    timer_running = true;
+    timer_paused = false;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_INF("ECG timer STARTED - leads detected (running=%s, paused=%s)", 
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+}
+
+void hpi_ecg_timer_pause(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    timer_paused = true;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_INF("ECG timer paused - leads off (running=%s, paused=%s)",
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+}
+
+void hpi_ecg_timer_reset(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    timer_running = false;
+    timer_paused = true;
+    lead_on_detected = false;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_INF("ECG timer RESET - ready for fresh start (running=%s, paused=%s)",
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+}
+
+bool hpi_ecg_timer_is_running(void)
+{
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    bool is_running = timer_running && !timer_paused;
+    k_mutex_unlock(&timer_state_mutex);
+    
+    LOG_DBG("Timer status check: running=%s, paused=%s, is_running=%s",
+            timer_running ? "true" : "false", 
+            timer_paused ? "true" : "false",
+            is_running ? "true" : "false");
+    return is_running;
+}
 
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
 {
-    if (chart_ecg_update == true && chart_ecg != NULL && ser_ecg != NULL)
-    {
-        // Batch process samples for better performance
-        for (int i = 0; i < num_samples; i++)
-        {
-            // Convert ECG data to display units more efficiently
-            int32_t data_ecg_i = (data_ecg[i] * 10000) / 5242880; // Optimized calculation
-            
-            // Track min/max values for auto-scaling
-            if (data_ecg_i < y_min_ecg) y_min_ecg = data_ecg_i;
-            if (data_ecg_i > y_max_ecg) y_max_ecg = data_ecg_i;
-            
-            // Add data point to chart
-            lv_chart_set_next_value(chart_ecg, ser_ecg, data_ecg_i);
-            
-            sample_counter++;
-        }
-        
-        // Update chart range periodically for better performance
-        if (sample_counter >= RANGE_UPDATE_INTERVAL)
-        {
-            // Add some margin to the range for better visualization
-            int32_t range_margin = (y_max_ecg - y_min_ecg) / 10;
-            lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, 
-                             y_min_ecg - range_margin, 
-                             y_max_ecg + range_margin);
-            
-            // Reset for next cycle
-            sample_counter = 0;
-            y_max_ecg = -900000;
-            y_min_ecg = 900000;
-        }
-        
-        // Update samples counter
-        gx += num_samples;
-        if (gx >= ECG_DISP_WINDOW_SIZE) {
-            gx = 0;
-        }
+    // Early validation - LVGL 9.2 best practice
+    if (chart_ecg_update == false || chart_ecg == NULL || ser_ecg == NULL || data_ecg == NULL || num_samples <= 0) {
+        return;
+    }
 
-        // Handle lead off status changes efficiently
-        if (ecg_lead_off != prev_lead_off_status)
-        {
-            if (ecg_lead_off)
-            {
-                lv_label_set_text(label_ecg_lead_off, "Lead Off");
-                lv_obj_remove_style_all(label_ecg_lead_off);
-                lv_obj_add_style(label_ecg_lead_off, &style_red_medium, 0);
+    // Performance optimization: Skip processing if chart is hidden
+    if (lv_obj_has_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN)) {
+        return;
+    }
+
+    // Batch processing for efficiency
+    for (int i = 0; i < num_samples; i++)
+    {
+        batch_data[batch_count++] = data_ecg[i];
+        
+        // Process batch when full or at end of samples
+        if (batch_count >= 32 || i == num_samples - 1) {
+            // Process batch
+            for (uint32_t j = 0; j < batch_count; j++) {
+                lv_chart_set_next_value(chart_ecg, ser_ecg, batch_data[j]);
+                
+                // Track min/max for auto-scaling
+                if (batch_data[j] < y_min_ecg) y_min_ecg = batch_data[j];
+                if (batch_data[j] > y_max_ecg) y_max_ecg = batch_data[j];
             }
-            else
-            {
-                lv_label_set_text(label_ecg_lead_off, "Lead On");
-                lv_obj_remove_style_all(label_ecg_lead_off);
-                lv_obj_add_style(label_ecg_lead_off, &style_white_medium, 0);
-            }
-            prev_lead_off_status = ecg_lead_off;
+            
+            sample_counter += batch_count; // Fix: Update sample counter correctly
+            batch_count = 0;
         }
+    }
+    
+    // Auto-scaling logic
+    if (sample_counter % RANGE_UPDATE_INTERVAL == 0) {
+        if (y_max_ecg > y_min_ecg) {
+            float range = y_max_ecg - y_min_ecg;
+            float margin = range * 0.1f; // 10% margin
+            
+            int32_t new_min = (int32_t)(y_min_ecg - margin);
+            int32_t new_max = (int32_t)(y_max_ecg + margin);
+            
+            // Ensure reasonable minimum range
+            if ((new_max - new_min) < 1000) {
+                int32_t center = (new_min + new_max) / 2;
+                new_min = center - 500;
+                new_max = center + 500;
+            }
+            
+            lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, new_min, new_max);
+        }
+        
+        // Reset for next interval
+        y_min_ecg = 10000;
+        y_max_ecg = -10000;
     }
 }
 
 void scr_ecg_lead_on_off_handler(bool lead_on_off)
 {
-    if (label_info == NULL)
+    LOG_INF("Screen handler called with lead_on_off=%s", lead_on_off ? "OFF" : "ON");
+    
+    if (label_info == NULL) {
+        LOG_WRN("label_info is NULL, screen handler returning early");
         return;
+    }
 
-    if (lead_on_off == false)
+    // Update lead state tracking (thread-safe)
+    k_mutex_lock(&timer_state_mutex, K_FOREVER);
+    lead_on_detected = !lead_on_off;  // ecg_lead_off == 0 means leads are ON
+    bool current_timer_running = timer_running;
+    bool current_timer_paused = timer_paused;
+    k_mutex_unlock(&timer_state_mutex);
+
+    if (lead_on_off == false)  // Lead ON condition (ecg_lead_off == false)
     {
+        LOG_INF("Handling Lead ON: hiding info, showing chart, starting timer");
+        
+        // Check if timer value indicates stabilization phase (>30s means stabilizing)
+        // During stabilization, show a message instead of hiding the label
+        // This will be updated by timer display function based on progress_timer value
+        
+        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+        // Don't hide label_info yet - will be handled by timer display based on countdown
+    }
+    else  // Lead OFF condition (ecg_lead_off == true)
+    {
+        LOG_INF("Handling Lead OFF: showing info, hiding chart, pausing timer");
         lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-    }
-    else
-    {
-        lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+        
+        // Update message based on timer state
+        if (current_timer_running && !current_timer_paused) {
+            lv_label_set_text(label_info, "Leads disconnected\nTimer paused - reconnect to continue");
+        } else {
+            lv_label_set_text(label_info, "Place fingers on electrodes\nTimer will start automatically");
+        }
     }
 }
 
 void gesture_down_scr_ecg_2(void)
 {
     printk("Cancel ECG\n");
+    LOG_INF("ECG measurement cancelled by user");
+    
+    // Reset timer state when cancelling
+    hpi_ecg_timer_reset();
+    
     k_sem_give(&sem_ecg_cancel);
     hpi_load_screen(SCR_ECG, SCROLL_DOWN);
 }

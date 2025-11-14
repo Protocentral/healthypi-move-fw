@@ -1,0 +1,18 @@
+{
+    "version": 2,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20
+    },
+    "configurePresets": [
+        {
+            "name": "build",
+            "displayName": "Build for HealthyPi Move nRF5340 application MCU",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "BOARD": "healthypi_move/nrf5340/cpuapp"
+            }
+        }
+    ]
+}

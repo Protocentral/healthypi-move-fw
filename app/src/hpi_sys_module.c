@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -90,6 +120,12 @@ static struct hpi_last_update_time_t g_hpi_last_update = {
 
     .steps_last_update_ts = 0,
     .steps_last_value = 0,
+
+    .gsr_last_update_ts = 0,
+    .gsr_last_value = 0,
+
+    .hrv_last_lf_hf_value = 0,
+    .hrv_last_lf_hf_update_ts = 0,
 };
 
 K_MUTEX_DEFINE(mutex_hpi_last_update_time);
@@ -329,8 +365,13 @@ int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_st
     else
     {
         struct tm *tm_info = localtime(&in_ts);
-        snprintf(out_str, out_str_size, "%02d-%02d-%04d",
-                 tm_info->tm_mday, tm_info->tm_mon + 1, tm_info->tm_year + 1900);
+        if (tm_info != NULL) {
+            snprintf(out_str, out_str_size, "%02d-%02d-%04d",
+                     tm_info->tm_mday, tm_info->tm_mon + 1, tm_info->tm_year + 1900);
+        } else {
+            // Fallback if localtime fails
+            snprintf(out_str, out_str_size, "Long ago");
+        }
     }
     return 0;
 }
@@ -350,6 +391,9 @@ static int hpi_sys_load_update_time(void)
         .bp_sys_last_value = 0,
         .bp_dia_last_value = 0,
         .ecg_last_hr = 0,
+
+        .hrv_last_lf_hf_value = 0,
+        .hrv_last_lf_hf_update_ts = 0,
     };
 
     struct fs_file_t m_file;
@@ -394,9 +438,25 @@ static int hpi_sys_load_update_time(void)
 
     g_hpi_last_update.steps_last_update_ts = m_hpi_last_update_time.steps_last_update_ts;
     g_hpi_last_update.steps_last_value = m_hpi_last_update_time.steps_last_value;
+
+    g_hpi_last_update.hrv_last_lf_hf_value = m_hpi_last_update_time.hrv_last_lf_hf_value;
+    g_hpi_last_update.hrv_last_lf_hf_update_ts = m_hpi_last_update_time.hrv_last_lf_hf_update_ts;
+
+    g_hpi_last_update.gsr_last_update_ts = m_hpi_last_update_time.gsr_last_update_ts;
+    g_hpi_last_update.gsr_last_value = m_hpi_last_update_time.gsr_last_value;
+
+  
     k_mutex_unlock(&mutex_hpi_last_update_time);
 
     return ret;
+}
+
+void hpi_sys_set_last_lf_hf_update(uint16_t hrv_last_lf_hf_value, int64_t hrv_last_lf_hf_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.hrv_last_lf_hf_value = hrv_last_lf_hf_value;
+    g_hpi_last_update.hrv_last_lf_hf_update_ts = hrv_last_lf_hf_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
 }
 
 void hpi_sys_set_last_hr_update(uint16_t hr_last_value, int64_t hr_last_update_ts)
@@ -429,6 +489,16 @@ void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts)
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     g_hpi_last_update.ecg_last_update_ts = ecg_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+}
+
+int hpi_sys_get_last_lf_hf_update(uint16_t *hrv_last_lf_hf_value, int64_t *hrv_last_lf_hf_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    *hrv_last_lf_hf_value = g_hpi_last_update.hrv_last_lf_hf_value;
+    *hrv_last_lf_hf_update_ts = g_hpi_last_update.hrv_last_lf_hf_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    return 0;
 }
 
 int hpi_sys_get_last_hr_update(uint16_t *hr_last_value, int64_t *hr_last_update_ts)
@@ -477,6 +547,23 @@ int hpi_sys_get_last_temp_update(uint16_t *temp_last_value_x100, int64_t *temp_l
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     *temp_last_update_ts = g_hpi_last_update.temp_last_update_ts;
     *temp_last_value_x100 = g_hpi_last_update.temp_last_value;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+    return 0;
+}
+
+void hpi_sys_set_last_gsr_update(uint16_t gsr_last_value, int64_t gsr_last_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.gsr_last_value = gsr_last_value;
+    g_hpi_last_update.gsr_last_update_ts = gsr_last_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+}
+
+int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    *gsr_last_value = g_hpi_last_update.gsr_last_value;
+    *gsr_last_update_ts = g_hpi_last_update.gsr_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
     return 0;
 }

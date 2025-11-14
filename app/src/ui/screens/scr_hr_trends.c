@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -37,9 +67,9 @@ static lv_obj_t *btn_hr_settings;
 // Externs
 extern lv_style_t style_scr_container;
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
-extern lv_style_t style_white_small;
+extern lv_style_t style_white_medium;
 
 extern lv_style_t style_scr_black;
 extern lv_style_t style_bg_red;
@@ -83,7 +113,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     
     lv_obj_t *label_signal = lv_label_create(cont_col);
     lv_label_set_text(label_signal, "Heart Rate");
-    lv_obj_add_style(label_signal, &style_white_small, 0);
+    lv_obj_add_style(label_signal, &style_white_medium, 0);
 
     // Draw a horizontal line
     /*lv_obj_t * line1 = lv_line_create(cont_col);
@@ -91,7 +121,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
        
     lv_obj_t *lbl_l1 = lv_label_create(cont_col);
     lv_label_set_text(lbl_l1, "Last hour trend");
-    lv_obj_add_style(lbl_l1, &style_white_small, 0);
+    lv_obj_add_style(lbl_l1, &style_white_medium, 0);
 
     chart_hr_hour_trend = lv_chart_create(cont_col);
     lv_obj_set_size(chart_hr_hour_trend, 270, 110);
@@ -169,7 +199,7 @@ void draw_scr_hr_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     lv_label_set_text(lbl_gap1, " ");
     lv_obj_align_to(lbl_gap1, btn_hr_settings, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
 
-    lv_obj_t *btn_hr_live = lv_btn_create(cont_col);
+    lv_obj_t *btn_hr_live = hpi_btn_create(cont_col);
     lv_obj_add_event_cb(btn_hr_live, scr_hr_btn_live_event_handler, LV_EVENT_ALL, NULL);
     lv_obj_set_height(btn_hr_live, 80);
 

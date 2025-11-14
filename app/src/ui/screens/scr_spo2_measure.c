@@ -1,3 +1,32 @@
+/*
+ * HealthyPi Move
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -6,8 +35,14 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include <math.h>
+
+/* Enable verbose plotting debug to trace values. Comment out to reduce log spam. */
+#undef SPO2_PLOT_DEBUG
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2_measure, LOG_LEVEL_DBG);
+
+#define PPG_RAW_WINDOW_SIZE 128
 
 static lv_obj_t *scr_spo2_scr_measure;
 
@@ -27,7 +62,7 @@ static float gx = 0;
 
 // Externs
 extern lv_style_t style_red_medium;
-extern lv_style_t style_white_large;
+extern lv_style_t style_white_large_numeric;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
@@ -36,6 +71,8 @@ extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
 static int spo2_source = 0;
+
+extern struct k_sem sem_fi_spo2_est_cancel;
 
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
@@ -85,25 +122,32 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 
     // LVGL 9: Chart point styling changed - commented out
 
-
     // lv_obj_set_style_width(...);
     // LVGL 9: Chart point styling changed - commented out
 
     // lv_obj_set_style_height(...);
     lv_obj_set_style_border_width(chart_ppg, 0, LV_PART_MAIN);
 
+    /* Use consistent buffering/point-count choices as raw PPG screen for better visual parity
+     * - FI source keeps the wider BPT window
+     * - Wrist PPG uses the raw PPG window for snappier updates
+     */
     if (spo2_source == SPO2_SOURCE_PPG_FI)
     {
         lv_chart_set_point_count(chart_ppg, BPT_DISP_WINDOW_SIZE * 2);
     }
     else if (spo2_source == SPO2_SOURCE_PPG_WR)
     {
-        lv_chart_set_point_count(chart_ppg, SPO2_DISP_WINDOW_SIZE_WR);
+        /* match raw PPG window size for wrist plotting */
+        lv_chart_set_point_count(chart_ppg, PPG_RAW_WINDOW_SIZE);
     }
 
     lv_chart_set_div_line_count(chart_ppg, 0, 0);
     lv_chart_set_update_mode(chart_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_align(chart_ppg, LV_ALIGN_CENTER, 0, -35);
+
+    /* Set a sensible default Y range to keep waveform visible until autoscale runs */
+    lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, 2048 - 128, 2048 + 128);
 
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
@@ -116,7 +160,7 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 
     // Draw BPM
     /*lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_35);
+    lv_img_set_src(img_heart, &img_heart_48px);
 
     label_hr = lv_label_create(cont_hr);
     lv_label_set_text(label_hr, "00");
@@ -136,15 +180,7 @@ static void hpi_ppg_disp_add_samples(int num_samples)
 
 static void hpi_ppg_disp_do_set_scale(int disp_window_size)
 {
-    if (gx >= (disp_window_size / 4))
-    {
-
-        lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
-
-        gx = 0;
-        y_max_ppg = -900000;
-        y_min_ppg = 900000;
-    }
+    hpi_ppg_disp_do_set_scale_shared(chart_ppg, &y_min_ppg, &y_max_ppg, &gx, disp_window_size);
 }
 
 void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int spo2, int hr)
@@ -162,7 +198,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     else if (state == SPO2_MEAS_SUCCESS)
     {
         lv_label_set_text(label_spo2_status, "Complete");
-        //hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
+        // hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_UP, (uint8_t)SCR_SPO2, spo2, hr, 0);
     }
     else if (state == SPO2_MEAS_TIMEOUT)
     {
@@ -173,72 +209,113 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     {
         lv_label_set_text(label_spo2_status, "Starting...");
     }
-
-    /*if (hr == 0)
-    {
-        lv_label_set_text(label_hr, "--");
-    }
-    else
-    {
-        lv_label_set_text_fmt(label_hr, "%d", hr);
-    }*/
 }
 
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
+    uint32_t *data_ppg = ppg_sensor_sample.raw_green;
 
-    for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
+    /* Simple DC removal: EMA baseline and plot residual centered to avoid LVGL coord wrap. */
+    static float baseline_ema = 0.0f;
+    static bool baseline_init = false;
+    const float alpha = 0.005f; /* small alpha for slow baseline tracking */
+
+    /* Cache locals to reduce repeated global accesses */
+    int num = ppg_sensor_sample.ppg_num_samples;
+    float local_ymin = y_min_ppg;
+    float local_ymax = y_max_ppg;
+    float local_base = baseline_ema;
+    int local_spo2_source = spo2_source;
+
+    for (int i = 0; i < num; i++)
     {
-        if (data_ppg[i] < y_min_ppg)
+    /* Driver now provides normalized samples; use value directly. */
+    int32_t scaled = (int32_t)(data_ppg[i]);
+
+        if (!baseline_init)
         {
-            y_min_ppg = data_ppg[i];
+            local_base = (float)scaled;
+            baseline_init = true;
         }
 
-        if (data_ppg[i] > y_max_ppg)
-        {
-            y_max_ppg = data_ppg[i];
-        }
+        float residual = (float)scaled - local_base;
+        local_base = local_base * (1.0f - alpha) + ((float)scaled * alpha);
 
-        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg[i]);
+        /* Center residual to positive range for plotting */
+        int32_t plot_val = (int32_t)(residual) + 2048; /* center offset */
 
+        float fplot = (float)plot_val;
+
+        /* Update local extrema then write sample to chart so autoscale sees newest values */
+        if (fplot < local_ymin) local_ymin = fplot;
+        if (fplot > local_ymax) local_ymax = fplot;
+
+        lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
+
+        /* Commit extrema to globals used by the shared autoscale helper */
+        y_min_ppg = local_ymin;
+        y_max_ppg = local_ymax;
+
+        /* Advance sample counter used by autoscaler and call helper */
         hpi_ppg_disp_add_samples(1);
 
-        if (spo2_source == SPO2_SOURCE_PPG_WR)
-        {
-            hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_WR);
-        }
-        else
-        {
+    (void)0;
+
+        if (local_spo2_source == SPO2_SOURCE_PPG_WR) {
+            hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
+        } else {
             hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_FI);
         }
     }
+
+    /* write back cached locals */
+    y_min_ppg = local_ymin;
+    y_max_ppg = local_ymax;
+    baseline_ema = local_base;
 }
 
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
     uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
+    /* Simple DC removal for FI source similar to wrist plotting to reduce baseline wander */
+    static float fi_baseline_ema = 0.0f;
+    static bool fi_baseline_init = false;
+    const float alpha_fi = 0.01f; /* slightly faster baseline tracking for finger */
+
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
-        float data_ppg_i = (float)(data_ppg[i] * 1.000); // * 0.100);
+        float data_ppg_i = (float)(data_ppg[i]);
 
-        if (data_ppg_i == 0)
+        /* Guard against zero/invalid samples from driver */
+        if (data_ppg_i == 0.0f)
         {
-            return;
+            continue; /* skip this sample instead of aborting the whole batch */
         }
 
-        if (data_ppg_i < y_min_ppg)
+        if (!fi_baseline_init)
         {
-            y_min_ppg = data_ppg_i;
+            fi_baseline_ema = data_ppg_i;
+            fi_baseline_init = true;
         }
 
-        if (data_ppg_i > y_max_ppg)
+        float residual = data_ppg_i - fi_baseline_ema;
+        fi_baseline_ema = fi_baseline_ema * (1.0f - alpha_fi) + (data_ppg_i * alpha_fi);
+
+        /* Center residual to positive range for LVGL plotting */
+        int32_t plot_val = (int32_t)(residual) + 2048;
+
+        if ((float)plot_val < y_min_ppg)
         {
-            y_max_ppg = data_ppg_i;
+            y_min_ppg = (float)plot_val;
         }
 
-        lv_chart_set_next_value(chart_ppg, ser_ppg, data_ppg_i);
+        if ((float)plot_val > y_max_ppg)
+        {
+            y_max_ppg = (float)plot_val;
+        }
+
+        lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
 
         hpi_ppg_disp_add_samples(1);
         hpi_ppg_disp_do_set_scale(BPT_DISP_WINDOW_SIZE * 2);
@@ -247,6 +324,11 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 
 void gesture_down_scr_spo2_measure(void)
 {
-    // Handle gesture down on SpO2 measure screen
+    // If finger-based measurement, signal cancel to the finger SM
+    if (spo2_source == SPO2_SOURCE_PPG_FI) {
+        k_sem_give(&sem_fi_spo2_est_cancel);
+    }
+
+    // Navigate back to selection screen
     hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_DOWN, 0, 0, 0, 0);
 }

@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <lvgl.h>
 #include <stdio.h>
@@ -9,8 +39,8 @@ LOG_MODULE_REGISTER(scr_device_user_settings, LOG_LEVEL_INF);
 
 #include "ui/move_ui.h"
 #include "hw_module.h"
-#include "hpi_settings_persistence.h"
-#include "sm/smf_ecg_bioz.h"
+#include "hpi_settings_store.h"
+#include "sm/smf_ecg.h"
 
 lv_obj_t *scr_device_user_settings;
 
@@ -31,8 +61,12 @@ extern double m_user_met;
 // Settings persistence - we'll sync with the persistence module
 static struct hpi_user_settings current_ui_settings;
 
-extern lv_style_t style_scr_black;
 extern lv_style_t style_lbl_white_14;
+
+// Modern style system
+extern lv_style_t style_body_medium;
+extern lv_style_t style_numeric_large;
+extern lv_style_t style_caption;
 
 // Function to automatically save settings
 static void hpi_auto_save_settings(void)
@@ -122,7 +156,7 @@ static void btn_sleep_timeout_event_cb(lv_event_t *e)
     if (code == LV_EVENT_CLICKED) {
         LOG_DBG("Sleep timeout button clicked");
         // Navigate to sleep timeout selection screen
-        hpi_load_scr_spl(SCR_SPL_TEMP_UNIT_SELECT + 1, SCROLL_DOWN, SCR_SPL_DEVICE_USER_SETTINGS, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SLEEP_TIMEOUT_SELECT, SCROLL_DOWN, SCR_SPL_DEVICE_USER_SETTINGS, 0, 0, 0);
     }
 }
 
@@ -179,9 +213,9 @@ void hpi_update_setting_labels(void)
 void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     // Initialize settings persistence if needed
-    int rc = hpi_settings_persistence_init();
+    int rc = hpi_settings_store_init();
     if (rc) {
-        LOG_ERR("Failed to initialize settings persistence: %d", rc);
+        LOG_ERR("Failed to initialize settings store: %d", rc);
     }
     
     // Load current settings
@@ -206,148 +240,163 @@ void draw_scr_device_user_settings(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     m_user_weight = current_ui_settings.weight;
 
     scr_device_user_settings = lv_obj_create(NULL);
-    draw_scr_common(scr_device_user_settings);
-    
-    // Disable scrolling on the main screen
-    lv_obj_set_scrollbar_mode(scr_device_user_settings, LV_SCROLLBAR_MODE_OFF);
+    // AMOLED OPTIMIZATION: Pure black background for power efficiency
+    lv_obj_set_style_bg_color(scr_device_user_settings, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_device_user_settings, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Create simplified main container with scroll capability - optimized for 390x390 round display
-    lv_obj_t *cont_main = lv_obj_create(scr_device_user_settings);
-    lv_obj_set_size(cont_main, 340, 340);
-    lv_obj_align_to(cont_main, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_pad_all(cont_main, 12, 0);
-    lv_obj_add_style(cont_main, &style_scr_black, 0);
-    lv_obj_set_scrollbar_mode(cont_main, LV_SCROLLBAR_MODE_ON);
-    lv_obj_set_style_radius(cont_main, 170, 0); // Make container circular
-    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
+    // CIRCULAR AMOLED-OPTIMIZED SETTINGS SCREEN
+    // Display center: (195, 195), Usable radius: ~185px
 
-    // Title - centered for round display
-    lv_obj_t *lbl_title = lv_label_create(cont_main);
+    // Title - clean and centered at top
+    lv_obj_t *lbl_title = lv_label_create(scr_device_user_settings);
     lv_label_set_text(lbl_title, "Settings");
-    lv_obj_add_style(lbl_title, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_title, 130, 10);
+    lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 20);
+    lv_obj_add_style(lbl_title, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_title, lv_color_white(), LV_PART_MAIN);
 
-    int16_t y_pos = 45;
-    const int16_t item_height = 80;
-    const int16_t label_x = 20;
-    const int16_t button_x = 180;
+    // Create scrollable container optimized for circular display
+    lv_obj_t *cont_main = lv_obj_create(scr_device_user_settings);
+    lv_obj_set_size(cont_main, 350, 280);  // Fit within circular bounds
+    lv_obj_align(cont_main, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_set_style_bg_color(cont_main, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(cont_main, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_main, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_main, 10, LV_PART_MAIN);
+    lv_obj_set_scrollbar_mode(cont_main, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_scroll_dir(cont_main, LV_DIR_VER);
 
-    // Height input - optimized layout for round display
+    int16_t y_pos = 0;
+    const int16_t item_spacing = 45;
+
+    // Height Setting - compact row layout
     lv_obj_t *lbl_height = lv_label_create(cont_main);
     lv_label_set_text(lbl_height, "Height:");
-    lv_obj_add_style(lbl_height, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_height, label_x, y_pos + 18);
+    lv_obj_set_pos(lbl_height, 20, y_pos);
+    lv_obj_add_style(lbl_height, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_height, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     
-    btn_user_height = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_user_height, 140, 55);
-    lv_obj_set_pos(btn_user_height, button_x - 10, y_pos);
-    lv_obj_add_event_cb(btn_user_height, btn_height_event_cb, LV_EVENT_ALL, NULL);
+    btn_user_height = hpi_btn_create_secondary(cont_main);
+    lv_obj_set_size(btn_user_height, 120, 35);
+    lv_obj_set_pos(btn_user_height, 200, y_pos - 5);
+    lv_obj_add_event_cb(btn_user_height, btn_height_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *lbl_height_value = lv_label_create(btn_user_height);
     lv_label_set_text_fmt(lbl_height_value, "%d cm", m_user_height);
     lv_obj_center(lbl_height_value);
+    lv_obj_add_style(lbl_height_value, &style_caption, LV_PART_MAIN);
 
-    y_pos += item_height;
+    y_pos += item_spacing;
 
-    // Weight input - optimized layout for round display
+    // Weight Setting
     lv_obj_t *lbl_weight = lv_label_create(cont_main);
     lv_label_set_text(lbl_weight, "Weight:");
-    lv_obj_add_style(lbl_weight, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_weight, label_x, y_pos + 18);
+    lv_obj_set_pos(lbl_weight, 20, y_pos);
+    lv_obj_add_style(lbl_weight, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_weight, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     
-    btn_user_weight = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_user_weight, 140, 55);
-    lv_obj_set_pos(btn_user_weight, button_x - 10, y_pos);
-    lv_obj_add_event_cb(btn_user_weight, btn_weight_event_cb, LV_EVENT_ALL, NULL);
+    btn_user_weight = hpi_btn_create_secondary(cont_main);
+    lv_obj_set_size(btn_user_weight, 120, 35);
+    lv_obj_set_pos(btn_user_weight, 200, y_pos - 5);
+    lv_obj_add_event_cb(btn_user_weight, btn_weight_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *lbl_weight_value = lv_label_create(btn_user_weight);
     lv_label_set_text_fmt(lbl_weight_value, "%d kg", m_user_weight);
     lv_obj_center(lbl_weight_value);
+    lv_obj_add_style(lbl_weight_value, &style_caption, LV_PART_MAIN);
 
-    y_pos += item_height;
+    y_pos += item_spacing;
 
-    // Hand worn - optimized layout for round display
+    // Hand Worn Setting
     lv_obj_t *lbl_hand_worn = lv_label_create(cont_main);
     lv_label_set_text(lbl_hand_worn, "Worn on:");
-    lv_obj_add_style(lbl_hand_worn, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_hand_worn, label_x, y_pos + 18);
+    lv_obj_set_pos(lbl_hand_worn, 20, y_pos);
+    lv_obj_add_style(lbl_hand_worn, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_hand_worn, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     
-    btn_hand_worn = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_hand_worn, 140, 55);
-    lv_obj_set_pos(btn_hand_worn, button_x - 10, y_pos);
-    lv_obj_add_event_cb(btn_hand_worn, btn_hand_worn_event_cb, LV_EVENT_ALL, NULL);
+    btn_hand_worn = hpi_btn_create_secondary(cont_main);
+    lv_obj_set_size(btn_hand_worn, 120, 35);
+    lv_obj_set_pos(btn_hand_worn, 200, y_pos - 5);
+    lv_obj_add_event_cb(btn_hand_worn, btn_hand_worn_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *lbl_hand_value = lv_label_create(btn_hand_worn);
     lv_label_set_text(lbl_hand_value, current_ui_settings.hand_worn ? "Right" : "Left");
     lv_obj_center(lbl_hand_value);
+    lv_obj_add_style(lbl_hand_value, &style_caption, LV_PART_MAIN);
 
-    y_pos += item_height;
+    y_pos += item_spacing;
 
-    // Time format - optimized layout for round display
+    // Time Format Setting
     lv_obj_t *lbl_time_format = lv_label_create(cont_main);
     lv_label_set_text(lbl_time_format, "Time:");
-    lv_obj_add_style(lbl_time_format, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_time_format, label_x, y_pos + 18);
+    lv_obj_set_pos(lbl_time_format, 20, y_pos);
+    lv_obj_add_style(lbl_time_format, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_time_format, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     
-    btn_time_format = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_time_format, 120, 55);
-    lv_obj_set_pos(btn_time_format, button_x, y_pos);
-    lv_obj_add_event_cb(btn_time_format, btn_time_format_event_cb, LV_EVENT_ALL, NULL);
+    btn_time_format = hpi_btn_create_secondary(cont_main);
+    lv_obj_set_size(btn_time_format, 120, 35);
+    lv_obj_set_pos(btn_time_format, 200, y_pos - 5);
+    lv_obj_add_event_cb(btn_time_format, btn_time_format_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *lbl_time_value = lv_label_create(btn_time_format);
     lv_label_set_text(lbl_time_value, current_ui_settings.time_format ? "12 H" : "24 H");
     lv_obj_center(lbl_time_value);
+    lv_obj_add_style(lbl_time_value, &style_caption, LV_PART_MAIN);
 
-    y_pos += item_height;
+    y_pos += item_spacing;
 
-    // Temperature unit - optimized layout for round display
+    // Temperature Unit Setting
     lv_obj_t *lbl_temp_unit = lv_label_create(cont_main);
     lv_label_set_text(lbl_temp_unit, "Temp:");
-    lv_obj_add_style(lbl_temp_unit, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_temp_unit, label_x, y_pos + 18);
+    lv_obj_set_pos(lbl_temp_unit, 20, y_pos);
+    lv_obj_add_style(lbl_temp_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_temp_unit, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     
-    btn_temp_unit = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_temp_unit, 120, 55);
-    lv_obj_set_pos(btn_temp_unit, button_x, y_pos);
-    lv_obj_add_event_cb(btn_temp_unit, btn_temp_unit_event_cb, LV_EVENT_ALL, NULL);
+    btn_temp_unit = hpi_btn_create_secondary(cont_main);
+    lv_obj_set_size(btn_temp_unit, 120, 35);
+    lv_obj_set_pos(btn_temp_unit, 200, y_pos - 5);
+    lv_obj_add_event_cb(btn_temp_unit, btn_temp_unit_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *lbl_temp_value = lv_label_create(btn_temp_unit);
     lv_label_set_text(lbl_temp_value, current_ui_settings.temp_unit ? "°F" : "°C");
     lv_obj_center(lbl_temp_value);
+    lv_obj_add_style(lbl_temp_value, &style_caption, LV_PART_MAIN);
 
-    y_pos += item_height;
+    y_pos += item_spacing;
 
-    // Auto sleep switch - optimized layout for round display
+    // Auto Sleep Switch
     lv_obj_t *lbl_auto_sleep = lv_label_create(cont_main);
     lv_label_set_text(lbl_auto_sleep, "Auto Sleep:");
-    lv_obj_add_style(lbl_auto_sleep, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_auto_sleep, label_x, y_pos + 18);
+    lv_obj_set_pos(lbl_auto_sleep, 20, y_pos);
+    lv_obj_add_style(lbl_auto_sleep, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_auto_sleep, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     
     sw_auto_sleep = lv_switch_create(cont_main);
-    lv_obj_set_size(sw_auto_sleep, 80, 45);
-    lv_obj_set_pos(sw_auto_sleep, button_x + 20, y_pos + 8);
+    lv_obj_set_size(sw_auto_sleep, 60, 30);
+    lv_obj_set_pos(sw_auto_sleep, 240, y_pos - 3);
     if (current_ui_settings.auto_sleep_enabled) {
         lv_obj_add_state(sw_auto_sleep, LV_STATE_CHECKED);
     }
-    lv_obj_add_event_cb(sw_auto_sleep, sw_auto_sleep_event_cb, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(sw_auto_sleep, sw_auto_sleep_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    y_pos += item_height;
+    y_pos += item_spacing;
 
-    // Sleep timeout selection - optimized layout for round display
+    // Sleep Timeout Setting
     lv_obj_t *lbl_sleep_timeout = lv_label_create(cont_main);
-    lv_label_set_text(lbl_sleep_timeout, "Sleep Timeout:");
-    lv_obj_add_style(lbl_sleep_timeout, &style_lbl_white_14, 0);
-    lv_obj_set_pos(lbl_sleep_timeout, label_x, y_pos + 18);
+    lv_label_set_text(lbl_sleep_timeout, "Sleep Time:");
+    lv_obj_set_pos(lbl_sleep_timeout, 20, y_pos);
+    lv_obj_add_style(lbl_sleep_timeout, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_sleep_timeout, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     
-    btn_sleep_timeout = lv_btn_create(cont_main);
-    lv_obj_set_size(btn_sleep_timeout, 140, 55);
-    lv_obj_set_pos(btn_sleep_timeout, button_x - 10, y_pos);
-    lv_obj_add_event_cb(btn_sleep_timeout, btn_sleep_timeout_event_cb, LV_EVENT_ALL, NULL);
+    btn_sleep_timeout = hpi_btn_create_secondary(cont_main);
+    lv_obj_set_size(btn_sleep_timeout, 120, 35);
+    lv_obj_set_pos(btn_sleep_timeout, 200, y_pos - 5);
+    lv_obj_add_event_cb(btn_sleep_timeout, btn_sleep_timeout_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *lbl_sleep_timeout_value = lv_label_create(btn_sleep_timeout);
     lv_label_set_text_fmt(lbl_sleep_timeout_value, "%d s", current_ui_settings.sleep_timeout);
     lv_obj_center(lbl_sleep_timeout_value);
+    lv_obj_add_style(lbl_sleep_timeout_value, &style_caption, LV_PART_MAIN);
 
     hpi_disp_set_curr_screen(SCR_SPL_DEVICE_USER_SETTINGS);
     hpi_show_screen(scr_device_user_settings, m_scroll_dir);
@@ -388,7 +437,7 @@ static void roller_height_event_cb(lv_event_t *e)
 void draw_scr_height_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_height_select = lv_obj_create(NULL);
-    draw_scr_common(scr_height_select);
+    lv_obj_set_style_bg_color(scr_height_select, lv_color_hex(0x000000), 0);
 
     // Create main container
     lv_obj_t *cont_main = lv_obj_create(scr_height_select);
@@ -397,7 +446,7 @@ void draw_scr_height_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_
     lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
-    lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_style_bg_color(cont_main, lv_color_hex(0x000000), 0);
     lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
@@ -464,7 +513,7 @@ static void roller_weight_event_cb(lv_event_t *e)
 void draw_scr_weight_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_weight_select = lv_obj_create(NULL);
-    draw_scr_common(scr_weight_select);
+    lv_obj_set_style_bg_color(scr_weight_select, lv_color_hex(0x000000), 0);
 
     // Create main container
     lv_obj_t *cont_main = lv_obj_create(scr_weight_select);
@@ -473,7 +522,7 @@ void draw_scr_weight_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_
     lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
-    lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_style_bg_color(cont_main, lv_color_hex(0x000000), 0);
     lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
@@ -544,7 +593,7 @@ static void roller_hand_worn_event_cb(lv_event_t *e)
 void draw_scr_hand_worn_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_hand_worn_select = lv_obj_create(NULL);
-    draw_scr_common(scr_hand_worn_select);
+    lv_obj_set_style_bg_color(scr_hand_worn_select, lv_color_hex(0x000000), 0);
 
     // Create main container
     lv_obj_t *cont_main = lv_obj_create(scr_hand_worn_select);
@@ -553,7 +602,7 @@ void draw_scr_hand_worn_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
-    lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_style_bg_color(cont_main, lv_color_hex(0x000000), 0);
     lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
@@ -607,7 +656,7 @@ static void roller_time_format_event_cb(lv_event_t *e)
 void draw_scr_time_format_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_time_format_select = lv_obj_create(NULL);
-    draw_scr_common(scr_time_format_select);
+    lv_obj_set_style_bg_color(scr_time_format_select, lv_color_hex(0x000000), 0);
 
     // Create main container
     lv_obj_t *cont_main = lv_obj_create(scr_time_format_select);
@@ -616,7 +665,7 @@ void draw_scr_time_format_select(enum scroll_dir m_scroll_dir, uint32_t arg1, ui
     lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
-    lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_style_bg_color(cont_main, lv_color_hex(0x000000), 0);
     lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
@@ -670,7 +719,7 @@ static void roller_temp_unit_event_cb(lv_event_t *e)
 void draw_scr_temp_unit_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_temp_unit_select = lv_obj_create(NULL);
-    draw_scr_common(scr_temp_unit_select);
+    lv_obj_set_style_bg_color(scr_temp_unit_select, lv_color_hex(0x000000), 0);
 
     // Create main container
     lv_obj_t *cont_main = lv_obj_create(scr_temp_unit_select);
@@ -679,7 +728,7 @@ void draw_scr_temp_unit_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
-    lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_style_bg_color(cont_main, lv_color_hex(0x000000), 0);
 
     // Title
     lv_obj_t *lbl_title = lv_label_create(cont_main);
@@ -738,7 +787,7 @@ static void roller_sleep_timeout_event_cb(lv_event_t *e)
 void draw_scr_sleep_timeout_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_sleep_timeout_select = lv_obj_create(NULL);
-    draw_scr_common(scr_sleep_timeout_select);
+    lv_obj_set_style_bg_color(scr_sleep_timeout_select, lv_color_hex(0x000000), 0);
 
     // Create main container
     lv_obj_t *cont_main = lv_obj_create(scr_sleep_timeout_select);
@@ -747,7 +796,7 @@ void draw_scr_sleep_timeout_select(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(cont_main, 10, 0);
-    lv_obj_add_style(cont_main, &style_scr_black, 0);
+    lv_obj_set_style_bg_color(cont_main, lv_color_hex(0x000000), 0);
     lv_obj_set_scroll_dir(cont_main, LV_DIR_VER); // Disable horizontal scrolling
 
     // Title
@@ -771,7 +820,7 @@ void draw_scr_sleep_timeout_select(enum scroll_dir m_scroll_dir, uint32_t arg1, 
     }
     lv_roller_set_selected(roller_sleep_timeout, current_index, LV_ANIM_OFF);
 
-    hpi_disp_set_curr_screen(SCR_SPL_TEMP_UNIT_SELECT + 1);
+    hpi_disp_set_curr_screen(SCR_SPL_SLEEP_TIMEOUT_SELECT);
     hpi_show_screen(scr_sleep_timeout_select, m_scroll_dir);
 }
 

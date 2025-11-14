@@ -3,8 +3,54 @@
 LOG_MODULE_REGISTER(max32664d_async, CONFIG_SENSOR_LOG_LEVEL);
 
 #include "max32664d.h"
+#include <errno.h>
+
+/* Local I2C wrappers to centralize bus calls (keeps parity with max32664c pattern).
+ * These are simple wrappers that call the DeviceTree helpers; they can be extended
+ * later to use RTIO if needed. */
+static int max32664d_i2c_write(const struct i2c_dt_spec *i2c, const void *buf, size_t len)
+{
+    return i2c_write_dt(i2c, buf, len);
+}
+
+static int max32664d_i2c_read(const struct i2c_dt_spec *i2c, void *buf, size_t len)
+{
+    return i2c_read_dt(i2c, buf, len);
+}
 
 #define MAX32664D_SENSOR_DATA_OFFSET 1
+
+/* Helper to read FIFO via I2C while toggling MFIO. Returns 0 on success or negative rc */
+static int max32664d_read_fifo_i2c(const struct device *dev, uint8_t *buf, int sample_len, int fifo_count)
+{
+    const struct max32664d_config *config = dev->config;
+    uint8_t wr_buf[2] = {0x12, 0x01};
+
+    if (fifo_count <= 0 || buf == NULL) {
+        return -EINVAL;
+    }
+
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+
+    int rc = max32664d_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        LOG_ERR("I2C write (FIFO read cmd) failed: %d", rc);
+        return rc;
+    }
+
+    rc = max32664d_i2c_read(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664D_SENSOR_DATA_OFFSET));
+    if (rc != 0) {
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+        LOG_ERR("I2C read (FIFO data) failed: %d", rc);
+        return rc;
+    }
+
+    k_sleep(K_USEC(300));
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+    return 0;
+}
 
 static int max32664_async_sample_fetch(const struct device *dev,
                                        uint32_t ir_samples[32], uint32_t red_samples[32], uint8_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf,
@@ -12,92 +58,91 @@ static int max32664_async_sample_fetch(const struct device *dev,
 {
     struct max32664d_data *data = dev->data;
     const struct max32664d_config *config = dev->config;
-
-    uint8_t wr_buf[2] = {0x12, 0x01};
     static uint8_t buf[2048];
 
-    static int sample_len = 29;
-    uint64_t start_time = k_uptime_get();
-    uint64_t timeout_ms = 1000;
+    int sample_len = 29;
 
+    /* Read hub status once and only proceed if DRDY is set. This mirrors
+     * the max32664c pattern and avoids tight busy-wait loops that hammer
+     * the I2C/MFIO lines. If no DRDY, return with zero samples. */
     uint8_t hub_stat = max32664d_read_hub_status(dev);
-    while (!(hub_stat & MAX32664D_HUB_STAT_DRDY_MASK))
+    if (!(hub_stat & MAX32664D_HUB_STAT_DRDY_MASK))
     {
-        hub_stat = max32664d_read_hub_status(dev);
-
-        if (k_uptime_get() - start_time > timeout_ms)
-        {
-            LOG_ERR("Timeout waiting for DRDY flag");
-            return -ETIMEDOUT; // Return a timeout error code
-        }
+        *num_samples = 0;
+        return 0;
     }
 
-    if (hub_stat & MAX32664D_HUB_STAT_DRDY_MASK)
+    int fifo_count = max32664d_get_fifo_count(dev);
+    if (fifo_count > 32)
     {
-        int fifo_count = max32664d_get_fifo_count(dev);
-        // printk("F: %d | ", fifo_count);
+        fifo_count = 32;
+    }
 
-        if (fifo_count > 32)
+    *num_samples = fifo_count;
+
+    if (fifo_count <= 0)
+    {
+        return 0;
+    }
+
+    if (data->op_mode == MAX32664D_OP_MODE_RAW)
+    {
+        sample_len = 12;
+    }
+    else if ((data->op_mode == MAX32664D_OP_MODE_BPT_EST) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
+    {
+        sample_len = 29;
+    }
+
+    int rc = max32664d_read_fifo_i2c(dev, buf, sample_len, fifo_count);
+    if (rc != 0)
+    {
+        return rc;
+    }
+
+
+        /*
+         * Datasheet note: the MAX32664 provides LED samples as 24-bit MSB-first
+         * bytes in the FIFO. The ADC effective resolution is 20 bits; to produce
+         * canonical values for consumers we assemble the 24-bit word and
+         * right-align it by 4 bits (assembled_24 >> 4) so the resulting
+         * integers correspond to the datasheet's 20-bit ADC range.
+         */
+        for (int i = 0; i < fifo_count; i++)
         {
-            fifo_count = 32;
-        }
+            uint32_t led_ir = (uint32_t)buf[(sample_len * i) + MAX32664D_SENSOR_DATA_OFFSET] << 16;
+            led_ir |= (uint32_t)buf[(sample_len * i) + 1 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+            led_ir |= (uint32_t)buf[(sample_len * i) + 2 + MAX32664D_SENSOR_DATA_OFFSET];
+            /* Normalize assembled 24-bit IR value down by 4 bits to provide canonical scale to UI */
+            ir_samples[i] = (led_ir >> 4);
 
-        *num_samples = fifo_count;
+            uint32_t led_red = (uint32_t)buf[(sample_len * i) + 3 + MAX32664D_SENSOR_DATA_OFFSET] << 16;
+            led_red |= (uint32_t)buf[(sample_len * i) + 4 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+            led_red |= (uint32_t)buf[(sample_len * i) + 5 + MAX32664D_SENSOR_DATA_OFFSET];
+            /* Normalize assembled 24-bit Red value down by 4 bits to provide canonical scale to UI */
+            red_samples[i] = (led_red >> 4);
 
-        if (fifo_count > 0)
-        {
-            if (data->op_mode == MAX32664D_OP_MODE_RAW)
-            {
-                sample_len = 12;
-            }
-            else if ((data->op_mode == MAX32664D_OP_MODE_BPT_EST) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
-            {
-                sample_len = 29;
-            }
+        /* bytes 7..12 are ignored in current layout */
 
-            i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-            // k_sleep(K_USEC(300));
-            i2c_read_dt(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664D_SENSOR_DATA_OFFSET));
+        *bpt_status = buf[(sample_len * i) + 12 + MAX32664D_SENSOR_DATA_OFFSET];
+        *bpt_progress = buf[(sample_len * i) + 13 + MAX32664D_SENSOR_DATA_OFFSET];
 
-            for (int i = 0; i < fifo_count; i++)
-            {
-                uint32_t led_ir = (uint32_t)buf[(sample_len * i) + MAX32664D_SENSOR_DATA_OFFSET] << 16;
-                led_ir |= (uint32_t)buf[(sample_len * i) + 1 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                led_ir |= (uint32_t)buf[(sample_len * i) + 2 + MAX32664D_SENSOR_DATA_OFFSET];
+        uint16_t bpt_hr = (uint16_t)buf[(sample_len * i) + 14 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+        bpt_hr |= (uint16_t)buf[(sample_len * i) + 15 + MAX32664D_SENSOR_DATA_OFFSET];
 
-                ir_samples[i] = led_ir;
+        *hr = (bpt_hr / 10);
 
-                uint32_t led_red = (uint32_t)buf[(sample_len * i) + 3 + MAX32664D_SENSOR_DATA_OFFSET] << 16;
-                led_red |= (uint32_t)buf[(sample_len * i) + 4 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                led_red |= (uint32_t)buf[(sample_len * i) + 5 + MAX32664D_SENSOR_DATA_OFFSET];
+        *bpt_sys = buf[(sample_len * i) + 16 + MAX32664D_SENSOR_DATA_OFFSET];
+        *bpt_dia = buf[(sample_len * i) + 17 + MAX32664D_SENSOR_DATA_OFFSET];
 
-                red_samples[i] = led_red;
+        uint16_t bpt_spo2 = (uint16_t)buf[(sample_len * i) + 18 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+        bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 19 + MAX32664D_SENSOR_DATA_OFFSET];
 
-                // bytes 7,8,9, 10,11,12 are ignored
+        *spo2 = (bpt_spo2 / 10);
+        *spo2_conf = buf[(sample_len * i) + 25 + MAX32664D_SENSOR_DATA_OFFSET];
 
-                *bpt_status = buf[(sample_len * i) + 12 + MAX32664D_SENSOR_DATA_OFFSET];
-                *bpt_progress = buf[(sample_len * i) + 13 + MAX32664D_SENSOR_DATA_OFFSET];
-
-                uint16_t bpt_hr = (uint16_t)buf[(sample_len * i) + 14 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                bpt_hr |= (uint16_t)buf[(sample_len * i) + 15 + MAX32664D_SENSOR_DATA_OFFSET];
-
-                *hr = (bpt_hr / 10);
-
-                *bpt_sys = buf[(sample_len * i) + 16 + MAX32664D_SENSOR_DATA_OFFSET];
-                *bpt_dia = buf[(sample_len * i) + 17 + MAX32664D_SENSOR_DATA_OFFSET];
-
-                uint16_t bpt_spo2 = (uint16_t)buf[(sample_len * i) + 18 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 19 + MAX32664D_SENSOR_DATA_OFFSET];
-
-                *spo2 = (bpt_spo2 / 10);
-                *spo2_conf = buf[(sample_len * i) + 25 + MAX32664D_SENSOR_DATA_OFFSET]; 
-
-                uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 20 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-                spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 + MAX32664D_SENSOR_DATA_OFFSET];
-
-                
-            }
-        }
+        uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 20 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+        spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 + MAX32664D_SENSOR_DATA_OFFSET];
     }
 
     return 0;
@@ -144,6 +189,41 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     }
 
     rtio_iodev_sqe_ok(iodev_sqe, 0);
+
+    return 0;
+}
+
+/*
+ * Cancel any running estimation/algorithm and power the sensor down.
+ * This stops the algorithm via the existing attribute handler and then
+ * places the chip into a safe powered-down state by toggling reset/mfio.
+ */
+int max32664d_cancel(const struct device *dev)
+{
+    const struct max32664d_config *config = dev->config;
+    struct max32664d_data *data = dev->data;
+    struct sensor_value stop_val;
+
+    LOG_INF("max32664d_cancel: stopping algorithm and powering down sensor");
+
+    /* Request the driver to stop estimation/algorithm */
+    stop_val.val1 = MAX32664D_ATTR_STOP_EST;
+    sensor_attr_set(dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_STOP_EST, &stop_val);
+
+    /* Give the chip a little time to stop */
+    k_msleep(50);
+
+    /* Drive MFIO low and reset the device to ensure AFE is disabled */
+    gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+
+    gpio_pin_set_dt(&config->reset_gpio, 0);
+    k_msleep(10);
+
+    /* Leave reset asserted to keep chip inactive */
+    LOG_DBG("max32664d_cancel: MFIO low and RESET asserted");
+
+    data->op_mode = MAX32664D_OP_MODE_IDLE;
 
     return 0;
 }
