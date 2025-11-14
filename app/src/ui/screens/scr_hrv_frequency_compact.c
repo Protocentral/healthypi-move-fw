@@ -56,10 +56,10 @@ static float lf_power_compact = 0.0f;
 static float hf_power_compact = 0.0f;
 static float stress_score_compact = 0.0f;
 
-static void lvgl_update_cb(void *user_data)
-{
-    hpi_hrv_frequency_compact_update_display();
-}
+// static void lvgl_update_cb(void *user_data)
+// {
+//     hpi_hrv_frequency_compact_update_display();
+// }
 
 // Simplified stress assessment for compact display
 static int get_stress_percentage(float lf, float hf) {
@@ -375,7 +375,7 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
     
     // Average the PSD and normalize
     if (num_segments > 0) {
-        LOG_INF("Number of segments: %d", num_segments);
+        //LOG_INF("Number of segments: %d", num_segments);
         float32_t scale = 1.0f / (num_segments * fs * fft_size);
         arm_scale_f32(psd, scale, psd, fft_size);
     }
