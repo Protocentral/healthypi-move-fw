@@ -10,7 +10,6 @@
 
 LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
 
-#define HRV_COLLECTION_MS 30000 
 K_MUTEX_DEFINE(hrv_mutex);
 
 static bool collecting = false;
