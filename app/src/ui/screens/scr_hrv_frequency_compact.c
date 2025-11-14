@@ -239,8 +239,8 @@ float hpi_get_lf_hf_ratio(void) {
 
  /* Linear interpolation for RR intervals */
  
-static float32_t linear_interp(float32_t x, float32_t x0, float32_t x1, 
-                                float32_t y0, float32_t y1) {
+static float32_t linear_interp(float32_t x, float32_t x0, float32_t x1, float32_t y0, float32_t y1)
+{
     if (x1 == x0) return y0;
     return y0 + (x - x0) * (y1 - y0) / (x1 - x0);
 }
@@ -383,9 +383,8 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
 
 /* Integrate power in frequency band using trapezoidal rule */
 
-static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,
-                                      float32_t fs, float32_t f_low, 
-                                      float32_t f_high) {
+static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_t fs, float32_t f_low, float32_t f_high)
+ {
     float32_t df = fs / fft_size;
     uint32_t idx_low = (uint32_t)(f_low / df);
     uint32_t idx_high = (uint32_t)(f_high / df);
