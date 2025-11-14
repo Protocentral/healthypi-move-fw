@@ -66,7 +66,7 @@ static lv_obj_t *ui_home_label_hour = NULL;
 static lv_obj_t *ui_home_label_min = NULL;
 static lv_obj_t *ui_home_label_date = NULL;
 static lv_obj_t *ui_home_label_ampm = NULL;
-static lv_obj_t *label_home_batt_val = NULL;  // Renamed to avoid conflicts with other screens
+static lv_obj_t *label_home_batt_val = NULL;  
 
 // LVGL delete event callback - called when LVGL auto-deletes this screen
 static void scr_home_delete_event_cb(lv_event_t *e)
