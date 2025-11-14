@@ -286,9 +286,7 @@ float battery_get_voltage(void)
 void battery_monitor_conditions(uint8_t sys_batt_level, bool sys_batt_charging, float sys_batt_voltage)
 {
     if(!battery_monitor_enabled)
-    {
-        return;
-    }
+    return;
     // Update internal state
     last_battery_level = sys_batt_level;
     last_battery_voltage = sys_batt_voltage;
