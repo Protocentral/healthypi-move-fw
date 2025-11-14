@@ -319,8 +319,9 @@ void on_new_rr_interval_detected(uint16_t rr_interval)
         float sdnn = hrv_calculate_sdnn();
         float rmssd = hrv_calculate_rmssd();
         float pnn50 = hrv_calculate_pnn50();    
-        float hrv_max = (float)hrv_calculate_max();
         float hrv_min = (float)hrv_calculate_min();
+        float hrv_max = (float)hrv_calculate_max();
+       
 
         LOG_INF("HRV 30 interval Collection Complete: \nSamples=%d\nMean=%.1f\nSDNN=%.1f\nRMSSD=%.1f\npNN50=%.3f\nMAX=%.2f\nMIN=%.2f",sample_count, mean, sdnn, rmssd, pnn50, hrv_max, hrv_min);
 
