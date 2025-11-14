@@ -46,6 +46,7 @@
 
 lv_obj_t *scr_hrv;
 
+static bool chart_hrv_update = true;
 // GUI Charts
 static lv_obj_t *chart_hrv;
 static lv_chart_series_t *ser_hrv;
@@ -54,7 +55,7 @@ static lv_chart_series_t *ser_hrv;
 static lv_obj_t *label_hrv_rri;
 static lv_obj_t *label_hrv_sdnn;
 
-static bool chart_hrv_update = true;
+
 
 static float y_max_hrv = 0;
 static float y_min_hrv = 10000;
