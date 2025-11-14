@@ -37,6 +37,7 @@
 
 #define FILTERORDER 161 /* DC Removal Numerator Coeff*/
 #define NRCOEFF (0.992)
+
 #define HRV_LIMIT 30
 
 void hrv_reset(void);
