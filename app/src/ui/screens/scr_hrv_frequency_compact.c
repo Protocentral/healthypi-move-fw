@@ -10,6 +10,7 @@
 #include "arm_math.h"
 #include "arm_const_structs.h"
 #include <string.h>
+#include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv_frequency_compact, LOG_LEVEL_DBG);
 
@@ -42,6 +43,7 @@ lv_obj_t *scr_hrv_frequency_compact;
 static lv_obj_t *label_lf_power_compact;
 static lv_obj_t *label_hf_power_compact;
 static lv_obj_t *label_lf_hf_ratio_compact;
+static lv_obj_t *label_stress;
 static lv_obj_t *label_stress_level_compact;
 static lv_obj_t *arc_stress_gauge;
 
@@ -163,6 +165,11 @@ void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1,
         lv_obj_set_flex_align(cont_bottom, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_align(cont_bottom, LV_ALIGN_BOTTOM_MID, 0, -10);
 
+        // label_stress = lv_obj_create(cont_bottom);
+        // lv_label_set_text(label_stress, "Stress");
+        // lv_obj_set_style_text_color(label_stress, lv_color_hex(0x8000FF), 0);
+        //  lv_obj_add_style(label_stress, &style_white_small, 0);
+
         label_lf_hf_ratio_compact = lv_label_create(cont_bottom);
         lv_label_set_text(label_lf_hf_ratio_compact, "LF/HF: 0.00");
         lv_obj_set_style_text_color(label_lf_hf_ratio_compact, lv_color_hex(0xC080FF), 0);  
@@ -170,10 +177,9 @@ void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1,
 
         // Gesture handler
         lv_obj_add_event_cb(scr_hrv_frequency_compact, gesture_handler, LV_EVENT_GESTURE, NULL);
-
-           
-        hpi_disp_set_curr_screen(SCR_HRV_SUMMARY);
+        hpi_disp_set_curr_screen(SCR_SPL_HRV_FREQUENCY);
         hpi_show_screen(scr_hrv_frequency_compact, m_scroll_dir);
+        lv_async_call(lvgl_update_cb, NULL);
 }
 
 
@@ -231,8 +237,8 @@ void hpi_hrv_frequency_compact_update_display(void)
 }
 float hpi_get_lf_hf_ratio(void) {
    
-    float lf_hf =  lf_power_compact / hf_power_compact;
-    return lf_hf;
+
+    return (hf_power_compact == 0.0f) ? 0.0f : lf_power_compact / hf_power_compact;
 
 }
 
@@ -441,5 +447,5 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     LOG_INF("LF/HF Ratio (Compact): %f", lf_power_compact/hf_power_compact);
     LOG_INF("Stress Score (Compact): %f", stress_score_compact);
 
-    lv_async_call(lvgl_update_cb, NULL);
+    
  }
