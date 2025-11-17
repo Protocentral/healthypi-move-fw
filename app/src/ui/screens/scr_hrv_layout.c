@@ -41,6 +41,13 @@ static lv_obj_t *arc_hrv;
 static lv_obj_t *label_hrv_value;
 static lv_obj_t *label_hrv_unit;
 static lv_obj_t *label_hrv_status;
+static lv_obj_t *lfhf_box;
+static lv_obj_t *lfhf_fill;
+static lv_obj_t *lfhf_arc;
+static lv_obj_t *label_lfhf_value;
+
+
+
 
 
 K_TIMER_DEFINE(hrv_check_timer, hrv_check_and_transition, NULL);
@@ -132,27 +139,47 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     // // MID-UPPER RING: Flame icon (clean, no container)
     lv_obj_t *img_hrv = lv_img_create(scr_hrv_layout);
     lv_img_set_src(img_hrv, &img_calories_48);  // Using flame as HRV placeholder
-    lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 95);  // Positioned below title
+    //lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 95);  // Positioned below title
+    lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 75);  // Positioned below title
     lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
 
-    // CENTRAL ZONE: Main HRV Value/Status (properly spaced from icon)
-    label_hrv_value = lv_label_create(scr_hrv_layout);
-    lv_label_set_text(label_hrv_value, "--");
-    lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, -10); 
-    lv_obj_set_style_text_color(label_hrv_value, lv_color_white(), LV_PART_MAIN);
-    lv_obj_add_style(label_hrv_value, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_hrv_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  
+        lfhf_arc = lv_arc_create(scr_hrv_layout);
+        lv_obj_set_size(lfhf_arc, 115, 115);
+        lv_arc_set_rotation(lfhf_arc, 135);
+        lv_arc_set_bg_angles(lfhf_arc, 0, 270);
+        lv_arc_set_value(lfhf_arc, 0);
+        lv_obj_clear_flag(lfhf_arc, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_style(lfhf_arc, NULL, LV_PART_KNOB);
+        lv_obj_align(lfhf_arc, LV_ALIGN_CENTER, 0, 10);
 
-    // Unit/Status label directly below main value
-    label_hrv_unit = lv_label_create(scr_hrv_layout);
-    lv_label_set_text(label_hrv_unit, "--"); 
-    lv_obj_align(label_hrv_unit, LV_ALIGN_CENTER, 0, 35);  
-    lv_obj_set_style_text_color(label_hrv_unit, lv_color_hex(0x8000FF), LV_PART_MAIN);
-    lv_obj_add_style(label_hrv_unit, &style_numeric_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_hrv_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    
+        // --- LF/HF Ratio Value in the middle of the arc ---
+        label_hrv_value = lv_label_create(scr_hrv_layout);
+        lv_label_set_text(label_hrv_value, "--");      // Initial placeholder
+        lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, 10);  // Same center as lfhf_arc
+        lv_obj_set_style_text_color(label_hrv_value, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
+
+        /* ---------------- LEFT LABEL: PARASYM ---------------- */
+        lv_obj_t *label_para = lv_label_create(scr_hrv_layout);
+        lv_label_set_text(label_para, "Parasym");
+        lv_obj_set_style_text_color(label_para, lv_color_hex(0x2D9CFF), 0);
+
+        /* Align left edge of arc */
+        lv_obj_align_to(label_para, lfhf_arc, LV_ALIGN_OUT_LEFT_MID, -5, 0);
+
+
+
+        /* ---------------- RIGHT LABEL: SYM ---------------- */
+        lv_obj_t *label_sym = lv_label_create(scr_hrv_layout);
+        lv_label_set_text(label_sym, "Sympath");
+        lv_obj_set_style_text_color(label_sym, lv_color_hex(0xFF4E4E), 0);
+
+        /* Align right edge of arc */
+        lv_obj_align_to(label_sym, lfhf_arc, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+
 
     label_hrv_status = lv_label_create(scr_hrv_layout);
     lv_label_set_text(label_hrv_status, "HeartRateVariability");
@@ -188,6 +215,10 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
 static void hrv_update_display(void)
 {
 
+    float ratio_norm;
+
+    // Box width (must match above box)
+  
     char last_meas_str[25];
 
     ratio = hpi_get_lf_hf_ratio();
@@ -209,18 +240,27 @@ static void hrv_update_display(void)
         m_hrv_ratio_int = (int)ratio;
         m_hrv_ratio_dec = abs((int)((ratio - m_hrv_ratio_int) * 100));
 
-        if(ratio < 1.0){
-            lv_label_set_text(label_hrv_unit, "Parasympathetic");
-        }
-        else if(ratio == 1.0){
-            lv_label_set_text(label_hrv_unit, "Balanced");
-        }
-        else if(ratio > 1.0){
-            lv_label_set_text(label_hrv_unit, "Sympathetic");
-        }  
         lv_label_set_text_fmt(label_hrv_value, "%d.%02d", m_hrv_ratio_int, m_hrv_ratio_dec);
         lv_label_set_text(label_hrv_status, last_meas_str);
     }
+    // Normalize ratio to 0-100 for arc
+    float max_ratio = 5.0f;
+    if (ratio < 0) ratio = 0;
+    if (ratio > max_ratio) ratio = max_ratio;
+
+    int arc_val = (int)((ratio / max_ratio) * 100);
+    lv_arc_set_value(lfhf_arc, arc_val);
+
+    // Color based on ratio range
+    if (ratio <= 1.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x00FF00), LV_PART_INDICATOR);  // Green
+    } else if (ratio <= 2.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFFFF00), LV_PART_INDICATOR);  // Yellow
+    } else {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF0000), LV_PART_INDICATOR);  // Red
+    }
+
+
     
 }
 
