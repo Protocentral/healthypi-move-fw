@@ -110,10 +110,9 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32
     lv_arc_set_range(arc_hrv_zone, 0, 30);   
 
     // Configure background and progress arcs
-    lv_arc_set_bg_angles(arc_hrv_zone, 135, 45);  
+   // lv_arc_set_bg_angles(arc_hrv_zone, 135, 45);  
+    lv_arc_set_bg_angles(arc_hrv_zone, 135, 405);
     lv_arc_set_value(arc_hrv_zone, 30);           
-
-    // HRV theme: blue gradient
     lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x000000), LV_PART_MAIN);    
     lv_obj_set_style_arc_width(arc_hrv_zone, 8, LV_PART_MAIN);
     lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x666666), LV_PART_INDICATOR);
