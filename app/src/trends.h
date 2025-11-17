@@ -40,6 +40,16 @@ struct hpi_hr_trend_point_t
     uint16_t latest; 
 };
 
+struct hpi_hrv_trend_point_t
+{
+   int64_t timestamp;
+    uint16_t max;
+    uint16_t min;
+    uint16_t avg;
+    uint16_t latest; 
+   
+};
+
 struct hpi_temp_trend_point_t
 {
     int64_t timestamp;
