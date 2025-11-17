@@ -64,6 +64,7 @@ static const char* const log_paths[] = {
     [HPI_LOG_TYPE_BIOZ_RECORD] = "/lfs/bioz/",
     [HPI_LOG_TYPE_PPG_WRIST_RECORD] = "/lfs/ppgw/",
     [HPI_LOG_TYPE_PPG_FINGER_RECORD] = "/lfs/ppgf/",
+    [HPI_LOG_TYPE_HRV_RR_RECORD] = "/lfs/hrv/",
 };
 
 #define LOG_PATHS_COUNT (sizeof(log_paths) / sizeof(log_paths[0]))
@@ -152,6 +153,22 @@ void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_l
     // Use generic writer for ECG records
     write_trend_to_file(HPI_LOG_TYPE_ECG_RECORD, ecg_record_buffer, 
                        ecg_record_length * sizeof(int32_t), start_ts);
+}
+void hpi_write_hrv_rr_record_file(int32_t *rr_buffer, uint16_t rr_count, int64_t start_ts)
+{
+     if(rr_buffer == NULL || rr_count == 0)
+     {
+        LOG_ERR("Invalid HRV Record parameters");
+        return;
+     }
+     if (!is_timestamp_valid(start_ts))
+     {
+        LOG_ERR("Invalid timestamp for RR record: %" PRId64 " - refusing to write", start_ts);
+        return;
+     }
+
+       write_trend_to_file(HPI_LOG_TYPE_HRV_RR_RECORD, rr_buffer, 
+                       rr_count * sizeof(int32_t),start_ts);
 }
 
 void hpi_hr_trend_wr_point_to_file(struct hpi_hr_trend_point_t m_trend_point, int64_t day_ts)
