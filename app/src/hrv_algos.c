@@ -7,6 +7,8 @@
 #include <string.h>
 #include "hrv_algos.h"
 #include "ui/move_ui.h"
+#include "log_module.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
 
@@ -311,9 +313,16 @@ void on_new_rr_interval_detected(uint16_t rr_interval)
     k_mutex_unlock(&hrv_mutex);
 
     if (should_process) {
+
+    
         
         int sample_count = hrv_get_rr_intervals(rr_interval_buffer, HRV_LIMIT);
 
+        struct tm tm_sys_time = hpi_sys_get_sys_time();
+        int64_t log_time = timeutil_timegm64(&tm_sys_time);
+
+
+     hpi_write_hrv_rr_record_file(rr_interval_buffer, sample_count, log_time);
        
         float mean = hrv_calculate_mean();
         float sdnn = hrv_calculate_sdnn();
@@ -325,9 +334,11 @@ void on_new_rr_interval_detected(uint16_t rr_interval)
 
         LOG_INF("HRV 30 interval Collection Complete: \nSamples=%d\nMean=%.1f\nSDNN=%.1f\nRMSSD=%.1f\npNN50=%.3f\nMAX=%.2f\nMIN=%.2f",sample_count, mean, sdnn, rmssd, pnn50, hrv_max, hrv_min);
 
+        hpi_hrv_frequency_compact_update_spectrum(rr_interval_buffer, sample_count);
+
         hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
 
-        hpi_hrv_frequency_compact_update_spectrum(rr_interval_buffer, sample_count);
+       
       
     }
 }
