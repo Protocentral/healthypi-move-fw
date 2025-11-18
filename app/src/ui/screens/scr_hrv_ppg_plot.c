@@ -1,33 +1,3 @@
-/*
- * HealthyPi Move
- * 
- * SPDX-License-Identifier: MIT
- *
- * Copyright (c) 2025 Protocentral Electronics
- *
- * Author: Ashwin Whitchurch, Protocentral Electronics
- * Contact: ashwin@protocentral.com
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -37,6 +7,7 @@
 #include <zephyr/logging/log.h>
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "hrv_algos.h"
 
 LOG_MODULE_REGISTER(ppg_scr_hrv);
 
@@ -44,7 +15,7 @@ LOG_MODULE_REGISTER(ppg_scr_hrv);
 #define PPG_SIGNAL_RED 0
 #define PPG_SIGNAL_IR 1
 #define PPG_SIGNAL_GREEN 2
-#define PPG_SIGNAL_TIMEOUT_MS 3000  
+#define PPG_SIGNAL_TIMEOUT_MS 10000  
 
 K_MUTEX_DEFINE(timer_state_mutex_for_hrv);
 
@@ -68,7 +39,6 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
-static int parent_screen = 0;
 static uint32_t batch_count = 0;
 
 static float y_max_ppg_hrv = 0;
@@ -82,6 +52,9 @@ float y3_min_hrv = 10000;
 
 static float gx_hrv = 0;
 
+bool check_gesture = false;
+extern bool collecting;
+
 // Signal detection and timeout tracking
 static uint32_t last_ppg_data_time = 0;
 static enum hpi_ppg_status last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
@@ -89,10 +62,9 @@ static enum hpi_ppg_status last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
 // Performance optimization variables - LVGL 9.2 optimized
 static uint32_t sample_counter = 0;
 uint8_t ppg_disp_signal_type_hrv = PPG_SIGNAL_RED;
-static bool hrv_timer_running = false;
+// static bool hrv_timer_running = false;
 static bool hrv_timer_paused = true;
-static bool hrv_lead_on_detected = false;
-static bool hrv_measurement_active = false;
+// static bool hrv_measurement_active = false;
 
 
 void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
@@ -109,11 +81,10 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32
     lv_obj_center(arc_hrv_zone);
     lv_arc_set_range(arc_hrv_zone, 0, 30);   
 
-    // Configure background and progress arcs
-   // lv_arc_set_bg_angles(arc_hrv_zone, 135, 45);  
+    // Configure background and progress arcs 
     lv_arc_set_bg_angles(arc_hrv_zone, 135, 405);
     lv_arc_set_value(arc_hrv_zone, 30);           
-    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x000000), LV_PART_MAIN);    
+    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x808080), LV_PART_MAIN);    
     lv_obj_set_style_arc_width(arc_hrv_zone, 8, LV_PART_MAIN);
     lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x666666), LV_PART_INDICATOR);
     lv_obj_set_style_arc_width(arc_hrv_zone, 6, LV_PART_INDICATOR);
@@ -145,7 +116,7 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32
     lv_obj_set_style_pad_left(label_hrv_timer, 8, LV_PART_MAIN);
 
     label_hrv_intervals_collected = lv_label_create(cont_timer);
-    lv_label_set_text(label_hrv_intervals_collected, "/30");
+    lv_label_set_text(label_hrv_intervals_collected, "/30 RR");
     lv_obj_add_style(label_hrv_intervals_collected, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_hrv_intervals_collected, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_pad_left(label_hrv_intervals_collected, 4, LV_PART_MAIN);
@@ -156,10 +127,10 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32
     lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
-    // Initialize timer state
-    hrv_timer_running = false;
-    hrv_timer_paused  = true;
-    hrv_measurement_active = false;
+    // // Initialize timer state
+    // hrv_timer_running = false;
+    // hrv_timer_paused  = true;
+    // hrv_measurement_active = false;
 
     //  PPG CHART 
     chart_ppg_hrv = lv_chart_create(scr_raw_ppg_hrv);
@@ -451,8 +422,12 @@ void hpi_hrv_disp_update_timer(int time_left)
             // Update the progress arc to show progress towards completion
             if (arc_hrv_zone != NULL) {
                 // Show progress: empty at start (30s), full at end (0s)
-                int arc_value = (time_left < 0) ? 30 : ((time_left > 30) ? 0 : (30 - time_left));
-                lv_arc_set_value(arc_hrv_zone, arc_value);
+               
+                lv_arc_set_range(arc_hrv_zone, 0, 30); 
+                lv_arc_set_value(arc_hrv_zone, time_left);
+                lv_arc_set_bg_angles(arc_hrv_zone, 135, 405);
+
+               // lv_arc_set_value(arc_hrv_zone, arc_value);
                 
 
                 // Thread-safe access to timer_paused
@@ -472,53 +447,6 @@ void hpi_hrv_disp_update_timer(int time_left)
     }
 }
 
-void hpi_hrv_timer_start(void)
-{
-    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
-    hrv_timer_running = true;
-    hrv_timer_paused = false;
-    k_mutex_unlock(&timer_state_mutex_for_hrv);
-    
-    
-}
-static void hrv_chart_reset_performance_counters(void)
-{
-    sample_counter = 0;
-    batch_count = 0;
-    // Initialize for proper range detection
-    y_max_ppg_hrv = -10000;
-    y_min_ppg_hrv = 10000;
-}
-
-void hpi_hrv_timer_pause(void)
-{
-    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
-    hrv_timer_paused = true;
-    k_mutex_unlock(&timer_state_mutex_for_hrv);
-    
-    
-}
-
-void hpi_hrv_timer_reset(void)
-{
-    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
-    hrv_timer_running = false;
-    hrv_timer_paused = true;
-    hrv_lead_on_detected = false;
-    k_mutex_unlock(&timer_state_mutex_for_hrv);
-    
-   
-}
-
-bool hpi_hrv_timer_is_running(void)
-{
-    k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
-    bool is_running = hrv_timer_running && !hrv_timer_paused;
-    k_mutex_unlock(&timer_state_mutex_for_hrv);
-    
-    
-    return is_running;
-}
 
 void gesture_handler_for_ppg(lv_event_t *e)
 {
@@ -531,6 +459,7 @@ void gesture_handler_for_ppg(lv_event_t *e)
 void gesture_down_scr_spl_ppg_for_hrv(void)
 {
     printk("Exit HRV Frequency Compact\n");
-    hpi_hrv_timer_reset();
+    check_gesture = true;
+    collecting = false;
     hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
 }
