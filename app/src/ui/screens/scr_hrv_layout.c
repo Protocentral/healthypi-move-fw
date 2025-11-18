@@ -33,29 +33,30 @@ static bool hrv_measurement_active = false;
 bool hrv_active = false;
 int past_value = 0;
 int64_t m_hrv_last_update = 0;
+extern bool check_gesture;
 
 // GUI Objects
 lv_obj_t *scr_hrv_layout;
 static lv_obj_t *btn_hrv_measure;
 static lv_obj_t *arc_hrv;
 static lv_obj_t *label_hrv_value;
-static lv_obj_t *label_hrv_unit;
 static lv_obj_t *label_hrv_status;
-static lv_obj_t *lfhf_box;
-static lv_obj_t *lfhf_fill;
 static lv_obj_t *lfhf_arc;
-static lv_obj_t *label_lfhf_value;
-
-
-
 
 
 K_TIMER_DEFINE(hrv_check_timer, hrv_check_and_transition, NULL);
 
 void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 {
-    if (!hrv_measurement_active) 
+    if (!hrv_measurement_active || check_gesture) 
     {
+        // if(check_gesture)
+        // {
+        //     k_timer_stop(&hrv_check_timer);
+        // }
+
+        check_gesture = false;
+
         lv_event_code_t code = lv_event_get_code(e);
 
         if (code == LV_EVENT_CLICKED)
@@ -68,14 +69,11 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 
             hpi_load_scr_spl(SCR_SPL_HRV_PLOT, SCROLL_UP, (uint8_t)SCR_HRV_PPG_PLOT, 0, 0, 0);
          
-             
-            extern void hrv_reset(void);
             hrv_reset();
 
             k_timer_start(&hrv_check_timer, K_SECONDS(1), K_SECONDS(1));  
 
-          
-            extern void start_hrv_collection(void);
+        
             start_hrv_collection();
 
           
@@ -140,45 +138,39 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_t *img_hrv = lv_img_create(scr_hrv_layout);
     lv_img_set_src(img_hrv, &img_calories_48);  // Using flame as HRV placeholder
     //lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 95);  // Positioned below title
-    lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 75);  // Positioned below title
+    lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 80);  // Positioned below title
     lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
 
-  
-        lfhf_arc = lv_arc_create(scr_hrv_layout);
-        lv_obj_set_size(lfhf_arc, 115, 115);
-        lv_arc_set_rotation(lfhf_arc, 135);
-        lv_arc_set_bg_angles(lfhf_arc, 0, 270);
-        lv_arc_set_value(lfhf_arc, 0);
-        lv_obj_clear_flag(lfhf_arc, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_remove_style(lfhf_arc, NULL, LV_PART_KNOB);
-        lv_obj_align(lfhf_arc, LV_ALIGN_CENTER, 0, 10);
+    // Gauge to represent sympathetic or parasympathetic
+    lfhf_arc = lv_arc_create(scr_hrv_layout);
+    lv_obj_set_size(lfhf_arc, 115, 115);
+    lv_arc_set_rotation(lfhf_arc, 135);
+    lv_arc_set_bg_angles(lfhf_arc, 0, 270);
+    lv_arc_set_value(lfhf_arc, 0);
+    lv_obj_clear_flag(lfhf_arc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_style(lfhf_arc, NULL, LV_PART_KNOB);
+    lv_obj_align(lfhf_arc, LV_ALIGN_CENTER, 0, 10);
 
-        // --- LF/HF Ratio Value in the middle of the arc ---
-        label_hrv_value = lv_label_create(scr_hrv_layout);
-        lv_label_set_text(label_hrv_value, "--");      // Initial placeholder
-        lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, 10);  // Same center as lfhf_arc
-        lv_obj_set_style_text_color(label_hrv_value, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-
-
-        /* ---------------- LEFT LABEL: PARASYM ---------------- */
-        lv_obj_t *label_para = lv_label_create(scr_hrv_layout);
-        lv_label_set_text(label_para, "Parasym");
-        lv_obj_set_style_text_color(label_para, lv_color_hex(0x2D9CFF), 0);
-
-        /* Align left edge of arc */
-        lv_obj_align_to(label_para, lfhf_arc, LV_ALIGN_OUT_LEFT_MID, -5, 0);
+    // --- LF/HF Ratio Value in the middle of the arc ---
+    label_hrv_value = lv_label_create(scr_hrv_layout);
+    lv_label_set_text(label_hrv_value, "--"); 
+    lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, 10);
+    lv_obj_set_style_text_color(label_hrv_value, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
 
+    /* LEFT LABEL: PARASYM */
+    lv_obj_t *label_para = lv_label_create(scr_hrv_layout);
+    lv_label_set_text(label_para, "Par ");
+    lv_obj_set_style_text_color(label_para, lv_color_hex(COLOR_SUCCESS_GREEN), 0);
+    lv_obj_align_to(label_para, lfhf_arc, LV_ALIGN_OUT_LEFT_MID, -5, 0);
 
-        /* ---------------- RIGHT LABEL: SYM ---------------- */
-        lv_obj_t *label_sym = lv_label_create(scr_hrv_layout);
-        lv_label_set_text(label_sym, "Sympath");
-        lv_obj_set_style_text_color(label_sym, lv_color_hex(0xFF4E4E), 0);
-
-        /* Align right edge of arc */
-        lv_obj_align_to(label_sym, lfhf_arc, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    /* RIGHT LABEL: SYM */
+    lv_obj_t *label_sym = lv_label_create(scr_hrv_layout);
+    lv_label_set_text(label_sym, " Sym");
+    lv_obj_set_style_text_color(label_sym, lv_color_hex(0xFF4E4E), 0);
+    lv_obj_align_to(label_sym, lfhf_arc, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
 
 
     label_hrv_status = lv_label_create(scr_hrv_layout);
@@ -216,8 +208,6 @@ static void hrv_update_display(void)
 {
 
     float ratio_norm;
-
-    // Box width (must match above box)
   
     char last_meas_str[25];
 
@@ -253,11 +243,11 @@ static void hrv_update_display(void)
 
     // Color based on ratio range
     if (ratio <= 1.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x00FF00), LV_PART_INDICATOR);  // Green
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_SUCCESS_GREEN), LV_PART_INDICATOR);  // Green
     } else if (ratio <= 2.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFFFF00), LV_PART_INDICATOR);  // Yellow
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFFCC00), LV_PART_INDICATOR);  // Yellow
     } else {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF0000), LV_PART_INDICATOR);  // Red
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // Red
     }
 
 
