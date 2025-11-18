@@ -14,7 +14,7 @@ LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
 
 K_MUTEX_DEFINE(hrv_mutex);
 
-static bool collecting = false;
+bool collecting = false;
 static uint16_t rr_interval_buffer[HRV_LIMIT];
 
 //HRV calculation state
@@ -334,7 +334,7 @@ void on_new_rr_interval_detected(uint16_t rr_interval)
 
         LOG_INF("HRV 30 interval Collection Complete: \nSamples=%d\nMean=%.1f\nSDNN=%.1f\nRMSSD=%.1f\npNN50=%.3f\nMAX=%.2f\nMIN=%.2f",sample_count, mean, sdnn, rmssd, pnn50, hrv_max, hrv_min);
 
-        hpi_hrv_frequency_compact_update_spectrum(rr_interval_buffer, sample_count);
+        hpi_hrv_frequency_compact_update_spectrum(rr_interval_buffer, sample_count, sdnn, rmssd);
 
         hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
 
