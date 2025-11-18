@@ -40,13 +40,12 @@ float32_t window[FFT_SIZE];             // Hanning window
 lv_obj_t *scr_hrv_frequency_compact;
 
 // GUI Labels - minimal set
-static lv_obj_t *label_lf_power_compact;
-static lv_obj_t *label_hf_power_compact;
 static lv_obj_t *label_lf_hf_ratio_compact;
 static lv_obj_t *label_stress;
 static lv_obj_t *label_stress_level_compact;
 static lv_obj_t *arc_stress_gauge;
-
+static lv_obj_t *label_sdnn;
+static lv_obj_t *label_rmssd;
 // Externs
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
@@ -57,6 +56,8 @@ extern lv_style_t style_scr_black;
 static float lf_power_compact = 0.0f;
 static float hf_power_compact = 0.0f;
 static float stress_score_compact = 0.0f;
+static float sdnn_val = 0.0f;
+static float rmssd_val = 0.0f;
 
 static void lvgl_update_cb(void *user_data)
 {
@@ -128,16 +129,16 @@ void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1,
         lv_obj_align(cont_top, LV_ALIGN_TOP_MID, 0, 40);
 
         // LF Power label
-        label_lf_power_compact = lv_label_create(cont_top);
-        lv_label_set_text(label_lf_power_compact, "LF: 0.00");
-        lv_obj_set_style_text_color(label_lf_power_compact, lv_color_hex(0xFF7070), 0); 
-        lv_obj_add_style(label_lf_power_compact, &style_white_small, 0);
+        label_sdnn = lv_label_create(cont_top);
+        lv_label_set_text(label_sdnn, "SDNN: 0.00");
+        lv_obj_set_style_text_color(label_sdnn, lv_color_hex(0xFF7070), 0); 
+        lv_obj_add_style(label_sdnn, &style_white_small, 0);
 
         // HF Power label
-        label_hf_power_compact = lv_label_create(cont_top);
-        lv_label_set_text(label_hf_power_compact, "HF: 0.00");
-        lv_obj_set_style_text_color(label_hf_power_compact, lv_color_hex(0x70A0FF), 0);  
-        lv_obj_add_style(label_hf_power_compact, &style_white_small, 0);
+        label_rmssd = lv_label_create(cont_top);
+        lv_label_set_text(label_rmssd, "RMSSD: 0.00");
+        lv_obj_set_style_text_color(label_rmssd, lv_color_hex(0x70A0FF), 0);  
+        lv_obj_add_style(label_rmssd, &style_white_small, 0);
 
         // --- Stress gauge ---
         arc_stress_gauge = lv_arc_create(cont_main);
@@ -190,20 +191,20 @@ void hpi_hrv_frequency_compact_update_display(void)
    
     ratio = lf_power_compact / hf_power_compact;
 
-    int lf_int = (int)lf_power_compact;
-    int lf_dec = (int)((lf_power_compact - lf_int) * 100);  
-
-    int hf_int = (int)hf_power_compact;
-    int hf_dec = (int)((hf_power_compact - hf_int) * 100);
-
     int ratio_int = (int)ratio;
     int ratio_dec = (int)((ratio - ratio_int) * 100);
 
-    if (label_lf_power_compact)
-        lv_label_set_text_fmt(label_lf_power_compact, "LF: %d.%02d", lf_int, abs(lf_dec));
+    int sdnn_int = (int)sdnn_val;
+    int sdnn_dec = (int)((sdnn_val - sdnn_int) * 100);
 
-    if (label_hf_power_compact)
-        lv_label_set_text_fmt(label_hf_power_compact, "HF: %d.%02d", hf_int, abs(hf_dec));
+    int rmssd_int = (int)rmssd_val;
+    int rmssd_dec = (int)((rmssd_val - rmssd_int) * 100);
+
+    if(label_sdnn)
+        lv_label_set_text_fmt(label_sdnn,"SDNN: %d.%02d",sdnn_int, abs(sdnn_dec));
+    
+    if(label_rmssd)
+        lv_label_set_text_fmt(label_rmssd,"RMSSD: %d.%02d", rmssd_int, abs(rmssd_dec));
 
     if (label_lf_hf_ratio_compact)
         lv_label_set_text_fmt(label_lf_hf_ratio_compact, "LF/HF: %d.%02d", ratio_int, abs(ratio_dec));
@@ -411,7 +412,7 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     return power;
 }
 
- void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals)
+ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals, float sdnn, float rmssd)
  {
    
     LOG_INF("Updating HRV Frequency Compact Spectrum with %d intervals", num_intervals);
@@ -434,18 +435,15 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     lf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS, LF_LOW, LF_HIGH);
     hf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS,HF_LOW, HF_HIGH);
     stress_score_compact = get_stress_percentage(lf_power_compact, hf_power_compact);
-
-    // LOG_INF("labels: lf=%p hf=%p ratio=%p stress=%p arc=%p",
-    //    label_lf_power_compact, label_hf_power_compact,
-    //    label_lf_hf_ratio_compact, label_stress_level_compact, arc_stress_gauge);
-
-     // Update display
-    //hpi_hrv_frequency_compact_update_display();
+    sdnn_val = sdnn;
+    rmssd_val = rmssd; 
 
     LOG_INF("LF Power (Compact): %f", lf_power_compact);
     LOG_INF("HF Power (Compact): %f", hf_power_compact);
     LOG_INF("LF/HF Ratio (Compact): %f", lf_power_compact/hf_power_compact);
     LOG_INF("Stress Score (Compact): %f", stress_score_compact);
+    LOG_INF("SDNN : %f", sdnn_val);
+    LOG_INF("RMSSD : %f", rmssd_val);
 
     
  }
