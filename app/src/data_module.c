@@ -73,6 +73,8 @@ static bool settings_send_usb_enabled = false;
 static bool settings_send_ble_enabled = true;
 static bool settings_plot_enabled = true;
 
+static int last_rr_value = 0;
+
 enum hpi5_data_format
 {
     DATA_FMT_OPENVIEW,
@@ -103,6 +105,8 @@ K_MUTEX_DEFINE(mutex_hr_change);
 // Externs
 
 ZBUS_CHAN_DECLARE(hr_chan);
+
+ZBUS_CHAN_DECLARE(rr_chan);
 
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 
@@ -339,7 +343,18 @@ void data_thread(void)
                     }
                 }
             }
-
+            //LOG_INF("RR in ecg : %d", ecg_sensor_sample.rtor);
+         
+             if(last_rr_value != ecg_sensor_sample.rtor)
+             {
+                last_rr_value = ecg_sensor_sample.rtor;
+                struct ecg_rtor rr_value = {
+                    .rtor = ecg_sensor_sample.rtor
+                };
+                LOG_INF("RR in ecg : %d", ecg_sensor_sample.rtor);
+                LOG_INF("Heart Rate in ecg : %d", ecg_sensor_sample.hr);
+                zbus_chan_pub(&rr_chan, &rr_value, K_SECONDS(1));
+             }
             // ECG recording buffer management with mutex protection
             // Fixed: No circular buffer - linear recording only, stop when full
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
@@ -495,7 +510,8 @@ void data_thread(void)
                         hr_zbus_last_pub_time = k_uptime_seconds();
                     }
                    
-                   // if((k_uptime_seconds() - hr_zbus_last_pub_time) >= 0)
+                   if((k_uptime_seconds() - hr_zbus_last_pub_time) >= 2)
+                   {
                    
                         struct hpi_hr_t hr_chan_value = {
                             .timestamp = hw_get_sys_time_ts(),
@@ -505,6 +521,7 @@ void data_thread(void)
                         };
                         zbus_chan_pub(&hr_chan, &hr_chan_value, K_SECONDS(1));
                         hr_zbus_last_pub_time = k_uptime_seconds();
+                   }
                 
                 }
             }
