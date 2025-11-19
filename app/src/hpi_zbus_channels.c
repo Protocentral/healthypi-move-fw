@@ -60,6 +60,13 @@ ZBUS_CHAN_DEFINE(hr_chan,         /* Name */
                  ZBUS_OBSERVERS(disp_hr_lis, trend_hr_lis, sys_hr_lis),
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
+ZBUS_CHAN_DEFINE(rr_chan,         /* Name */
+                 struct ecg_rtor, /* Message type */
+                 NULL,            /* Validator */
+                 NULL,            /* User Data */
+                 ZBUS_OBSERVERS(trend_rr_listen),
+                 ZBUS_MSG_INIT(0) /*Initial value {0} */
+);
 
 ZBUS_CHAN_DEFINE(steps_chan,         /* Name */
                  struct hpi_steps_t, /* Message type */
