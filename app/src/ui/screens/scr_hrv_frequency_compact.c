@@ -361,11 +361,7 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
             fft_input[2 * i + 1] = 0.0f;      // Imaginary part
         }
 
-        LOG_INF("signal=%p, window=%p, fft_input=%p, fft_output=%p, psd=%p",
-        signal, window, fft_input, fft_output, psd);
-
-
-        
+    
         // Perform FFT
         arm_copy_f32(fft_input, fft_output, fft_size * 2);
         arm_cfft_f32(fft_instance, fft_output, 0, 1);
