@@ -432,9 +432,9 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
 
         // Thread-safe lead detection logic with debouncing
         bool current_lead_state = get_ecg_lead_on_off();
-        LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s, debouncing=%s", 
+       /* LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s, debouncing=%s", 
                 edata->ecg_lead_off, current_lead_state ? "OFF" : "ON", 
-                lead_off_debouncing ? "yes" : "no");
+                lead_off_debouncing ? "yes" : "no");*/
         
         // Handle Lead OFF with debounce
         if (edata->ecg_lead_off == 1)
