@@ -124,6 +124,7 @@ static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_s
         LOG_ERR("Failed to get path for log type %d", log_type);
         return -EINVAL;
     }
+    snprintf(fname, sizeof(fname), "%s%" PRId64, base_path, timestamp);
     
     LOG_DBG("Write to file... %s | Size: %zu", fname, data_size);
     
@@ -398,7 +399,8 @@ void log_wipe_records(void)
         HPI_LOG_TYPE_ECG_RECORD,
         HPI_LOG_TYPE_BIOZ_RECORD,
         HPI_LOG_TYPE_PPG_WRIST_RECORD,
-        HPI_LOG_TYPE_PPG_FINGER_RECORD
+        HPI_LOG_TYPE_PPG_FINGER_RECORD,
+        HPI_LOG_TYPE_HRV_RR_RECORD
     };
     
     wipe_log_types(record_types, sizeof(record_types), "all records");
