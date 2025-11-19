@@ -1,10 +1,3 @@
- /*
- * HealthyPi Move HRV Screen
- * 
- *
- * HRV (Heart Rate Variability) display with start button
- */
-
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/dac.h>
@@ -22,7 +15,6 @@
 #include "stdlib.h"
 #include "hrv_algos.h"
 
-
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv_layout, LOG_LEVEL_DBG);
 
 bool battery_monitor_enabled = true;
@@ -33,7 +25,9 @@ static bool hrv_measurement_active = false;
 bool hrv_active = false;
 int past_value = 0;
 int64_t m_hrv_last_update = 0;
+
 extern bool check_gesture;
+extern int64_t last_measurement_time;
 
 // GUI Objects
 lv_obj_t *scr_hrv_layout;
@@ -43,18 +37,27 @@ static lv_obj_t *label_hrv_value;
 static lv_obj_t *label_hrv_status;
 static lv_obj_t *lfhf_arc;
 
+#define HRV_WORK_STACKSIZE 512
 
-K_TIMER_DEFINE(hrv_check_timer, hrv_check_and_transition, NULL);
+K_WORK_DEFINE(hrv_check_work, hrv_check_and_transition_work);
+
+// Timer handler, now only schedules work—not logic directly
+static void hrv_check_timer_handler(struct k_timer *timer)
+{
+    k_work_submit(&hrv_check_work);
+}
+
+//K_TIMER_DEFINE(hrv_check_timer, hrv_check_and_transition, NULL);
+K_TIMER_DEFINE(hrv_check_timer, hrv_check_timer_handler, NULL);
+
+static void hrv_check_and_transition_work(struct k_work *work) {
+    hrv_check_and_transition();
+}
 
 void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 {
     if (!hrv_measurement_active || check_gesture) 
     {
-        // if(check_gesture)
-        // {
-        //     k_timer_stop(&hrv_check_timer);
-        // }
-
         check_gesture = false;
 
         lv_event_code_t code = lv_event_get_code(e);
@@ -73,10 +76,7 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
 
             k_timer_start(&hrv_check_timer, K_SECONDS(1), K_SECONDS(1));  
 
-        
-            start_hrv_collection();
-
-          
+            start_hrv_collection();   
         }
     }
 }
@@ -101,10 +101,15 @@ void hrv_check_and_transition(void)
 
         past_value = 0;
 
+        float ratio = hpi_get_lf_hf_ratio();
+        if (ratio > 0.0f) 
+        {
+            int64_t now_ts = hw_get_sys_time_ts();
+            hpi_sys_set_last_lf_hf_update((uint16_t)(ratio * 100), now_ts);
+        }
     }
 }
 
-// Draw HRV screen
 void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
 {
  
@@ -112,7 +117,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_color(scr_hrv_layout, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_hrv_layout, LV_OBJ_FLAG_SCROLLABLE);
 
-    // --- SINGLE BIG WHITE ARC ---
+    // --- SINGLE BIG ARC ---
     arc_hrv = lv_arc_create(scr_hrv_layout);
     lv_obj_set_size(arc_hrv, 370, 370);      
     lv_obj_center(arc_hrv);
@@ -121,7 +126,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_arc_set_angles(arc_hrv, 135, 135);   
     lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc_hrv, 8, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_INDICATOR); // Progress purple
+    lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_INDICATOR); 
     lv_obj_set_style_arc_width(arc_hrv, 6, LV_PART_INDICATOR);
     lv_obj_remove_style(arc_hrv, NULL, LV_PART_KNOB);
     lv_obj_clear_flag(arc_hrv, LV_OBJ_FLAG_CLICKABLE);
@@ -134,16 +139,15 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // // MID-UPPER RING: Flame icon (clean, no container)
+    // --- MID-UPPER RING: Flame icon (clean, no container) ---
     lv_obj_t *img_hrv = lv_img_create(scr_hrv_layout);
     lv_img_set_src(img_hrv, &img_calories_48);  // Using flame as HRV placeholder
-    //lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 95);  // Positioned below title
     lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 80);  // Positioned below title
     lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
 
-    // Gauge to represent sympathetic or parasympathetic
+    // --- Gauge to represent sympathetic or parasympathetic ---
     lfhf_arc = lv_arc_create(scr_hrv_layout);
     lv_obj_set_size(lfhf_arc, 115, 115);
     lv_arc_set_rotation(lfhf_arc, 135);
@@ -160,13 +164,13 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(label_hrv_value, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
 
-    /* LEFT LABEL: PARASYM */
+    /* --- LEFT LABEL: PARASYM --- */
     lv_obj_t *label_para = lv_label_create(scr_hrv_layout);
     lv_label_set_text(label_para, "Par ");
     lv_obj_set_style_text_color(label_para, lv_color_hex(COLOR_SUCCESS_GREEN), 0);
     lv_obj_align_to(label_para, lfhf_arc, LV_ALIGN_OUT_LEFT_MID, -5, 0);
 
-    /* RIGHT LABEL: SYM */
+    /* --- RIGHT LABEL: SYM --- */
     lv_obj_t *label_sym = lv_label_create(scr_hrv_layout);
     lv_label_set_text(label_sym, " Sym");
     lv_obj_set_style_text_color(label_sym, lv_color_hex(0xFF4E4E), 0);
@@ -208,16 +212,12 @@ static void hrv_update_display(void)
 {
 
     float ratio_norm;
-  
+    float max_ratio = 5.0f;
     char last_meas_str[25];
-
     ratio = hpi_get_lf_hf_ratio();
+    int m_hrv_last_value = 0;
 
-    if(ratio > 0.0f){
-        m_hrv_last_update = hw_get_sys_time_ts(); 
-        hpi_sys_set_last_lf_hf_update(ratio, m_hrv_last_update);
-    }
-
+    hpi_sys_get_last_lf_hf_update(&m_hrv_last_value, &m_hrv_last_update);
     hpi_helper_get_relative_time_str(m_hrv_last_update, last_meas_str, sizeof(last_meas_str));
 
     if (ratio < 0.0f)
@@ -234,7 +234,7 @@ static void hrv_update_display(void)
         lv_label_set_text(label_hrv_status, last_meas_str);
     }
     // Normalize ratio to 0-100 for arc
-    float max_ratio = 5.0f;
+   
     if (ratio < 0) ratio = 0;
     if (ratio > max_ratio) ratio = max_ratio;
 
