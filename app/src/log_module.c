@@ -125,8 +125,6 @@ static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_s
         return -EINVAL;
     }
     
-    snprintf(fname, sizeof(fname), "%s%" PRId64, base_path, timestamp);
-    
     LOG_DBG("Write to file... %s | Size: %zu", fname, data_size);
     
     CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND), "open", fname);
@@ -161,14 +159,8 @@ void hpi_write_hrv_rr_record_file(int32_t *rr_buffer, uint16_t rr_count, int64_t
         LOG_ERR("Invalid HRV Record parameters");
         return;
      }
-     if (!is_timestamp_valid(start_ts))
-     {
-        LOG_ERR("Invalid timestamp for RR record: %" PRId64 " - refusing to write", start_ts);
-        return;
-     }
 
-       write_trend_to_file(HPI_LOG_TYPE_HRV_RR_RECORD, rr_buffer, 
-                       rr_count * sizeof(int32_t),start_ts);
+   write_trend_to_file(HPI_LOG_TYPE_HRV_RR_RECORD, rr_buffer, rr_count * sizeof(int32_t),start_ts);
 }
 
 void hpi_hr_trend_wr_point_to_file(struct hpi_hr_trend_point_t m_trend_point, int64_t day_ts)
@@ -388,7 +380,8 @@ void log_wipe_trends(void)
         HPI_LOG_TYPE_TREND_TEMP,
         HPI_LOG_TYPE_TREND_STEPS,
         HPI_LOG_TYPE_TREND_BPT,
-        HPI_LOG_TYPE_ECG_RECORD
+        HPI_LOG_TYPE_ECG_RECORD,
+        HPI_LOG_TYPE_HRV_RR_RECORD
     };
     
     wipe_log_types(trend_types, sizeof(trend_types), "all trend logs");
