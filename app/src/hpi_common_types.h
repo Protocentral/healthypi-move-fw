@@ -341,3 +341,8 @@ struct rtor_msg
     double rtor;
   
 };
+
+struct ecg_rtor
+{
+    uint16_t rtor;
+};
