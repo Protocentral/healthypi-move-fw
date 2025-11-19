@@ -323,6 +323,15 @@ void hpi_init_fs_struct(void)
     {
         LOG_DBG("Created dir");
     }
+
+    ret = fs_mkdir("/lfs/hrv");
+    if(ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else{
+        LOG_DBG("Created dir");
+    }
 }
 
 int fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
@@ -441,5 +450,16 @@ void fs_module_init(void)
         LOG_INF("Creating FS directory structure");
         hpi_init_fs_struct();
         lsdir("/lfs/trhr");
+    }
+
+    rc = lsdir("/lfs/hrv");
+    if(rc < 0)
+    {
+        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+        int dir_err = fs_mkdir("/lfs/hrv");
+        if (dir_err < 0 && dir_err != -EEXIST) 
+        {
+          LOG_ERR("Failed to create directory /lfs/hrv/ (%d)", dir_err);
+       }
     }
 }
