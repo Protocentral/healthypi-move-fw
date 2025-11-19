@@ -414,12 +414,12 @@ static void trend_hr_listener(const struct zbus_channel *chan)
     const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
     m_hr_curr_minute[m_trends_hr_minute_sample_counter] = hpi_hr->hr;
     m_trends_hr_minute_sample_counter++;
-    //LOG_DBG("ZB HR: %d", hpi_hr->hr);
+    LOG_DBG("ZB HR: %d", hpi_hr->hr);
   
-    if(hpi_hr -> rr_interval > 0 )
-    {
-       on_new_rr_interval_detected(hpi_hr->rr_interval);
-    }
+    // if(hpi_hr -> rr_interval > 0 )
+    // {
+    //    on_new_rr_interval_detected(hpi_hr->rr_interval);
+    // }
     
   
 
@@ -471,6 +471,15 @@ static void trend_sys_time_listener(const struct zbus_channel *chan)
     // LOG_DBG("Sys TS: %" PRIx64, m_trend_time_ts);
 }
 ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
+
+static void trend_rr_listener(const struct ecg_rtor *chan)
+{
+     const struct ecg_rtor *rtor_msg = zbus_chan_const_msg(chan);
+     LOG_INF("RR data from listener : %d", rtor_msg -> rtor);
+     if(rtor_msg -> rtor > 0)
+     on_new_rr_interval_detected(rtor_msg -> rtor);
+}
+ZBUS_LISTENER_DEFINE(trend_rr_listen, trend_rr_listener);
 
 #define THREAD_SAMPLE_THREAD_STACK_SIZE 1024
 #define THREAD_SAMPLE_THREAD_PRIORITY 5
