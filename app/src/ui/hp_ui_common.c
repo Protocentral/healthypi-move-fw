@@ -82,6 +82,7 @@ lv_style_t style_red_medium;
 lv_style_t style_lbl_red_small;
 
 lv_style_t style_white_medium;
+lv_style_t style_white_small;
 
 lv_style_t style_scr_container;
 

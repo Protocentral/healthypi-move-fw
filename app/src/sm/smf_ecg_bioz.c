@@ -754,7 +754,7 @@ static void st_ecg_idle_entry(void *o)
             }
             
             // Return to GSR home screen (no results to display for live view only)
-            hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+           // hpi_load_screen(SCR_GSR, SCROLL_DOWN);
         }
         else {
             // Publish status once per second via ZBus

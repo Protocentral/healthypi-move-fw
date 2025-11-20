@@ -111,12 +111,12 @@ enum hpi_disp_screens
     SCR_ECG,
     SCR_TEMP,
     SCR_BPT,
-<<<<<<< HEAD
+
     SCR_GSR,
-=======
+
     //SCR_SPL_PLOT_HRV,
     SCR_HRV_SUMMARY,
->>>>>>> 384b64c (Added HRV interface)
+
 
     SCR_LIST_END,
     // Should not go here
