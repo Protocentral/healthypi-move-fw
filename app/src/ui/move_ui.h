@@ -167,6 +167,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_SLEEP_TIMEOUT_SELECT,
     SCR_SPL_HRV_PLOT,
     SCR_SPL_LIST_END,
+    SCR_SPL_SCREEN_HRV2,
 
     SCR_SPL_BLE,
 };
@@ -539,5 +540,21 @@ void hrv_check_and_transition(void);
 static void hrv_update_display(void);
 static void hrv_check_and_transition_work(struct k_work *work);
 static void hrv_check_timer_handler(struct k_timer *timer);
+void hpi_ecg_disp_draw_plotECG_for_hrv(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
+void scr_ecg_lead_on_off_handler_for_hrv(bool lead_on_off);
 
 
+void gesture_down_scr_ecg_hrv(void);
+void scr_ecg_lead_on_off_handler_hrv(bool lead_on_off);
+void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
+bool hpi_ecg_timer_is_running_hrv(void);
+void hpi_ecg_timer_reset_hrv(void);
+void hpi_ecg_timer_pause_hrv(void);
+void hpi_ecg_timer_start_hrv(void);
+void hpi_ecg_disp_update_timer_hrv(int time_left);
+void hpi_ecg_disp_update_hr_hrv(int hr);
+void hpi_ecg_disp_add_samples_hrv(int num_samples);
+void hpi_ecg_disp_do_set_scale_hrv(int disp_window_size);
+static void ecg_chart_reset_performance_counters_hrv(void);
+static void ecg_chart_enable_performance_mode_hrv(bool enable);
+void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
