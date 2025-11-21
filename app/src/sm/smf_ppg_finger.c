@@ -1,7 +1,38 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
+#include <errno.h>
 
 LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 
@@ -122,10 +153,10 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint16_t _n_samples = edata->num_samples;
-    // printk("FNS: %d ", edata->num_samples);
-    if (_n_samples > 16)
+    // Cap to the FI PPG points per sample (driver may return up to 32)
+    if (_n_samples > BPT_PPG_POINTS_PER_SAMPLE)
     {
-        _n_samples = 16;
+        _n_samples = BPT_PPG_POINTS_PER_SAMPLE;
     }
 
     if (_n_samples > 0)
@@ -222,12 +253,29 @@ void work_fi_sample_handler(struct k_work *work)
     uint8_t data_buf[384];
 
     int ret = 0;
+    static int consecutive_timeouts = 0;
+    static int sample_count = 0;
+    sample_count++;
+    if (sample_count <= 5 || sample_count % 10 == 0) {
+        LOG_DBG("Reading sensor data (sample #%d)...", sample_count);
+    }
     ret = sensor_read(&max32664d_iodev, &max32664d_read_rtio_poll_ctx, data_buf, sizeof(data_buf));
     if (ret < 0)
     {
-        LOG_ERR("Error reading sensor data");
+        if (ret == -ETIMEDOUT) {
+            consecutive_timeouts++;
+            LOG_WRN("Sensor read timed out (%d). consecutive_timeouts=%d", ret, consecutive_timeouts);
+            if (consecutive_timeouts >= 3) {
+                LOG_ERR("Multiple consecutive sensor timeouts, stopping sampling");
+                k_sem_give(&sem_stop_fi_sampling);
+                consecutive_timeouts = 0;
+            }
+        } else {
+            LOG_ERR("Error reading sensor data: %d", ret);
+        }
         return;
     }
+    consecutive_timeouts = 0;
     sensor_ppg_finger_decode(data_buf, sizeof(data_buf), sens_decode_ppg_fi_op_mode);
 }
 K_WORK_DEFINE(work_fi_sample, work_fi_sample_handler);
@@ -354,6 +402,14 @@ static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf, uint8_t l_cal_
 
 void hpi_bpt_abort(void)
 {
+    /* Stop sampling first */
+    k_sem_give(&sem_stop_fi_sampling);
+
+    /* Ask the sensor driver to stop algorithms and power down */
+    /* Use the attribute-based stop (driver handles algorithm stop) */
+    hpi_bpt_stop();
+
+    /* Ensure state machine goes to IDLE */
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
@@ -409,6 +465,7 @@ static void st_ppg_fing_idle_run(void *o)
 
     if (k_sem_take(&sem_bpt_enter_mode_cal, K_NO_WAIT) == 0)
     {
+        LOG_INF("sem_bpt_enter_mode_cal received - entering BPT calibration mode");
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
     }
@@ -419,14 +476,18 @@ static void st_ppg_fing_idle_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 
-    // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
-
-    /*if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
+    // FIX: Allow calibration to start directly from IDLE if app sends HPI_CMD_START_BPT_CAL_START
+    // without first sending HPI_CMD_BPT_SEL_CAL_MODE. This makes the device more tolerant
+    // of different app implementations.
+    if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
-        // k_msleep(1000);
+        LOG_INF("BPT calibration start from IDLE - transitioning to CAL_WAIT then CAL");
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
-    }*/
+        // First enter CAL_WAIT to show the progress screen, then immediately transition to CAL
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
+        // Re-signal the semaphore so CAL_WAIT state can pick it up
+        k_sem_give(&sem_bpt_cal_start);
+    }
 }
 
 static void bpt_cal_timeout_handler(struct k_timer *timer_id)
@@ -455,6 +516,7 @@ static void st_ppg_fi_cal_wait_run(void *o)
     // LOG_DBG("PPG Finger SM BPT Calibration Running");
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
+        LOG_INF("sem_bpt_cal_start received in CAL_WAIT state - starting calibration");
         // Turn off timeout
         k_timer_stop(&tmr_bpt_cal_timeout);
 
@@ -471,9 +533,14 @@ static void st_ppg_fi_cal_wait_run(void *o)
 
 static void st_ppg_fing_bpt_cal_entry(void *o)
 {
-    LOG_DBG("PPG Finger SM BPT Calibration Entry");
+    LOG_INF("PPG Finger SM BPT Calibration Entry");
+    LOG_INF("Step 1: Enabling finger sensor power");
+    hpi_hw_fi_sensor_on();
+    LOG_INF("Step 2: Starting BPT calibration with index=%d sys=%d dia=%d", m_cal_index, m_cal_sys, m_cal_dia);
     hw_bpt_start_cal(m_cal_index, m_cal_sys, m_cal_dia);
+    LOG_INF("Step 3: Signaling to start sampling");
     k_sem_give(&sem_start_fi_sampling);
+    LOG_INF("BPT Calibration Entry complete");
 }
 
 static void st_ppg_fing_bpt_cal_run(void *o)
@@ -491,6 +558,7 @@ static void st_ppg_fing_bpt_cal_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Done Entry");
     hpi_load_scr_spl(SCR_SPL_BPT_CAL_COMPLETE, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    hpi_hw_fi_sensor_off();
 }
 
 static void st_ppg_fing_bpt_cal_done_run(void *o)
@@ -504,6 +572,7 @@ static void st_ppg_fing_bpt_est_entry(void *o)
     LOG_DBG("PPG Finger SM BPT Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
     hpi_load_scr_spl(SCR_SPL_BPT_MEASURE, SCROLL_NONE, SCR_SPL_FI_SENS_CHECK, 0, 0, 0);
+    hpi_hw_fi_sensor_on();
     hw_bpt_start_est();
     k_sem_give(&sem_start_fi_sampling);
 }
@@ -522,7 +591,6 @@ static void st_ppg_fing_bpt_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Entry");
     hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2);
-    // hpi_hw_ldsw2_off();
 }
 
 static void st_ppg_fing_bpt_est_done_run(void *o)
@@ -547,6 +615,7 @@ static void st_ppg_fing_bpt_cal_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Fail Entry");
     hpi_load_scr_spl(SCR_SPL_BPT_FAILED, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    hpi_hw_fi_sensor_off();
 }
 
 static void st_ppg_fing_bpt_cal_fail_run(void *o)
@@ -559,6 +628,8 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
 static void sensor_check_timeout_handler(struct k_timer *timer_id)
 {
     LOG_ERR("Sensor check timeout: Sensor not found");
+    /* Ensure FI sensor rail is powered off on timeout */
+    hpi_hw_fi_sensor_off();
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
@@ -570,6 +641,11 @@ static void st_ppg_fi_check_sensor_entry(void *o)
     LOG_DBG("PPG Finger SM Check Sensor Entry");
     hpi_load_scr_spl(SCR_SPL_FI_SENS_CHECK, SCROLL_NONE, SCR_BPT, s->ppg_fi_op_mode, 0, 0);
 
+    /* Ensure FI sensor rail is powered on for detection */
+    hpi_hw_fi_sensor_on();
+    /* Allow AFE time to power up and enumerate */
+    k_msleep(150);
+
     k_timer_start(&tmr_sensor_check_timeout, K_MSEC(SENSOR_CHECK_TIMEOUT_MS), K_NO_WAIT);
 }
 
@@ -580,8 +656,23 @@ static void st_ppg_fi_check_sensor_run(void *o)
 
     struct sensor_value sensor_id_get;
     sensor_id_get.val1 = 0x00;
-    sensor_attr_get(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SENSOR_ID, &sensor_id_get);
-    LOG_DBG("AFE Sensor ID: %d", sensor_id_get.val1);
+
+    /* Try multiple times to read the AFE sensor ID, power-cycling the FI rail if needed */
+    const int max_attempts = 3;
+    int attempt;
+    for (attempt = 1; attempt <= max_attempts; attempt++) {
+        sensor_attr_get(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SENSOR_ID, &sensor_id_get);
+        LOG_DBG("AFE Sensor ID (attempt %d): %d", attempt, sensor_id_get.val1);
+        if (sensor_id_get.val1 != 0x00) {
+            break;
+        }
+
+        LOG_WRN("Sensor ID read returned 0, attempt %d/%d - power-cycling FI rail", attempt, max_attempts);
+        hpi_hw_fi_sensor_off();
+        k_msleep(50);
+        hpi_hw_fi_sensor_on();
+        k_msleep(200);
+    }
 
     // k_sem_give(&sem_ppg_fi_hide_loading);
 
@@ -631,6 +722,7 @@ static void st_ppg_fi_check_sensor_run(void *o)
 static void st_ppg_fi_sensor_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Sensor Fail Entry");
+    hpi_hw_fi_sensor_off();
 }
 
 static void st_ppg_fi_sensor_fail_run(void *o)
@@ -643,6 +735,7 @@ static void st_ppg_fi_spo2_est_entry(void *o)
     LOG_DBG("PPG Finger SM SpO2 Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_SPO2_EST;
     hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
+    hpi_hw_fi_sensor_on();
     hw_bpt_start_est();                 // Start the BPT estimation for SpO2
     k_sem_give(&sem_start_fi_sampling); // Give the semaphore to start sampling
 }
@@ -650,11 +743,22 @@ static void st_ppg_fi_spo2_est_entry(void *o)
 static void st_ppg_fi_spo2_est_run(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Running");
+    /* Check for completion */
     if (k_sem_take(&sem_spo2_est_complete, K_NO_WAIT) == 0)
     {
         k_sem_give(&sem_stop_fi_sampling); // Stop the sampling
         k_sleep(K_MSEC(1000));             // Wait for the sampling to stop
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST_DONE]);
+        return;
+    }
+
+    /* Honor user cancel during active measurement */
+    if (k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("SpO2 Estimation Cancelled (during measurement)");
+        /* Use application abort helper to stop sampling, stop algorithm and go IDLE */
+        hpi_bpt_abort();
+        return;
     }
 }
 
@@ -662,6 +766,7 @@ static void st_ppg_fi_spo2_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Done Entry");
     hpi_load_scr_spl(SCR_SPL_SPO2_COMPLETE, SCROLL_NONE, SCR_SPO2, m_est_spo2, 0, 0);
+    hpi_hw_fi_sensor_off();
 }
 static void st_ppg_fi_spo2_est_done_run(void *o)
 {
@@ -719,9 +824,12 @@ static void ppg_fi_ctrl_thread(void)
     {
         if (k_sem_take(&sem_start_fi_sampling, K_NO_WAIT) == 0)
         {
-            LOG_INF("Start sampling");
+            LOG_INF("Start sampling signal received");
+            LOG_INF("Waiting 1 second for sensor stabilization...");
             k_msleep(1000);
+            LOG_INF("Starting sampling timer (interval: %d ms)", PPG_FI_SAMPLING_INTERVAL_MS);
             k_timer_start(&tmr_ppg_fi_sampling, K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS), K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS));
+            LOG_INF("Sampling timer started successfully");
         }
 
         if (k_sem_take(&sem_stop_fi_sampling, K_NO_WAIT) == 0)

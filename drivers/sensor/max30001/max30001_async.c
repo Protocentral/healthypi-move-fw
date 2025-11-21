@@ -72,6 +72,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
         max30001_status = max30001_read_status(dev);
     }*/
 
+    // Handle ECG FIFO (when EINT is set)
     if ((max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
     // while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
     {
@@ -94,6 +95,10 @@ static int max30001_async_sample_fetch(const struct device *dev,
 
         spi_transceive_dt(&config->spi, &tx_ecg, &rx_ecg);
 
+        // Also read BioZ FIFO when ECG is active
+        if (max30001_mngr_int == 0) {
+            max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
+        }
         b_fifo_num_samples = (((max30001_mngr_int & MAX30001_INT_MASK_BFIT) >> MAX30001_INT_SHIFT_BFIT) + 1);
         b_fifo_num_bytes = (b_fifo_num_samples * 3);
         *num_samples_bioz = b_fifo_num_samples;
@@ -183,6 +188,71 @@ static int max30001_async_sample_fetch(const struct device *dev,
             *rrint = 0;
         }*/
     }
+    
+    // Handle BioZ-only FIFO (when BINT is set but EINT is not)
+    else if ((max30001_status & MAX30001_STATUS_MASK_BINT) == MAX30001_STATUS_MASK_BINT)
+    {
+        max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
+        
+        // No ECG samples in this case
+        *num_samples_ecg = 0;
+        
+        // Read BioZ FIFO
+        b_fifo_num_samples = (((max30001_mngr_int & MAX30001_INT_MASK_BFIT) >> MAX30001_INT_SHIFT_BFIT) + 1);
+        b_fifo_num_bytes = (b_fifo_num_samples * 3);
+        *num_samples_bioz = b_fifo_num_samples;
+        
+        if (b_fifo_num_samples > 32) {
+            b_fifo_num_samples = 32;
+            *num_samples_bioz = 32;
+        }
+
+        struct spi_buf rx_bioz_buf[2] = {{.buf = NULL, .len = 1}, {.buf = &buf_bioz, .len = b_fifo_num_bytes}};
+        const struct spi_buf_set rx_bioz = {.buffers = rx_bioz_buf, .count = 2};
+
+        spi_transceive_dt(&config->spi, &tx_bioz, &rx_bioz);
+
+        // Process BioZ samples
+        for (int i = 0; i < b_fifo_num_samples; i++)
+        {
+            uint32_t btag = ((((uint8_t)buf_bioz[i * 3 + 2]) & 0x07));
+
+            LOG_DBG("BioZ sample %d: btag=0x%02X", i, btag);
+
+            if ((btag == 0x00) || (btag == 0x02)) // Valid sample
+            {
+                uint32_t u_bioz_temp = (uint32_t)(((uint32_t)buf_bioz[i * 3] << 16 | (uint32_t)buf_bioz[i * 3 + 1] << 8) | (uint32_t)(buf_bioz[i * 3 + 2] & 0xF0));
+                u_bioz_temp = (uint32_t)(u_bioz_temp << 8);
+
+                int32_t s_bioz_temp = (int32_t)u_bioz_temp;
+                s_bioz_temp = (int32_t)(s_bioz_temp >> 4);
+
+                bioz_samples[i] = s_bioz_temp;
+            }
+            else if (btag == 0x06)
+            {
+                LOG_DBG("BioZ sample %d: FIFO empty (btag=0x06)", i);
+                break;
+            }
+            else if (btag == 0x07) // FIFO Overflow
+            {
+                LOG_WRN("BioZ FIFO overflow at sample %d", i);
+                // Don't reset FIFO immediately - try to recover the valid samples first
+                // max30001_fifo_reset(dev);
+                break;
+            }
+            else
+            {
+                LOG_WRN("BioZ sample %d: invalid btag=0x%02X", i, btag);
+            }
+        }
+    }
+    else
+    {
+        // No data available
+        *num_samples_ecg = 0;
+        *num_samples_bioz = 0;
+    }
 
     /*if ((max30001_status & MAX30001_STATUS_MASK_BINT) == MAX30001_STATUS_MASK_BINT)
     {
@@ -198,11 +268,12 @@ static int max30001_async_sample_fetch(const struct device *dev,
         {
             data->lastRRI = (uint16_t)(max30001_rtor >> 10) * 8;
             data->lastHR = (uint16_t)(60 * 1000 / data->lastRRI);
-
-            *hr = data->lastHR;
-            *rri = data->lastRRI;
         }
     }
+
+    // Always output the last known good HR and RRI values (prevents displaying garbage/stale data)
+    *hr = data->lastHR;
+    *rri = data->lastRRI;
 
     return 0;
 }
@@ -249,8 +320,20 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     }
     if (ret != 0)
     {
+        LOG_ERR("RTIO submit failed: ret=%d", ret);
         rtio_iodev_sqe_err(iodev_sqe, ret);
         return ret;
+    }
+
+    // Check if we have any data to return
+    if (m_edata->chip_op_mode == MAX30001_OP_MODE_STREAM) {
+        if (m_edata->num_samples_ecg == 0 && m_edata->num_samples_bioz == 0) {
+            rtio_iodev_sqe_ok(iodev_sqe, 0);  // Return 0 bytes
+            return 0;
+        } else {
+            rtio_iodev_sqe_ok(iodev_sqe, m_min_buf_len);  // Return actual data
+            return 0;
+        }
     }
 
     rtio_iodev_sqe_ok(iodev_sqe, 0);

@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
@@ -17,16 +47,28 @@
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
 
-LOG_MODULE_REGISTER(smf_ecg_bioz, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(smf_ecg, LOG_LEVEL_DBG);
 
 SENSOR_DT_READ_IODEV(max30001_iodev, DT_ALIAS(max30001), SENSOR_CHAN_VOLTAGE);
 
-K_MSGQ_DEFINE(q_ecg_bioz_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);  // Reduced from 128 to 64
+K_MSGQ_DEFINE(q_ecg_sample, sizeof(struct hpi_ecg_bioz_sensor_data_t), 64, 1);  // Reduced from 128 to 64
+/* Lightweight queue for BioZ-only samples to reduce copy overhead when ECG not needed */
+K_MSGQ_DEFINE(q_bioz_sample, sizeof(struct hpi_bioz_sample_t), 64, 1);
 
-K_SEM_DEFINE(sem_ecg_start, 0, 1);
+/* `sem_ecg_start` is defined in `hw_module.c`; declare extern below. */
 K_SEM_DEFINE(sem_ecg_lon, 0, 1);
 K_SEM_DEFINE(sem_ecg_loff, 0, 1);
 K_SEM_DEFINE(sem_ecg_cancel, 0, 1);
+
+// GSR (BioZ) Control Semaphores - Independent from ECG
+K_SEM_DEFINE(sem_gsr_start, 0, 1);
+K_SEM_DEFINE(sem_gsr_cancel, 0, 1);
+
+// GSR Measurement Timing (60 seconds for reliable stress index)
+#define GSR_MEASUREMENT_DURATION_S 60
+static int64_t gsr_measurement_start_time = 0;
+static bool gsr_measurement_in_progress = false;
+static uint32_t gsr_last_status_pub_s = 0; // Last published elapsed seconds
 
 K_SEM_DEFINE(sem_ecg_lead_on, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
@@ -34,27 +76,30 @@ K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 
-// Mutex for protecting shared state variables
-K_MUTEX_DEFINE(ecg_state_mutex);
+// Semaphore for lead reconnection during recording (triggers re-stabilization)
+K_SEM_DEFINE(sem_ecg_lead_on_stabilize, 0, 1);
 
-// Mutex for protecting timer and countdown variables
+// Lead off debounce (500ms) to avoid false triggers
+#define ECG_LEAD_OFF_DEBOUNCE_MS 500
+static int64_t lead_off_debounce_start = 0;
+static bool lead_off_debouncing = false;
+
+// Mutex for protecting timer and countdown variables (used by non-ISR thread functions)
 K_MUTEX_DEFINE(ecg_timer_mutex);
 
-// Mutex for ECG smoothing filter (always defined for simplicity)
-K_MUTEX_DEFINE(ecg_filter_mutex);
+// NOTE: Removed ecg_state_mutex and ecg_filter_mutex - now using ISR-safe atomic operations
 
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
 ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
 #define ECG_SAMPLING_INTERVAL_MS 125
+#define BIOZ_SAMPLING_INTERVAL_MS 62  // ~16 Hz polling for 32 SPS BioZ to prevent FIFO overflow
 #define ECG_RECORD_DURATION_S 30
 #define ECG_STABILIZATION_DURATION_S 5  // Wait 5 seconds for signal to stabilize
 
 // Define maximum sample limits for validation
 #define MAX_ECG_SAMPLES 32
 #define MAX_BIOZ_SAMPLES 32
-#define ECG_STATS_LOG_INTERVAL_SAMPLES 2000
-#define ECG_DEBUG_LOG_INTERVAL_SAMPLES 500
 
 // ECG Signal Smoothing Configuration
 #define ECG_FILTER_WINDOW_SIZE 5  // Moving average window size
@@ -62,7 +107,7 @@ ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
 // Allow runtime configuration of smoothing (optional)
 #ifndef CONFIG_ECG_SMOOTHING_ENABLED
-#define CONFIG_ECG_SMOOTHING_ENABLED 1  // Enable smoothing by default
+#define CONFIG_ECG_SMOOTHING_ENABLED 0  // Disable smoothing for testing
 #endif
 
 #if CONFIG_ECG_SMOOTHING_ENABLED
@@ -75,10 +120,13 @@ static bool ecg_filter_initialized = false;
  * @brief Apply moving average filter to smooth ECG sample
  * @param raw_sample Raw ECG sample value
  * @return Smoothed ECG sample value
+ * 
+ * NOTE: ISR-safe version - uses spinlock instead of mutex
  */
 static int32_t ecg_smooth_sample(int32_t raw_sample)
 {
-    k_mutex_lock(&ecg_filter_mutex, K_FOREVER);
+    static struct k_spinlock ecg_filter_lock;
+    k_spinlock_key_t key = k_spin_lock(&ecg_filter_lock);
     
     // Add new sample to circular buffer
     ecg_filter_buffer[ecg_filter_index] = raw_sample;
@@ -108,20 +156,22 @@ static int32_t ecg_smooth_sample(int32_t raw_sample)
     
     int32_t smoothed_sample = (int32_t)(sum / valid_samples);
     
-    k_mutex_unlock(&ecg_filter_mutex);
+    k_spin_unlock(&ecg_filter_lock, key);
     return smoothed_sample;
 }
 
 /**
  * @brief Reset ECG smoothing filter state
+ * ISR-safe version using spinlock
  */
 static void ecg_smooth_reset(void)
 {
-    k_mutex_lock(&ecg_filter_mutex, K_FOREVER);
+    static struct k_spinlock ecg_filter_lock;
+    k_spinlock_key_t key = k_spin_lock(&ecg_filter_lock);
     memset(ecg_filter_buffer, 0, sizeof(ecg_filter_buffer));
     ecg_filter_index = 0;
     ecg_filter_initialized = false;
-    k_mutex_unlock(&ecg_filter_mutex);
+    k_spin_unlock(&ecg_filter_lock, key);
 }
 #else
 // ECG smoothing disabled - no-op functions
@@ -141,25 +191,26 @@ static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
 static bool ecg_stabilization_complete = false;
 
-static const struct smf_state ecg_bioz_states[];
-struct s_ecg_bioz_object
+static const struct smf_state ecg_states[];
+struct s_ecg_object
 {
     struct smf_ctx ctx;
-} s_ecg_bioz_obj;
+} s_ecg_obj;
 
-enum ecg_bioz_state
+enum ecg_state
 {
-    HPI_ECG_BIOZ_STATE_IDLE,
-    HPI_ECG_BIOZ_STATE_STABILIZING,
-    HPI_ECG_BIOZ_STATE_STREAM,
-    HPI_ECG_BIOZ_STATE_LEADOFF,
-    HPI_ECG_BIOZ_STATE_COMPLETE,
+    HPI_ECG_STATE_IDLE,
+    HPI_ECG_STATE_STABILIZING,
+    HPI_ECG_STATE_STREAM,
+    HPI_ECG_STATE_LEADOFF,
+    HPI_ECG_STATE_COMPLETE,
 };
 
 RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
 
 static bool ecg_active = false;
-static bool m_ecg_lead_on_off = true;
+static bool gsr_active = false;  // Independent GSR (BioZ) state
+static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
 
 static uint16_t m_ecg_hr = 0;
 
@@ -168,8 +219,7 @@ static int hw_max30001_ecg_disable(void);
 
 // EXTERNS
 extern const struct device *const max30001_dev;
-extern struct k_sem sem_ecg_bioz_smf_start;
-extern struct k_sem sem_ecg_bioz_sm_start;
+extern struct k_sem sem_ecg_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
 
@@ -211,50 +261,53 @@ void reconfigure_ecg_leads_for_hand_worn(void)
 
 
 
-// Thread-safe accessors for shared variables
+// Thread-safe accessors for shared variables - ISR-safe versions using atomic operations
 static bool get_ecg_active(void)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
-    bool active = ecg_active;
-    k_mutex_unlock(&ecg_state_mutex);
-    return active;
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return ecg_active;
 }
 
 static void set_ecg_active(bool active)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
     ecg_active = active;
-    k_mutex_unlock(&ecg_state_mutex);
+}
+
+static bool get_gsr_active(void)
+{
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return gsr_active;
+}
+
+static void set_gsr_active(bool active)
+{
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
+    gsr_active = active;
 }
 
 static bool get_ecg_lead_on_off(void)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
-    bool lead_state = m_ecg_lead_on_off;
-    k_mutex_unlock(&ecg_state_mutex);
-    return lead_state;
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return m_ecg_lead_on_off;
 }
 
 static void set_ecg_lead_on_off(bool state)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
     m_ecg_lead_on_off = state;
-    k_mutex_unlock(&ecg_state_mutex);
 }
 
 static uint16_t get_ecg_hr(void)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
-    uint16_t hr = m_ecg_hr;
-    k_mutex_unlock(&ecg_state_mutex);
-    return hr;
+    // Use atomic read for ISR safety - single uint16_t read is typically atomic on most architectures
+    return m_ecg_hr;
 }
 
 static void set_ecg_hr(uint16_t hr)
 {
-    k_mutex_lock(&ecg_state_mutex, K_FOREVER);
+    // Use atomic write for ISR safety - single uint16_t write is typically atomic on most architectures
     m_ecg_hr = hr;
-    k_mutex_unlock(&ecg_state_mutex);
 }
 
 // Thread-safe accessors for timer variables
@@ -272,6 +325,25 @@ static void get_ecg_timer_values(uint32_t *last_timer, int *countdown)
     if (last_timer) *last_timer = ecg_last_timer_val;
     if (countdown) *countdown = ecg_countdown_val;
     k_mutex_unlock(&ecg_timer_mutex);
+}
+
+// Function to reset ECG timer countdown to full duration (30s)
+void hpi_ecg_reset_countdown_timer(void)
+{
+    k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
+    ecg_countdown_val = ECG_RECORD_DURATION_S;  // Reset to 30 seconds
+    ecg_last_timer_val = k_uptime_get_32();     // Update timestamp
+    k_mutex_unlock(&ecg_timer_mutex);
+    
+    LOG_INF("ECG SMF: Timer countdown RESET to %d seconds", ECG_RECORD_DURATION_S);
+    
+    // Immediately publish the reset timer value to update the display
+    struct hpi_ecg_status_t ecg_stat = {
+        .ts_complete = 0,
+        .status = HPI_ECG_STATUS_STREAMING,
+        .hr = get_ecg_hr(),
+        .progress_timer = ECG_RECORD_DURATION_S};  // Show 30 seconds
+    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 }
 
 static void set_ecg_stabilization_values(int stabilization_countdown, bool complete)
@@ -292,7 +364,6 @@ static void get_ecg_stabilization_values(int *stabilization_countdown, bool *com
 
 static void work_ecg_lon_handler(struct k_work *work)
 {
-    LOG_DBG("ECG LON Work");
     // Don't disable/enable ECG during recording to avoid sample loss
     // Just log the lead-on event
     LOG_INF("ECG leads connected");
@@ -301,21 +372,21 @@ K_WORK_DEFINE(work_ecg_lon, work_ecg_lon_handler);
 
 static void work_ecg_loff_handler(struct k_work *work)
 {
-    LOG_DBG("ECG LOFF Work");
+    // Lead off detected
 }
 K_WORK_DEFINE(work_ecg_loff, work_ecg_loff_handler);
 
-static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
+static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
 {
     // Input validation
     if (!buf || buf_len < sizeof(struct max30001_encoded_data)) {
-        LOG_ERR("Invalid buffer parameters: buf=%p, len=%u, required=%u", 
-                buf, buf_len, (uint32_t)sizeof(struct max30001_encoded_data));
+        LOG_ERR("Invalid buffer parameters: buf=%s, len=%u, required=%u", 
+                buf ? "OK" : "NULL", buf_len, (uint32_t)sizeof(struct max30001_encoded_data));
         return;
     }
 
     const struct max30001_encoded_data *edata = (const struct max30001_encoded_data *)buf;
-    struct hpi_ecg_bioz_sensor_data_t ecg_bioz_sensor_sample;
+    struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
 
     uint8_t ecg_num_samples = edata->num_samples_ecg;
     uint8_t bioz_samples = edata->num_samples_bioz;
@@ -330,89 +401,101 @@ static void sensor_ecg_bioz_process_decode(uint8_t *buf, uint32_t buf_len)
     // printk("ECG NS: %d ", ecg_samples);
     // printk("BioZ NS: %d ", bioz_samples);
 
-    if ((ecg_num_samples < MAX_ECG_SAMPLES && ecg_num_samples > 0) || (bioz_samples < MAX_BIOZ_SAMPLES && bioz_samples > 0))
+    if (ecg_num_samples > 0 || bioz_samples > 0) 
     {
-        // Log sample counts for debugging
-        static uint32_t total_ecg_samples_processed = 0;
-        total_ecg_samples_processed += ecg_num_samples;
-        
-        if ((total_ecg_samples_processed % ECG_DEBUG_LOG_INTERVAL_SAMPLES) == 0) {
-            LOG_DBG("ECG samples processed: %u (current batch: %u)", total_ecg_samples_processed, ecg_num_samples);
-        }
-
-        ecg_bioz_sensor_sample.ecg_num_samples = edata->num_samples_ecg;
-        ecg_bioz_sensor_sample.bioz_num_samples = edata->num_samples_bioz;
+    ecg_sensor_sample.ecg_num_samples = edata->num_samples_ecg;
+    ecg_sensor_sample.bioz_num_samples = edata->num_samples_bioz;
 
         // Apply smoothing filter to ECG samples if enabled
         for (int i = 0; i < edata->num_samples_ecg; i++)
         {
             int32_t raw_sample = edata->ecg_samples[i];
-            ecg_bioz_sensor_sample.ecg_samples[i] = ecg_smooth_sample(raw_sample);
+            ecg_sensor_sample.ecg_samples[i] = ecg_smooth_sample(raw_sample);
         }
 
         for (int i = 0; i < edata->num_samples_bioz; i++)
         {
-            ecg_bioz_sensor_sample.bioz_sample[i] = edata->bioz_samples[i];
+            ecg_sensor_sample.bioz_sample[i] = edata->bioz_samples[i];
         }
 
-        ecg_bioz_sensor_sample.hr = edata->hr;
-        ecg_bioz_sensor_sample.rtor = edata->rri;
+    ecg_sensor_sample.hr = edata->hr;
+    ecg_sensor_sample.rtor = edata->rri;
 
         set_ecg_hr(edata->hr);
         // ecg_bioz_sensor_sample.rrint = edata->rri;
 
         // LOG_DBG("RRI: %d", edata->rri);
 
-        ecg_bioz_sensor_sample.ecg_lead_off = edata->ecg_lead_off;
+    ecg_sensor_sample.ecg_lead_off = edata->ecg_lead_off;
 
-        // Thread-safe lead detection logic
+        // Thread-safe lead detection logic with debouncing
         bool current_lead_state = get_ecg_lead_on_off();
-        if (edata->ecg_lead_off == 1 && current_lead_state == false)
+        LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s, debouncing=%s", 
+                edata->ecg_lead_off, current_lead_state ? "OFF" : "ON", 
+                lead_off_debouncing ? "yes" : "no");
+        
+        // Handle Lead OFF with debounce
+        if (edata->ecg_lead_off == 1)
         {
-            set_ecg_lead_on_off(true);
-            LOG_DBG("ECG LOFF");
-            k_work_submit(&work_ecg_loff);
-
-            // Only transition to leadoff state if actively recording (not during stabilization)
-            if (hpi_data_is_ecg_record_active()) {
-                // k_sem_give(&sem_ecg_lead_off);
-                // smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_LEADOFF]);
-            }
-        }
-        else if (edata->ecg_lead_off == 0 && current_lead_state == true)
-        {
-            set_ecg_lead_on_off(false);
-            LOG_DBG("ECG LON");
-            k_work_submit(&work_ecg_lon);
-            // k_sem_give(&sem_ecg_lead_on);
-            // k_sem_give(&sem_ecg_lead_on_local);
-            //  smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
-        }
-
-        if (get_ecg_active())
-        {
-            static uint32_t total_samples_queued = 0;
-            static uint32_t total_samples_dropped = 0;
-            
-            int ret = k_msgq_put(&q_ecg_bioz_sample, &ecg_bioz_sensor_sample, K_NO_WAIT);
-            if (ret != 0) {
-                total_samples_dropped += ecg_num_samples;
-                LOG_WRN("ECG sample dropped - queue full (ret=%d), dropped: %u, queued: %u", 
-                        ret, total_samples_dropped, total_samples_queued);
-            } else {
-                total_samples_queued += ecg_num_samples;
-            }
-            
-            // Log statistics every interval
-            if (((total_samples_queued + total_samples_dropped) % ECG_STATS_LOG_INTERVAL_SAMPLES) == 0) {
-                uint32_t total_samples = total_samples_queued + total_samples_dropped;
-                if (total_samples > 0) {  // Prevent division by zero
-                    LOG_INF("ECG sample stats - Queued: %u, Dropped: %u, Drop rate: %u%%", 
-                            total_samples_queued, total_samples_dropped,
-                            (total_samples_dropped * 100) / total_samples);
+            if (current_lead_state == false)
+            {
+                // Lead OFF detected - start or continue debounce timer
+                if (!lead_off_debouncing) {
+                    lead_off_debouncing = true;
+                    lead_off_debounce_start = k_uptime_get();
+                    LOG_INF("ECG Lead OFF detected - starting debounce timer");
+                } else {
+                    // Check if debounce period elapsed
+                    int64_t elapsed = k_uptime_get() - lead_off_debounce_start;
+                    if (elapsed >= ECG_LEAD_OFF_DEBOUNCE_MS) {
+                        LOG_INF("ECG Lead OFF confirmed after %lld ms - signaling display thread", elapsed);
+                        set_ecg_lead_on_off(true);
+                        k_work_submit(&work_ecg_loff);
+                        
+                        // Signal display thread for UI update
+                        LOG_INF("ECG SMF: Giving sem_ecg_lead_off semaphore");
+                        k_sem_give(&sem_ecg_lead_off);
+                        
+                        // Reset debounce state
+                        lead_off_debouncing = false;
+                    }
                 }
             }
+            // else: already in lead-off state, nothing to do
         }
+        // Handle Lead ON (immediate, cancels debounce)
+        else if (edata->ecg_lead_off == 0)
+        {
+            // Cancel any ongoing debounce first
+            if (lead_off_debouncing) {
+                LOG_INF("ECG Lead OFF debounce cancelled - leads reconnected before timeout");
+                lead_off_debouncing = false;
+            }
+            
+            // Signal lead ON if state changed
+            if (current_lead_state == true) {
+                LOG_INF("ECG Lead ON detected (edata->ecg_lead_off=0) - signaling display thread");
+                set_ecg_lead_on_off(false);
+                k_work_submit(&work_ecg_lon);
+                
+                // Signal display thread for UI update  
+                LOG_INF("ECG SMF: Giving sem_ecg_lead_on semaphore");
+                k_sem_give(&sem_ecg_lead_on);
+            }
+            // else: already in lead-on state, nothing to do
+        }
+
+        if (get_ecg_active() || get_gsr_active())
+        {
+    int ret = k_msgq_put(&q_ecg_sample, &ecg_sensor_sample, K_NO_WAIT);
+            if (ret != 0) {
+                LOG_WRN("ECG/GSR sample dropped - queue full (ret=%d)", ret);
+            }
+        }
+    }
+    else
+    {
+        // No samples available
     }
 }
 
@@ -426,17 +509,98 @@ static void work_ecg_sample_handler(struct k_work *work)
         LOG_ERR("Error reading sensor data: %d", ret);
         return;
     }
-    sensor_ecg_bioz_process_decode(ecg_bioz_buf, sizeof(ecg_bioz_buf));
+    if (ret == 0) {
+        return;
+    }
+    sensor_ecg_process_decode(ecg_bioz_buf, ret);
 }
 
 K_WORK_DEFINE(work_ecg_sample, work_ecg_sample_handler);
-
-static void ecg_bioz_sampling_handler(struct k_timer *dummy)
+/**
+ * @brief Process only BioZ samples from the encoded RTIO buffer.
+ * This is a lightweight decoder used when only GSR/BioZ sampling is active.
+ */
+static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
 {
-    k_work_submit(&work_ecg_sample);
+    if (!buf || buf_len < sizeof(struct max30001_encoded_data)) {
+        LOG_ERR("Invalid buffer parameters for BioZ-only decode: buf=%s, len=%u, required=%u",
+                buf ? "OK" : "NULL", buf_len, (uint32_t)sizeof(struct max30001_encoded_data));
+        return;
+    }
+
+    const struct max30001_encoded_data *edata = (const struct max30001_encoded_data *)buf;
+    struct hpi_ecg_bioz_sensor_data_t sample;
+
+    uint8_t bioz_samples = edata->num_samples_bioz;
+    if (bioz_samples == 0) {
+        return;
+    }
+
+    if (bioz_samples > MAX_BIOZ_SAMPLES) {
+        LOG_ERR("BioZ sample count exceeds limit: %u (max %u)", bioz_samples, MAX_BIOZ_SAMPLES);
+        return;
+    }
+
+    // Zero out ECG portion since this decoder only handles BioZ
+    sample.ecg_num_samples = 0;
+    sample.bioz_num_samples = bioz_samples;
+    for (int i = 0; i < bioz_samples; i++) {
+        sample.bioz_sample[i] = edata->bioz_samples[i];
+    }
+
+    sample.hr = edata->hr;
+    sample.rtor = edata->rri;
+    sample.ecg_lead_off = edata->ecg_lead_off;
+
+    if (get_gsr_active()) {
+        struct hpi_bioz_sample_t bsample = {0};
+        bsample.bioz_num_samples = sample.bioz_num_samples;
+        bsample.bioz_lead_off = sample.bioz_lead_off;
+        bsample.timestamp = k_uptime_get();
+        for (int i = 0; i < sample.bioz_num_samples && i < BIOZ_POINTS_PER_SAMPLE; i++) {
+            bsample.bioz_samples[i] = sample.bioz_sample[i];
+        }
+        int ret = k_msgq_put(&q_bioz_sample, &bsample, K_NO_WAIT);
+        if (ret != 0) {
+            LOG_WRN("BioZ sample dropped - bqueue full (ret=%d)", ret);
+        }
+    }
 }
 
-K_TIMER_DEFINE(tmr_ecg_bioz_sampling, ecg_bioz_sampling_handler, NULL);
+static void work_bioz_sample_handler(struct k_work *work)
+{
+    uint8_t ecg_bioz_buf[512];
+    int ret;
+
+    ret = sensor_read(&max30001_iodev, &max30001_read_rtio_poll_ctx, ecg_bioz_buf, sizeof(ecg_bioz_buf));
+    if (ret < 0) {
+        LOG_ERR("Error reading sensor data (BioZ only): %d", ret);
+        return;
+    }
+    if (ret == 0) {
+        return;
+    }
+    sensor_bioz_only_process_decode(ecg_bioz_buf, ret);
+}
+
+K_WORK_DEFINE(work_bioz_sample, work_bioz_sample_handler);
+
+static void ecg_sampling_handler(struct k_timer *dummy)
+{
+    if (get_ecg_active()) {
+        k_work_submit(&work_ecg_sample);
+    }
+}
+
+static void bioz_sampling_handler(struct k_timer *dummy)
+{
+    if (get_gsr_active()) {
+        k_work_submit(&work_bioz_sample);
+    }
+}
+
+K_TIMER_DEFINE(tmr_ecg_sampling, ecg_sampling_handler, NULL);
+K_TIMER_DEFINE(tmr_bioz_sampling, bioz_sampling_handler, NULL);
 
 static int hw_max30001_bioz_enable(void) __attribute__((unused));
 static int hw_max30001_bioz_enable(void)
@@ -453,7 +617,6 @@ static int hw_max30001_ecg_enable(void)
     int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
     if (ret == 0) {
         set_ecg_active(true);
-        LOG_DBG("ECG enabled successfully");
         
         // Configure leads based on hand worn setting
         int lead_ret = hw_max30001_configure_leads();
@@ -484,17 +647,41 @@ static int hw_max30001_ecg_disable(void)
     int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_ECG_ENABLED, &ecg_mode_set);
     if (ret == 0) {
         set_ecg_active(false);
-        LOG_DBG("ECG disabled successfully");
     } else {
         LOG_ERR("Failed to disable ECG: %d", ret);
     }
     return ret;
 }
 
-static void st_ecg_bioz_idle_entry(void *o)
+// GSR (BioZ) specific hardware control functions
+static int hw_max30001_gsr_enable(void)
 {
-    LOG_DBG("ECG/BioZ SM Idle Entry");
+    struct sensor_value bioz_mode_set;
+    bioz_mode_set.val1 = 1;
+    int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
+    if (ret == 0) {
+        set_gsr_active(true);
+    } else {
+        LOG_ERR("Failed to enable GSR (BioZ): %d", ret);
+    }
+    return ret;
+}
 
+static int hw_max30001_gsr_disable(void)
+{
+    struct sensor_value bioz_mode_set;
+    bioz_mode_set.val1 = 0;
+    int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_BIOZ_ENABLED, &bioz_mode_set);
+    if (ret == 0) {
+        set_gsr_active(false);
+    } else {
+        LOG_ERR("Failed to disable GSR (BioZ): %d", ret);
+    }
+    return ret;
+}
+
+static void st_ecg_idle_entry(void *o)
+{
     int ret;
     
     ret = hw_max30001_ecg_disable();
@@ -502,52 +689,156 @@ static void st_ecg_bioz_idle_entry(void *o)
         LOG_ERR("Failed to disable ECG in idle entry: %d", ret);
     }
     
-    k_timer_stop(&tmr_ecg_bioz_sampling);
-    
-    ret = hw_max30001_bioz_disable();
-    if (ret != 0) {
-        LOG_ERR("Failed to disable BioZ in idle entry: %d", ret);
+    // Only stop timers if GSR is also not active
+    if (!get_gsr_active()) {
+        k_timer_stop(&tmr_ecg_sampling);
+        k_timer_stop(&tmr_bioz_sampling);
+        
+        ret = hw_max30001_bioz_disable();
+        if (ret != 0) {
+            LOG_ERR("Failed to disable BioZ in idle entry: %d", ret);
+        }
     }
-}
-
-static void st_ecg_bioz_idle_run(void *o)
+}static void st_ecg_idle_run(void *o)
 {
     // LOG_DBG("ECG/BioZ SM Idle Run");
     if (k_sem_take(&sem_ecg_start, K_NO_WAIT) == 0)
     {
-        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STABILIZING]);
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
+    }
+    
+    // Handle independent GSR (BioZ) control
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting GSR (BioZ) measurement for %d seconds", GSR_MEASUREMENT_DURATION_S);
+        int ret = hw_max30001_gsr_enable();
+        if (ret == 0) {
+            hpi_data_set_gsr_measurement_active(true);
+            gsr_measurement_start_time = k_uptime_get();
+            gsr_measurement_in_progress = true;
+            k_timer_start(&tmr_bioz_sampling, K_MSEC(BIOZ_SAMPLING_INTERVAL_MS), K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
+            LOG_INF("GSR (BioZ) measurement started successfully");
+        } else {
+            LOG_ERR("Failed to start GSR (BioZ) measurement: %d", ret);
+            gsr_measurement_in_progress = false;
+        }
+    }
+    
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Stopping GSR (BioZ) measurement");
+        int ret = hw_max30001_gsr_disable();
+        if (ret == 0) {
+            hpi_data_set_gsr_measurement_active(false);
+            gsr_measurement_in_progress = false;
+            // Only stop bioz timer if ECG is not active
+            if (!get_ecg_active()) {
+                k_timer_stop(&tmr_bioz_sampling);
+            }
+            LOG_INF("GSR (BioZ) measurement stopped successfully");
+        } else {
+            LOG_ERR("Failed to stop GSR (BioZ) measurement: %d", ret);
+        }
+    }
+    
+    // Auto-complete GSR measurement after duration
+    if (gsr_measurement_in_progress) {
+        int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
+        if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
+            LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
+            hw_max30001_gsr_disable();
+            hpi_data_set_gsr_measurement_active(false);
+            gsr_measurement_in_progress = false;
+            if (!get_ecg_active()) {
+                k_timer_stop(&tmr_bioz_sampling);
+            }
+            
+            // Return to GSR home screen (no results to display for live view only)
+            hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+        }
+        else {
+            // Publish status once per second via ZBus
+            uint32_t elapsed_s = elapsed_ms / 1000;
+            if (elapsed_s != gsr_last_status_pub_s && elapsed_s <= GSR_MEASUREMENT_DURATION_S) {
+                gsr_last_status_pub_s = elapsed_s;
+#if defined(CONFIG_HPI_GSR_SCREEN)
+                struct hpi_gsr_status_t gsr_status = {
+                    .elapsed_s = (uint16_t)elapsed_s,
+                    .remaining_s = (uint16_t)((elapsed_s < GSR_MEASUREMENT_DURATION_S) ? (GSR_MEASUREMENT_DURATION_S - elapsed_s) : 0),
+                    .total_s = GSR_MEASUREMENT_DURATION_S,
+                    .active = true,
+                };
+                extern const struct zbus_channel gsr_status_chan;
+                zbus_chan_pub(&gsr_status_chan, &gsr_status, K_NO_WAIT);
+#endif
+            }
+        }
     }
 }
 
-static void st_ecg_bioz_stream_entry(void *o)
+static void st_ecg_stream_entry(void *o)
 {
-    LOG_DBG("ECG/BioZ SM Stream Entry");
     int ret;
     bool stabilization_complete;
 
     // Check if coming from stabilization 
     get_ecg_stabilization_values(NULL, &stabilization_complete);
+    
     if (!stabilization_complete) {
         ret = hw_max30001_ecg_enable();
         if (ret != 0) {
             LOG_ERR("Failed to enable ECG in stream entry: %d", ret);
-            // Consider transitioning to error state or retry logic
             return;
         }
-        k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+        k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     }
     
     // Start actual recording
     hpi_data_set_ecg_record_active(true);
     
-    // Timer initialization
+    // Timer initialization - start paused until lead ON is detected
     set_ecg_timer_values(k_uptime_get_32(), ECG_RECORD_DURATION_S);
+    hpi_ecg_timer_reset();  // Start in reset state (paused, waiting for leads)
     
-    LOG_INF("ECG recording started - %d seconds", ECG_RECORD_DURATION_S);
+    // Publish initial timer status to update display immediately
+    struct hpi_ecg_status_t ecg_stat = {
+        .ts_complete = 0,
+        .status = HPI_ECG_STATUS_STREAMING,
+        .hr = get_ecg_hr(),
+        .progress_timer = ECG_RECORD_DURATION_S};
+    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+    
+    // Initialize screen with current lead state - signal display thread
+    bool current_lead_off = get_ecg_lead_on_off();
+    if (current_lead_off) {
+        k_sem_give(&sem_ecg_lead_off);
+    } else {
+        k_sem_give(&sem_ecg_lead_on);
+    }
+    
+    LOG_INF("ECG recording started - waiting for leads to be connected");
+    LOG_INF("Timer will start automatically when leads are detected");
 }
 
-static void st_ecg_bioz_stream_run(void *o)
+static void st_ecg_stream_run(void *o)
 {
+    // Check for lead reconnection requiring stabilization
+    if (k_sem_take(&sem_ecg_lead_on_stabilize, K_NO_WAIT) == 0)
+    {
+        LOG_INF("ECG SMF: Lead reconnected - entering stabilization phase");
+        
+        // Reset software smoothing filter for clean start
+        ecg_smooth_reset();
+        
+        // Note: We don't reset FIFO here - the sensor is already running
+        // and FIFO reset during active operation might cause issues
+        // The stabilization period will naturally discard transient samples
+        
+        // Transition to stabilizing state
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
+        return;
+    }
+
     // LOG_DBG("ECG/BioZ SM Stream Run");
     // Stream for ECG duration (30s)
     if (hpi_data_is_ecg_record_active() == true)
@@ -556,11 +847,13 @@ static void st_ecg_bioz_stream_run(void *o)
         int countdown;
         get_ecg_timer_values(&last_timer, &countdown);
         
-        if ((k_uptime_get_32() - last_timer) >= 1000)
+        // Only count down if timer is actually running (leads are on)
+        if (hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
         {
             countdown--;
-            LOG_DBG("ECG timer: %d", countdown);
             set_ecg_timer_values(k_uptime_get_32(), countdown);
+            
+            LOG_DBG("ECG SMF: Timer countdown: %ds remaining (timer running)", countdown);
 
             struct hpi_ecg_status_t ecg_stat = {
                 .ts_complete = 0,
@@ -571,22 +864,64 @@ static void st_ecg_bioz_stream_run(void *o)
 
             if (countdown <= 0)
             {
-                smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_COMPLETE]);
+                LOG_INF("ECG SMF: Timer completed - switching to COMPLETE state");
+                smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
             }
         }
+        // If timer is paused (leads off), still update the display but don't count down
+        else if (!hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
+        {
+            // Update timestamp to prevent rapid firing but keep countdown unchanged
+            set_ecg_timer_values(k_uptime_get_32(), countdown);
+            
+            LOG_DBG("ECG SMF: Timer paused: %ds remaining (timer not running)", countdown);
+            
+            struct hpi_ecg_status_t ecg_stat = {
+                .ts_complete = 0,
+                .status = HPI_ECG_STATUS_STREAMING,
+                .hr = get_ecg_hr(),
+                .progress_timer = countdown};  // Keep same countdown value
+            zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+        }
+    }
+
+    // Check if buffer is full (signaled by data module)
+    // This provides redundant protection in case timer and buffer get out of sync
+    if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+    {
+        LOG_INF("ECG SMF: Buffer full signal received - switching to COMPLETE state");
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
+    }
+
+    // Handle GSR start/stop even during ECG recording
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting GSR during ECG recording");
+        hw_max30001_gsr_enable();
+        hpi_data_set_gsr_measurement_active(true);
+    }
+    
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Stopping GSR during ECG recording");
+        hw_max30001_gsr_disable();
+        hpi_data_set_gsr_measurement_active(false);
     }
 
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0)
     {
         LOG_DBG("ECG cancelled");
-        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
     }
 }
 
-static void st_ecg_bioz_stream_exit(void *o)
+static void st_ecg_stream_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stream Exit");
-
+    
+    // Reset timer when exiting stream state
+    hpi_ecg_timer_reset();
+    
     hpi_data_set_ecg_record_active(false);
 
     // Reset timer
@@ -594,12 +929,16 @@ static void st_ecg_bioz_stream_exit(void *o)
     set_ecg_stabilization_values(0, false); 
 }
 
-static void st_ecg_bioz_complete_entry(void *o)
+static void st_ecg_complete_entry(void *o)
 {
     LOG_DBG("ECG/BioZ SM Complete Entry");
     int ret;
     
-    k_timer_stop(&tmr_ecg_bioz_sampling);
+    // Only stop timer if GSR is also not active
+    if (!get_gsr_active()) {
+        k_timer_stop(&tmr_ecg_sampling);
+        k_timer_stop(&tmr_bioz_sampling);
+    }
     
     ret = hw_max30001_ecg_disable();
     if (ret != 0) {
@@ -609,53 +948,94 @@ static void st_ecg_bioz_complete_entry(void *o)
     k_sem_give(&sem_ecg_complete);
 }
 
-static void st_ecg_bioz_complete_run(void *o)
+static void st_ecg_complete_run(void *o)
 {
-    smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
+    // Handle GSR start/stop during ECG complete phase
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting GSR during ECG complete phase");
+        hw_max30001_gsr_enable();
+        hpi_data_set_gsr_measurement_active(true);
+    }
+    
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Stopping GSR during ECG complete phase");
+        hw_max30001_gsr_disable();
+        hpi_data_set_gsr_measurement_active(false);
+    }
+    
+    // ECG complete - return to idle unless new operation requested
+    smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
 }
 
-static void st_ecg_bioz_complete_exit(void *o)
+static void st_ecg_complete_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Complete Exit");
 }
 
-static void st_ecg_bioz_leadoff_entry(void *o)
+static void st_ecg_leadoff_entry(void *o)
 {
     LOG_DBG("ECG/BioZ SM Leadoff Entry");
     // hw_max30001_ecg_disable();
     // hw_max30001_bioz_disable();
-    // k_timer_stop(&tmr_ecg_bioz_sampling);
-    // k_timer_stop()
+    // Timers are managed separately for ECG and BioZ
 }
 
-static void st_ecg_bioz_leadoff_run(void *o)
+static void st_ecg_leadoff_run(void *o)
 {
+    // Handle GSR start/stop during ECG leadoff
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting GSR during ECG leadoff");
+        hw_max30001_gsr_enable();
+        hpi_data_set_gsr_measurement_active(true);
+    }
+    
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Stopping GSR during ECG leadoff");
+        hw_max30001_gsr_disable();
+        hpi_data_set_gsr_measurement_active(false);
+    }
 
     // LOG_DBG("ECG/BioZ SM Leadoff Run");
     if (k_sem_take(&sem_ecg_lead_on_local, K_NO_WAIT) == 0)
     {
-        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STREAM]);
     }
 }
 
-static void st_ecg_bioz_stabilizing_entry(void *o)
+static void st_ecg_stabilizing_entry(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stabilizing Entry");
     int ret;
 
-    // Enable ECG
-    // Reset ECG smoothing filter for clean start
+    // Check if this is initial stabilization or re-stabilization during recording
+    bool is_recording_active = hpi_data_is_ecg_record_active();
+
+    // Always reset ECG smoothing filter for clean start
     ecg_smooth_reset();
 
-    // Enable ECG but don't start recording yet
-    ret = hw_max30001_ecg_enable();
-    if (ret != 0) {
-        LOG_ERR("Failed to enable ECG in stabilizing entry: %d", ret);
-       
-        return;
+    // Only enable ECG and start sampling if not already active (initial start)
+    if (!is_recording_active) {
+        LOG_INF("Initial stabilization - enabling ECG and starting sampling");
+        
+        // Enable ECG but don't start recording yet
+        ret = hw_max30001_ecg_enable();
+        if (ret != 0) {
+            LOG_ERR("Failed to enable ECG in stabilizing entry: %d", ret);
+            return;
+        }
+        
+        k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+    } else {
+        LOG_INF("Re-stabilization during active recording - syncing MAX30001");
+        
+        // SYNCH command resets internal decimation filters and timing
+        // without affecting configuration registers (gain, leads, etc.)
+        //max30001_synch(max30001_dev);
     }
-    
-    k_timer_start(&tmr_ecg_bioz_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     
     // Init stabilization values
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
@@ -664,7 +1044,7 @@ static void st_ecg_bioz_stabilizing_entry(void *o)
     // Publish status indicating stabilization phase
     struct hpi_ecg_status_t ecg_stat = {
         .ts_complete = 0,
-        .status = HPI_ECG_STATUS_STREAMING, // add HPI_ECG_STATUS_STABILIZING
+        .status = HPI_ECG_STATUS_STREAMING, // TODO: Consider adding HPI_ECG_STATUS_STABILIZING
         .hr = 0,
         .progress_timer = ECG_RECORD_DURATION_S + ECG_STABILIZATION_DURATION_S};
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
@@ -677,7 +1057,7 @@ static void st_ecg_bioz_stabilizing_entry(void *o)
 #endif
 }
 
-static void st_ecg_bioz_stabilizing_run(void *o)
+static void st_ecg_stabilizing_run(void *o)
 {
     // Count down stabilization timer
     uint32_t last_timer;
@@ -705,46 +1085,68 @@ static void st_ecg_bioz_stabilizing_run(void *o)
         if (stabilization_countdown <= 0)
         {
             LOG_INF("ECG stabilization complete - starting recording");
-            smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_STREAM]);
+            smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STREAM]);
         }
+    }
+
+    // Handle GSR start/stop during ECG stabilization
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting GSR during ECG stabilization");
+        hw_max30001_gsr_enable();
+        hpi_data_set_gsr_measurement_active(true);
+    }
+    
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Stopping GSR during ECG stabilization");
+        hw_max30001_gsr_disable();
+        hpi_data_set_gsr_measurement_active(false);
     }
 
     // Allow cancellation during stabilization
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0)
     {
         LOG_DBG("ECG cancelled during stabilization");
-        smf_set_state(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
     }
 }
 
-static void st_ecg_bioz_stabilizing_exit(void *o)
+static void st_ecg_stabilizing_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stabilizing Exit");
     set_ecg_stabilization_values(0, true);
+    
+    // If this was a re-stabilization during recording, restart the timer
+    bool is_recording_active = hpi_data_is_ecg_record_active();
+    if (is_recording_active) {
+        LOG_INF("Stabilization complete - resuming recording with timer start");
+        hpi_ecg_timer_start();
+    }
 }
 
-static const struct smf_state ecg_bioz_states[] = {
-    [HPI_ECG_BIOZ_STATE_IDLE] = SMF_CREATE_STATE(st_ecg_bioz_idle_entry, st_ecg_bioz_idle_run, NULL, NULL, NULL),
-    [HPI_ECG_BIOZ_STATE_STABILIZING] = SMF_CREATE_STATE(st_ecg_bioz_stabilizing_entry, st_ecg_bioz_stabilizing_run, st_ecg_bioz_stabilizing_exit, NULL, NULL),
-    [HPI_ECG_BIOZ_STATE_STREAM] = SMF_CREATE_STATE(st_ecg_bioz_stream_entry, st_ecg_bioz_stream_run, st_ecg_bioz_stream_exit, NULL, NULL),
-    [HPI_ECG_BIOZ_STATE_LEADOFF] = SMF_CREATE_STATE(st_ecg_bioz_leadoff_entry, st_ecg_bioz_leadoff_run, NULL, NULL, NULL),
-    [HPI_ECG_BIOZ_STATE_COMPLETE] = SMF_CREATE_STATE(st_ecg_bioz_complete_entry, st_ecg_bioz_complete_run, st_ecg_bioz_complete_exit, NULL, NULL),
+static const struct smf_state ecg_states[] = {
+    [HPI_ECG_STATE_IDLE] = SMF_CREATE_STATE(st_ecg_idle_entry, st_ecg_idle_run, NULL, NULL, NULL),
+    [HPI_ECG_STATE_STABILIZING] = SMF_CREATE_STATE(st_ecg_stabilizing_entry, st_ecg_stabilizing_run, st_ecg_stabilizing_exit, NULL, NULL),
+    [HPI_ECG_STATE_STREAM] = SMF_CREATE_STATE(st_ecg_stream_entry, st_ecg_stream_run, st_ecg_stream_exit, NULL, NULL),
+    [HPI_ECG_STATE_LEADOFF] = SMF_CREATE_STATE(st_ecg_leadoff_entry, st_ecg_leadoff_run, NULL, NULL, NULL),
+    [HPI_ECG_STATE_COMPLETE] = SMF_CREATE_STATE(st_ecg_complete_entry, st_ecg_complete_run, st_ecg_complete_exit, NULL, NULL),
 };
 
-void smf_ecg_bioz_thread(void)
+void smf_ecg_thread(void)
 {
     int ret;
 
-    // Wait for HW module to init ECG/BioZ
-    k_sem_take(&sem_ecg_bioz_sm_start, K_FOREVER);
+    // Wait for HW module to init ECG
+    k_sem_take(&sem_ecg_start, K_FOREVER);
 
-    LOG_INF("ECG/BioZ SMF Thread Started");
+    LOG_INF("ECG SMF Thread Started");
 
-    smf_set_initial(SMF_CTX(&s_ecg_bioz_obj), &ecg_bioz_states[HPI_ECG_BIOZ_STATE_IDLE]);
+    smf_set_initial(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
 
     for (;;)
     {
-        ret = smf_run_state(SMF_CTX(&s_ecg_bioz_obj));
+        ret = smf_run_state(SMF_CTX(&s_ecg_obj));
         if (ret != 0)
         {
             LOG_ERR("SMF Run error: %d", ret);
@@ -754,4 +1156,7 @@ void smf_ecg_bioz_thread(void)
     }
 }
 
-K_THREAD_DEFINE(smf_ecg_bioz_thread_id, 1024, smf_ecg_bioz_thread, NULL, NULL, NULL, 10, 0, 0);
+// Increased from 1024 to 4096 bytes to accommodate file write operations
+// File writes require ~500-700 bytes for LittleFS operations, path buffers,
+// and file structures. 1024 bytes was causing stack overflow crashes.
+K_THREAD_DEFINE(smf_ecg_thread_id, 4096, smf_ecg_thread, NULL, NULL, NULL, 10, 0, 0);

@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <lvgl.h>
@@ -12,7 +42,7 @@ lv_obj_t *ui_spo2_number;
 
 lv_obj_t *ui_spo2_button_create(lv_obj_t *comp_parent)
 {
-    btn_spo2_disp = lv_btn_create(comp_parent);
+    btn_spo2_disp = hpi_btn_create(comp_parent);
     lv_obj_set_width(btn_spo2_disp, 120);
     lv_obj_set_height(btn_spo2_disp, 120);
     lv_obj_set_x(btn_spo2_disp, 0);

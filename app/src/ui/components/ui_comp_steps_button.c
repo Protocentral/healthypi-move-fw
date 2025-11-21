@@ -1,3 +1,33 @@
+/*
+ * HealthyPi Move
+ * 
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <lvgl.h>
@@ -15,14 +45,18 @@ static void scr_home_steps_btn_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
+#if defined(CONFIG_HPI_TODAY_SCREEN)
         hpi_load_screen(SCR_TODAY, SCROLL_LEFT);
+#else
+        // TODAY screen disabled - no action
+#endif
     }
 }
 
 lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
 {
     lv_obj_t *cui_buttonround;
-    cui_buttonround = lv_btn_create(comp_parent);
+    cui_buttonround = hpi_btn_create(comp_parent);
     lv_obj_set_width(cui_buttonround, 110);
     lv_obj_set_height(cui_buttonround, 110);
     lv_obj_set_x(cui_buttonround, 0);
@@ -64,7 +98,7 @@ lv_obj_t *ui_steps_button_create(lv_obj_t *comp_parent)
     lv_label_set_text(cui_step_label, "--");
     lv_obj_set_style_text_color(cui_step_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(cui_step_label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(cui_step_label, &lv_font_montserrat_24, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(cui_step_label, &inter_semibold_24, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     // lv_obj_t **children = lv_mem_alloc(sizeof(lv_obj_t *) * _UI_COMP_STEPGROUP_NUM);
 

@@ -19,30 +19,33 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/components/*.c
                         src/ui/images/*.c
                         src/ui/fonts/*.c
+                        src/ui/fonts/lvgl/*.c
                         src/ui/screens/*.c
                         src/ui/screens/*.c
-                        src/ui/hp_ui_common.c
+                        src/ui/screens/*.c
                         src/sm/*.c)  
-                        
+
+# Exclude TODAY screen source if disabled
+if(NOT CONFIG_HPI_TODAY_SCREEN)
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_today\\.c$")
+endif()
+
+# Exclude GSR sources if the screen is disabled
+if(NOT CONFIG_HPI_GSR_SCREEN)
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr\\.c$")
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr_plot\\.c$")
+endif()
+
 target_sources(app PRIVATE ${app_sources})
+
+# Explicitly include autoscale helper (ensure CMake picks it up if globbing was run earlier)
+target_sources(app PRIVATE src/ui/hpi_ppg_autoscale.c)
 
 if(CONFIG_MAX32664_UPDATER)
     FILE(GLOB max32664_updater_sources 
          src/max32664_updater/max32664_updater.c)
-         #src/max32664_updater/msbl/*.c)
     target_sources(app PRIVATE ${max32664_updater_sources})
-    #add_subdirectory(src/max32664_updater)
-    #target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/max32664_updater)
     zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/max32664_updater)
-endif()
-
-if(CONFIG_MAX32664_UPDATER_MSBL)
-    FILE(GLOB max32664_updater_msbl_sources 
-         src/max32664_updater/msbl/*.c)
-    target_sources(app PRIVATE ${max32664_updater_msbl_sources})
-    #add_subdirectory(src/max32664_updater/msbl)
-    #target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/max32664_updater/msbl)
-    zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/max32664_updater/msbl)
 endif()
 
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)

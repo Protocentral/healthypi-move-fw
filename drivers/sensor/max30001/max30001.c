@@ -242,6 +242,21 @@ static int max30001_enable_bioz(const struct device *dev, bool bioz_en)
     {
         LOG_DBG("Enabling MAX30001 BioZ...");
         data->chip_cfg.reg_cnfg_gen.bit.en_bioz = 1;
+        
+        // Write general config with BioZ enabled
+        int ret = _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
+        if (ret != 0) {
+            LOG_ERR("Failed to write CNFG_GEN for BioZ enable: %d", ret);
+            return ret;
+        }
+        
+        // Also write BioZ-specific configuration registers to ensure they're active
+        _max30001RegWrite(dev, CNFG_BIOZ_LC, 0x800000); // Turn OFF low current mode
+        _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
+        _max30001RegWrite(dev, CNFG_BMUX, data->chip_cfg.reg_cnfg_bmux.all);
+        
+        LOG_INF("BioZ configuration registers written");
+        return 0;
     }
     else
     {
@@ -292,6 +307,8 @@ static int max30001_sample_fetch(const struct device *dev,
     struct max30001_data *data = dev->data;
 
     max30001_status = max30001_read_status(dev);
+    LOG_INF("MAX30001 Status: 0x%06X", max30001_status);
+    
     // printk("Status: %x\n", max30001_status);
 
     if ((max30001_status & MAX30001_STATUS_MASK_DCLOFF) == MAX30001_STATUS_MASK_DCLOFF)
@@ -316,10 +333,16 @@ static int max30001_sample_fetch(const struct device *dev,
 
     if ((max30001_status & MAX30001_STATUS_MASK_BINT) == MAX30001_STATUS_MASK_BINT) // BIOZ FIFO is full
     {
+        LOG_INF("BINT flag set - reading BioZ FIFO");
         max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
         b_fifo_num_bytes = (((max30001_mngr_int & MAX30001_INT_MASK_BFIT) >> MAX30001_INT_SHIFT_BFIT) + 1) * 3;
+        LOG_INF("BioZ FIFO bytes to read: %d", b_fifo_num_bytes);
         // printk("BFN %d ", b_fifo_num_bytes);
         _max30001_read_bioz_fifo(dev, b_fifo_num_bytes);
+    }
+    else
+    {
+        LOG_INF("BINT flag NOT set - no BioZ data available");
     }
 
     if ((max30001_status & MAX30001_STATUS_MASK_RRINT) == MAX30001_STATUS_MASK_RRINT)
@@ -559,7 +582,7 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_emux.bit.caln_sel = 0;
 
     // BIOZ Configuration
-    data->chip_cfg.reg_cnfg_bioz.bit.rate = 0;                 // 64 SPS
+    data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;                 // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
     data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b010;             // 500 Hz
     data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 40 Hz
     data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b010;             // 0.5 Hz

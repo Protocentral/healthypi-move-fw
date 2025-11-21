@@ -8,6 +8,10 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/sys/byteorder.h>
 
+#ifdef CONFIG_SENSOR_ASYNC_API
+#include <zephyr/rtio/rtio.h>
+#endif
+
 #define MAX32664C_I2C_ADDRESS 0x55
 
 #define MAX32664C_HUB_STAT_DRDY_MASK 0x08
@@ -21,10 +25,22 @@
 #define MAX32664C_AFE_ID 0x25
 #define MAX32664C_ACC_ID 0x1B
 
+// Motion detection parameters according to datasheet
+// WUFC: Time in seconds × 25 (0.4s × 25 = 10) - increased filter time to reduce noise  
+#define MAX32664C_MOTION_WUFC 0x14
+// ATH: Threshold in g × 16 (1.5g × 16 = 24) - increased threshold for actual wrist motion
+#define MAX32664C_MOTION_ATH 0x20
+
 uint8_t max32664c_read_hub_status(const struct device *dev);
 void max32664c_do_enter_bl(const struct device *dev);
 //int m_read_op_mode(const struct device *dev);
 int max32664c_do_enter_app(const struct device *dev);
+
+// Motion detection test function
+int max32664c_test_motion_detection(const struct device *dev);
+
+// Motion detection data fetch function
+int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode);
 
 enum max32664c_mode
 {
@@ -123,6 +139,13 @@ struct max32664c_encoded_data
 
 	uint32_t num_samples;
 
+	/*
+	 * Encoded sample arrays contain LED ADC values normalized to 20-bit
+	 * right-aligned integers. The sensor FIFO provides 24-bit MSB-first
+	 * bytes; driver assembly packs these then right-shifts by 4 bits
+	 * (i.e. assembled_24bit >> 4) so the higher layers receive canonical
+	 * 20-bit values that match the datasheet ADC resolution.
+	 */
 	uint32_t green_samples[32];
 	uint32_t red_samples[32];
 	uint32_t ir_samples[32];
@@ -149,5 +172,31 @@ struct max32664c_encoded_data
 	uint32_t steps_walk;
 };
 
-int max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
 int max32664c_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
+
+/* I2C wrapper helpers so driver can centralize I2C calls */
+int max32664c_i2c_write(const struct i2c_dt_spec *i2c, const void *buf, size_t len);
+int max32664c_i2c_read(const struct i2c_dt_spec *i2c, void *buf, size_t len);
+
+#ifdef CONFIG_SENSOR_ASYNC_API
+/* RTIO-based I2C wrapper functions for async operations
+ * These functions provide RTIO support for I2C operations in the MAX32664C driver.
+ * Currently implemented as fallback to synchronous I2C operations.
+ * 
+ * @param r: RTIO context (currently unused in fallback implementation)
+ * @param iodev: RTIO I/O device containing I2C device tree spec
+ * @param buf: Buffer for read/write data
+ * @param len: Length of data to read/write
+ * @return 0 on success, negative error code on failure
+ */
+int max32664c_i2c_rtio_write(struct rtio *r, struct rtio_iodev *iodev, const void *buf, size_t len);
+int max32664c_i2c_rtio_read(struct rtio *r, struct rtio_iodev *iodev, void *buf, size_t len);
+#endif
+
+#if defined(CONFIG_SENSOR_ASYNC_API) && defined(MAX32664C_USE_RTIO_IMPL)
+/* Register RTIO context and iodev to allow synchronous wrappers to
+ * forward operations through RTIO when MAX32664C_USE_RTIO_IMPL is set.
+ */
+void max32664c_register_rtio_context(struct rtio *r, struct rtio_iodev *iodev);
+#endif

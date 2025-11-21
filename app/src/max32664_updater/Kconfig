@@ -7,13 +7,6 @@ config MAX32664_UPDATER
 	help
 		Enable the driver for the Maxim MAX32664 Updater
 
-config MAX32664_UPDATER_MSBL
-	bool "Enable MSBL support"
-	default y
-	depends on MAX32664_UPDATER
-	help
-		Enable support for the Maxim Serial Bootloader (MSBL) for the MAX32664 Updater
-
 module = MAX32664_UPDATER
 module-str = max32664_updater
 

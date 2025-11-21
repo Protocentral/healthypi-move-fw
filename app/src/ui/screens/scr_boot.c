@@ -1,3 +1,32 @@
+/*
+ * HealthyPi Move
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2025 Protocentral Electronics
+ *
+ * Author: Ashwin Whitchurch, Protocentral Electronics
+ * Contact: ashwin@protocentral.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #include <zephyr/kernel.h>
 
 #include <zephyr/logging/log.h>
@@ -50,7 +79,7 @@ void draw_scr_boot(void)
 
     // Scrollable container for boot messages
     scroll_container = lv_obj_create(main_container);
-    lv_obj_set_size(scroll_container, LV_PCT(80), 250);
+    lv_obj_set_size(scroll_container, LV_PCT(85), 220);
     lv_obj_set_style_bg_color(scroll_container, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scroll_container, LV_OPA_20, LV_PART_MAIN);
     lv_obj_set_style_border_color(scroll_container, lv_color_white(), LV_PART_MAIN);
@@ -64,6 +93,7 @@ void draw_scr_boot(void)
     label_boot_messages = lv_label_create(scroll_container);
     lv_label_set_text(label_boot_messages, "");
     lv_obj_set_width(label_boot_messages, LV_PCT(100));
+    lv_obj_set_height(label_boot_messages, LV_SIZE_CONTENT);
     lv_label_set_long_mode(label_boot_messages, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_color(label_boot_messages, lv_color_white(), LV_PART_MAIN);
     lv_obj_align(label_boot_messages, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -72,7 +102,7 @@ void draw_scr_boot(void)
     hpi_show_screen(scr_boot, SCROLL_RIGHT);
 }
 
-void scr_boot_add_status(char *dev_label, bool status, bool show_status)
+void scr_boot_add_status(const char *dev_label, bool status, bool show_status)
 {
     char buf[64];
     if (show_status)
@@ -87,46 +117,62 @@ void scr_boot_add_status(char *dev_label, bool status, bool show_status)
     // Get current text and append new message using static buffer
     const char *current_text = lv_label_get_text(label_boot_messages);
     static char full_text[2048]; // Static buffer to avoid malloc/free
-    
+
     // Safely copy and concatenate
     strncpy(full_text, current_text, sizeof(full_text) - 1);
     full_text[sizeof(full_text) - 1] = '\0';
-    
+
     size_t current_len = strlen(full_text);
     size_t remaining = sizeof(full_text) - current_len - 1;
-    
-    if (remaining > 0) {
+
+    if (remaining > 0)
+    {
         strncat(full_text, buf, remaining);
     }
-    
+
     lv_label_set_text(label_boot_messages, full_text);
+
+    // Refresh the label to ensure proper sizing
+    lv_obj_refresh_style(label_boot_messages, LV_PART_ANY, LV_STYLE_PROP_ANY);
+    lv_obj_update_layout(scroll_container);
+    
+    // Force LVGL to process tasks and then scroll
+    lv_task_handler();
     
     // Auto-scroll to bottom to show latest message
-    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_ON);
+    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_OFF);
 }
 
 void scr_boot_add_final(bool status)
 {
     char buf[64];
     sprintf(buf, "\nCOMPLETE: %s\n", status ? "OK" : "FAIL");
-    
+
     // Get current text and append final message using static buffer
     const char *current_text = lv_label_get_text(label_boot_messages);
     static char full_text[2048]; // Static buffer to avoid malloc/free
-    
+
     // Safely copy and concatenate
     strncpy(full_text, current_text, sizeof(full_text) - 1);
     full_text[sizeof(full_text) - 1] = '\0';
-    
+
     size_t current_len = strlen(full_text);
     size_t remaining = sizeof(full_text) - current_len - 1;
-    
-    if (remaining > 0) {
+
+    if (remaining > 0)
+    {
         strncat(full_text, buf, remaining);
     }
-    
+
     lv_label_set_text(label_boot_messages, full_text);
+
+    // Refresh the label to ensure proper sizing
+    lv_obj_refresh_style(label_boot_messages, LV_PART_ANY, LV_STYLE_PROP_ANY);
+    lv_obj_update_layout(scroll_container);
+    
+    // Force LVGL to process tasks and then scroll
+    lv_task_handler();
     
     // Auto-scroll to bottom to show final message
-    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_ON);
+    lv_obj_scroll_to_y(scroll_container, LV_COORD_MAX, LV_ANIM_OFF);
 }
