@@ -333,6 +333,7 @@ void data_thread(void)
             if (settings_plot_enabled)
             {
                 int ret = k_msgq_put(&q_plot_ecg, &ecg_sensor_sample, K_NO_WAIT);
+                LOG_INF("Sent message to queue to plot ecg");
                 if (ret != 0)
                 {
                     static uint32_t plot_drops = 0;
