@@ -8,6 +8,7 @@
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "hrv_algos.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(Ecg_scr_hrv);
 
@@ -30,7 +31,7 @@ static float y_min_ecg_hrv = 10000;
 
 // static bool ecg_plot_hidden = false;
 
-static float gx_hrv_hrv = 0;
+static float gx_hrv = 0;
 
 // Timer control variables for lead-based automatic start/stop
 static bool timer_running = false;
@@ -49,8 +50,8 @@ static uint32_t batch_count = 0;
 static bool chart_auto_refresh_enabled = true;
 
 // Function declarations for LVGL 9.2 optimized chart management
-static void ecg_chart_enable_performance_mode(bool enable);
-static void ecg_chart_reset_performance_counters(void);
+static void ecg_chart_enable_performance_mode_hrv(bool enable);
+static void ecg_chart_reset_performance_counters_hrv(void);
 
 // Externs
 extern lv_style_t style_red_medium;
@@ -63,6 +64,10 @@ extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
 extern struct k_sem sem_ecg_cancel;
+
+extern bool collecting;
+extern bool check_gesture;
+extern bool hrv_active;
 
 // Commented out - unused function
                   
@@ -129,13 +134,13 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     // Timer Icon
     LV_IMG_DECLARE(timer_32);
     lv_obj_t *img_timer_hrv = lv_img_create(cont_timer_hrv);
-    lv_img_set_src(img_time_hrv, &timer_32);
-    lv_obj_set_style_img_recolor(img_time_hrv, lv_color_hex(0xFFFFFF), LV_PART_MAIN);  // Orange theme
-    lv_obj_set_style_img_recolor_opa(img_time_hrv, LV_OPA_COVER, LV_PART_MAIN);
+    lv_img_set_src(img_timer_hrv, &timer_32);
+    lv_obj_set_style_img_recolor(img_timer_hrv, lv_color_hex(0xFFFFFF), LV_PART_MAIN);  // Orange theme
+    lv_obj_set_style_img_recolor_opa(img_timer_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
     // Timer value
     label_timer_hrv = lv_label_create(cont_timer_hrv);
-    lv_label_set_text(label_timer_hrv, "30");
+    lv_label_set_text(label_timer_hrv, "0");
     lv_obj_add_style(label_timer_hrv, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer_hrv, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_pad_left(label_timer_hrv, 8, LV_PART_MAIN);
@@ -144,7 +149,7 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     lv_obj_t *label_timer_hrv_unit = lv_label_create(cont_timer_hrv);
     lv_label_set_text(label_timer_hrv_unit, "/30 RR collected ");
     lv_obj_add_style(label_timer_hrv_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_timer_hrv_unit, lv_color_hex(0xFF8C00), LV_PART_MAIN);  // Orange accent
+    lv_obj_set_style_text_color(label_timer_hrv_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);  // Orange accent
 
     // Initialize timer state - start paused, waiting for lead ON detection
     timer_running = false;
@@ -174,7 +179,7 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     lv_obj_set_style_pad_all(chart_ecg_hrv, 5, LV_PART_MAIN);             // Minimal padding
     
     // Create series for ECG data
-    ser_ecg_hrv = lv_chart_add_series(chart_ecg_hrv, lv_color_hex(0xFF8C00), LV_CHART_AXIS_PRIMARY_Y);
+    ser_ecg_hrv = lv_chart_add_series(chart_ecg_hrv, lv_color_hex(COLOR_CRITICAL_RED), LV_CHART_AXIS_PRIMARY_Y);
     
     // Configure line series styling - orange theme
     lv_obj_set_style_line_width(chart_ecg_hrv, 3, LV_PART_ITEMS);         // Increased line width for better visibility
@@ -208,7 +213,7 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
 
     // Heart Icon
     lv_obj_t *img_heart_hrv = lv_img_create(cont_hr_hrv);
-    lv_img_set_src(img_heart_hrv, &img_heart_hrv_48px);
+    lv_img_set_src(img_heart_hrv, &img_heart_48px);
     lv_obj_set_style_img_recolor(img_heart_hrv, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_heart_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
@@ -243,10 +248,12 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     label_info_hrv = label_ecg_lead_off_hrv;
 
     // Initialize performance optimization system
-    ecg_chart_reset_performance_counters();
-    ecg_chart_enable_performance_mode(true);  // Start in high-performance mode
+    ecg_chart_reset_performance_counters_hrv();
+    ecg_chart_enable_performance_mode_hrv(true);  // Start in high-performance mode
 
-    hpi_disp_set_curr_screen(SCR_SPL_ECG_SCR2);
+    hpi_disp_set_curr_screen(SCR_SPL_SCREEN_HRV2);
+     int curr_screen = hpi_disp_get_curr_screen();
+LOG_INF("Current screen value = %d", curr_screen);
     hpi_show_screen(scr_ecg_hrv, m_scroll_dir);
 }
 
@@ -297,9 +304,10 @@ void hpi_ecg_disp_add_samples_hrv(int num_samples)
 void hpi_ecg_disp_update_hr_hrv(int hr)
 {
     // Check if we're on the ECG measurement screen (scr2) before updating
-    if (hpi_disp_get_curr_screen() != SCR_SPL_ECG_SCR2 || l_hrv == NULL)
+    if (hpi_disp_get_curr_screen() != SCR_SPL_SCREEN_HRV2 || label_ecg_hr_hrv == NULL)
         return;
 
+    LOG_INF("Inside hr update function");
     // Use standard sprintf for reliability - avoid custom conversion that can cause font issues
     static char hr_buf[8]; // Static buffer to avoid repeated allocations
     static int last_hr = -1; // Cache last value to avoid unnecessary updates
@@ -316,7 +324,7 @@ void hpi_ecg_disp_update_hr_hrv(int hr)
             snprintf(hr_buf, sizeof(hr_buf), "%d", hr);
         }
         
-        lv_label_set_text(l_hrv, hr_buf);
+        lv_label_set_text(label_ecg_hr_hrv, hr_buf);
         last_hr = hr;
     }
 }
@@ -398,7 +406,7 @@ void hpi_ecg_disp_update_timer_hrv(int time_left)
                 k_mutex_unlock(&timer_state_mutex_hrv);
                 
                 if (is_paused) {
-                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0x666666), LV_PART_INDICATOR);  // Gray when paused
+                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Gray when paused
                 } else {
                     lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0xFF8C00), LV_PART_INDICATOR);  // Orange when running
                 }
@@ -457,8 +465,12 @@ bool hpi_ecg_timer_is_running_hrv(void)
 
 void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
 {
+    if (!chart_ecg_hrv || !ser_ecg_hrv || !data_ecg || num_samples <= 0) {
+        LOG_WRN("Invalid pointers or data in HRV plot");
+        return;
+    }
     // Early validation - LVGL 9.2 best practice
-    if (chart_ecg_hrv_update == false || chart_ecg_hrv == NULL || ser_ecg == NULL || data_ecg == NULL || num_samples <= 0) {
+    if (chart_ecg_hrv_update_hrv == false || chart_ecg_hrv == NULL || ser_ecg_hrv == NULL || data_ecg == NULL || num_samples <= 0) {
         return;
     }
 
@@ -476,7 +488,7 @@ void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_
         if (batch_count >= 32 || i == num_samples - 1) {
             // Process batch
             for (uint32_t j = 0; j < batch_count; j++) {
-                lv_chart_set_next_value(chart_ecg_hrv, ser_ecg, batch_data[j]);
+                lv_chart_set_next_value(chart_ecg_hrv, ser_ecg_hrv, batch_data[j]);
                 
                 // Track min/max for auto-scaling
                 if (batch_data[j] < y_min_ecg_hrv) y_min_ecg_hrv = batch_data[j];
@@ -561,8 +573,11 @@ void gesture_down_scr_ecg_hrv(void)
     LOG_INF("ECG measurement cancelled by user");
     
     // Reset timer state when cancelling
-    hpi_ecg_timer_reset();
+    hpi_ecg_timer_reset_hrv();
+    collecting = false;
+    check_gesture = true;
+    hrv_active = false;
     
-    k_sem_give(&sem_ecg_cancel);
-    hpi_load_screen(SCR_ECG, SCROLL_DOWN);
+    //k_sem_give(&sem_ecg_cancel);
+    hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
 }
