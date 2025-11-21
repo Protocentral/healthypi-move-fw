@@ -225,6 +225,8 @@ enum hpi_ecg_status
     HPI_ECG_STATUS_ERROR,
 };
 
+
+
 enum hpi_ble_event
 {
     HPI_BLE_EVENT_PAIR_REQUEST =0x01,
