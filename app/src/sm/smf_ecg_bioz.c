@@ -92,6 +92,7 @@ K_MUTEX_DEFINE(ecg_timer_mutex);
 // NOTE: Removed ecg_state_mutex and ecg_filter_mutex - now using ISR-safe atomic operations
 
 ZBUS_CHAN_DECLARE(ecg_stat_chan);
+ZBUS_CHAN_DECLARE(hrv_stat_chan);
 ZBUS_CHAN_DECLARE(ecg_lead_on_off_chan);
 
 #define ECG_SAMPLING_INTERVAL_MS 125
@@ -703,8 +704,8 @@ static void st_ecg_idle_entry(void *o)
     }
 }static void st_ecg_idle_run(void *o)
 {
-    if(hrv_active)
-        return;
+    // if(hrv_active)
+    //     return;
 
 
     // LOG_DBG("ECG/BioZ SM Idle Run");
@@ -813,6 +814,15 @@ static void st_ecg_stream_entry(void *o)
         .hr = get_ecg_hr(),
         .progress_timer = ECG_RECORD_DURATION_S};
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+
+    // struct hpi_hrv_status_t hrv_stat = {
+    //     .ts_complete_hrv = 0,
+    //     .status_hrv = HPI_ECG_STATUS_STREAMING,
+    //     .hr_hrv = get_ecg_hr(),
+    //     .progress_timer_hrv = ECG_RECORD_DURATION_S
+
+    // };
+    // zbus_chan_pub(&hrv_stat_chan, &hrv_stat, K_NO_WAIT);
     
     // Initialize screen with current lead state - signal display thread
     bool current_lead_off = get_ecg_lead_on_off();
