@@ -579,5 +579,6 @@ void gesture_down_scr_ecg_hrv(void)
     hrv_active = false;
     
     //k_sem_give(&sem_ecg_cancel);
-    hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
+   // hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
+   hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }

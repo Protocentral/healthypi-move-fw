@@ -568,7 +568,7 @@ void gesture_down_scr_spl_ppg_for_hrv(void)
     printk("Exit HRV Frequency Compact\n");
     check_gesture = true;
     collecting = false;
-    hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
+    hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }
 
 // void hpi_ecg_timer_start_for_hrv(void)

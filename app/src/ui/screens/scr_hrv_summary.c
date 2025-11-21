@@ -197,7 +197,7 @@ void draw_scr_hrv_summary(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_hrv_stress_indicator, "Calculating...");
     lv_obj_add_style(label_hrv_stress_indicator, &style_white_small, 0);
 
-    hpi_disp_set_curr_screen(SCR_HRV_SUMMARY);
+   // hpi_disp_set_curr_screen(SCR_HRV_SUMMARY);
     hpi_show_screen(scr_hrv_summary, m_scroll_dir);
 }
 

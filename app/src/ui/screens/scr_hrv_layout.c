@@ -206,7 +206,7 @@ void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir)
 
     hrv_update_display();
 
-    hpi_disp_set_curr_screen(SCR_HRV_SUMMARY);
+    hpi_disp_set_curr_screen(SCR_HRV);
     hpi_show_screen(scr_hrv_layout, m_scroll_dir);
 }
 
