@@ -82,6 +82,8 @@ K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
+K_SEM_DEFINE(sem_gsr_complete, 0, 1);  // name, initial count 0, max count 1
+
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
 
@@ -175,7 +177,7 @@ static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
 
 // @brief GSR Screen variables
-static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
+static uint16_t m_disp_gsr_remaining = 30; // countdown timer (seconds remaining)
 
 struct s_disp_object
 {
