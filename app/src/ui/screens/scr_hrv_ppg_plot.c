@@ -40,6 +40,9 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 
 static uint32_t batch_count = 0;
+static int32_t batch_data[32] __attribute__((aligned(4))); // Batch buffer for efficiency
+static bool lead_on_detected = false;
+
 
 static float y_max_ppg_hrv = 0;
 static float y_min_ppg_hrv = 10000;
@@ -54,7 +57,10 @@ static float gx_hrv = 0;
 
 bool check_gesture = false;
 extern bool collecting;
+static bool timer_running = false;
+static bool timer_paused = true;  // Start paused, wait for lead ON
 
+static const uint32_t RANGE_UPDATE_INTERVAL = 128; // Update range every 64 samples - Less frequent for better performance
 // Signal detection and timeout tracking
 static uint32_t last_ppg_data_time = 0;
 static enum hpi_ppg_status last_scd_state = HPI_PPG_SCD_STATUS_UNKNOWN;
@@ -293,7 +299,7 @@ static void hpi_ppg_disp_do_set_scale_hrv(int disp_window_size)
     hpi_ppg_disp_do_set_scale_shared(chart_ppg_hrv, &y_min_ppg_hrv, &y_max_ppg_hrv, &gx_hrv, disp_window_size);
 }
 
-/* Update "No Signal" label visibility based on data presence and SCD status */
+// /* Update "No Signal" label visibility based on data presence and SCD status */
 static void hpi_ppg_update_signal_status_hrv(enum hpi_ppg_status scd_state)
 {
     if (label_ppg_no_signal_hrv == NULL)
@@ -383,7 +389,7 @@ void hpi_ppg_check_signal_timeout_hrv(void)
 {
     // Use the last known SCD state for timeout checks
     // This way we only show timeout, not incorrectly assuming "no skin contact"
-    hpi_ppg_update_signal_status_hrv(last_scd_state);
+   hpi_ppg_update_signal_status_hrv(last_scd_state);
 }
 void hpi_hrv_disp_update_timer(int time_left)
 {
@@ -447,6 +453,107 @@ void hpi_hrv_disp_update_timer(int time_left)
     }
 }
 
+// void hpi_ecg_disp_draw_plotECG_for_hrv(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
+// {
+//     // Early validation - LVGL 9.2 best practice
+//     if ( chart_ppg_hrv == NULL || ser_ppg_hrv == NULL || data_ecg == NULL || num_samples <= 0) {
+//         LOG_INF("Label null");
+//         return;
+//     }
+
+//     // Performance optimization: Skip processing if chart is hidden
+//     if (lv_obj_has_flag(chart_ppg_hrv, LV_OBJ_FLAG_HIDDEN)) {
+//         LOG_INF("Chart is hidden");
+//         return;
+//     }
+
+//     // Batch processing for efficiency
+//     for (int i = 0; i < num_samples; i++)
+//     {
+//         batch_data[batch_count++] = data_ecg[i];
+        
+//         // Process batch when full or at end of samples
+//         if (batch_count >= 32 || i == num_samples - 1) {
+//             // Process batch
+//             for (uint32_t j = 0; j < batch_count; j++) {
+//                 lv_chart_set_next_value(chart_ppg_hrv, ser_ppg_hrv, batch_data[j]);
+                
+//                 // Track min/max for auto-scaling
+//                 if (batch_data[j] < y_min_ppg_hrv) y_min_ppg_hrv = batch_data[j];
+//                 if (batch_data[j] > y_max_ppg_hrv) y_max_ppg_hrv= batch_data[j];
+//             }
+            
+//             sample_counter += batch_count; // Fix: Update sample counter correctly
+//             batch_count = 0;
+//         }
+//     }
+    
+//     // Auto-scaling logic
+//     if (sample_counter % RANGE_UPDATE_INTERVAL == 0) {
+//         if (y_max_ppg_hrv > y_min_ppg_hrv) {
+//             float range = y_max_ppg_hrv - y_min_ppg_hrv;
+//             float margin = range * 0.1f; // 10% margin
+            
+//             int32_t new_min = (int32_t)(y_min_ppg_hrv - margin);
+//             int32_t new_max = (int32_t)(y_max_ppg_hrv + margin);
+            
+//             // Ensure reasonable minimum range
+//             if ((new_max - new_min) < 1000) {
+//                 int32_t center = (new_min + new_max) / 2;
+//                 new_min = center - 500;
+//                 new_max = center + 500;
+//             }
+            
+//             lv_chart_set_range(chart_ppg_hrv, LV_CHART_AXIS_PRIMARY_Y, new_min, new_max);
+//         }
+        
+//         // Reset for next interval
+//         y_min_ppg_hrv = 10000;
+//         y_max_ppg_hrv = -10000;
+//     }
+// }
+
+// void scr_ecg_lead_on_off_handler_for_hrv(bool lead_on_off)
+// {
+//     LOG_INF("Screen handler called with lead_on_off=%s", lead_on_off ? "OFF" : "ON");
+    
+//     if (label_ppg_no_signal_hrv == NULL) {
+//         LOG_WRN("label_info is NULL, screen handler returning early");
+//         return;
+//     }
+
+//     // Update lead state tracking (thread-safe)
+//     k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+//     lead_on_detected = !lead_on_off;  // ecg_lead_off == 0 means leads are ON
+//     bool current_timer_running = timer_running;
+//     bool current_timer_paused = timer_paused;
+//     k_mutex_unlock(&timer_state_mutex_for_hrv);
+
+//     if (lead_on_off == false)  // Lead ON condition (ecg_lead_off == false)
+//     {
+//         LOG_INF("Handling Lead ON: hiding info, showing chart, starting timer");
+        
+//         // Check if timer value indicates stabilization phase (>30s means stabilizing)
+//         // During stabilization, show a message instead of hiding the label
+//         // This will be updated by timer display function based on progress_timer value
+        
+//         lv_obj_clear_flag(chart_ppg_hrv, LV_OBJ_FLAG_HIDDEN);
+//         // Don't hide label_info yet - will be handled by timer display based on countdown
+//     }
+//     else  // Lead OFF condition (ecg_lead_off == true)
+//     {
+//         LOG_INF("Handling Lead OFF: showing info, hiding chart, pausing timer");
+//         lv_obj_clear_flag(label_ppg_no_signal_hrv, LV_OBJ_FLAG_HIDDEN);
+//         lv_obj_add_flag(chart_ppg_hrv, LV_OBJ_FLAG_HIDDEN);
+        
+//         // Update message based on timer state
+//         if (current_timer_running && !current_timer_paused) {
+//             lv_label_set_text(label_ppg_no_signal_hrv, "Leads disconnected\nTimer paused - reconnect to continue");
+//         } else {
+//             lv_label_set_text(label_ppg_no_signal_hrv, "Place fingers on electrodes\nTimer will start automatically");
+//         }
+//     }
+// }
 
 void gesture_handler_for_ppg(lv_event_t *e)
 {
@@ -463,3 +570,49 @@ void gesture_down_scr_spl_ppg_for_hrv(void)
     collecting = false;
     hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
 }
+
+// void hpi_ecg_timer_start_for_hrv(void)
+// {
+//     k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+//     timer_running = true;
+//     timer_paused = false;
+//     k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+//    /* LOG_INF("ECG timer STARTED - leads detected (running=%s, paused=%s)", 
+//             timer_running ? "true" : "false", timer_paused ? "true" : "false");*/
+// }
+
+// void hpi_ecg_timer_pause_for_hrv(void)
+// {
+//     k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+//     timer_paused = true;
+//     k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+//    /* LOG_INF("ECG timer paused - leads off (running=%s, paused=%s)",
+//             timer_running ? "true" : "false", timer_paused ? "true" : "false");*/
+// }
+
+// void hpi_ecg_timer_reset_for_hrv(void)
+// {
+//     k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+//     timer_running = false;
+//     timer_paused = true;
+//     lead_on_detected = false;
+//     k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+//    /* LOG_INF("ECG timer RESET - ready for fresh start (running=%s, paused=%s)",
+//             timer_running ? "true" : "false", timer_paused ? "true" : "false");*/
+// }
+
+// bool hpi_ecg_timer_is_running_for_hrv(void)
+// {
+//     k_mutex_lock(&timer_state_mutex_for_hrv, K_FOREVER);
+//     bool is_running = timer_running && !timer_paused;
+//     k_mutex_unlock(&timer_state_mutex_for_hrv);
+    
+//    /* LOG_DBG("Timer status check: running=%s, paused=%s, is_running=%s",
+//             timer_running ? "true" : "false", 
+//             timer_paused ? "true" : "false",
+//             is_running ? "true" : "false");*/
+//     return is_running;
+// }
