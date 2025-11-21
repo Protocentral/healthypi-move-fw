@@ -531,7 +531,7 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
         draw_scr_bpt(m_scroll_dir);
         break;
     case SCR_HRV_SUMMARY:
-        draw_scr_hrv_layout(m_scroll_dir);
+        draw_scr_hrv(m_scroll_dir);
         break;
     case SCR_TEMP:
         draw_scr_temp(m_scroll_dir);

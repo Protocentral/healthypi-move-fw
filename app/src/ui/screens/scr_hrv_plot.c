@@ -246,6 +246,9 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     
     // Set reference for lead on/off handler
     label_info_hrv = label_ecg_lead_off_hrv;
+    
+    // Initially HIDE the label - it will be shown by lead-off handler if needed
+    lv_obj_add_flag(label_info_hrv, LV_OBJ_FLAG_HIDDEN);
 
     // Initialize performance optimization system
     ecg_chart_reset_performance_counters_hrv();
@@ -543,18 +546,17 @@ void scr_ecg_lead_on_off_handler_hrv(bool lead_on_off)
 
     if (lead_on_off == false)  // Lead ON condition (ecg_lead_off == false)
     {
-        LOG_INF("Handling Lead ON: hiding info, showing chart, starting timer");
+        LOG_INF("Handling Lead ON: showing chart and hiding info label");
         
-        // Check if timer value indicates stabilization phase (>30s means stabilizing)
-        // During stabilization, show a message instead of hiding the label
-        // This will be updated by timer display function based on progress_timer value
-        
+        // Show the chart immediately when leads are detected
         lv_obj_clear_flag(chart_ecg_hrv, LV_OBJ_FLAG_HIDDEN);
-        // Don't hide label_info_hrv yet - will be handled by timer display based on countdown
+        
+        // Hide the info label - timer update will manage its visibility during stabilization
+        lv_obj_add_flag(label_info_hrv, LV_OBJ_FLAG_HIDDEN);
     }
     else  // Lead OFF condition (ecg_lead_off == true)
     {
-        LOG_INF("Handling Lead OFF: showing info, hiding chart, pausing timer");
+        LOG_INF("Handling Lead OFF: showing info label and hiding chart");
         lv_obj_clear_flag(label_info_hrv, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(chart_ecg_hrv, LV_OBJ_FLAG_HIDDEN);
         

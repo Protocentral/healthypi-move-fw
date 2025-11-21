@@ -399,7 +399,7 @@ void draw_scr_bpt_measure(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uin
 void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // HRV screen functions
-void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void draw_scr_hrv(enum scroll_dir m_scroll_dir);
 void hpi_disp_hrv_draw_plot_rtor(float rtor);
 void hpi_disp_hrv_update_rtor(int rtor);
 void hpi_disp_hrv_update_sdnn(int sdnn);
@@ -531,7 +531,6 @@ bool hpi_hrv_timer_is_running(void);
 float hpi_get_lf_hf_ratio(void);
 void gesture_down_scr_spl_ppg_for_hrv(void);
 void gesture_handler_for_ppg(lv_event_t *e);
-void draw_scr_hrv_layout(enum scroll_dir m_scroll_dir);
 void scr_hrv_measure_btn_event_handler(lv_event_t *e);
 void hrv_measure_timer_handler(struct k_timer *timer_id);
 void gesture_down_scr_spl_hrv(void);
