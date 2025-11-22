@@ -857,56 +857,64 @@ static void st_ecg_stream_run(void *o)
 
     // LOG_DBG("ECG/BioZ SM Stream Run");
     // Stream for ECG duration (30s)
-    if (hpi_data_is_ecg_record_active() == true)
+    // if(hrv_active)
+    // {
+    //     LOG_INF("HRV mode active - ignoring standard ECG completion logic");
+    // }
+    if(!hrv_active)
     {
-        uint32_t last_timer;
-        int countdown;
-        get_ecg_timer_values(&last_timer, &countdown);
-        
-        // Only count down if timer is actually running (leads are on)
-        if (hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
-        {
-            countdown--;
-            set_ecg_timer_values(k_uptime_get_32(), countdown);
-            
-            LOG_DBG("ECG SMF: Timer countdown: %ds remaining (timer running)", countdown);
-
-            struct hpi_ecg_status_t ecg_stat = {
-                .ts_complete = 0,
-                .status = HPI_ECG_STATUS_STREAMING,
-                .hr = get_ecg_hr(),
-                .progress_timer = countdown};
-            zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
-
-            if (countdown <= 0)
+            if (hpi_data_is_ecg_record_active() == true)
             {
-                LOG_INF("ECG SMF: Timer completed - switching to COMPLETE state");
+                uint32_t last_timer;
+                int countdown;
+                get_ecg_timer_values(&last_timer, &countdown);
+                
+                // Only count down if timer is actually running (leads are on)
+                if (hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
+                {
+                    countdown--;
+                    set_ecg_timer_values(k_uptime_get_32(), countdown);
+                    
+                    LOG_DBG("ECG SMF: Timer countdown: %ds remaining (timer running)", countdown);
+
+                    struct hpi_ecg_status_t ecg_stat = {
+                        .ts_complete = 0,
+                        .status = HPI_ECG_STATUS_STREAMING,
+                        .hr = get_ecg_hr(),
+                        .progress_timer = countdown};
+                    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+
+                    if (countdown <= 0)
+                    {
+                        LOG_INF("ECG SMF: Timer completed - switching to COMPLETE state");
+                        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
+                    }
+                }
+                // If timer is paused (leads off), still update the display but don't count down
+                else if (!hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
+                {
+                    // Update timestamp to prevent rapid firing but keep countdown unchanged
+                    set_ecg_timer_values(k_uptime_get_32(), countdown);
+                    
+                    LOG_DBG("ECG SMF: Timer paused: %ds remaining (timer not running)", countdown);
+                    
+                    struct hpi_ecg_status_t ecg_stat = {
+                        .ts_complete = 0,
+                        .status = HPI_ECG_STATUS_STREAMING,
+                        .hr = get_ecg_hr(),
+                        .progress_timer = countdown};  // Keep same countdown value
+                    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+                }
+          }
+     
+
+            // Check if buffer is full (signaled by data module)
+            // This provides redundant protection in case timer and buffer get out of sync
+            if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+            {
+                LOG_INF("ECG SMF: Buffer full signal received - switching to COMPLETE state");
                 smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
             }
-        }
-        // If timer is paused (leads off), still update the display but don't count down
-        else if (!hpi_ecg_timer_is_running() && (k_uptime_get_32() - last_timer) >= 1000)
-        {
-            // Update timestamp to prevent rapid firing but keep countdown unchanged
-            set_ecg_timer_values(k_uptime_get_32(), countdown);
-            
-            LOG_DBG("ECG SMF: Timer paused: %ds remaining (timer not running)", countdown);
-            
-            struct hpi_ecg_status_t ecg_stat = {
-                .ts_complete = 0,
-                .status = HPI_ECG_STATUS_STREAMING,
-                .hr = get_ecg_hr(),
-                .progress_timer = countdown};  // Keep same countdown value
-            zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
-        }
-    }
-
-    // Check if buffer is full (signaled by data module)
-    // This provides redundant protection in case timer and buffer get out of sync
-    if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
-    {
-        LOG_INF("ECG SMF: Buffer full signal received - switching to COMPLETE state");
-        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
     }
 
     // Handle GSR start/stop even during ECG recording
@@ -961,7 +969,14 @@ static void st_ecg_complete_entry(void *o)
         LOG_ERR("Failed to disable ECG in complete entry: %d", ret);
     }
 
-    k_sem_give(&sem_ecg_complete);
+    // if(hrv_active)
+    // {
+    //     LOG_INF("HRV mode active - ignoring standard ECG completion logic");
+    // }
+    if(!hrv_active)
+    {
+       k_sem_give(&sem_ecg_complete);
+    }
 }
 
 static void st_ecg_complete_run(void *o)
