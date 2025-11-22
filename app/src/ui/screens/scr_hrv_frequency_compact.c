@@ -59,6 +59,9 @@ static float stress_score_compact = 0.0f;
 static float sdnn_val = 0.0f;
 static float rmssd_val = 0.0f;
 
+extern bool hrv_active;
+extern struct k_sem hrv_state_set_mutex;
+
 static void lvgl_update_cb(void *user_data)
 {
     hpi_hrv_frequency_compact_update_display();
@@ -95,7 +98,10 @@ void gesture_handler(lv_event_t *e)
 void gesture_down_scr_spl_hrv(void)
 {
     printk("Exit HRV Frequency Compact\n");
-    hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
+    k_mutex_lock(&hrv_state_set_mutex, K_FOREVER);
+    hrv_active = false;
+    k_mutex_unlock(&hrv_state_set_mutex);
+    hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }
 
 void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
