@@ -72,8 +72,8 @@ static lv_style_t style_btn_secondary;
 static lv_style_t style_btn_icon;
 
 /* Modern arc styles - made global for external access */
-lv_style_t style_health_arc;
 lv_style_t style_health_arc_bg;
+lv_style_t style_health_arc;
 
 // Global LVGL Styles
 lv_style_t style_tiny;
