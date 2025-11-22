@@ -14,6 +14,9 @@ LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
 
 K_MUTEX_DEFINE(hrv_mutex);
 
+extern struct k_sem sem_ecg_stop;
+extern struct k_sem sem_ecg_complete;
+
 bool collecting = false;
 static uint16_t rr_interval_buffer[HRV_LIMIT];
 int64_t last_measurement_time = 0;
@@ -323,7 +326,10 @@ void on_new_rr_interval_detected(uint16_t rr_interval)
 
         hpi_hrv_frequency_compact_update_spectrum(rr_interval_buffer, sample_count, sdnn, rmssd);
 
-        hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_HRV_SUMMARY, 0, 0, 0);
+       // k_sem_give(&sem_ecg_stop);
+        k_sem_give(&sem_ecg_complete);
+
+       // hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_HRV, 0, 0, 0);
 
        
       
