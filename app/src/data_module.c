@@ -242,31 +242,34 @@ void hpi_data_set_ecg_record_active(bool active)
     }
     else
     {
-        // Stopping recording - write file SYNCHRONOUSLY with mutex held
-        // This prevents race condition where new recording could start before write completes
-        if (ecg_record_counter > 0)
+        if(!hrv_active)
         {
-            // Validate counter is within bounds before writing
-            if (ecg_record_counter > ECG_RECORD_BUFFER_SAMPLES) {
-                LOG_ERR("ECG counter overflow detected: %d > %d - clamping to max",
-                        ecg_record_counter, ECG_RECORD_BUFFER_SAMPLES);
-                ecg_record_counter = ECG_RECORD_BUFFER_SAMPLES;
+            // Stopping recording - write file SYNCHRONOUSLY with mutex held
+            // This prevents race condition where new recording could start before write completes
+            if (ecg_record_counter > 0)
+            {
+                // Validate counter is within bounds before writing
+                if (ecg_record_counter > ECG_RECORD_BUFFER_SAMPLES) {
+                    LOG_ERR("ECG counter overflow detected: %d > %d - clamping to max",
+                            ecg_record_counter, ECG_RECORD_BUFFER_SAMPLES);
+                    ecg_record_counter = ECG_RECORD_BUFFER_SAMPLES;
+                }
+                
+                struct tm tm_sys_time = hpi_sys_get_sys_time();
+                int64_t log_time = timeutil_timegm64(&tm_sys_time);
+                
+                LOG_INF("ECG recording stopped - writing %d samples to file (%.1f seconds @ 128Hz)", 
+                        ecg_record_counter, (float)ecg_record_counter / 128.0f);
+                
+                // Write actual collected samples, not full buffer size
+                hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, log_time);
+                
+                LOG_INF("ECG file write completed");
             }
-            
-            struct tm tm_sys_time = hpi_sys_get_sys_time();
-            int64_t log_time = timeutil_timegm64(&tm_sys_time);
-            
-            LOG_INF("ECG recording stopped - writing %d samples to file (%.1f seconds @ 128Hz)", 
-                    ecg_record_counter, (float)ecg_record_counter / 128.0f);
-            
-            // Write actual collected samples, not full buffer size
-            hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, log_time);
-            
-            LOG_INF("ECG file write completed");
-        }
-        else
-        {
-            LOG_WRN("ECG recording stopped but no samples collected");
+            else
+            {
+                LOG_WRN("ECG recording stopped but no samples collected");
+            }
         }
     }
     k_mutex_unlock(&mutex_is_ecg_record_active);
