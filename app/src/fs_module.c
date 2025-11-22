@@ -453,13 +453,13 @@ void fs_module_init(void)
     }
 
     rc = lsdir("/lfs/hrv");
-    if(rc < 0)
-    {
-        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
-        int dir_err = fs_mkdir("/lfs/hrv");
-        if (dir_err < 0 && dir_err != -EEXIST) 
-        {
-          LOG_ERR("Failed to create directory /lfs/hrv/ (%d)", dir_err);
-       }
-    }
+    // if(rc < 0)
+    // {
+    //     LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
+    //     int dir_err = fs_mkdir("/lfs/hrv");
+    //     if (dir_err < 0 && dir_err != -EEXIST) 
+    //     {
+    //       LOG_ERR("Failed to create directory /lfs/hrv/ (%d)", dir_err);
+    //    }
+    // }
 }
