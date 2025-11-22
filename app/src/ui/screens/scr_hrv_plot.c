@@ -117,7 +117,7 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0x808080), LV_PART_MAIN);    // Background track
     lv_obj_set_style_arc_width(arc_ecg_zone_hrv, 8, LV_PART_MAIN);
     lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Orange progress
-    lv_obj_set_style_arc_width(arc_ecg_zone_hrv, 6, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(arc_ecg_zone_hrv, 8, LV_PART_INDICATOR);
     lv_obj_remove_style(arc_ecg_zone_hrv, NULL, LV_PART_KNOB);  // Remove knob
     lv_obj_clear_flag(arc_ecg_zone_hrv, LV_OBJ_FLAG_CLICKABLE);
 
@@ -412,7 +412,7 @@ void hpi_ecg_disp_update_timer_hrv(int time_left)
                 if (is_paused) {
                     lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0x808080), LV_PART_INDICATOR);  // Gray when paused
                 } else {
-                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Orange when running
+                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // RED when running
                 }
             }
         }
