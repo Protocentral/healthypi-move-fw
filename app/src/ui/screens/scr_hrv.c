@@ -30,6 +30,7 @@ extern bool check_gesture;
 extern int64_t last_measurement_time;
 extern struct k_sem sem_ecg_start;
 
+
 // GUI Objects
 lv_obj_t *scr_hrv;
 static lv_obj_t *btn_hrv_measure;
@@ -72,7 +73,7 @@ void scr_hrv_measure_btn_event_handler(lv_event_t *e)
             battery_monitor_enabled = false;
 
             //hpi_load_scr_spl(SCR_SPL_HRV_PLOT, SCROLL_UP, (uint8_t)SCR_HRV_PPG_PLOT, 0, 0, 0);
-            hpi_load_scr_spl(SCR_SPL_SCREEN_HRV2, SCROLL_UP, (uint8_t)SCR_SPL_SCREEN_HRV2, 0, 0, 0);
+            hpi_load_scr_spl(SCR_SPL_PLOT_HRV, SCROLL_UP, (uint8_t)SCR_SPL_PLOT_HRV, 0, 0, 0);
            // hpi_load_scr_spl(SCR_SPL_ECG_SCR2, SCROLL_UP, (uint8_t)SCR_ECG, 0, 0, 0);
          
             k_msleep(500);
@@ -105,6 +106,7 @@ void hrv_check_and_transition(void)
         stop_hrv_collection();
 
         k_timer_stop(&hrv_check_timer);
+
 
         past_value = 0;
 
@@ -211,7 +213,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir)
 
     hrv_update_display();
 
-    hpi_disp_set_curr_screen(SCR_HRV_SUMMARY);
+    hpi_disp_set_curr_screen(SCR_HRV);
     hpi_show_screen(scr_hrv, m_scroll_dir);
 }
 
