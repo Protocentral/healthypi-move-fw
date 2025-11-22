@@ -84,6 +84,7 @@ K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
+K_SEM_DEFINE(sem_ecg_stop, 0,1 );
 
 extern int past_value;
 extern struct kmsgq ppg_wrist_rtor;
@@ -257,8 +258,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
 
     [SCR_SPL_HRV_FREQUENCY] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
-    [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, gesture_down_scr_spl_ppg_for_hrv},
-    [SCR_SPL_SCREEN_HRV2] = {draw_scr_ecg_hrv, gesture_down_scr_ecg_hrv},
+   // [SCR_SPL_HRV_PLOT] = {draw_scr_spl_raw_ppg_hrv, gesture_down_scr_spl_ppg_for_hrv},
+    [SCR_SPL_PLOT_HRV] = {draw_scr_ecg_hrv, gesture_down_scr_ecg_hrv},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -557,6 +558,7 @@ extern struct k_msgq q_plot_gsr;
 extern struct k_sem sem_crown_key_pressed;
 
 extern struct k_sem sem_ecg_lead_on;
+//extern struct k_sem sem_ecg_stop;
 extern struct k_sem sem_ecg_lead_off;
 extern struct k_sem sem_ecg_lead_on_stabilize;
 
@@ -829,17 +831,17 @@ static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sam
         /* Update the HR label on raw PPG screen if available */
         hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
     }
-    else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_PLOT)
-    {
-        /* Forward samples to the HRV plotting function */
-         lv_disp_trig_activity(NULL);
-        hpi_disp_ppg_draw_plotPPG_hrv(ppg_sensor_sample);
-        /* Update the HR and HRV labels on HRV screen if available */
-        hpi_ppg_disp_update_hr_hrv(ppg_sensor_sample.hr);
-        hpi_ppg_disp_update_rr_interval_hrv(ppg_sensor_sample.rtor);
+    // else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_PLOT)
+    // {
+    //     /* Forward samples to the HRV plotting function */
+    //      lv_disp_trig_activity(NULL);
+    //     hpi_disp_ppg_draw_plotPPG_hrv(ppg_sensor_sample);
+    //     /* Update the HR and HRV labels on HRV screen if available */
+    //     hpi_ppg_disp_update_hr_hrv(ppg_sensor_sample.hr);
+    //     hpi_ppg_disp_update_rr_interval_hrv(ppg_sensor_sample.rtor);
 
        
-    }
+    // }
 }
 
 static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample)
@@ -849,11 +851,10 @@ static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sens
     {
         hpi_ecg_disp_draw_plotECG(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
     }
-    else if(hpi_disp_get_curr_screen() == SCR_SPL_SCREEN_HRV2)
+    else if(hpi_disp_get_curr_screen() == SCR_SPL_PLOT_HRV)
     {
-       LOG_INF("ECG data -> calling plot");
        hpi_ecg_disp_draw_plotECG_hrv(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
-      //hpi_ecg_disp_update_hr_hrv(ecg_sensor_sample.hr);
+       hpi_ecg_disp_update_hr_hrv(ecg_sensor_sample.hr);
     }
     
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
@@ -959,14 +960,18 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
         break;
-    case SCR_SPL_HRV_PLOT:
+    // case SCR_SPL_HRV_PLOT:
       
-       hpi_hrv_disp_update_timer(past_value);
-      // hpi_ppg_check_signal_timeout_hrv();
-         lv_disp_trig_activity(NULL);
-        break;
-    case SCR_SPL_SCREEN_HRV2:
-       hpi_ecg_disp_update_timer_hrv(m_disp_ecg_timer);
+    //    hpi_hrv_disp_update_timer(past_value);
+    //   // hpi_ppg_check_signal_timeout_hrv();
+    //      lv_disp_trig_activity(NULL);
+    //     break;
+    case SCR_SPL_PLOT_HRV:
+       hpi_ecg_disp_update_timer_hrv(past_value);
+       if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+        {
+            hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_DOWN, SCR_SPL_HRV_FREQUENCY, 0, 0, 0);
+        }
        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
@@ -1191,7 +1196,6 @@ static void st_display_active_run(void *o)
     int ecg_processed_count = 0;
     while (k_msgq_get(&q_plot_ecg, &ecg_sensor_sample, K_NO_WAIT) == 0)
     {
-        LOG_INF("Received message from queue to plot ecg ");
         hpi_disp_process_ecg_data(ecg_sensor_sample);
         ecg_processed_count++;
 
