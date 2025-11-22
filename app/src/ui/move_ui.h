@@ -113,7 +113,7 @@ enum hpi_disp_screens
     SCR_BPT,
 
     //SCR_SPL_PLOT_HRV,
-    SCR_HRV_SUMMARY,
+    SCR_HRV,
     SCR_HRV_PPG_PLOT,
     SCR_GSR,
 
@@ -165,9 +165,9 @@ enum hpi_disp_spl_screens
     SCR_SPL_TIME_FORMAT_SELECT,
     SCR_SPL_TEMP_UNIT_SELECT,
     SCR_SPL_SLEEP_TIMEOUT_SELECT,
-    SCR_SPL_HRV_PLOT,
+    //SCR_SPL_HRV_PLOT,
     SCR_SPL_LIST_END,
-    SCR_SPL_SCREEN_HRV2,
+    SCR_SPL_PLOT_HRV,
 
     SCR_SPL_BLE,
 };
