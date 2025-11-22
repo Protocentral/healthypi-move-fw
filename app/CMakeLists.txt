@@ -16,7 +16,6 @@ project(healthypi_move)
 FILE(GLOB app_sources   src/*.c 
                         src/images/*.c 
                         src/ui/*.c 
-                        src/gsr_algo.c    
                         src/ui/components/*.c
                         src/ui/images/*.c
                         src/ui/fonts/*.c
