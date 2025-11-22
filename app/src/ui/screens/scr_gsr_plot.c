@@ -216,7 +216,6 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Timer label (remaining seconds) positioned below title
     label_timer = lv_label_create(scr_gsr_plot);
-  //  lv_label_set_text(label_timer, "60");
     lv_label_set_text(label_timer, "30");
     lv_obj_align(label_timer, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_set_style_text_color(label_timer, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
