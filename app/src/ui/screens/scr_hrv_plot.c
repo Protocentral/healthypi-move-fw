@@ -581,7 +581,10 @@ void gesture_down_scr_ecg_hrv(void)
     collecting = false;
     check_gesture = true;
     hrv_active = false;
+
     k_sem_give(&sem_ecg_cancel);
     k_mutex_unlock(&hrv_state_set_mutex);
     hpi_load_screen(SCR_HRV, SCROLL_DOWN);
+
+
 }

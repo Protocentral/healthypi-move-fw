@@ -326,10 +326,13 @@ void on_new_rr_interval_detected(uint16_t rr_interval)
 
         hpi_hrv_frequency_compact_update_spectrum(rr_interval_buffer, sample_count, sdnn, rmssd);
 
+
        // k_sem_give(&sem_ecg_stop);
         k_sem_give(&sem_ecg_complete);
 
        // hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_HRV, 0, 0, 0);
+
+        hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_SPL_HRV_FREQUENCY, 0, 0, 0);
 
        
       

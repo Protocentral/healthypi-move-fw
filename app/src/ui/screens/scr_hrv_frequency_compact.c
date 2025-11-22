@@ -98,9 +98,11 @@ void gesture_handler(lv_event_t *e)
 void gesture_down_scr_spl_hrv(void)
 {
     printk("Exit HRV Frequency Compact\n");
+
     k_mutex_lock(&hrv_state_set_mutex, K_FOREVER);
     hrv_active = false;
     k_mutex_unlock(&hrv_state_set_mutex);
+
     hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }
 
