@@ -111,17 +111,10 @@ enum hpi_disp_screens
     SCR_ECG,
     SCR_TEMP,
     SCR_BPT,
-
     //SCR_SPL_PLOT_HRV,
-
     SCR_HRV,
     SCR_HRV_PPG_PLOT,
-
-    //SCR_HRV_SUMMARY,
- 
-
     SCR_GSR,
-
     SCR_LIST_END,
     // Should not go here
     
