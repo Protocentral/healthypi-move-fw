@@ -255,7 +255,7 @@ void draw_scr_spl_raw_ppg_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32
     lv_obj_add_event_cb(scr_raw_ppg_hrv, gesture_handler_for_ppg, LV_EVENT_GESTURE, NULL);
 
    
-    hpi_disp_set_curr_screen(SCR_SPL_HRV_PLOT);
+   // hpi_disp_set_curr_screen(SCR_SPL_HRV_PLOT);
     hpi_show_screen(scr_raw_ppg_hrv, m_scroll_dir);
 }
 
@@ -568,7 +568,7 @@ void gesture_down_scr_spl_ppg_for_hrv(void)
     printk("Exit HRV Frequency Compact\n");
     check_gesture = true;
     collecting = false;
-    hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
+    hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }
 
 // void hpi_ecg_timer_start_for_hrv(void)
