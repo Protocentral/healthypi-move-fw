@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(Ecg_scr_hrv);
 
 // Mutex for thread-safe timer state access
 K_MUTEX_DEFINE(timer_state_mutex_hrv);
+K_MUTEX_DEFINE(hrv_state_set_mutex);
 
 static lv_obj_t *scr_ecg_hrv;
 // static lv_obj_t *btn_ecg_cancel;  // Commented out - not used
@@ -254,9 +255,7 @@ void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     ecg_chart_reset_performance_counters_hrv();
     ecg_chart_enable_performance_mode_hrv(true);  // Start in high-performance mode
 
-    hpi_disp_set_curr_screen(SCR_SPL_SCREEN_HRV2);
-     int curr_screen = hpi_disp_get_curr_screen();
-LOG_INF("Current screen value = %d", curr_screen);
+    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
     hpi_show_screen(scr_ecg_hrv, m_scroll_dir);
 }
 
@@ -307,10 +306,9 @@ void hpi_ecg_disp_add_samples_hrv(int num_samples)
 void hpi_ecg_disp_update_hr_hrv(int hr)
 {
     // Check if we're on the ECG measurement screen (scr2) before updating
-    if (hpi_disp_get_curr_screen() != SCR_SPL_SCREEN_HRV2 || label_ecg_hr_hrv == NULL)
+    if (hpi_disp_get_curr_screen() != SCR_SPL_PLOT_HRV || label_ecg_hr_hrv == NULL)
         return;
 
-    LOG_INF("Inside hr update function");
     // Use standard sprintf for reliability - avoid custom conversion that can cause font issues
     static char hr_buf[8]; // Static buffer to avoid repeated allocations
     static int last_hr = -1; // Cache last value to avoid unnecessary updates
@@ -399,8 +397,11 @@ void hpi_ecg_disp_update_timer_hrv(int time_left)
             // Update the progress arc to show progress towards completion
             if (arc_ecg_zone_hrv != NULL) {
                 // Show progress: empty at start (30s), full at end (0s)
-                int arc_value = (time_left < 0) ? 30 : ((time_left > 30) ? 0 : (30 - time_left));
-                lv_arc_set_value(arc_ecg_zone_hrv, arc_value);
+                //int arc_value = (time_left < 0) ? 30 : ((time_left > 30) ? 0 : (30 - time_left));
+                 lv_arc_set_range(arc_ecg_zone_hrv, 0, 30); 
+                lv_arc_set_value(arc_ecg_zone_hrv, time_left);
+                lv_arc_set_bg_angles(arc_ecg_zone_hrv, 135, 405);
+                //lv_arc_set_value(arc_ecg_zone_hrv, arc_value);
                 
                 // Change arc color based on timer state: Orange when running, gray when paused
                 // Thread-safe access to timer_paused
@@ -409,9 +410,9 @@ void hpi_ecg_disp_update_timer_hrv(int time_left)
                 k_mutex_unlock(&timer_state_mutex_hrv);
                 
                 if (is_paused) {
-                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Gray when paused
+                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0x808080), LV_PART_INDICATOR);  // Gray when paused
                 } else {
-                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0xFF8C00), LV_PART_INDICATOR);  // Orange when running
+                    lv_obj_set_style_arc_color(arc_ecg_zone_hrv, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // Orange when running
                 }
             }
         }
@@ -576,10 +577,11 @@ void gesture_down_scr_ecg_hrv(void)
     
     // Reset timer state when cancelling
     hpi_ecg_timer_reset_hrv();
+    k_mutex_lock(&hrv_state_set_mutex, K_FOREVER);
     collecting = false;
     check_gesture = true;
     hrv_active = false;
-    
-    //k_sem_give(&sem_ecg_cancel);
-    hpi_load_screen(SCR_HRV_SUMMARY, SCROLL_DOWN);
+    k_sem_give(&sem_ecg_cancel);
+    k_mutex_unlock(&hrv_state_set_mutex);
+    hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }
