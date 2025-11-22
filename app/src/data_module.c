@@ -73,6 +73,8 @@ static bool settings_send_usb_enabled = false;
 static bool settings_send_ble_enabled = true;
 static bool settings_plot_enabled = true;
 
+extern bool hrv_active;
+
 static int last_rr_value = 0;
 
 enum hpi5_data_format
@@ -333,7 +335,6 @@ void data_thread(void)
             if (settings_plot_enabled)
             {
                 int ret = k_msgq_put(&q_plot_ecg, &ecg_sensor_sample, K_NO_WAIT);
-                LOG_INF("Sent message to queue to plot ecg");
                 if (ret != 0)
                 {
                     static uint32_t plot_drops = 0;
@@ -358,67 +359,75 @@ void data_thread(void)
              }
             // ECG recording buffer management with mutex protection
             // Fixed: No circular buffer - linear recording only, stop when full
-            k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
-            if (is_ecg_record_active == true)
+            // if(hrv_active)
+            // {
+            //      LOG_INF("HRV mode active - ignoring standard ECG completion logic");
+            // }
+            if(!hrv_active)
             {
-                int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
-                int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
+                    k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
+                    if (is_ecg_record_active == true)
+                    {
+                        int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
+                        int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
 
-                // Defensive check: prevent counter from exceeding buffer size
-                if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES) {
-                    LOG_ERR("ECG buffer counter overflow detected: %d >= %d - stopping recording",
-                            ecg_record_counter, ECG_RECORD_BUFFER_SAMPLES);
-                    extern struct k_sem sem_ecg_complete;
-                    k_sem_give(&sem_ecg_complete);
+                        // Defensive check: prevent counter from exceeding buffer size
+                        if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES) {
+                            LOG_ERR("ECG buffer counter overflow detected: %d >= %d - stopping recording",
+                                    ecg_record_counter, ECG_RECORD_BUFFER_SAMPLES);
+                            extern struct k_sem sem_ecg_complete;
+                            k_sem_give(&sem_ecg_complete);
+                            k_mutex_unlock(&mutex_is_ecg_record_active);
+                            continue;  // Skip this sample batch
+                        }
+
+                        if (samples_to_copy <= space_left)
+                        {
+                            // Copy samples to buffer
+                            memcpy(&ecg_record_buffer[ecg_record_counter], 
+                                ecg_sensor_sample.ecg_samples, 
+                                samples_to_copy * sizeof(int32_t));
+                            ecg_record_counter += samples_to_copy;
+                            
+                            // Check if buffer is exactly full
+                            if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES)
+                            {
+                                LOG_INF("ECG buffer full - collected %d samples (30.0 seconds @ 128Hz)", 
+                                        ecg_record_counter);
+                                LOG_INF("Signaling state machine to stop recording");
+                                
+                                // Signal state machine that buffer is full
+                                // State machine will call hpi_data_set_ecg_record_active(false)
+                                // which will write the file synchronously
+                                    extern struct k_sem sem_ecg_complete;
+                                    k_sem_give(&sem_ecg_complete);
+                                
+                            }
+                        }
+                        else
+                        {
+                            // Not enough space - copy what fits and stop
+                            if (space_left > 0)
+                            {
+                                memcpy(&ecg_record_buffer[ecg_record_counter], 
+                                    ecg_sensor_sample.ecg_samples, 
+                                    space_left * sizeof(int32_t));
+                                ecg_record_counter += space_left;
+                            }
+                            
+                            LOG_WRN("ECG buffer full mid-batch - collected %d samples, discarded %d", 
+                                    ecg_record_counter, samples_to_copy - space_left);
+                            LOG_INF("Signaling state machine to stop recording");
+                            
+                            // Signal completion
+                              extern struct k_sem sem_ecg_complete;
+                            k_sem_give(&sem_ecg_complete);
+                            
+                        }
+                    }
                     k_mutex_unlock(&mutex_is_ecg_record_active);
-                    continue;  // Skip this sample batch
-                }
-
-                if (samples_to_copy <= space_left)
-                {
-                    // Copy samples to buffer
-                    memcpy(&ecg_record_buffer[ecg_record_counter], 
-                           ecg_sensor_sample.ecg_samples, 
-                           samples_to_copy * sizeof(int32_t));
-                    ecg_record_counter += samples_to_copy;
-                    
-                    // Check if buffer is exactly full
-                    if (ecg_record_counter >= ECG_RECORD_BUFFER_SAMPLES)
-                    {
-                        LOG_INF("ECG buffer full - collected %d samples (30.0 seconds @ 128Hz)", 
-                                ecg_record_counter);
-                        LOG_INF("Signaling state machine to stop recording");
-                        
-                        // Signal state machine that buffer is full
-                        // State machine will call hpi_data_set_ecg_record_active(false)
-                        // which will write the file synchronously
-                        extern struct k_sem sem_ecg_complete;
-                        k_sem_give(&sem_ecg_complete);
-                    }
-                }
-                else
-                {
-                    // Not enough space - copy what fits and stop
-                    if (space_left > 0)
-                    {
-                        memcpy(&ecg_record_buffer[ecg_record_counter], 
-                               ecg_sensor_sample.ecg_samples, 
-                               space_left * sizeof(int32_t));
-                        ecg_record_counter += space_left;
-                    }
-                    
-                    LOG_WRN("ECG buffer full mid-batch - collected %d samples, discarded %d", 
-                            ecg_record_counter, samples_to_copy - space_left);
-                    LOG_INF("Signaling state machine to stop recording");
-                    
-                    // Signal completion
-                    extern struct k_sem sem_ecg_complete;
-                    k_sem_give(&sem_ecg_complete);
                 }
             }
-            k_mutex_unlock(&mutex_is_ecg_record_active);
-        }
-
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
             processed_data = true;
