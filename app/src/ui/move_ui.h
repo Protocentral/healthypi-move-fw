@@ -398,26 +398,6 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir);
-void hpi_disp_hrv_draw_plot_rtor(float rtor);
-void hpi_disp_hrv_update_rtor(int rtor);
-void hpi_disp_hrv_update_sdnn(int sdnn);
-
-// HRV Scatter screen functions
-void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir);
-void hpi_disp_hrv_scatter_draw_plot_rtor(float rtor, float prev_rtor);
-void hpi_disp_hrv_scatter_update_rtor(int rtor);
-void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
-
-// HRV Summary screen functions
-void draw_scr_hrv_summary(enum scroll_dir m_scroll_dir);
-void hpi_hrv_summary_update_metrics(float sdnn, float rmssd, float pnn50, float mean_rr);
-void hpi_hrv_summary_draw_rr_plot(float rr_interval);
-void hpi_hrv_summary_set_update_enabled(bool enabled);
-
-// HRV Frequency Analysis screen functions
-void draw_scr_hrv_frequency(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
-void hpi_hrv_frequency_update_spectrum(float *rr_intervals, int num_intervals);
-void hpi_hrv_frequency_update_display(void);
 
 // HRV Frequency Compact screen functions (optimized for small round displays)
 void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
