@@ -123,6 +123,9 @@ static struct hpi_last_update_time_t g_hpi_last_update = {
 
     .gsr_last_update_ts = 0,
     .gsr_last_value = 0,
+
+    .hrv_last_update_ts = 0,
+    .hrv_last_value = 0,
 };
 
 K_MUTEX_DEFINE(mutex_hpi_last_update_time);
@@ -469,6 +472,14 @@ void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts)
 {
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     g_hpi_last_update.ecg_last_update_ts = ecg_last_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+}
+
+void hpi_sys_set_last_hrv_update(uint16_t hrv_last_value, int64_t hrv_last_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.hrv_last_value = hrv_last_value;
+    g_hpi_last_update.hrv_last_update_ts = hrv_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
 }
 
