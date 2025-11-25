@@ -51,6 +51,7 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "hpi_sys.h"
 
 #include "log_module.h"
+#include "gsr_algos.h"
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 ZBUS_CHAN_DECLARE(gsr_stress_chan);
@@ -96,6 +97,14 @@ static bool is_ecg_record_active = false;
 static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128 Hz * 30 seconds = 3840 samples (15.36KB)
 static volatile uint16_t ecg_record_counter = 0;
 K_MUTEX_DEFINE(mutex_is_ecg_record_active);
+
+static bool is_gsr_record_active = false;
+static int32_t gsr_record_buffer[GSR_RECORD_BUFFER_SAMPLES]; // e.g., 32Hz * 30s = 960 samples
+static volatile uint16_t gsr_record_counter = 0;
+K_MUTEX_DEFINE(mutex_is_gsr_record_active);
+
+
+int g_last_scr_count = 0;
 
 static bool is_gsr_measurement_active = false;
 K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
@@ -267,6 +276,70 @@ void hpi_data_set_ecg_record_active(bool active)
     k_mutex_unlock(&mutex_is_ecg_record_active);
 }
 
+void hpi_data_set_gsr_record_active(bool active)
+{
+    k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+    is_gsr_record_active = active;
+
+    if (active)
+    {
+        // Starting new recording
+        gsr_record_counter = 0;
+        memset(gsr_record_buffer, 0, sizeof(gsr_record_buffer));
+        LOG_INF("GSR recording started - buffer reset");
+    }
+    else
+    {
+        // Stopping recording - write file synchronously
+        if (gsr_record_counter > 0)
+        {
+            if (gsr_record_counter > GSR_RECORD_BUFFER_SAMPLES) {
+                LOG_ERR("GSR counter overflow detected: %d > %d - clamping to max",
+                        gsr_record_counter, GSR_RECORD_BUFFER_SAMPLES);
+                gsr_record_counter = GSR_RECORD_BUFFER_SAMPLES;
+            }
+
+            struct tm tm_sys_time = hpi_sys_get_sys_time();
+            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+
+            LOG_INF("GSR recording stopped - writing %d samples to file (%.1f seconds @ 32Hz)",
+                    gsr_record_counter, (float)gsr_record_counter / 32.0f);
+
+            hpi_write_gsr_record_file(gsr_record_buffer, gsr_record_counter, log_time);
+            LOG_INF("GSR file write completed");
+
+            if (!is_gsr_record_active && gsr_record_counter > 0) 
+            { 
+                int scr_count = calculate_scr_count(gsr_record_buffer, gsr_record_counter); 
+                LOG_INF("SCR count: %d", scr_count);
+
+                g_last_scr_count = scr_count;   // <---- SAVE HERE
+                 // Update last GSR value
+                hpi_sys_set_last_gsr_update(g_last_scr_count, log_time);
+
+
+             }
+        }
+        else
+        {
+            LOG_WRN("GSR recording stopped but no samples collected");
+        }
+    }
+
+    k_mutex_unlock(&mutex_is_gsr_record_active);
+}
+
+bool hpi_data_is_gsr_record_active(void)
+{
+    bool active;
+    k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+    active = is_gsr_record_active;
+    k_mutex_unlock(&mutex_is_gsr_record_active);
+    return active;
+}
+
+
+
 void hpi_data_reset_ecg_record_buffer(void)
 {
     k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
@@ -424,6 +497,44 @@ void data_thread(void)
                     }
                 }
             }
+
+        k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+        if (is_gsr_record_active)
+        {
+            int samples_to_copy = bsample.bioz_num_samples;
+            int space_left = GSR_RECORD_BUFFER_SAMPLES - gsr_record_counter;
+
+            if (space_left <= 0)
+            {
+                LOG_INF("GSR buffer full - stopping recording");
+                k_mutex_unlock(&mutex_is_gsr_record_active);
+                hpi_data_set_gsr_record_active(false);
+            }
+            else
+            {
+                int copy_count = (samples_to_copy <= space_left) ? samples_to_copy : space_left;
+                memcpy(&gsr_record_buffer[gsr_record_counter],
+                    bsample.bioz_samples,
+                    copy_count * sizeof(int32_t));
+                gsr_record_counter += copy_count;
+
+                if (copy_count < samples_to_copy)
+                {
+                    LOG_WRN("GSR buffer full mid-batch - collected %d samples, discarded %d",
+                            gsr_record_counter, samples_to_copy - copy_count);
+                    k_mutex_unlock(&mutex_is_gsr_record_active);
+                    hpi_data_set_gsr_record_active(false);
+                }
+                else
+                {
+                    k_mutex_unlock(&mutex_is_gsr_record_active);
+                }
+            }
+        }
+        else
+        {
+            k_mutex_unlock(&mutex_is_gsr_record_active);
+        }
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
             // Calculate stress index from GSR samples
