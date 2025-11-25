@@ -30,15 +30,58 @@
 
 #pragma once
 
-#define SF_spo2 25 // sampling frequency
-#define BUFFER_SIZE (SF_spo2 * 4)
-#define MA4_SIZE 4 // DONOT CHANGE
-#define min(x, y) ((x) < (y) ? (x) : (y))
-
-#define FILTERORDER 161 /* DC Removal Numerator Coeff*/
-#define NRCOEFF (0.992)
-
 #define HRV_LIMIT 120
+#define MAX_RR_INTERVALS 30        // Maximum RR intervals to process
+#define INTERP_FS 4.0f             // Interpolation sampling frequency (Hz)
+#define FFT_SIZE 64                // Must be power of 2
+#define WELCH_OVERLAP 0.5f         // 50% overlap for Welch method
+
+// Frequency band definitions (Hz)
+#define LF_LOW   0.04f
+#define LF_HIGH  0.15f
+#define HF_LOW   0.15f
+#define HF_HIGH  0.4f
+
+typedef struct 
+{
+  float mean;
+  float sdnn;
+  float rmssd;
+  float pnn50;
+  float hrv_min;
+  float hrv_max;
+
+}time_domain;
+
+//HRV calculation state
+typedef struct {
+    uint16_t rr_intervals[HRV_LIMIT];
+    int sample_count;
+    int buffer_index;
+    bool buffer_full; 
+    // Cached values to avoid recalculation
+    float cached_mean;
+    bool mean_valid;
+} hrv_state_t;
+
+// Required buffer sizes to process LF and HF power
+float32_t rr_time[MAX_RR_INTERVALS + 1]; // Time taken to collect samples (cumulative time processed from RR intervals)
+float32_t rr_values[MAX_RR_INTERVALS + 1]; // RR intervals in seconds
+float32_t interp_signal[FFT_SIZE * 4];  // Larger buffer for interpolated signal
+float32_t fft_input[FFT_SIZE * 2];      // Complex FFT input
+float32_t fft_output[FFT_SIZE * 2];     // Complex FFT output
+float32_t psd[FFT_SIZE];                // Power spectral density
+float32_t window[FFT_SIZE];             // Hanning window
+
+
+// Static variables for HRV frequency analysis
+float lf_power_compact = 0.0f;
+float hf_power_compact = 0.0f;
+float stress_score_compact = 0.0f;
+float sdnn_val = 0.0f;
+float rmssd_val = 0.0f;
+
+int interval_counter = 0;
 
 void hrv_reset(void);
 int hrv_get_sample_count(void);
@@ -54,3 +97,4 @@ float hrv_calculate_pnn50(void);
 uint32_t hrv_calculate_min(void);
 uint32_t hrv_calculate_max(void);
 int hrv_get_rr_intervals(uint16_t *buffer, int buffer_size);
+void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals);
