@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
-#include "gsr_algo.h"
+#include "gsr_algos.h"
 
 
 #define SCR_THRESHOLD    0.03f   // Threshold in µS (typical 0.03 µS)
