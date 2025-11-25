@@ -64,6 +64,7 @@ static const char* const log_paths[] = {
     [HPI_LOG_TYPE_BIOZ_RECORD] = "/lfs/bioz/",
     [HPI_LOG_TYPE_PPG_WRIST_RECORD] = "/lfs/ppgw/",
     [HPI_LOG_TYPE_PPG_FINGER_RECORD] = "/lfs/ppgf/",
+    [HPI_LOG_TYPE_GSR_RECORD] = "/lfs/gsr/",
 };
 
 #define LOG_PATHS_COUNT (sizeof(log_paths) / sizeof(log_paths[0]))
@@ -152,6 +153,32 @@ void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_l
     // Use generic writer for ECG records
     write_trend_to_file(HPI_LOG_TYPE_ECG_RECORD, ecg_record_buffer, 
                        ecg_record_length * sizeof(int32_t), start_ts);
+}
+
+void hpi_write_gsr_record_file(int32_t *samples, uint16_t num_samples, int64_t timestamp)
+{
+    if (samples == NULL || num_samples == 0) {
+        LOG_ERR("Invalid GSR record parameters");
+        return;
+    }
+
+    // Validate timestamp
+    if (!is_timestamp_valid(timestamp)) {
+        LOG_ERR("Invalid timestamp for GSR record: %" PRId64 " - refusing to write", timestamp);
+        return;
+    }
+
+    // --- Print samples to terminal ---
+    // printf("Timestamp: %" PRId64 "\n", timestamp);
+    // printf("GSR Samples (%u): ", num_samples);
+    // for (uint16_t i = 0; i < num_samples; i++) {
+    //     printf("%" PRId32 " ", samples[i]);
+    // }
+    // printf("\n");
+
+    // Write GSR data using generic function
+    write_trend_to_file(HPI_LOG_TYPE_GSR_RECORD, samples, 
+                        num_samples * sizeof(int32_t), timestamp);
 }
 
 void hpi_hr_trend_wr_point_to_file(struct hpi_hr_trend_point_t m_trend_point, int64_t day_ts)
@@ -371,7 +398,8 @@ void log_wipe_trends(void)
         HPI_LOG_TYPE_TREND_TEMP,
         HPI_LOG_TYPE_TREND_STEPS,
         HPI_LOG_TYPE_TREND_BPT,
-        HPI_LOG_TYPE_ECG_RECORD
+        HPI_LOG_TYPE_ECG_RECORD,
+        HPI_LOG_TYPE_GSR_RECORD 
     };
     
     wipe_log_types(trend_types, sizeof(trend_types), "all trend logs");
@@ -388,7 +416,8 @@ void log_wipe_records(void)
         HPI_LOG_TYPE_ECG_RECORD,
         HPI_LOG_TYPE_BIOZ_RECORD,
         HPI_LOG_TYPE_PPG_WRIST_RECORD,
-        HPI_LOG_TYPE_PPG_FINGER_RECORD
+        HPI_LOG_TYPE_PPG_FINGER_RECORD,
+        HPI_LOG_TYPE_GSR_RECORD 
     };
     
     wipe_log_types(record_types, sizeof(record_types), "all records");
