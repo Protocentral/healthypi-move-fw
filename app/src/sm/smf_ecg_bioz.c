@@ -65,7 +65,7 @@ K_SEM_DEFINE(sem_gsr_start, 0, 1);
 K_SEM_DEFINE(sem_gsr_cancel, 0, 1);
 
 // GSR Measurement Timing (60 seconds for reliable stress index)
-#define GSR_MEASUREMENT_DURATION_S 60
+#define GSR_MEASUREMENT_DURATION_S 30
 static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
 static uint32_t gsr_last_status_pub_s = 0; // Last published elapsed seconds
@@ -714,6 +714,8 @@ static void st_ecg_idle_entry(void *o)
         int ret = hw_max30001_gsr_enable();
         if (ret == 0) {
             hpi_data_set_gsr_measurement_active(true);
+            hpi_data_set_gsr_record_active(true);   //  Start recording data 
+
             gsr_measurement_start_time = k_uptime_get();
             gsr_measurement_in_progress = true;
             k_timer_start(&tmr_bioz_sampling, K_MSEC(BIOZ_SAMPLING_INTERVAL_MS), K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
@@ -731,6 +733,7 @@ static void st_ecg_idle_entry(void *o)
         if (ret == 0) {
             hpi_data_set_gsr_measurement_active(false);
             gsr_measurement_in_progress = false;
+           // hpi_data_set_gsr_record_active(false);   //  Stop recording
             // Only stop bioz timer if ECG is not active
             if (!get_ecg_active()) {
                 k_timer_stop(&tmr_bioz_sampling);
@@ -748,6 +751,8 @@ static void st_ecg_idle_entry(void *o)
             LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
             hw_max30001_gsr_disable();
             hpi_data_set_gsr_measurement_active(false);
+            hpi_data_set_gsr_record_active(false);   //  Stop recording
+
             gsr_measurement_in_progress = false;
             if (!get_ecg_active()) {
                 k_timer_stop(&tmr_bioz_sampling);
