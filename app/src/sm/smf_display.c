@@ -177,6 +177,9 @@ static bool m_lead_on_off = false;
 // @brief GSR Screen variables
 static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
 
+// @brief HRV Screen variables
+extern int interval_counter;
+
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -241,6 +244,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
+    [SCR_SPL_PLOT_HRV] = {draw_scr_ecg_hrv, gesture_down_scr_ecg_hrv},
+    [SCR_SPL_HRV_FREQUENCY] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -818,8 +823,10 @@ static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sens
     {
         hpi_ecg_disp_draw_plotECG(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
     }
-    else
+    else if(hpi_disp_get_curr_screen() == SCR_SPL_PLOT_HRV)
     {
+        hpi_ecg_disp_draw_plotECG_hrv(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
+        hpi_ecg_disp_update_hr_hrv(ecg_sensor_sample.hr);
     }
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
@@ -924,6 +931,74 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
         break;
+    case SCR_SPL_PLOT_HRV:
+        hpi_ecg_disp_update_timer_hrv(interval_counter);
+        if(k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+        {
+           hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_SPL_HRV_FREQUENCY, 0, 0, 0);
+        }
+        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
+            scr_ecg_lead_on_off_handler_hrv(false); // false = leads ON
+            
+            // Only trigger stabilization if this is a reconnection (previous state was leads OFF)
+            bool is_ecg_active = hpi_data_is_ecg_record_active();
+            bool was_lead_off = m_lead_on_off;  // Previous state before this update
+            
+            m_lead_on_off = false;              // Update to leads ON
+            
+            LOG_INF("DISPLAY THREAD: ECG active=%s, was_lead_off=%s", 
+                    is_ecg_active ? "true" : "false", 
+                    was_lead_off ? "true" : "false");
+            
+            // Only trigger re-stabilization if:
+            // 1. Recording is active AND
+            // 2. This is a reconnection (previous state was lead off)
+            if (is_ecg_active && was_lead_off)
+            {
+                LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
+                
+                // Signal state machine to enter stabilization before resuming recording
+                k_sem_give(&sem_ecg_lead_on_stabilize);
+            }
+            // Start timer if this is first lead-on (not a reconnection)
+            else if (is_ecg_active && !was_lead_off)
+            {
+                LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
+                hpi_ecg_timer_start_hrv();
+            }
+        }
+        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore - calling UI handler");
+            scr_ecg_lead_on_off_handler_hrv(true); // true = leads OFF
+            m_lead_on_off = true;              // true = leads OFF
+
+            // Reset recording to ensure continuous 30s data when leads come back on
+            bool is_ecg_active = hpi_data_is_ecg_record_active();
+            LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
+            if (is_ecg_active)
+            {
+                LOG_INF("DISPLAY THREAD: Lead disconnected - resetting recording buffer for continuous capture");
+                
+                // Reset the recording buffer without saving incomplete data
+                hpi_data_reset_ecg_record_buffer();
+                
+                // Reset UI timer state
+                LOG_INF("DISPLAY THREAD: Resetting UI timer state");
+                hpi_ecg_timer_reset_hrv();
+                
+                // Reset ECG SMF countdown to 30s
+                LOG_INF("DISPLAY THREAD: Resetting ECG SMF countdown to 30s");
+                hpi_ecg_reset_countdown_timer();
+            }
+        }
+
+        lv_disp_trig_activity(NULL);
+
+        break;
+
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
