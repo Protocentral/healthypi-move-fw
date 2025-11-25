@@ -175,7 +175,7 @@ static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
 
 // @brief GSR Screen variables
-static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
+static uint16_t m_disp_gsr_remaining = 30; // countdown timer (seconds remaining)
 
 struct s_disp_object
 {
