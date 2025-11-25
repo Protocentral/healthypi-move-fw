@@ -46,7 +46,7 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ble_module.h"
-#include "algos.h"
+#include "hrv_algos.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
 
@@ -93,9 +93,15 @@ uint16_t current_session_log_id = 0;
 char session_id_str[5];
 
 static bool is_ecg_record_active = false;
+
 static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128 Hz * 30 seconds = 3840 samples (15.36KB)
 static volatile uint16_t ecg_record_counter = 0;
 K_MUTEX_DEFINE(mutex_is_ecg_record_active);
+
+K_MUTEX_DEFINE(mutex_is_hrv_record_active);
+static bool is_hrv_record_active = false;
+static volatile uint16_t hrv_record_counter = 0;
+static int32_t hrv_record_buffer[HRV_LIMIT];
 
 static bool is_gsr_measurement_active = false;
 K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
@@ -222,6 +228,67 @@ void send_data_text_1(int32_t in_sample)
     sprintf(data, "%.3f\r\n", f_in_sample);
     send_usb_cdc(data, strlen(data));
 }
+void hpi_data_set_hrv_record_active(bool active)
+{
+    k_mutex_lock(&mutex_is_hrv_record_active, K_FOREVER);
+    is_hrv_record_active = active;
+
+    if(active)
+    {
+         hrv_record_counter = 0;
+         memset(hrv_record_buffer, 0, sizeof(hrv_record_buffer));
+         LOG_INF("HRV recording started - buffer reset");
+         
+    }
+    else
+    {
+        if(hrv_record_counter > 0)
+        {
+            if (hrv_record_counter > HRV_LIMIT) {
+                LOG_ERR("HRV counter overflow detected: %d > %d - clamping to max",
+                        hrv_record_counter, HRV_LIMIT);
+                hrv_record_counter = HRV_LIMIT;
+            }
+            
+            struct tm tm_sys_time = hpi_sys_get_sys_time();
+            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+            
+            LOG_INF("HRV recording stopped - writing %d samples to file (%.1f seconds @ 128Hz)", 
+                    hrv_record_counter, (float)hrv_record_counter / 128.0f);
+            
+            // Write actual collected samples, not full buffer size
+            hpi_write_hrv_record_file(hrv_record_buffer, hrv_record_counter, log_time);
+            
+            LOG_INF("HRV file write completed");
+        }
+        else
+        {
+            LOG_WRN("ECG recording stopped but no samples collected");
+        }
+    }
+    
+         k_mutex_unlock(&mutex_is_hrv_record_active);
+    
+
+}
+void hpi_data_reset_hrv_record_buffer(void)
+{
+    k_mutex_lock(&mutex_is_hrv_record_active, K_FOREVER);
+    // Reset buffer and counter without saving (for lead-off restart)
+    hrv_record_counter = 0;
+    memset(hrv_record_buffer, 0, sizeof(hrv_record_buffer));
+    LOG_INF("HRV recording buffer reset (discard incomplete data)");
+    k_mutex_unlock(&mutex_is_hrv_record_active);
+}
+
+bool hpi_data_is_hrv_record_active(void)
+{
+    bool active;
+    k_mutex_lock(&mutex_is_hrv_record_active, K_FOREVER);
+    active = is_hrv_record_active;
+    k_mutex_unlock(&mutex_is_hrv_record_active);
+    return active;
+}
 
 void hpi_data_set_ecg_record_active(bool active)
 {
@@ -340,6 +407,65 @@ void data_thread(void)
                     }
                 }
             }
+
+            k_mutex_lock(&mutex_is_hrv_record_active, K_FOREVER);
+            if(is_hrv_record_active == true)
+            {
+                int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
+                int space_left = HRV_LIMIT - hrv_record_counter;
+                if (hrv_record_counter >= HRV_LIMIT) {
+                    LOG_ERR("HRV buffer counter overflow detected: %d >= %d - stopping recording",
+                            hrv_record_counter, HRV_LIMIT);
+                    extern struct k_sem sem_ecg_complete;
+                    k_sem_give(&sem_ecg_complete);
+                    k_mutex_unlock(&mutex_is_hrv_record_active);
+                    continue;  // Skip this sample batch
+                }
+
+                if (samples_to_copy <= space_left)
+                {
+                    // Copy samples to buffer
+                    memcpy(&hrv_record_buffer[hrv_record_counter], 
+                           ecg_sensor_sample.ecg_samples, 
+                           samples_to_copy * sizeof(int32_t));
+                    hrv_record_counter += samples_to_copy;
+                    
+                    // Check if buffer is exactly full
+                    if (hrv_record_counter >= HRV_LIMIT)
+                    {
+                        LOG_INF("HRV buffer full - collected %d samples (30.0 seconds @ 128Hz)", 
+                                hrv_record_counter);
+                        LOG_INF("Signaling state machine to stop recording");
+                        
+                        // Signal state machine that buffer is full
+                        // State machine will call hpi_data_set_ecg_record_active(false)
+                        // which will write the file synchronously
+                        extern struct k_sem sem_ecg_complete;
+                        k_sem_give(&sem_ecg_complete);
+                    }
+                }
+                else
+                {
+                    // Not enough space - copy what fits and stop
+                    if (space_left > 0)
+                    {
+                        memcpy(&hrv_record_buffer[hrv_record_counter], 
+                               ecg_sensor_sample.ecg_samples, 
+                               space_left * sizeof(int32_t));
+                        hrv_record_counter += space_left;
+                    }
+                    
+                    LOG_WRN("HRV buffer full mid-batch - collected %d samples, discarded %d", 
+                            hrv_record_counter, samples_to_copy - space_left);
+                    LOG_INF("Signaling state machine to stop recording");
+                    
+                    // Signal completion
+                    extern struct k_sem sem_ecg_complete;
+                    k_sem_give(&sem_ecg_complete);
+                }
+             }
+             k_mutex_unlock(&mutex_is_hrv_record_active);
+            
 
             // ECG recording buffer management with mutex protection
             // Fixed: No circular buffer - linear recording only, stop when full
