@@ -304,6 +304,16 @@ void hpi_init_fs_struct(void)
         LOG_DBG("Created dir");
     }
 
+    ret = fs_mkdir("lfs/hrv");
+    if(ret)
+    {
+        LOG_ERR("Unable to create dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created dir");
+    }
+
     ret = fs_mkdir("/lfs/log");
     if (ret)
     {
