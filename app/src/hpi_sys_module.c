@@ -483,6 +483,16 @@ void hpi_sys_set_last_hrv_update(uint16_t hrv_last_value, int64_t hrv_last_updat
     k_mutex_unlock(&mutex_hpi_last_update_time);
 }
 
+int hpi_sys_get_last_hrv_update(uint16_t *hrv_last_value, int64_t *hrv_last_update_ts)
+{
+     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+     *hrv_last_value = g_hpi_last_update.hrv_last_value;
+     *hrv_last_update_ts = g_hpi_last_update.hrv_last_update_ts;
+     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    return 0;
+}
+
 int hpi_sys_get_last_hr_update(uint16_t *hr_last_value, int64_t *hr_last_update_ts)
 {
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);

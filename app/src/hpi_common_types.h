@@ -299,6 +299,9 @@ struct hpi_last_update_time_t
 
     uint16_t gsr_last_value; // GSR value * 100 (microsiemens)
     int64_t gsr_last_update_ts;
+
+    uint16_t hrv_last_value;
+    int64_t hrv_last_update_ts;
 };
 
 struct hpi_gsr_stress_index_t
