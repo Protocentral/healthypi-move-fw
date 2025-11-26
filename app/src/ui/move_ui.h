@@ -403,7 +403,7 @@ static void hrv_check_and_transition_work(struct k_work *work);
 
 //HRV frequnecy screen functions
 static void lvgl_update_cb(void *user_data);
-static int get_stress_percentage(float lf, float hf);
+int get_stress_percentage(float lf, float hf);
 static lv_color_t get_stress_arc_color(int stress_percentage);
 void gesture_handler(lv_event_t *e);
 void gesture_down_scr_spl_hrv(void);
