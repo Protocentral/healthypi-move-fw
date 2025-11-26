@@ -178,7 +178,7 @@ static bool m_lead_on_off = false;
 static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
 
 // @brief HRV Screen variables
-extern int interval_counter;
+extern volatile uint16_t hrv_record_counter ;
 
 struct s_disp_object
 {
@@ -218,7 +218,6 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
     [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
     [SCR_SPL_ECG_COMPLETE] = {draw_scr_ecg_complete, gesture_down_scr_ecg_complete},
-    [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
     //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
     [SCR_SPL_SPO2_SCR2] = {draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2},
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
@@ -932,7 +931,7 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_PLOT_HRV:
-        hpi_ecg_disp_update_timer_hrv(interval_counter);
+        hpi_ecg_disp_update_timer_hrv(hrv_record_counter);
         if(k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
         {
            hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_SPL_HRV_FREQUENCY, 0, 0, 0);
