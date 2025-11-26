@@ -29,6 +29,7 @@
 
 
 #pragma once
+#include "arm_math.h"
 
 #define HRV_LIMIT 120
 #define MAX_RR_INTERVALS 30        // Maximum RR intervals to process
@@ -64,24 +65,7 @@ typedef struct {
     bool mean_valid;
 } hrv_state_t;
 
-// Required buffer sizes to process LF and HF power
-float32_t rr_time[MAX_RR_INTERVALS + 1]; // Time taken to collect samples (cumulative time processed from RR intervals)
-float32_t rr_values[MAX_RR_INTERVALS + 1]; // RR intervals in seconds
-float32_t interp_signal[FFT_SIZE * 4];  // Larger buffer for interpolated signal
-float32_t fft_input[FFT_SIZE * 2];      // Complex FFT input
-float32_t fft_output[FFT_SIZE * 2];     // Complex FFT output
-float32_t psd[FFT_SIZE];                // Power spectral density
-float32_t window[FFT_SIZE];             // Hanning window
 
-
-// Static variables for HRV frequency analysis
-float lf_power_compact = 0.0f;
-float hf_power_compact = 0.0f;
-float stress_score_compact = 0.0f;
-float sdnn_val = 0.0f;
-float rmssd_val = 0.0f;
-
-int interval_counter = 0;
 
 void hrv_reset(void);
 int hrv_get_sample_count(void);
