@@ -222,6 +222,7 @@ extern const struct device *const max30001_dev;
 extern struct k_sem sem_ecg_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
+//extern bool hrv_active;
 
 /**
  * @brief Configure ECG leads based on hand worn setting
@@ -793,8 +794,16 @@ static void st_ecg_stream_entry(void *o)
         k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     }
     
-    // Start actual recording
-    hpi_data_set_ecg_record_active(true);
+   
+    // if(hrv_active)
+    // {
+    //     hpi_data_set_hrv_record_active(true);
+    // }
+   // else
+    //{
+         // Start actual recording
+       hpi_data_set_ecg_record_active(true);
+   // }
     
     // Timer initialization - start paused until lead ON is detected
     set_ecg_timer_values(k_uptime_get_32(), ECG_RECORD_DURATION_S);
@@ -919,10 +928,19 @@ static void st_ecg_stream_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stream Exit");
     
-    // Reset timer when exiting stream state
-    hpi_ecg_timer_reset();
     
-    hpi_data_set_ecg_record_active(false);
+
+    // if(hrv_active)
+    // {
+    //     hpi_ecg_timer_reset_hrv();
+    //     hpi_data_set_hrv_record_active(false);
+    // }
+  //  else{
+        // Reset timer when exiting stream state
+        hpi_ecg_timer_reset();
+        
+        hpi_data_set_ecg_record_active(false);
+   // }
 
     // Reset timer
     set_ecg_timer_values(0, 0);
