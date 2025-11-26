@@ -66,8 +66,8 @@ extern lv_style_t style_bg_red;
 
 extern struct k_sem sem_ecg_cancel;
 
-extern bool collecting;
-extern bool check_gesture;
+extern bool collecting ;
+bool check_gesture = false;
 extern bool hrv_active;
 
 // Commented out - unused function
