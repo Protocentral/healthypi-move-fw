@@ -100,8 +100,10 @@ K_MUTEX_DEFINE(mutex_is_ecg_record_active);
 
 K_MUTEX_DEFINE(mutex_is_hrv_record_active);
 static bool is_hrv_record_active = false;
-static volatile uint16_t hrv_record_counter = 0;
+volatile uint16_t hrv_record_counter = 0;
 static int32_t hrv_record_buffer[HRV_LIMIT];
+static int rtor_prev_value ;
+extern struct k_sem sem_ecg_complete;
 
 static bool is_gsr_measurement_active = false;
 K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
@@ -260,6 +262,10 @@ void hpi_data_set_hrv_record_active(bool active)
             hpi_write_hrv_record_file(hrv_record_buffer, hrv_record_counter, log_time);
             
             LOG_INF("HRV file write completed");
+
+            hpi_hrv_frequency_compact_update_spectrum(hrv_record_buffer, hrv_record_counter);
+
+            k_sem_give(&sem_ecg_complete);
         }
         else
         {
@@ -325,6 +331,7 @@ void hpi_data_set_ecg_record_active(bool active)
             hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, log_time);
             
             LOG_INF("ECG file write completed");
+
         }
         else
         {
@@ -424,11 +431,16 @@ void data_thread(void)
 
                 if (samples_to_copy <= space_left)
                 {
+                    if(ecg_sensor_sample.rtor > 0 && ecg_sensor_sample.rtor != rtor_prev_value)
+                    {
                     // Copy samples to buffer
-                    memcpy(&hrv_record_buffer[hrv_record_counter], 
-                           ecg_sensor_sample.ecg_samples, 
-                           samples_to_copy * sizeof(int32_t));
-                    hrv_record_counter += samples_to_copy;
+                        memcpy(&hrv_record_buffer[hrv_record_counter], 
+                            ecg_sensor_sample.rtor, 
+                            samples_to_copy * sizeof(int32_t));
+                        hrv_record_counter += samples_to_copy;
+
+                        rtor_prev_value = ecg_sensor_sample.rtor;
+                    }
                     
                     // Check if buffer is exactly full
                     if (hrv_record_counter >= HRV_LIMIT)
@@ -449,10 +461,15 @@ void data_thread(void)
                     // Not enough space - copy what fits and stop
                     if (space_left > 0)
                     {
-                        memcpy(&hrv_record_buffer[hrv_record_counter], 
-                               ecg_sensor_sample.ecg_samples, 
-                               space_left * sizeof(int32_t));
-                        hrv_record_counter += space_left;
+                        if(ecg_sensor_sample.rtor > 0 && ecg_sensor_sample.rtor != rtor_prev_value)
+                        {
+                            memcpy(&hrv_record_buffer[hrv_record_counter], 
+                                ecg_sensor_sample.rtor, 
+                                space_left * sizeof(int32_t));
+                            hrv_record_counter += space_left;
+                        }
+
+                        rtor_prev_value = ecg_sensor_sample.rtor;
                     }
                     
                     LOG_WRN("HRV buffer full mid-batch - collected %d samples, discarded %d", 
