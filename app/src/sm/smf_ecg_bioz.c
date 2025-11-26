@@ -70,6 +70,22 @@ static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
 static uint32_t gsr_last_status_pub_s = 0; // Last published elapsed seconds
 
+// HRV (Heart Rate Variability) Evaluation Control Semaphores - Independent from ECG
+K_SEM_DEFINE(sem_hrv_eval_start, 0, 1);
+K_SEM_DEFINE(sem_hrv_eval_cancel, 0, 1);
+
+// HRV Measurement Timing (configurable duration, default 30 seconds for quick evaluation)
+#define HRV_MEASUREMENT_DURATION_S 30  // 30 seconds for quick HRV measurement with ECG plot
+static int64_t hrv_measurement_start_time = 0;
+static bool hrv_measurement_in_progress = false;
+static uint32_t hrv_last_status_pub_s = 0; // Last published elapsed seconds
+
+// HRV state variables managed by data_module.c
+extern struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];
+extern volatile uint16_t hrv_interval_count;
+
+K_MUTEX_DEFINE(hrv_eval_mutex);
+
 K_SEM_DEFINE(sem_ecg_lead_on, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 
@@ -771,6 +787,69 @@ static void st_ecg_idle_entry(void *o)
                 extern const struct zbus_channel gsr_status_chan;
                 zbus_chan_pub(&gsr_status_chan, &gsr_status, K_NO_WAIT);
 #endif
+            }
+        }
+    }
+
+    // Handle independent HRV (Heart Rate Variability) evaluation control
+    if (k_sem_take(&sem_hrv_eval_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting HRV evaluation for %d seconds", HRV_MEASUREMENT_DURATION_S);
+        int ret = hw_max30001_ecg_enable();
+        if (ret == 0) {
+            hpi_data_set_hrv_eval_active(true);
+            hrv_measurement_start_time = k_uptime_get();
+            hrv_measurement_in_progress = true;
+            hrv_interval_count = 0;
+            memset(hrv_intervals, 0, sizeof(hrv_intervals));
+            k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
+            LOG_INF("HRV evaluation started successfully");
+        } else {
+            LOG_ERR("Failed to start HRV evaluation: %d", ret);
+            hrv_measurement_in_progress = false;
+        }
+    }
+    
+    if (k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Stopping HRV evaluation");
+        int ret = hw_max30001_ecg_disable();
+        if (ret == 0) {
+            hpi_data_set_hrv_eval_active(false);
+            hrv_measurement_in_progress = false;
+            if (!get_ecg_active()) {
+                k_timer_stop(&tmr_ecg_sampling);
+            }
+            LOG_INF("HRV evaluation stopped successfully - collected %d intervals", hrv_interval_count);
+        } else {
+            LOG_ERR("Failed to stop HRV evaluation: %d", ret);
+        }
+    }
+    
+    // Auto-complete HRV evaluation after duration
+    if (hrv_measurement_in_progress) {
+        int64_t elapsed_ms = k_uptime_get() - hrv_measurement_start_time;
+        if (elapsed_ms >= (HRV_MEASUREMENT_DURATION_S * 1000)) {
+            LOG_INF("HRV evaluation complete after %d seconds - collected %d intervals", 
+                    HRV_MEASUREMENT_DURATION_S, hrv_interval_count);
+            hw_max30001_ecg_disable();
+            hpi_data_set_hrv_eval_active(false);
+            hrv_measurement_in_progress = false;
+            if (!get_ecg_active()) {
+                k_timer_stop(&tmr_ecg_sampling);
+            }
+            
+            // Display HRV complete screen with results
+            hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
+        }
+        else {
+            // Publish status once per second via ZBus (if HRV status channel defined)
+            uint32_t elapsed_s = elapsed_ms / 1000;
+            if (elapsed_s != hrv_last_status_pub_s && elapsed_s <= HRV_MEASUREMENT_DURATION_S) {
+                hrv_last_status_pub_s = elapsed_s;
+                // Status can be used for progress display if needed
+                LOG_DBG("HRV evaluation progress: %d/%d seconds, %d intervals captured", 
+                        elapsed_s, HRV_MEASUREMENT_DURATION_S, hrv_interval_count);
             }
         }
     }

@@ -68,3 +68,8 @@ bool hpi_data_is_ecg_record_active(void);
 
 void hpi_data_set_gsr_measurement_active(bool active);
 bool hpi_data_is_gsr_measurement_active(void);
+
+void hpi_data_set_hrv_eval_active(bool active);
+bool hpi_data_is_hrv_eval_active(void);
+struct hpi_hrv_eval_result_t *hpi_data_get_hrv_eval_result(void);
+void hpi_data_add_hrv_interval(uint16_t rtor_ms);

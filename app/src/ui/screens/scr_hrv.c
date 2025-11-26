@@ -29,54 +29,54 @@
 
 
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
-#include <zephyr/smf.h>
-#include <app_version.h>
-#include <zephyr/logging/log.h>
 
 #include "hpi_common_types.h"
-
 #include "ui/move_ui.h"
+#include "hpi_sys.h"
+
+LOG_MODULE_REGISTER(hpi_disp_scr_hrv, LOG_LEVEL_DBG);
 
 lv_obj_t *scr_hrv;
 
-// GUI Charts
-static lv_obj_t *chart_hrv;
-static lv_chart_series_t *ser_hrv;
-
-// GUI Labels
-static lv_obj_t *label_hrv_rri;
-static lv_obj_t *label_hrv_sdnn;
-
-static bool chart_hrv_update = true;
-
-static float y_max_hrv = 0;
-static float y_min_hrv = 10000;
-
-static float gx = 0;
-extern lv_style_t style_red_medium;
+// GUI Labels and buttons
+static lv_obj_t *label_hrv_title;
+static lv_obj_t *label_hrv_description;
+static lv_obj_t *btn_hrv_start;
 
 // Externs - Modern style system
 extern lv_style_t style_body_medium;
 extern lv_style_t style_numeric_large;
 extern lv_style_t style_caption;
 
-static void anim_x_cb(void * var, int32_t v)
+/**
+ * @brief Button event handler for starting HRV evaluation
+ */
+static void scr_hrv_btn_start_handler(lv_event_t *e)
 {
-    lv_obj_set_x(var, v);
+    lv_event_code_t code = lv_event_get_code(e);
+    
+    if (code == LV_EVENT_CLICKED) {
+        LOG_INF("HRV Evaluation started by user");
+        
+        // Display progress screen immediately
+        hpi_load_scr_spl(SCR_SPL_HRV_EVAL_PROGRESS, SCROLL_UP, 0, 0, 0, 0);
+        
+        // Signal state machine to start HRV evaluation
+        extern struct k_sem sem_hrv_eval_start;
+        k_sem_give(&sem_hrv_eval_start);
+    }
 }
 
-static void anim_size_cb(void * var, int32_t v)
-{
-    lv_obj_set_size(var, v, v);
-}
-
+/**
+ * @brief Draw HRV home screen with measurement controls
+ * 
+ * Main carousel screen showing HRV evaluation options:
+ * - Start button to initiate new HRV evaluation
+ */
 void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_hrv = lv_obj_create(NULL);
@@ -84,134 +84,61 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_set_style_bg_color(scr_hrv, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_hrv, LV_OBJ_FLAG_SCROLLABLE);
 
-    // CIRCULAR AMOLED-OPTIMIZED HRV SCREEN
+    // CIRCULAR AMOLED-OPTIMIZED HRV HOME SCREEN
     // Display center: (195, 195), Usable radius: ~185px
     
-    // Screen title - clean and simple positioning
-    lv_obj_t *label_title = lv_label_create(scr_hrv);
-    lv_label_set_text(label_title, "Heart Rate Variability");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Centered at top, clear of arc
-    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+    // Screen title
+    label_hrv_title = lv_label_create(scr_hrv);
+    lv_label_set_text(label_hrv_title, "HRV");
+    lv_obj_align(label_hrv_title, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_add_style(label_hrv_title, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_hrv_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_hrv_title, lv_color_white(), LV_PART_MAIN);
 
-    // CENTRAL AREA: HRV Chart - modernized for circular display
-    chart_hrv = lv_chart_create(scr_hrv);
-    lv_obj_set_size(chart_hrv, 300, 120);  // Larger chart for better visibility
-    lv_obj_align(chart_hrv, LV_ALIGN_CENTER, 0, -20);  // Slightly above center
-    lv_obj_set_style_bg_color(chart_hrv, lv_color_hex(0x000000), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(chart_hrv, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(chart_hrv, 0, LV_PART_MAIN);
-    lv_chart_set_point_count(chart_hrv, 60);
-    lv_chart_set_type(chart_hrv, LV_CHART_TYPE_LINE);
-    lv_chart_set_range(chart_hrv, LV_CHART_AXIS_PRIMARY_Y, -1000, 1000);
-    lv_chart_set_div_line_count(chart_hrv, 0, 0);
-    lv_chart_set_update_mode(chart_hrv, LV_CHART_UPDATE_MODE_CIRCULAR);
-    ser_hrv = lv_chart_add_series(chart_hrv, lv_color_hex(COLOR_WARNING_AMBER), LV_CHART_AXIS_PRIMARY_Y);
-    lv_obj_set_style_line_width(chart_hrv, 3, LV_PART_ITEMS);
+    // HRV Icon - positioned at top-center below title
+    lv_obj_t *img_hrv = lv_img_create(scr_hrv);
+    lv_img_set_src(img_hrv, &img_heart_48px);
+    lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 95);
+    lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0xFF6B9D), LV_PART_MAIN);  // Heart color (pink-red)
+    lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
-    // LOWER LEFT: RR Interval Value Display
-    label_hrv_rri = lv_label_create(scr_hrv);
-    lv_label_set_text(label_hrv_rri, "--");
-    lv_obj_align(label_hrv_rri, LV_ALIGN_CENTER, -60, 80);  // Lower left position
-    lv_obj_add_style(label_hrv_rri, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_hrv_rri, lv_color_white(), LV_PART_MAIN);
+    // Description text
+    label_hrv_description = lv_label_create(scr_hrv);
+    lv_label_set_text(label_hrv_description, "30-second\nHeart Rate\nVariability");
+    lv_obj_align(label_hrv_description, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_set_style_text_color(label_hrv_description, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_description, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_hrv_description, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // RR Interval caption
-    lv_obj_t *label_rri_caption = lv_label_create(scr_hrv);
-    lv_label_set_text(label_rri_caption, "RR Int (ms)");
-    lv_obj_align_to(label_rri_caption, label_hrv_rri, LV_ALIGN_OUT_TOP_MID, 0, -5);
-    lv_obj_add_style(label_rri_caption, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_rri_caption, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    // START BUTTON - Single centered button
+    btn_hrv_start = hpi_btn_create_primary(scr_hrv);
+    lv_obj_set_size(btn_hrv_start, 180, 50);
+    lv_obj_align(btn_hrv_start, LV_ALIGN_CENTER, 0, 70);
+    lv_obj_set_style_radius(btn_hrv_start, 25, LV_PART_MAIN);
+    
+    // AMOLED-optimized button styling with heart pink color
+    lv_obj_set_style_bg_color(btn_hrv_start, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn_hrv_start, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn_hrv_start, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(btn_hrv_start, lv_color_hex(0xFF6B9D), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(btn_hrv_start, LV_OPA_80, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(btn_hrv_start, 0, LV_PART_MAIN);
+    
+    lv_obj_t *label_start = lv_label_create(btn_hrv_start);
+    lv_label_set_text(label_start, LV_SYMBOL_PLAY " Start");
+    lv_obj_center(label_start);
+    lv_obj_set_style_text_color(label_start, lv_color_hex(0xFF6B9D), LV_PART_MAIN);
+    lv_obj_add_event_cb(btn_hrv_start, scr_hrv_btn_start_handler, LV_EVENT_CLICKED, NULL);
 
-    // LOWER RIGHT: SDNN Value Display  
-    label_hrv_sdnn = lv_label_create(scr_hrv);
-    lv_label_set_text(label_hrv_sdnn, "--");
-    lv_obj_align(label_hrv_sdnn, LV_ALIGN_CENTER, 60, 80);  // Lower right position
-    lv_obj_add_style(label_hrv_sdnn, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_hrv_sdnn, lv_color_white(), LV_PART_MAIN);
-
-    // SDNN caption
-    lv_obj_t *label_sdnn_caption = lv_label_create(scr_hrv);
-    lv_label_set_text(label_sdnn_caption, "SDNN (ms)");
-    lv_obj_align_to(label_sdnn_caption, label_hrv_sdnn, LV_ALIGN_OUT_TOP_MID, 0, -5);
-    lv_obj_add_style(label_sdnn_caption, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_sdnn_caption, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-
-    hpi_disp_set_curr_screen(SCR_SPL_PLOT_HRV);
-
-    // Add screen to display
+    hpi_disp_set_curr_screen(SCR_HRV);
     hpi_show_screen(scr_hrv, m_scroll_dir);
 }
 
-static void hpi_hrv_disp_do_set_scale(int disp_window_size)
+/**
+ * @brief Gesture handler for HRV carousel screen - gesture down to go to home
+ */
+void gesture_down_scr_hrv(void)
 {
-    if (gx >= (disp_window_size))
-    {
-        if (chart_hrv_update == true)
-            lv_chart_set_range(chart_hrv, LV_CHART_AXIS_PRIMARY_Y, y_min_hrv, y_max_hrv);
-
-        gx = 0;
-
-        y_max_hrv = -900000;
-        y_min_hrv = 900000;
-    }
-}
-
-void hpi_disp_hrv_draw_plot_rtor(float rtor)
-{
-    if (chart_hrv_update == true)
-    {
-        if (rtor < y_min_hrv)
-        {
-            y_min_hrv = rtor;
-        }
-
-        if (rtor > y_max_hrv)
-        {
-            y_max_hrv = rtor;
-        }
-
-        // printk("E");
-        lv_chart_set_next_value(chart_hrv, ser_hrv, rtor);
-
-        gx += 1;
-        hpi_hrv_disp_do_set_scale(PPG_DISP_WINDOW_SIZE);
-    }
-}
-
-void hpi_disp_hrv_update_rtor(int rtor)
-{
-    if (label_hrv_rri == NULL)
-        return;
-
-    char buf[32];
-    if (rtor == 0)
-    {
-        sprintf(buf, "--");
-    }
-    else
-    {
-        sprintf(buf, "%d", rtor);
-    }
-
-    lv_label_set_text(label_hrv_rri, buf);
-}
-
-void hpi_disp_hrv_update_sdnn(int sdnn)
-{
-    if (label_hrv_sdnn == NULL)
-        return;
-
-    char buf[32];
-    if (sdnn == 0)
-    {
-        sprintf(buf, "--");
-    }
-    else
-    {
-        sprintf(buf, "%d", sdnn);
-    }
-
-    lv_label_set_text(label_hrv_sdnn, buf);
+    // Carousel screens don't have gesture down - this would navigate away from carousel
+    // Keep placeholder for consistency with other screens
 }
