@@ -30,7 +30,14 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_white_small;
 extern lv_style_t style_scr_black;
 
+extern float lf_power_compact;
+extern float hf_power_compact ;
+extern float stress_score_compact;
+extern float sdnn_val;
+extern float rmssd_val;
+
 extern bool hrv_active;
+extern bool check_gesture;
 extern struct k_sem hrv_state_set_mutex;
 
 static void lvgl_update_cb(void *user_data)
@@ -39,7 +46,7 @@ static void lvgl_update_cb(void *user_data)
 }
 
 // Simplified stress assessment for compact display
-static int get_stress_percentage(float lf, float hf) {
+int get_stress_percentage(float lf, float hf) {
     if (hf <= 0) return 100;
     float ratio = lf / hf;
     int stress_pct = (int)((ratio / 4.0f) * 100);
@@ -72,6 +79,7 @@ void gesture_down_scr_spl_hrv(void)
 
     k_mutex_lock(&hrv_state_set_mutex, K_FOREVER);
     hrv_active = false;
+    check_gesture = true;
     k_mutex_unlock(&hrv_state_set_mutex);
 
     hpi_load_screen(SCR_HRV, SCROLL_DOWN);
