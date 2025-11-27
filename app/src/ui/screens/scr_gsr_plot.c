@@ -22,6 +22,10 @@ static lv_chart_series_t *ser_gsr_trend;
 static lv_obj_t *btn_stop;
 static lv_obj_t *label_timer; // shows remaining countdown
 static lv_obj_t *arc_gsr_progress; // progress arc for measurement duration
+static lv_obj_t *label_gsr_error;   // shows sensor disconnected / lead-off
+static lv_obj_t *label_info; // reference for lead on/off handler
+
+static bool gsr_contact_present = false; // track GSR contact state
 
 // Styles extern
 extern lv_style_t style_scr_black;
@@ -70,6 +74,11 @@ static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
 // LVGL 9.2 optimized batch plot function (ECG-like flow adapted for GSR)
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off)
 {
+    
+    if (!gsr_contact_present  || lv_obj_has_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN))
+    return;
+
+
     // Early validation
     if (!plot_ready || chart_gsr_trend == NULL || ser_gsr_trend == NULL || data_gsr == NULL || num_samples <= 0) {
         return;
@@ -79,6 +88,7 @@ void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead
     if (lv_obj_has_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN)) {
         return;
     }
+
 
     // Batch processing for efficiency
     for (int i = 0; i < num_samples; i++) {
@@ -218,10 +228,41 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_text_color(label_timer, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     lv_obj_set_style_text_align(label_timer, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
+    // Sensor lead-off label
+    label_gsr_error = lv_label_create(scr_gsr_plot);
+     lv_label_set_long_mode(label_gsr_error, LV_LABEL_LONG_WRAP);
+     lv_obj_set_width(label_gsr_error, 300);
+    lv_label_set_text(label_gsr_error, "Place fingers on electrodes\nTimer will start automatically");
+    lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, 0); // above chart
+    lv_obj_add_style(label_gsr_error, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_gsr_error, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_gsr_error, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+   // lv_obj_add_flag(label_gsr_error, LV_OBJ_FLAG_HIDDEN); // hide by default
+
+    // Set reference for lead on/off handler
+    label_info = label_gsr_error;
+
     plot_ready = true;
 
     hpi_disp_set_curr_screen(SCR_SPL_PLOT_GSR);
     hpi_show_screen(scr_gsr_plot, m_scroll_dir);
+}
+
+
+void scr_gsr_lead_on_off_handler(bool lead_off)
+{
+    if (!label_info || !chart_gsr_trend) return;
+
+    gsr_contact_present = !lead_off; // true if contact present
+
+    if (gsr_contact_present) {
+        lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(label_info, "Place fingers on electrodes\nTimer will start automatically");
+    }
 }
 
 void unload_scr_gsr_plot(void)
