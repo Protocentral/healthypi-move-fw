@@ -453,10 +453,10 @@ void fs_module_init(void)
         lsdir("/lfs/trhr");
     }
 
-    // rc = lsdir("/lfs/gsr");
-    // if (rc < 0) {
-    //     LOG_ERR("FAIL: lsdir /lfs/gsr: %d\n", rc);
-    //     LOG_WRN("/lfs/gsr directory missing — creating it now");
-    // fs_mkdir("/lfs/gsr");
-    // }
+    rc = lsdir("/lfs/gsr");
+    if (rc < 0) {
+        LOG_ERR("FAIL: lsdir /lfs/gsr: %d\n", rc);
+        LOG_WRN("/lfs/gsr directory missing — creating it now");
+    fs_mkdir("/lfs/gsr");
+    }
 }
