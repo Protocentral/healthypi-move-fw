@@ -67,6 +67,18 @@ static int max30001_async_sample_fetch(const struct device *dev,
         *ecg_lead_off = 0;
     }
 
+    // --- BioZ lead-off detection ---
+    if ((max30001_status & BIOZ_LEAD_MASK) != 0)
+    {
+        data->bioz_lead_off = 1;
+        *bioz_lead_off = 1;
+    }
+    else
+    {
+        data->bioz_lead_off = 0;
+        *bioz_lead_off = 0;
+    }
+
     /*while ((max30001_status & MAX30001_STATUS_MASK_EINT) != MAX30001_STATUS_MASK_EINT)
     {
         max30001_status = max30001_read_status(dev);
