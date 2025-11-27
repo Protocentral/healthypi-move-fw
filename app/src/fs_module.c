@@ -452,4 +452,15 @@ void fs_module_init(void)
         hpi_init_fs_struct();
         lsdir("/lfs/trhr");
     }
+
+    rc = lsdir("/lfs/hrv");
+    if(rc < 0)
+    {
+        LOG_INF("Creating HRV file");
+        rc = fs_mkdir("/lfs/hrv");
+        if(rc == 0)
+        {
+            LOG_INF("HRV file created succesfully");
+        }
+    }
 }

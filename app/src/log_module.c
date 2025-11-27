@@ -155,7 +155,7 @@ void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_l
                        ecg_record_length * sizeof(int32_t), start_ts);
 }
 
-void hpi_write_hrv_record_file(int32_t *hrv_record_buffer, uint16_t hrv_record_length, int64_t start_ts)
+void hpi_write_hrv_record_file(uint16_t *hrv_record_buffer, uint16_t hrv_record_length, int64_t start_ts)
 {
     if (hrv_record_buffer == NULL || hrv_record_length == 0) {
         LOG_ERR("Invalid HRV record parameters");
