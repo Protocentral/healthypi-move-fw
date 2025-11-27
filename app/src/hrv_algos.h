@@ -32,7 +32,7 @@
 #include "arm_math.h"
 
 #define HRV_LIMIT 120
-#define MAX_RR_INTERVALS 30        // Maximum RR intervals to process
+#define MAX_RR_INTERVALS 300       // Maximum RR intervals to process
 #define INTERP_FS 4.0f             // Interpolation sampling frequency (Hz)
 #define FFT_SIZE 64                // Must be power of 2
 #define WELCH_OVERLAP 0.5f         // 50% overlap for Welch method
@@ -54,31 +54,10 @@ typedef struct
 
 }time_domain;
 
-//HRV calculation state
-typedef struct {
-    uint16_t rr_intervals[HRV_LIMIT];
-    int sample_count;
-    int buffer_index;
-    bool buffer_full; 
-    // Cached values to avoid recalculation
-    float cached_mean;
-    bool mean_valid;
-} hrv_state_t;
-
-
-
-void hrv_reset(void);
-int hrv_get_sample_count(void);
-bool hrv_is_ready(void);
-static void hrv_add_sample(double rr_interval);
-void start_hrv_collection(void);
-void stop_hrv_collection(void);
-void on_new_rr_interval_detected(uint16_t rr_interval);
-float hrv_calculate_mean(void);
-float hrv_calculate_sdnn(void);
-float hrv_calculate_rmssd(void);
-float hrv_calculate_pnn50(void);
-uint32_t hrv_calculate_min(void);
-uint32_t hrv_calculate_max(void);
-int hrv_get_rr_intervals(uint16_t *buffer, int buffer_size);
+float hrv_calculate_mean(uint16_t * rr_buffer, int count);
+float hrv_calculate_sdnn(uint16_t * rr_buffer, int count);
+float hrv_calculate_pnn50(uint16_t * rr_buffer, int count);
+uint32_t hrv_calculate_min(uint16_t * rr_buffer, int count);
+uint32_t hrv_calculate_max(uint16_t * rr_buffer, int count);
 void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals);
+float hpi_get_lf_hf_ratio(void);
