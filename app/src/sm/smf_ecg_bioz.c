@@ -76,6 +76,10 @@ K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 
+
+K_SEM_DEFINE(sem_gsr_lead_on, 0, 1);
+K_SEM_DEFINE(sem_gsr_lead_off, 0, 1);
+
 // Semaphore for lead reconnection during recording (triggers re-stabilization)
 K_SEM_DEFINE(sem_ecg_lead_on_stabilize, 0, 1);
 
@@ -191,6 +195,11 @@ static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
 static bool ecg_stabilization_complete = false;
 
+
+uint32_t gsr_countdown_val = 0;
+uint32_t gsr_last_timer_val = 0;
+K_MUTEX_DEFINE(gsr_timer_mutex);
+
 static const struct smf_state ecg_states[];
 struct s_ecg_object
 {
@@ -211,6 +220,7 @@ RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
 static bool ecg_active = false;
 static bool gsr_active = false;  // Independent GSR (BioZ) state
 static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
+static bool gsr_contact_ok = false;
 
 static uint16_t m_ecg_hr = 0;
 
@@ -345,6 +355,33 @@ void hpi_ecg_reset_countdown_timer(void)
         .progress_timer = ECG_RECORD_DURATION_S};  // Show 30 seconds
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 }
+
+void hpi_gsr_reset_countdown_timer(void)
+{
+    k_mutex_lock(&gsr_timer_mutex, K_FOREVER);
+
+    gsr_countdown_val = GSR_MEASUREMENT_DURATION_S;  // Reset to full duration (e.g., 30s)
+    gsr_last_timer_val = k_uptime_get_32();           // Update timestamp
+
+    k_mutex_unlock(&gsr_timer_mutex);
+
+    LOG_INF("GSR SMF: Timer countdown RESET to %d seconds", GSR_MEASUREMENT_DURATION_S);
+
+    // Immediately publish the reset timer value via ZBus
+    struct hpi_gsr_status_t gsr_stat = {
+        .elapsed_s = 0,
+        .remaining_s = GSR_MEASUREMENT_DURATION_S,
+        .total_s = GSR_MEASUREMENT_DURATION_S,
+        .active = false,  // Not active since timer just reset
+    };
+
+     extern const struct zbus_channel gsr_status_chan;
+                zbus_chan_pub(&gsr_status_chan, &gsr_stat, K_NO_WAIT);
+   // zbus_chan_pub(&gsr_status_chan, &gsr_stat, K_NO_WAIT);
+
+
+}
+
 
 static void set_ecg_stabilization_values(int stabilization_countdown, bool complete)
 {
@@ -552,6 +589,24 @@ static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
     sample.rtor = edata->rri;
     sample.ecg_lead_off = edata->ecg_lead_off;
 
+
+    LOG_DBG("GSR sensor data: bioz_lead_off=%d", edata->bioz_lead_off);
+    
+    if (edata->bioz_lead_off == 1) 
+    {
+        LOG_INF("BIOZ Lead OFF detected (no skin contact)");
+        k_sem_give(&sem_gsr_lead_off);
+         gsr_contact_ok = false;
+
+    } else {
+
+        LOG_INF("BIOZ Lead ON detected (skin contact OK)");
+        k_sem_give(&sem_gsr_lead_on);
+         gsr_contact_ok = true;
+
+       // gsr_measurement_start_time = k_uptime_get();
+    }
+
     if (get_gsr_active()) {
         struct hpi_bioz_sample_t bsample = {0};
         bsample.bioz_num_samples = sample.bioz_num_samples;
@@ -746,8 +801,15 @@ static void st_ecg_idle_entry(void *o)
     
     // Auto-complete GSR measurement after duration
     if (gsr_measurement_in_progress) {
-        int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
-        if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
+
+        if (!gsr_contact_ok) {
+        hpi_gsr_reset_countdown_timer();
+        // <<< IMPORTANT: Prevent countdown
+        }
+        else
+        {
+          int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
+          if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
             LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
             hw_max30001_gsr_disable();
             hpi_data_set_gsr_measurement_active(false);
@@ -760,6 +822,7 @@ static void st_ecg_idle_entry(void *o)
             
             // Return to GSR home screen (no results to display for live view only)
             hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+            
         }
         else {
             // Publish status once per second via ZBus
@@ -778,6 +841,7 @@ static void st_ecg_idle_entry(void *o)
 #endif
             }
         }
+    }
     }
 }
 
