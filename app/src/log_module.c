@@ -107,6 +107,13 @@ static bool is_timestamp_valid(int64_t timestamp)
 // Generic file writer function to reduce code duplication
 static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_size, int64_t timestamp)
 {
+     const uint16_t *arr = data;
+    size_t count = data_size / sizeof(uint16_t);
+
+    for (size_t i = 0; i < count; i++) {
+        LOG_INF("Data[%d] = %u",i, arr[i]);
+        k_msleep(10);
+    }
     struct fs_file_t file;
     char fname[50];  // Increased size to accommodate full path
     char base_path[20];
@@ -161,7 +168,11 @@ void hpi_write_hrv_record_file(uint16_t *hrv_record_buffer, uint16_t hrv_record_
         LOG_ERR("Invalid HRV record parameters");
         return;
     }
-    
+    for(int i = 0; i < hrv_record_length ; i++)
+    {
+        LOG_INF("HRV[%d] = %d", i, hrv_record_buffer[i]);
+        k_msleep(10);
+    }
     // Validate timestamp before writing
     if (!is_timestamp_valid(start_ts)) {
         LOG_ERR("Invalid timestamp for HRV record: %" PRId64 " - refusing to write", start_ts);
