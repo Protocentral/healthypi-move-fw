@@ -1,116 +1,217 @@
-/*
- * HealthyPi Move
- * 
- * SPDX-License-Identifier: MIT
- *
- * Copyright (c) 2025 Protocentral Electronics
- *
- * Author: Ashwin Whitchurch, Protocentral Electronics
- * Contact: ashwin@protocentral.com
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <lvgl.h>
 #include <stdio.h>
-
+#include <math.h>
+#include <stdlib.h>
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
-#include "hw_module.h"
-#include "hpi_sys.h"
+#include "arm_math.h"
+#include "arm_const_structs.h"
+#include <string.h>
+#include <zephyr/sys/util.h>
+#include "hrv_algos.h"
 
-LOG_MODULE_REGISTER(hpi_disp_scr_hrv_complete, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(hpi_disp_scr_hrv_frequency_compact, LOG_LEVEL_DBG);
 
-lv_obj_t *scr_hrv_complete;
-
+// GUI Screen object
+lv_obj_t *scr_hrv_frequency_compact;
+// GUI Labels - minimal set
+static lv_obj_t *label_lf_hf_ratio_compact;
+static lv_obj_t *label_stress;
+static lv_obj_t *label_stress_level_compact;
+static lv_obj_t *arc_stress_gauge;
+static lv_obj_t *label_sdnn;
+static lv_obj_t *label_rmssd;
 // Externs
-extern lv_style_t style_red_medium;
+extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
+extern lv_style_t style_white_small;
 extern lv_style_t style_scr_black;
-extern lv_style_t style_body_medium;
-extern lv_style_t style_caption;
-extern lv_style_t style_numeric_large;
 
+extern float lf_power_compact;
+extern float hf_power_compact ;
+extern float stress_score_compact;
+extern float sdnn_val;
+extern float rmssd_val;
+
+extern bool hrv_active;
+extern bool check_gesture;
+extern struct k_sem hrv_state_set_mutex;
+
+static void lvgl_update_cb(void *user_data)
+{
+    hpi_hrv_frequency_compact_update_display();
+}
+
+// Simplified stress assessment for compact display
+int get_stress_percentage(float lf, float hf) {
+    if (hf <= 0) return 100;
+    float ratio = lf / hf;
+    int stress_pct = (int)((ratio / 4.0f) * 100);
+    return stress_pct > 100 ? 100 : stress_pct;
+}
+
+static lv_color_t get_stress_arc_color(int stress_percentage) {
+    if (stress_percentage < 25) {
+        return lv_palette_main(LV_PALETTE_GREEN);
+    } else if (stress_percentage < 50) {
+        return lv_palette_main(LV_PALETTE_YELLOW);
+    } else if (stress_percentage < 75) {
+        return lv_palette_main(LV_PALETTE_ORANGE);
+    } else {
+        return lv_palette_main(LV_PALETTE_RED);
+    }
+}
+
+void gesture_handler(lv_event_t *e)
+{
+    lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
+    if (dir == LV_DIR_BOTTOM) {
+        //gesture_down_scr_spl_hrv();
+        gesture_down_scr_spl_hrv_complete();
+    }
+}
+
+ void gesture_down_scr_spl_hrv_complete(void)
+ {
+     // Handle gesture down event - return to HRV home screen
+          hpi_load_screen(SCR_HRV, SCROLL_DOWN);
+ }
+
+//void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
-    scr_hrv_complete = lv_obj_create(NULL);
-    // AMOLED OPTIMIZATION: Pure black background for power efficiency
-    lv_obj_set_style_bg_color(scr_hrv_complete, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_clear_flag(scr_hrv_complete, LV_OBJ_FLAG_SCROLLABLE);
 
-    // CIRCULAR AMOLED-OPTIMIZED HRV COMPLETE SCREEN
-    // Display center: (195, 195), Usable radius: ~185px
-    // Clean completion display matching design philosophy
+        scr_hrv_frequency_compact = lv_obj_create(NULL);
+        lv_obj_clear_flag(scr_hrv_frequency_compact, LV_OBJ_FLAG_SCROLLABLE);
+        draw_scr_common(scr_hrv_frequency_compact);
 
-    // Screen title - optimized position
-    lv_obj_t *label_title = lv_label_create(scr_hrv_complete);
-    lv_label_set_text(label_title, "HRV Evaluation");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 50);  // Better spacing from top
-    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+        lv_obj_t *cont_main = lv_obj_create(scr_hrv_frequency_compact);
+        lv_obj_set_size(cont_main, 360, 360);
+        lv_obj_center(cont_main);
+        lv_obj_add_style(cont_main, &style_scr_black, 0);
+        lv_obj_set_style_pad_all(cont_main, 10, LV_PART_MAIN);
+        lv_obj_set_style_border_width(cont_main, 0, LV_PART_MAIN);
 
-    // Success icon - centered
-    lv_obj_t *img_success = lv_img_create(scr_hrv_complete);
-    lv_img_set_src(img_success, &img_complete_85);
-    lv_obj_align(img_success, LV_ALIGN_CENTER, 0, -30);  // Centered vertically, slightly up
+        // Title
+        lv_obj_t *label_title = lv_label_create(cont_main);
+        lv_label_set_text(label_title, "HRV Frequency");
+        lv_obj_add_style(label_title, &style_white_medium, 0);
+        lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 5);
 
-    // Status message - below icon
-    lv_obj_t *label_status = lv_label_create(scr_hrv_complete);
-    lv_label_set_text(label_status, "Complete");
-    lv_obj_align(label_status, LV_ALIGN_CENTER, 0, 50);  // Below icon
-    lv_obj_add_style(label_status, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_status, lv_color_hex(0x00FF00), LV_PART_MAIN);  // Green for success
-    lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        // --- Row container for LF & HF ---
+        lv_obj_t *cont_top = lv_obj_create(cont_main);
+        lv_obj_set_size(cont_top, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_add_style(cont_top, &style_scr_black, 0);
+        lv_obj_set_style_bg_opa(cont_top, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(cont_top, 0, LV_PART_MAIN);
+        lv_obj_set_flex_flow(cont_top, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(cont_top, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_align(cont_top, LV_ALIGN_TOP_MID, 0, 40);
 
-    // Get HRV evaluation results
-    struct hpi_hrv_eval_result_t *hrv_result = hpi_data_get_hrv_eval_result();
+        // LF Power label
+        label_sdnn = lv_label_create(cont_top);
+        lv_label_set_text(label_sdnn, "SDNN: 0.00");
+        lv_obj_set_style_text_color(label_sdnn, lv_color_hex(0xFF7070), 0); 
+        lv_obj_add_style(label_sdnn, &style_white_small, 0);
+
+        // HF Power label
+        label_rmssd = lv_label_create(cont_top);
+        lv_label_set_text(label_rmssd, "RMSSD: 0.00");
+        lv_obj_set_style_text_color(label_rmssd, lv_color_hex(0x70A0FF), 0);  
+        lv_obj_add_style(label_rmssd, &style_white_small, 0);
+
+        // --- Stress gauge ---
+        arc_stress_gauge = lv_arc_create(cont_main);
+        lv_obj_set_size(arc_stress_gauge, 170, 170);
+        lv_arc_set_rotation(arc_stress_gauge, 135);
+        lv_arc_set_bg_angles(arc_stress_gauge, 0, 270);
+        lv_arc_set_value(arc_stress_gauge, 0);
+        lv_obj_clear_flag(arc_stress_gauge, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_style(arc_stress_gauge, NULL, LV_PART_KNOB);
+        lv_obj_align(arc_stress_gauge, LV_ALIGN_CENTER, 0, 10);
+
+        // Stress label inside arc
+        label_stress_level_compact = lv_label_create(cont_main);
+        lv_label_set_text(label_stress_level_compact, "Low");
+        lv_obj_add_style(label_stress_level_compact, &style_white_medium, 0);
+        lv_obj_align_to(label_stress_level_compact, arc_stress_gauge, LV_ALIGN_CENTER, 0, 0);
+
+        // --- Bottom metrics (LF/HF + Stress %) ---
+        lv_obj_t *cont_bottom = lv_obj_create(cont_main);
+        lv_obj_set_size(cont_bottom, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_add_style(cont_bottom, &style_scr_black, 0);
+        lv_obj_set_style_bg_opa(cont_bottom, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(cont_bottom, 0, LV_PART_MAIN);
+        lv_obj_set_flex_flow(cont_bottom, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(cont_bottom, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_align(cont_bottom, LV_ALIGN_BOTTOM_MID, 0, -10);
+
+        label_lf_hf_ratio_compact = lv_label_create(cont_bottom);
+        lv_label_set_text(label_lf_hf_ratio_compact, "LF/HF: 0.00");
+        lv_obj_set_style_text_color(label_lf_hf_ratio_compact, lv_color_hex(0xC080FF), 0);  
+        lv_obj_add_style(label_lf_hf_ratio_compact, &style_white_small, 0);
+
+        // Gesture handler
+        lv_obj_add_event_cb(scr_hrv_frequency_compact, gesture_handler, LV_EVENT_GESTURE, NULL);
+        hpi_disp_set_curr_screen(SCR_SPL_HRV_FREQUENCY);
+        hpi_show_screen(scr_hrv_frequency_compact, m_scroll_dir);
+        lv_async_call(lvgl_update_cb, NULL);
+}
+
+
+void hpi_hrv_frequency_compact_update_display(void)
+{
+
+    float ratio = 0.0f;
+   
+    ratio = lf_power_compact / hf_power_compact;
+
+    int ratio_int = (int)ratio;
+    int ratio_dec = (int)((ratio - ratio_int) * 100);
+
+    int sdnn_int = (int)sdnn_val;
+    int sdnn_dec = (int)((sdnn_val - sdnn_int) * 100);
+
+    int rmssd_int = (int)rmssd_val;
+    int rmssd_dec = (int)((rmssd_val - rmssd_int) * 100);
+
+    if(label_sdnn)
+        lv_label_set_text_fmt(label_sdnn,"SDNN: %d.%02d",sdnn_int, abs(sdnn_dec));
     
-    // Information display - intervals captured and duration
-    char info_text[80];
-    if (hrv_result != NULL) {
-        snprintf(info_text, sizeof(info_text), "Intervals: %d\nDuration: %u seconds",
-                 hrv_result->num_intervals,
-                 (uint32_t)(hrv_result->total_duration_ms / 1000));
-    } else {
-        snprintf(info_text, sizeof(info_text), "Measurement\nCompleted");
+    if(label_rmssd)
+        lv_label_set_text_fmt(label_rmssd,"RMSSD: %d.%02d", rmssd_int, abs(rmssd_dec));
+
+    if (label_lf_hf_ratio_compact)
+        lv_label_set_text_fmt(label_lf_hf_ratio_compact, "LF/HF: %d.%02d", ratio_int, abs(ratio_dec));
+
+    
+    // Update stress arc gauge
+    if (arc_stress_gauge != NULL) {
+        lv_arc_set_value(arc_stress_gauge, (int)stress_score_compact);
+        lv_obj_set_style_arc_color(arc_stress_gauge, get_stress_arc_color((int)stress_score_compact), LV_PART_INDICATOR);
     }
     
-    lv_obj_t *label_info = lv_label_create(scr_hrv_complete);
-    lv_label_set_text(label_info, info_text);
-    lv_obj_align(label_info, LV_ALIGN_BOTTOM_MID, 0, -40);  // Bottom with margin
-    lv_obj_add_style(label_info, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_info, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_width(label_info, 280);  // Constrain width for text wrapping
-    lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
 
-    hpi_disp_set_curr_screen(SCR_SPL_HRV_COMPLETE);
-    hpi_show_screen(scr_hrv_complete, m_scroll_dir);
+    // Update stress label with very short text
+    if (label_stress_level_compact != NULL) {
+        const char* stress_text;
+        if (stress_score_compact < 25) {
+            stress_text = "Low";
+        } else if (stress_score_compact < 50) {
+            stress_text = "Med";
+        } else if (stress_score_compact < 75) {
+            stress_text = "High";
+        } else {
+            stress_text = "Max";
+        }
+        
+        lv_label_set_text(label_stress_level_compact, stress_text);
+        lv_obj_set_style_text_color(label_stress_level_compact, get_stress_arc_color((int)stress_score_compact), 0);
+    }
+    
+   
 }
 
-void gesture_down_scr_spl_hrv_complete(void)
-{
-    // Handle gesture down event - return to HRV home screen
-    hpi_load_screen(SCR_HRV, SCROLL_DOWN);
-}
