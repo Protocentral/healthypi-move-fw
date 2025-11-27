@@ -337,8 +337,16 @@ bool hpi_data_is_gsr_record_active(void)
     k_mutex_unlock(&mutex_is_gsr_record_active);
     return active;
 }
+void hpi_data_reset_gsr_record_buffer(void)
+{
+    k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+    // Reset buffer and counter without saving (for contact lost / restart)
+    gsr_record_counter = 0;
+    memset(gsr_record_buffer, 0, sizeof(gsr_record_buffer));
+    LOG_INF("GSR recording buffer reset (discard incomplete data)");
+    k_mutex_unlock(&mutex_is_gsr_record_active);
 
-
+}
 
 void hpi_data_reset_ecg_record_buffer(void)
 {
