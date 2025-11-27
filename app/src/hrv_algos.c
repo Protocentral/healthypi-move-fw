@@ -34,6 +34,7 @@ float32_t fft_output[FFT_SIZE * 2];     // Complex FFT output
 float32_t psd[FFT_SIZE];                // Power spectral density
 float32_t window[FFT_SIZE];             // Hanning window
 
+
 // Static variables for HRV frequency analysis
 float lf_power_compact = 0.0f;
 float hf_power_compact = 0.0f;
@@ -41,16 +42,6 @@ float stress_score_compact = 0.0f;
 float sdnn_val = 0.0f;
 float rmssd_val = 0.0f;
 
-int interval_counter = 0;
-
-// Static state for HRV calculations, initialization of structure
-static hrv_state_t hrv_state = {
-    .sample_count = 0,
-    .buffer_index = 0,
-    .buffer_full = false,
-    .cached_mean = 0.0f,
-    .mean_valid = false
-};
 static time_domain tm_metrics = {
     .mean = 0,
     .rmssd = 0,
@@ -60,293 +51,82 @@ static time_domain tm_metrics = {
     .sdnn = 0
 };
 
-/* Add a new RR interval to the circular buffer */
-static void hrv_add_sample(double rr_interval)
-{
-    k_mutex_lock(&hrv_mutex, K_FOREVER);
-    hrv_state.rr_intervals[hrv_state.buffer_index] = rr_interval;
-    hrv_state.buffer_index = (hrv_state.buffer_index + 1) % HRV_LIMIT;
-    
-    if (hrv_state.sample_count < HRV_LIMIT) {
-        hrv_state.sample_count++;
-    } else {
-        hrv_state.buffer_full = true;
-    }
-    
-    // Invalidate cached values when new data is added
-    hrv_state.mean_valid = false;
-    k_mutex_unlock(&hrv_mutex);
-}
-
-void start_hrv_collection(void)
-{
-    k_mutex_lock(&hrv_mutex, K_FOREVER);
-    if (!collecting) {
-        collecting = true;
-        hrv_reset();
-        LOG_INF("HRV %d intervals collection started...",HRV_LIMIT);
-    }
-    k_mutex_unlock(&hrv_mutex);
-}
-
-void stop_hrv_collection(void)
-{
-   
-    if (collecting) {
-        LOG_INF("HRV %d intervals collection stopped.", HRV_LIMIT);
-        collecting = false;
-       
-    }
-
-}
 
 /* Calculate mean RR interval with caching */
 
-float hrv_calculate_mean(void)
+float hrv_calculate_mean(uint16_t *rr_buffer, int count)
 {
-    if (hrv_state.mean_valid) {
-        return hrv_state.cached_mean;
-    }
-    
-    if (hrv_state.sample_count == 0) {
-        return 0.0f;
-    }
-    
     uint64_t sum = 0;
-    int count = hrv_state.buffer_full ? HRV_LIMIT : hrv_state.sample_count;
-    
-    for (int i = 0; i < count; i++) {
-        sum += hrv_state.rr_intervals[i];
+    for( int i = 0; i < count ; i++)
+    {
+          sum += rr_buffer[i];
     }
+    return (float)sum / count;
     
-    hrv_state.cached_mean = (float)sum / count;
-    hrv_state.mean_valid = true;
-    
-    return hrv_state.cached_mean;
 }
 
 /* Calculate SDNN (Standard Deviation of NN intervals) */
 
-float hrv_calculate_sdnn(void)
-{
-    if (hrv_state.sample_count < 2) {
-        return 0.0f;
-    }
-    
-    float mean = hrv_calculate_mean();
+float hrv_calculate_sdnn(uint16_t * rr_buffer, int count)
+{ 
+    if (count < 2) return 0.0f;
+    float mean = hrv_calculate_mean(rr_buffer, count);
     float sum_squared_diff = 0.0f;
-    int count = hrv_state.buffer_full ? HRV_LIMIT : hrv_state.sample_count;
-    
     for (int i = 0; i < count; i++) {
-        float diff = (float)hrv_state.rr_intervals[i] - mean;
+        float diff = (float)rr_buffer[i] - mean;
         sum_squared_diff += diff * diff;
     }
-    
     return sqrtf(sum_squared_diff / (count - 1));
 }
 
 /* Calculate RMSSD (Root Mean Square of Successive Differences) */
 
-float hrv_calculate_rmssd(void)
+float hrv_calculate_rmssd(uint16_t * rr_buffer, int count)
 {
-    if (hrv_state.sample_count < 2) {
-        return 0.0f;
-    }
-    
+    if (count < 2) return 0.0f;
     float sum_squared_diff = 0.0f;
-    int count = hrv_state.buffer_full ? HRV_LIMIT : hrv_state.sample_count;
-    int differences = 0;
-    
     for (int i = 0; i < count - 1; i++) {
-        int32_t diff = (int32_t)hrv_state.rr_intervals[(i + 1) % HRV_LIMIT] - 
-                       (int32_t)hrv_state.rr_intervals[i];
-        sum_squared_diff += (float)(diff * diff);
-        differences++;
+        float diff = rr_buffer[i + 1] - rr_buffer[i];
+        sum_squared_diff += diff * diff;
     }
-    
-    if (differences == 0) {
-        return 0.0f;
-    }
-    
-    return sqrtf(sum_squared_diff / differences);
+    return sqrtf(sum_squared_diff / (count - 1));
 }
 
 /* Calculate pNN50 (percentage of successive RR intervals that differ by more than 50ms) */
 
-float hrv_calculate_pnn50(void)
-{
-    if (hrv_state.sample_count < 2) {
-        return 0.0f;
-    }
-    
+float hrv_calculate_pnn50(uint16_t * rr_buffer, int count)
+{  
+    if (count < 2) return 0.0f;
     int count_over_50ms = 0;
-    int count = hrv_state.buffer_full ? HRV_LIMIT : hrv_state.sample_count;
-    int total_differences = 0;
-    
     for (int i = 0; i < count - 1; i++) {
-        int32_t diff = abs((int32_t)hrv_state.rr_intervals[(i + 1) % HRV_LIMIT] - 
-                          (int32_t)hrv_state.rr_intervals[i]);
-        if (diff > 50) {
+        if (abs((int32_t)rr_buffer[i + 1] - (int32_t)rr_buffer[i]) > 50) {
             count_over_50ms++;
         }
-        total_differences++;
     }
-    
-    if (total_differences == 0) {
-        return 0.0f;
-    }
-    
-    return ((float)count_over_50ms * 100) / total_differences;
+    return ((float)count_over_50ms * 100) / (count - 1);
 }
 
 /* Find minimum RR interval in the buffer */
 
-uint32_t hrv_calculate_min(void)
+uint32_t hrv_calculate_min(uint16_t * rr_buffer, int count)
 {
-    if (hrv_state.sample_count == 0) {
-        return 0;
-    }
-    
-    uint32_t min_val = hrv_state.rr_intervals[0];
-    int count = hrv_state.buffer_full ? HRV_LIMIT : hrv_state.sample_count;
-    
-    for (int i = 1; i < count; i++) {
-        if (hrv_state.rr_intervals[i] < min_val) {
-            min_val = hrv_state.rr_intervals[i];
-        }
-    }
-    
+     if (count == 0) return 0;
+    uint32_t min_val = rr_buffer[0];
+    for (int i = 1; i < count; i++)
+        if (rr_buffer[i] < min_val) min_val = rr_buffer[i];
     return min_val;
 }
 
 /* Find maximum RR interval in the buffer */
 
-uint32_t hrv_calculate_max(void)
+uint32_t hrv_calculate_max(uint16_t * rr_buffer, int count)
 {
-    if (hrv_state.sample_count == 0) {
-        return 0;
-    }
-    
-    uint32_t max_val = hrv_state.rr_intervals[0];
-    int count = hrv_state.buffer_full ? HRV_LIMIT : hrv_state.sample_count;
-    
-    for (int i = 1; i < count; i++) {
-        if (hrv_state.rr_intervals[i] > max_val) {
-            max_val = hrv_state.rr_intervals[i];
-        }
-    }
-    
+    if (count == 0) return 0;
+    uint32_t max_val = rr_buffer[0];
+    for (int i = 1; i < count; i++)
+        if (rr_buffer[i] > max_val) max_val = rr_buffer[i];
     return max_val;
 }
-
-/* Reset HRV calculation state */
-
-void hrv_reset(void)
-{
-    k_mutex_lock(&hrv_mutex, K_FOREVER);
-    memset(&hrv_state, 0, sizeof(hrv_state_t));
-    LOG_DBG("HRV calculation state reset");
-    last_measurement_time = k_uptime_get();
-    k_mutex_unlock(&hrv_mutex);
-}
-
-/* Get current number of samples in the buffer */
-
-int hrv_get_sample_count(void)
-{
-    int count;
-    count = hrv_state.sample_count;
-    return count;
-}
-
-/* Check if HRV buffer is ready for reliable calculations */
-
-bool hrv_is_ready(void)
-{
-    return hrv_state.sample_count >= HRV_LIMIT;
-}
-
-/**
- * @brief Get raw RR interval buffer for frequency domain analysis
- * @param buffer Pointer to buffer to copy RR intervals to
- * @param buffer_size Size of the buffer
- * @return Number of samples copied
- */
-int hrv_get_rr_intervals(uint16_t *buffer, int buffer_size)
-{
-    if (!buffer || buffer_size <= 0) {
-        return 0;
-    }
-    
-    int count = hrv_state.buffer_full ? HRV_LIMIT : hrv_state.sample_count;
-    int samples_to_copy = (count < buffer_size) ? count : buffer_size;
-    
-    for (int i = 0; i < samples_to_copy; i++) {
-        buffer[i] = hrv_state.rr_intervals[i];
-    }
-    
-    return samples_to_copy;
-}
-
-/* Update HRV screens with new RR interval data */
-
-// void on_new_rr_interval_detected(uint16_t rr_interval)
-// {
-//     LOG_INF("New RR interval detected : %d ms", rr_interval);
-
-//     if (!collecting) 
-//     return;
-
-//     hrv_add_sample(rr_interval);
-
-//     interval_counter = hrv_state.sample_count;
-
-//     bool should_process = false;
-    
-//     k_mutex_lock(&hrv_mutex, K_FOREVER);
-//     if (collecting && hrv_state.sample_count >= HRV_LIMIT) {
-//         collecting = false;
-//         should_process = true;
-//     }
-//     k_mutex_unlock(&hrv_mutex);
-
-//     if (should_process) {
-
-       // int sample_count = hrv_get_rr_intervals(rr_interval_buffer, HRV_LIMIT);
-
-        
-        // struct tm tm_sys_time = hpi_sys_get_sys_time();
-        // int64_t timestamp = timeutil_timegm64(&tm_sys_time);
-
-        // // If timestamp invalid, fallback to uptime-based timestamp
-        // if (timestamp < 1577836800LL) {   // anything before year 2020 is invalid
-        //     int64_t up_sec = k_uptime_get() / 1000;
-
-        //     // Base timestamp: Jan 1 2025 00:00:00
-        //     timestamp = 1735689600LL + up_sec;
-        // }
-
-       // LOG_INF("Timestamp : %d", timestamp);
-
-       //hpi_write_hrv_rr_record_file(rr_interval_buffer, sample_count, timestamp);
-       
-        // tm_metrics.mean = hrv_calculate_mean();
-        // tm_metrics.sdnn = hrv_calculate_sdnn();
-        // tm_metrics.rmssd = hrv_calculate_rmssd();
-        // tm_metrics.pnn50 = hrv_calculate_pnn50();    
-        // tm_metrics.hrv_min = (float)hrv_calculate_min();
-        // tm_metrics.hrv_max = (float)hrv_calculate_max();
-       
-
-        // LOG_INF("HRV 30 interval Collection Complete: \nSamples=%d\nMean=%.1f\nSDNN=%.1f\n",hrv_state.sample_count,tm_metrics.mean, tm_metrics.sdnn);
-        // LOG_INF("RMSSD : %.1f\nPnn50: %.1f\nMAX : %.1f\nMIN : %.1f", tm_metrics.rmssd, tm_metrics.pnn50, tm_metrics.hrv_max, tm_metrics.hrv_min);
-
-     //   hpi_hrv_frequency_compact_update_spectrum(hrv_state.rr_intervals, hrv_state.sample_count);
-
-       // k_sem_give(&sem_ecg_complete);
-  
-//     }
-// }
 
 static float32_t linear_interp(float32_t x, float32_t x0, float32_t x1, float32_t y0, float32_t y1)
 {
@@ -433,6 +213,10 @@ static void remove_mean(float32_t *signal, uint32_t length)
 static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t *window, float32_t *fft_input,float32_t *fft_output, 
     float32_t *psd,uint32_t fft_size, float32_t fs) 
 {
+      if (signal_len < fft_size) {
+        LOG_WRN("signal_len (%u) < fft_size (%u) -> no PSD", signal_len, fft_size);
+        return;
+      }
     // Initialize PSD to zero
     memset(psd, 0, sizeof(float32_t) * fft_size);
     
@@ -477,7 +261,10 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
         
         num_segments++;
     }
-    
+    if (num_segments == 0) {
+      LOG_WRN("No PSD segments processed (signal_len=%u, fft_size=%u)", signal_len, fft_size);
+      return;
+      }
     // Average the PSD and normalize
     if (num_segments > 0) {
         //LOG_INF("Number of segments: %d", num_segments);
@@ -513,44 +300,50 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
 void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals)
  {
 
-    LOG_INF("Updating HRV Frequency Compact Spectrum with %d intervals", num_intervals);
+    //LOG_INF("Updating HRV Frequency Compact Spectrum with %d intervals", num_intervals);
 
-      tm_metrics.mean = hrv_calculate_mean();
-      tm_metrics.sdnn = hrv_calculate_sdnn();
-      tm_metrics.rmssd = hrv_calculate_rmssd();
-      tm_metrics.pnn50 = hrv_calculate_pnn50();    
-      tm_metrics.hrv_min = (float)hrv_calculate_min();
-      tm_metrics.hrv_max = (float)hrv_calculate_max();
+      // for(int i = 0; i < num_intervals ; i++)
+      // {
+      //   LOG_INF("RR interval[%d] : %d",i, rr_intervals[i]);
+      //   k_msleep(10);
+      // }
 
-      LOG_INF("HRV 30 interval Collection Complete: \nSamples=%d\nMean=%.1f\nSDNN=%.1f\n",num_intervals,tm_metrics.mean, tm_metrics.sdnn);
-      LOG_INF("RMSSD : %.1f\nPnn50: %.1f\nMAX : %.1f\nMIN : %.1f", tm_metrics.rmssd, tm_metrics.pnn50, tm_metrics.hrv_max, tm_metrics.hrv_min);
+      tm_metrics.mean = hrv_calculate_mean(rr_intervals, num_intervals);
+      tm_metrics.sdnn = hrv_calculate_sdnn(rr_intervals, num_intervals);
+      tm_metrics.rmssd = hrv_calculate_rmssd(rr_intervals, num_intervals);
+      tm_metrics.pnn50 = hrv_calculate_pnn50(rr_intervals, num_intervals);    
+      tm_metrics.hrv_min = (float)hrv_calculate_min(rr_intervals, num_intervals);
+      tm_metrics.hrv_max = (float)hrv_calculate_max(rr_intervals, num_intervals);
+
+      LOG_INF("HRV interval Collection Completed: \nSamples : %d\nMean : %.1f\nSDNN : %.1f\nRMSSD : %.1f\nPnn50 : %.1f\nMAX : %.1f\nMIN : %.1f",
+        num_intervals,tm_metrics.mean, tm_metrics.sdnn,tm_metrics.rmssd, tm_metrics.pnn50, tm_metrics.hrv_max, tm_metrics.hrv_min);
 
     // Interpolate RR intervals
 
     uint32_t num_interp_samples = interpolate_rr_intervals(rr_intervals, num_intervals,INTERP_FS,rr_time,rr_values,
         interp_signal,FFT_SIZE * 4);
 
-    // Remove mean
-    remove_mean(interp_signal, num_interp_samples);
+     // Remove mean
+     remove_mean(interp_signal, num_interp_samples);
 
-     // Create Hanning window
-    create_hanning_window(window, FFT_SIZE);
+      // Create Hanning window
+     create_hanning_window(window, FFT_SIZE);
 
-    // Calculate PSD using Welch's method
-    calculate_psd_welch(interp_signal, num_interp_samples, window, fft_input, fft_output, psd, FFT_SIZE, INTERP_FS);
+     // Calculate PSD using Welch's method
+     calculate_psd_welch(interp_signal, num_interp_samples, window, fft_input, fft_output, psd, FFT_SIZE, INTERP_FS);
 
     // Integrate power in LF, HF bands    
-    lf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS, LF_LOW, LF_HIGH);
+    lf_power_compact = integrate_band_power(psd,FFT_SIZE, INTERP_FS, LF_LOW, LF_HIGH);
     hf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS,HF_LOW, HF_HIGH);
     stress_score_compact = get_stress_percentage(lf_power_compact, hf_power_compact);
     sdnn_val = tm_metrics.sdnn;
     rmssd_val = tm_metrics.rmssd; 
 
-    float ratio = lf_power_compact / hf_power_compact;//hpi_get_lf_hf_ratio();
+    float ratio = hpi_get_lf_hf_ratio();
     if (ratio > 0.0f) 
     {
         int64_t now_ts = hw_get_sys_time_ts();
-        hpi_sys_get_last_hrv_update((uint16_t)(ratio * 100), now_ts);
+        hpi_sys_set_last_hrv_update((uint16_t)(ratio * 100), now_ts);
     }
 
     LOG_INF("LF Power (Compact): %f", lf_power_compact);
@@ -562,3 +355,8 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
 
     
  }
+ float hpi_get_lf_hf_ratio(void) {
+   
+    return (hf_power_compact == 0.0f) ? 0.0f : lf_power_compact / hf_power_compact;
+
+}
