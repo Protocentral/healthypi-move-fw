@@ -68,7 +68,7 @@ bool hpi_data_is_ecg_record_active(void);
 
 void hpi_data_set_gsr_record_active(bool active);
 bool hpi_data_is_gsr_record_active(void);
-
+void hpi_data_reset_gsr_record_buffer(void);
 
 void hpi_data_set_gsr_measurement_active(bool active);
 bool hpi_data_is_gsr_measurement_active(void);
