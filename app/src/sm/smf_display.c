@@ -547,6 +547,12 @@ extern struct k_sem sem_spo2_cancel;
 
 extern struct k_sem sem_bpt_sensor_found;
 
+extern struct k_sem sem_gsr_lead_on;
+extern struct k_sem sem_gsr_lead_off;
+
+static bool m_gsr_lead_off = false;
+
+
 static void st_display_init_entry(void *o)
 {
     LOG_DBG("Display SM Init Entry");
@@ -997,6 +1003,39 @@ static void hpi_disp_update_screens(void)
         // Update GSR countdown timer display (mirrors ECG pattern)
         hpi_gsr_disp_update_timer(m_disp_gsr_remaining);
 #endif
+        
+        if (k_sem_take(&sem_gsr_lead_on, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Processing GSR Lead ON semaphore");
+
+            // UI handler: hide error message, update icon, etc.
+            scr_gsr_lead_on_off_handler(false);   // false = lead ON
+
+            m_gsr_lead_off = false;
+        }
+
+        if (k_sem_take(&sem_gsr_lead_off, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Processing GSR Lead OFF semaphore");
+
+            // UI handler: show 'Finger not placed' message
+            scr_gsr_lead_on_off_handler(true);    // true = lead OFF
+
+            m_gsr_lead_off = true;
+            bool is_gsr_active = hpi_data_is_gsr_record_active();
+            
+            if (is_gsr_active)
+            {
+                LOG_INF("DISPLAY THREAD: Lead disconnected - resetting recording buffer for continuous capture");     
+                // (Optional) reset GSR recording if your workflow requires it
+                hpi_data_reset_gsr_record_buffer();
+
+                // Reset ECG SMF countdown to 30s
+                LOG_INF("DISPLAY THREAD: Resetting GSR SMF countdown to 30s");
+                hpi_gsr_reset_countdown_timer();
+            }
+        }
+
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_RAW_PPG:
