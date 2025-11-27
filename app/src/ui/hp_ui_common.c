@@ -528,9 +528,6 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ECG:
         draw_scr_ecg(m_scroll_dir);
         break;
-    case SCR_HRV:
-        draw_scr_hrv(m_scroll_dir);
-        break;
     case SCR_GSR:
 #if defined(CONFIG_HPI_GSR_SCREEN)
         draw_scr_gsr(m_scroll_dir);
