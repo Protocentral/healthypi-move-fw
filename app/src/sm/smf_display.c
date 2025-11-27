@@ -178,7 +178,9 @@ static bool m_lead_on_off = false;
 static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
 
 // @brief HRV Screen variables
-extern volatile uint16_t hrv_record_counter ;
+extern struct k_sem sem_hrv_eval_complete;
+static bool m_hrv_lead_on_off = true;  // true = leads OFF initially
+
 
 struct s_disp_object
 {
@@ -211,6 +213,14 @@ K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Array of function pointers for screen drawing functions
 static const screen_func_table_entry_t screen_func_table[] = {
+    [SCR_HOME] = {draw_scr_home, NULL},
+    [SCR_HR] = {draw_scr_hr, NULL},
+    [SCR_SPO2] = {draw_scr_spo2, NULL},
+    [SCR_ECG] = {draw_scr_ecg, NULL},
+    [SCR_TEMP] = {draw_scr_temp, NULL},
+    [SCR_BPT] = {draw_scr_bpt, NULL},
+    [SCR_GSR] = {draw_scr_gsr, NULL},
+    [SCR_HRV] = {draw_scr_hrv, NULL},
     [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, gesture_down_scr_spl_raw_ppg},
     [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
@@ -218,6 +228,11 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
     [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
     [SCR_SPL_ECG_COMPLETE] = {draw_scr_ecg_complete, gesture_down_scr_ecg_complete},
+
+  //  [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
+    [SCR_SPL_HRV_EVAL_PROGRESS] = {draw_scr_spl_hrv_eval_progress, gesture_down_scr_spl_hrv_eval_progress},
+    [SCR_SPL_HRV_COMPLETE] = {draw_scr_spl_hrv_complete, gesture_down_scr_spl_hrv_complete},
+
     //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
     [SCR_SPL_SPO2_SCR2] = {draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2},
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
@@ -243,8 +258,6 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
-    [SCR_SPL_PLOT_HRV] = {draw_scr_ecg_hrv, gesture_down_scr_ecg_hrv},
-    [SCR_SPL_HRV_FREQUENCY] = {draw_scr_hrv_frequency_compact, gesture_down_scr_spl_hrv},
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -426,8 +439,9 @@ void disp_screen_event(lv_event_t *e)
 
         if ((curr_screen + 1) == SCR_LIST_END)
         {
-            printk("End of list\n");
-            return;
+            // Wrap around: go from last carousel screen back to HOME
+            printk("End of list, wrapping to HOME\n");
+            hpi_load_screen(SCR_HOME, SCROLL_LEFT);
         }
         else
         {
@@ -461,8 +475,11 @@ void disp_screen_event(lv_event_t *e)
         }
         if ((curr_screen - 1) == SCR_LIST_START)
         {
-            printk("Start of list\n");
-            return;
+            // Wrap around: go from HOME back to last carousel screen (SCR_HRV or SCR_GSR)
+            printk("Start of list, wrapping to last screen\n");
+            // Find the last regular screen before SCR_LIST_END
+            int last_screen = SCR_LIST_END - 1;
+            hpi_load_screen(last_screen, SCROLL_RIGHT);
         }
         else
         {
@@ -822,10 +839,9 @@ static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sens
     {
         hpi_ecg_disp_draw_plotECG(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
     }
-    else if(hpi_disp_get_curr_screen() == SCR_SPL_PLOT_HRV)
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
     {
         hpi_ecg_disp_draw_plotECG_hrv(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
-        hpi_ecg_disp_update_hr_hrv(ecg_sensor_sample.hr);
     }
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
@@ -930,73 +946,11 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
         break;
-    case SCR_SPL_PLOT_HRV:
-        hpi_ecg_disp_update_timer_hrv(hrv_record_counter);
-        if(k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
-        {
-           hpi_load_scr_spl(SCR_SPL_HRV_FREQUENCY, SCROLL_UP, (uint8_t)SCR_SPL_HRV_FREQUENCY, 0, 0, 0);
-        }
-        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
-            scr_ecg_lead_on_off_handler_hrv(false); // false = leads ON
-            
-            // Only trigger stabilization if this is a reconnection (previous state was leads OFF)
-            bool is_ecg_active = hpi_data_is_ecg_record_active();
-            bool was_lead_off = m_lead_on_off;  // Previous state before this update
-            
-            m_lead_on_off = false;              // Update to leads ON
-            
-            LOG_INF("DISPLAY THREAD: ECG active=%s, was_lead_off=%s", 
-                    is_ecg_active ? "true" : "false", 
-                    was_lead_off ? "true" : "false");
-            
-            // Only trigger re-stabilization if:
-            // 1. Recording is active AND
-            // 2. This is a reconnection (previous state was lead off)
-            if (is_ecg_active && was_lead_off)
-            {
-                LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
-                
-                // Signal state machine to enter stabilization before resuming recording
-                k_sem_give(&sem_ecg_lead_on_stabilize);
-            }
-            // Start timer if this is first lead-on (not a reconnection)
-            else if (is_ecg_active && !was_lead_off)
-            {
-                LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
-                hpi_ecg_timer_start_hrv();
-            }
-        }
-        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore - calling UI handler");
-            scr_ecg_lead_on_off_handler_hrv(true); // true = leads OFF
-            m_lead_on_off = true;              // true = leads OFF
-
-            // Reset recording to ensure continuous 30s data when leads come back on
-            bool is_ecg_active = hpi_data_is_ecg_record_active();
-            LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
-            if (is_ecg_active)
-            {
-                LOG_INF("DISPLAY THREAD: Lead disconnected - resetting recording buffer for continuous capture");
-                
-                // Reset the recording buffer without saving incomplete data
-                hpi_data_reset_ecg_record_buffer();
-                
-                // Reset UI timer state
-                LOG_INF("DISPLAY THREAD: Resetting UI timer state");
-                hpi_ecg_timer_reset_hrv();
-                
-                // Reset ECG SMF countdown to 30s
-                LOG_INF("DISPLAY THREAD: Resetting ECG SMF countdown to 30s");
-                hpi_ecg_reset_countdown_timer();
-            }
-        }
-
-        lv_disp_trig_activity(NULL);
-
-        break;
+    case SCR_SPL_HRV_EVAL_PROGRESS:
+         if(k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
+         {
+            hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
+         }
 
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);

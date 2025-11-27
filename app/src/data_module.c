@@ -106,6 +106,16 @@ static int rtor_prev_value ;
 extern struct k_sem sem_ecg_complete;
 
 static bool is_gsr_measurement_active = false;
+
+// HRV (Heart Rate Variability) Evaluation State - Separate from ECG recording
+static bool is_hrv_eval_active = false;
+static struct hpi_hrv_eval_result_t hrv_eval_result = {0};
+struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];  // R-to-R interval buffer (shared with state machine)
+volatile uint16_t hrv_interval_count = 0;                     // Number of intervals collected (shared with state machine)
+K_MUTEX_DEFINE(mutex_is_hrv_eval_active);
+
+// Track last R-to-R interval to detect new beats
+static uint16_t last_rtor_value = 0;
 K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
 
 static uint32_t last_hr_update_time = 0;
@@ -376,6 +386,74 @@ bool hpi_data_is_gsr_measurement_active(void)
     return active;
 }
 
+/**
+ * @brief Set HRV evaluation active/inactive state
+ * @param active true to start evaluation, false to stop
+ */
+void hpi_data_set_hrv_eval_active(bool active)
+{
+    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    is_hrv_eval_active = active;
+    
+    if (active) {
+        // Reset result when starting new evaluation
+        memset(&hrv_eval_result, 0, sizeof(hrv_eval_result));
+        last_rtor_value = 0;
+        LOG_INF("HRV evaluation started - buffer reset");
+    }
+    
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
+}
+
+/**
+ * @brief Check if HRV evaluation is active
+ * @return true if evaluation in progress, false otherwise
+ */
+bool hpi_data_is_hrv_eval_active(void)
+{
+    bool active = false;
+    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    active = is_hrv_eval_active;
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
+    return active;
+}
+
+/**
+ * @brief Add R-to-R interval to HRV evaluation buffer
+ * @param rtor_ms R-to-R interval in milliseconds
+ */
+void hpi_data_add_hrv_interval(uint16_t rtor_ms)
+{
+    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    
+    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms > 0) {
+        // Detect new beat: RtoR value should change between samples
+        // Only add if different from last (to avoid duplicate intervals)
+        if (rtor_ms != last_rtor_value) {
+            hrv_intervals[hrv_interval_count].rtor_ms = rtor_ms;
+            hrv_intervals[hrv_interval_count].timestamp = k_uptime_get();
+            hrv_interval_count++;
+            last_rtor_value = rtor_ms;
+            
+            if (hrv_interval_count % 10 == 0) {
+                LOG_DBG("HRV: collected %d intervals", hrv_interval_count);
+            }
+        }
+    }
+    
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
+}
+
+/**
+ * @brief Get HRV evaluation results
+ * @return Pointer to HRV evaluation result structure
+ */
+struct hpi_hrv_eval_result_t *hpi_data_get_hrv_eval_result(void)
+{
+    return &hrv_eval_result;
+}
+
+
 void data_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
@@ -545,6 +623,14 @@ void data_thread(void)
                 }
             }
             k_mutex_unlock(&mutex_is_ecg_record_active);
+
+            // HRV (Heart Rate Variability) Evaluation - Capture R-to-R intervals
+            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
+            {
+                // Capture R-to-R intervals for HRV analysis
+                // RtoR value is in milliseconds from the MAX30001 sensor
+                hpi_data_add_hrv_interval(ecg_sensor_sample.rtor);
+            }
         }
 
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)

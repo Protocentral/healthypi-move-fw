@@ -1,9 +1,6 @@
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
-#include <zephyr/drivers/dac.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/display.h>
 #include <lvgl.h>
 #include <stdio.h>
 #include <zephyr/smf.h>
@@ -14,22 +11,18 @@
 #include "hpi_sys.h"
 #include "stdlib.h"
 #include "hrv_algos.h"
+#include "hpi_common_types.h"
+#include "ui/move_ui.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv, LOG_LEVEL_DBG);
 
-bool battery_monitor_enabled = true;
 int m_hrv_ratio_int = 0;
 int m_hrv_ratio_dec = 0;
 float ratio = 0.0f;
-static bool hrv_measurement_active = false;
-bool hrv_active = false;
-int past_value = 0;
 int64_t m_hrv_last_update = 0;
 
-extern bool check_gesture;
-extern int64_t last_measurement_time;
 extern struct k_sem sem_ecg_start;
-
 
 // GUI Objects
 lv_obj_t *scr_hrv;
@@ -39,87 +32,37 @@ static lv_obj_t *label_hrv_value;
 static lv_obj_t *label_hrv_status;
 static lv_obj_t *lfhf_arc;
 
-// #define HRV_WORK_STACKSIZE 512
+// Externs - Modern style system
+extern lv_style_t style_body_medium;
+extern lv_style_t style_numeric_large;
+extern lv_style_t style_caption;
 
-// K_WORK_DEFINE(hrv_check_work, hrv_check_and_transition_work);
-
-// // Timer handler, now only schedules work—not logic directly
-// static void hrv_check_timer_handler(struct k_timer *timer)
-// {
-//     k_work_submit(&hrv_check_work);
-// }
-
-// //K_TIMER_DEFINE(hrv_check_timer, hrv_check_and_transition, NULL);
-// K_TIMER_DEFINE(hrv_check_timer, hrv_check_timer_handler, NULL);
-
-// static void hrv_check_and_transition_work(struct k_work *work) {
-//     hrv_check_and_transition();
-// }
-
-void scr_hrv_measure_btn_event_handler(lv_event_t *e)
+/**
+ * @brief Button event handler for starting HRV evaluation
+ */
+static void scr_hrv_btn_start_handler(lv_event_t *e)
 {
-    if (!hrv_measurement_active || check_gesture) 
-    {
-        check_gesture = false;
-
-        lv_event_code_t code = lv_event_get_code(e);
-
-        if (code == LV_EVENT_CLICKED)
-        {
-            hrv_measurement_active = true;
-
-           // past_value = 0;
-
-            hrv_active = true;
-
-            battery_monitor_enabled = false;
-
-            hpi_load_scr_spl(SCR_SPL_PLOT_HRV, SCROLL_UP, (uint8_t)SCR_SPL_PLOT_HRV, 0, 0, 0);
-          
-            k_msleep(500);
-            
-            hrv_reset();
-
-           // k_timer_start(&hrv_check_timer, K_SECONDS(1), K_SECONDS(1));  
-
-            start_hrv_collection();
-            
-            k_sem_give(&sem_ecg_start);
-        }
+    lv_event_code_t code = lv_event_get_code(e);
+    
+    if (code == LV_EVENT_CLICKED) {
+        LOG_INF("HRV Evaluation started by user");
+        
+        // Display progress screen immediately
+        hpi_load_scr_spl(SCR_SPL_HRV_EVAL_PROGRESS, SCROLL_UP, 0, 0, 0, 0);
+        
+        // Signal state machine to start HRV evaluation
+        extern struct k_sem sem_hrv_eval_start;
+        k_sem_give(&sem_hrv_eval_start);
     }
 }
 
-// void hrv_check_and_transition(void)
-// {
-//     int current_count = hrv_get_sample_count();
-  
-//     if (current_count > past_value)
-//     {
-//         past_value = current_count;
-//     }
-
-//     if (past_value >= HRV_LIMIT)
-//     {
-     
-//         hrv_measurement_active = false;
-
-//         stop_hrv_collection();
-
-//         k_timer_stop(&hrv_check_timer);
-
-
-//         past_value = 0;
-
-//         float ratio = hpi_get_lf_hf_ratio();
-//         if (ratio > 0.0f) 
-//         {
-//             int64_t now_ts = hw_get_sys_time_ts();
-//             hpi_sys_set_last_lf_hf_update((uint16_t)(ratio * 100), now_ts);
-//         }
-//     }
-// }
-
-void draw_scr_hrv(enum scroll_dir m_scroll_dir)
+/**
+ * @brief Draw HRV home screen with measurement controls
+ * 
+ * Main carousel screen showing HRV evaluation options:
+ * - Start button to initiate new HRV evaluation
+ */
+void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
  
     scr_hrv = lv_obj_create(NULL);
@@ -209,10 +152,8 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_btn, LV_SYMBOL_PLAY " Start HRV");
     lv_obj_center(label_btn);
     lv_obj_set_style_text_color(label_btn, lv_color_hex(0x8000FF), LV_PART_MAIN);
-    lv_obj_add_event_cb(btn_hrv_measure, scr_hrv_measure_btn_event_handler, LV_EVENT_CLICKED, NULL);
-
+    lv_obj_add_event_cb(btn_hrv_measure, scr_hrv_btn_start_handler, LV_EVENT_CLICKED, NULL);
     hrv_update_display();
-
     hpi_disp_set_curr_screen(SCR_HRV);
     hpi_show_screen(scr_hrv, m_scroll_dir);
 }
@@ -258,7 +199,4 @@ static void hrv_update_display(void)
     } else {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // Red
     }
-
-
-    
 }
