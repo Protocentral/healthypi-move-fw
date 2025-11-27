@@ -72,8 +72,10 @@ extern lv_style_t style_body_medium;
 extern lv_style_t style_caption;
 extern lv_style_t style_numeric_large;
 
+K_MUTEX_DEFINE(Lead_on_off_handler_mutex);
+
 // HRV evaluation parameters
-#define HRV_MEASUREMENT_DURATION_S 30  // 30 seconds
+#define HRV_MEASUREMENT_DURATION_S 60  // 30 seconds
 
 // R-to-R interval data
 extern volatile uint16_t hrv_interval_count;
@@ -118,6 +120,7 @@ static void hrv_progress_update_timer_cb(lv_timer_t *timer)
     
     // Update progress arc (0-30 range, counting down from 30 to 0)
     if (arc_hrv_zone != NULL) {
+        // lv_arc_set_value(arc_hrv_zone, remaining_s);
         lv_arc_set_value(arc_hrv_zone, remaining_s);
     }
     
@@ -125,7 +128,6 @@ static void hrv_progress_update_timer_cb(lv_timer_t *timer)
     if (label_intervals_count != NULL) {
         lv_label_set_text_fmt(label_intervals_count, "Intervals: %d", hrv_interval_count);
     }
-    
     // Lead status display is updated by the state machine via semaphores
     // This timer callback focuses on timing and progress updates
 }
@@ -150,15 +152,15 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     arc_hrv_zone = lv_arc_create(scr_hrv_eval_progress);
     lv_obj_set_size(arc_hrv_zone, 370, 370);  // 185px radius
     lv_obj_center(arc_hrv_zone);
-    lv_arc_set_range(arc_hrv_zone, 0, HRV_MEASUREMENT_DURATION_S);
+    lv_arc_set_range(arc_hrv_zone,0, HRV_MEASUREMENT_DURATION_S);
     lv_arc_set_bg_angles(arc_hrv_zone, 135, 45);  // Full background arc
     lv_arc_set_value(arc_hrv_zone, HRV_MEASUREMENT_DURATION_S);  // Start at full duration
     
     // Style the progress arc - pink/magenta theme for HRV measurement
     lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
     lv_obj_set_style_arc_width(arc_hrv_zone, 8, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0xFF1493), LV_PART_INDICATOR);  // Deep pink progress
-    lv_obj_set_style_arc_width(arc_hrv_zone, 6, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x8B0000), LV_PART_INDICATOR);  // Deep pink progress
+    lv_obj_set_style_arc_width(arc_hrv_zone, 8, LV_PART_INDICATOR);
     lv_obj_remove_style(arc_hrv_zone, NULL, LV_PART_KNOB);  // Remove knob
     lv_obj_clear_flag(arc_hrv_zone, LV_OBJ_FLAG_CLICKABLE);
 
@@ -176,12 +178,13 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     LV_IMG_DECLARE(timer_32);
     lv_obj_t *img_timer = lv_img_create(cont_timer);
     lv_img_set_src(img_timer, &timer_32);
-    lv_obj_set_style_img_recolor(img_timer, lv_color_hex(0xFF1493), LV_PART_MAIN);  // Pink theme
+    lv_obj_set_style_img_recolor(img_timer, lv_color_hex(0xFFFFFF), LV_PART_MAIN);   
     lv_obj_set_style_img_recolor_opa(img_timer, LV_OPA_COVER, LV_PART_MAIN);
 
     // Timer value
     label_timer = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer, "30");
+    //lv_label_set_text(label_timer, "30");
+    lv_label_set_text_fmt(label_timer, "%d", HRV_MEASUREMENT_DURATION_S);
     lv_obj_add_style(label_timer, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_pad_left(label_timer, 8, LV_PART_MAIN);
@@ -190,7 +193,7 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     lv_obj_t *label_timer_unit = lv_label_create(cont_timer);
     lv_label_set_text(label_timer_unit, "s");
     lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFF1493), LV_PART_MAIN);  // Pink accent
+    lv_obj_set_style_text_color(label_timer_unit, lv_color_white(), LV_PART_MAIN);  
 
     // CENTRAL ZONE: ECG Chart (positioned in center area - similar to scr_ecg_scr2)
     chart_ecg = lv_chart_create(scr_hrv_eval_progress);
@@ -215,11 +218,11 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     lv_obj_set_style_pad_all(chart_ecg, 5, LV_PART_MAIN);
     
     // Create series for ECG data - pink theme for HRV
-    ser_ecg = lv_chart_add_series(chart_ecg, lv_color_hex(0xFF1493), LV_CHART_AXIS_PRIMARY_Y);
+    ser_ecg = lv_chart_add_series(chart_ecg, lv_color_hex(0x8B0000), LV_CHART_AXIS_PRIMARY_Y);
     
     // Configure line series styling - pink theme for HRV measurement
     lv_obj_set_style_line_width(chart_ecg, 3, LV_PART_ITEMS);
-    lv_obj_set_style_line_color(chart_ecg, lv_color_hex(0xFF1493), LV_PART_ITEMS);
+    lv_obj_set_style_line_color(chart_ecg, lv_color_hex(0x8B0000), LV_PART_ITEMS);
     lv_obj_set_style_line_opa(chart_ecg, LV_OPA_COVER, LV_PART_ITEMS);
     lv_obj_set_style_line_rounded(chart_ecg, false, LV_PART_ITEMS);
     
@@ -290,4 +293,107 @@ void gesture_down_scr_spl_hrv_eval_progress(void)
     
     // Return to HRV home screen
     hpi_load_screen(SCR_HRV, SCROLL_DOWN);
+}
+
+void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_lead_off)
+{
+    // Early validation - LVGL 9.2 best practice
+    if (chart_ecg == NULL || ser_ecg == NULL || data_ecg == NULL || num_samples <= 0) {
+        return;
+    }
+
+    // Hide "Place fingers" message when ECG starts plotting
+    if (label_ecg_lead_off != NULL) {
+        lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Performance optimization: Skip processing if chart is hidden
+    if (lv_obj_has_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN)) {
+        return;
+    }
+
+    // Batch processing for efficiency
+    for (int i = 0; i < num_samples; i++)
+    {
+        batch_data[batch_count++] = data_ecg[i];
+        
+        // Process batch when full or at end of samples
+        if (batch_count >= 32 || i == num_samples - 1) {
+            // Process batch
+            for (uint32_t j = 0; j < batch_count; j++) {
+                lv_chart_set_next_value(chart_ecg, ser_ecg, batch_data[j]);
+                
+                // Track min/max for auto-scaling
+                if (batch_data[j] < y_min_ecg) y_min_ecg = batch_data[j];
+                if (batch_data[j] > y_max_ecg) y_max_ecg = batch_data[j];
+            }
+            
+            sample_counter += batch_count; // Fix: Update sample counter correctly
+            batch_count = 0;
+        }
+    }
+    
+    // Auto-scaling logic
+    if (sample_counter % RANGE_UPDATE_INTERVAL == 0) {
+        if (y_max_ecg > y_min_ecg) {
+            float range = y_max_ecg - y_min_ecg;
+            float margin = range * 0.1f; // 10% margin
+            
+            int32_t new_min = (int32_t)(y_min_ecg - margin);
+            int32_t new_max = (int32_t)(y_max_ecg + margin);
+            
+            // Ensure reasonable minimum range
+            if ((new_max - new_min) < 1000) {
+                int32_t center = (new_min + new_max) / 2;
+                new_min = center - 500;
+                new_max = center + 500;
+            }
+            
+            lv_chart_set_range(chart_ecg, LV_CHART_AXIS_PRIMARY_Y, new_min, new_max);
+        }
+        
+        // Reset for next interval
+        y_min_ecg = 10000;
+        y_max_ecg = -10000;
+    }
+}
+void scr_ecg_lead_on_off_handler_hrv(bool lead_on_off)
+{
+    LOG_INF("Screen handler called with lead_on_off=%s", lead_on_off ? "OFF" : "ON");
+    
+    if (label_ecg_lead_off == NULL) {
+        LOG_WRN("label_info_hrv is NULL, screen handler returning early");
+        return;
+    }
+
+    // Update lead state tracking (thread-safe)
+    k_mutex_lock(&Lead_on_off_handler_mutex, K_FOREVER);
+    lead_on_detected = !lead_on_off;  // ecg_lead_off == 0 means leads are ON
+    bool current_timer_running = timer_running;
+    bool current_timer_paused = timer_paused;
+    k_mutex_unlock(&Lead_on_off_handler_mutex);
+
+    if (lead_on_off == false)  // Lead ON condition (ecg_lead_off == false)
+    {
+        LOG_INF("Handling Lead ON: showing chart and hiding info label");
+        
+        // Show the chart immediately when leads are detected
+        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+        
+        // Hide the info label - timer update will manage its visibility during stabilization
+        lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+    }
+    else  // Lead OFF condition (ecg_lead_off == true)
+    {
+        LOG_INF("Handling Lead OFF: showing info label and hiding chart");
+        lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+        
+        // Update message based on timer state
+        if (current_timer_running && !current_timer_paused) {
+            lv_label_set_text(label_ecg_lead_off, "Leads disconnected\nTimer paused - reconnect to continue");
+        } else {
+            lv_label_set_text(label_ecg_lead_off, "Place fingers on electrodes\nTimer will start automatically");
+        }
+    }
 }
