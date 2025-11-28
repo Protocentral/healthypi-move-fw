@@ -80,6 +80,8 @@ K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
 K_SEM_DEFINE(sem_gsr_lead_on, 0, 1);
 K_SEM_DEFINE(sem_gsr_lead_off, 0, 1);
 
+ZBUS_CHAN_DECLARE(gsr_status_chan);
+
 // Semaphore for lead reconnection during recording (triggers re-stabilization)
 K_SEM_DEFINE(sem_ecg_lead_on_stabilize, 0, 1);
 
@@ -221,6 +223,8 @@ static bool ecg_active = false;
 static bool gsr_active = false;  // Independent GSR (BioZ) state
 static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
 static bool gsr_contact_ok = false;
+
+static bool prev_gsr_contact_ok = false; // Track previous contact state
 
 static uint16_t m_ecg_hr = 0;
 
@@ -375,7 +379,7 @@ void hpi_gsr_reset_countdown_timer(void)
         .active = false,  // Not active since timer just reset
     };
 
-     extern const struct zbus_channel gsr_status_chan;
+     //extern const struct zbus_channel gsr_status_chan;
                 zbus_chan_pub(&gsr_status_chan, &gsr_stat, K_NO_WAIT);
    // zbus_chan_pub(&gsr_status_chan, &gsr_stat, K_NO_WAIT);
 
@@ -603,8 +607,6 @@ static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
         LOG_INF("BIOZ Lead ON detected (skin contact OK)");
         k_sem_give(&sem_gsr_lead_on);
          gsr_contact_ok = true;
-
-       // gsr_measurement_start_time = k_uptime_get();
     }
 
     if (get_gsr_active()) {
@@ -773,6 +775,7 @@ static void st_ecg_idle_entry(void *o)
 
             gsr_measurement_start_time = k_uptime_get();
             gsr_measurement_in_progress = true;
+            prev_gsr_contact_ok = gsr_contact_ok; // Initialize previous state
             k_timer_start(&tmr_bioz_sampling, K_MSEC(BIOZ_SAMPLING_INTERVAL_MS), K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
             LOG_INF("GSR (BioZ) measurement started successfully");
         } else {
@@ -800,48 +803,56 @@ static void st_ecg_idle_entry(void *o)
     }
     
     // Auto-complete GSR measurement after duration
-    if (gsr_measurement_in_progress) {
 
+
+    if (gsr_measurement_in_progress)
+    {
+        // Detect skin contact change
         if (!gsr_contact_ok) {
-        hpi_gsr_reset_countdown_timer();
-        // <<< IMPORTANT: Prevent countdown
+            // No contact → reset timer display to 30 s
+            hpi_gsr_reset_countdown_timer();
+        } else if (!prev_gsr_contact_ok && gsr_contact_ok) {
+            // Contact regained → restart countdown from 30 s
+            gsr_measurement_start_time = k_uptime_get();
+            gsr_last_status_pub_s = 0;
+            LOG_INF("GSR contact regained: countdown restarted from %d s", GSR_MEASUREMENT_DURATION_S);
         }
-        else
-        {
-          int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
-          if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
-            LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
-            hw_max30001_gsr_disable();
-            hpi_data_set_gsr_measurement_active(false);
-            hpi_data_set_gsr_record_active(false);   //  Stop recording
+        prev_gsr_contact_ok = gsr_contact_ok;
 
-            gsr_measurement_in_progress = false;
-            if (!get_ecg_active()) {
-                k_timer_stop(&tmr_bioz_sampling);
-            }
-            
-            // Return to GSR home screen (no results to display for live view only)
-            hpi_load_screen(SCR_GSR, SCROLL_DOWN);
-            
-        }
-        else {
-            // Publish status once per second via ZBus
-            uint32_t elapsed_s = elapsed_ms / 1000;
-            if (elapsed_s != gsr_last_status_pub_s && elapsed_s <= GSR_MEASUREMENT_DURATION_S) {
-                gsr_last_status_pub_s = elapsed_s;
-#if defined(CONFIG_HPI_GSR_SCREEN)
+        // Countdown logic
+        if (gsr_contact_ok) 
+        {
+            int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
+            if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
+                // Measurement complete
+                LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
+                hw_max30001_gsr_disable();
+                hpi_data_set_gsr_measurement_active(false);
+                hpi_data_set_gsr_record_active(false);
+
+                gsr_measurement_in_progress = false;
+                if (!get_ecg_active()) {
+                    k_timer_stop(&tmr_bioz_sampling);
+                }
+                hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+            } else {
+                // Publish countdown status
+                uint32_t elapsed_s = elapsed_ms / 1000;
+                if (elapsed_s != gsr_last_status_pub_s && elapsed_s <= GSR_MEASUREMENT_DURATION_S) {
+                    gsr_last_status_pub_s = elapsed_s;
+
+                #if defined(CONFIG_HPI_GSR_SCREEN)
                 struct hpi_gsr_status_t gsr_status = {
-                    .elapsed_s = (uint16_t)elapsed_s,
-                    .remaining_s = (uint16_t)((elapsed_s < GSR_MEASUREMENT_DURATION_S) ? (GSR_MEASUREMENT_DURATION_S - elapsed_s) : 0),
-                    .total_s = GSR_MEASUREMENT_DURATION_S,
-                    .active = true,
+                .elapsed_s = (uint16_t)elapsed_s,
+                .remaining_s = (uint16_t)(GSR_MEASUREMENT_DURATION_S - elapsed_s),
+                .total_s = GSR_MEASUREMENT_DURATION_S,
+                .active = true,
                 };
-                extern const struct zbus_channel gsr_status_chan;
                 zbus_chan_pub(&gsr_status_chan, &gsr_status, K_NO_WAIT);
-#endif
+                #endif
+              }
             }
         }
-    }
     }
 }
 
