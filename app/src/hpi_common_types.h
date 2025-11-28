@@ -325,7 +325,7 @@ struct hpi_gsr_status_t
 };
 
 // HRV (Heart Rate Variability) evaluation - stores R-to-R intervals for analysis
-#define HRV_MAX_INTERVALS 300  // Maximum R-to-R intervals to store (typically ~5 minutes @ ~60 bpm)
+#define HRV_MAX_INTERVALS 600  // Maximum R-to-R intervals to store (typically ~5 minutes @ ~60 bpm)
 
 struct hpi_hrv_interval_t
 {
