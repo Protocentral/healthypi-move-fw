@@ -179,7 +179,6 @@ static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining
 
 // @brief HRV Screen variables
 extern struct k_sem sem_hrv_eval_complete;
-static bool m_hrv_lead_on_off = true;  // true = leads OFF initially
 
 
 struct s_disp_object
@@ -951,6 +950,18 @@ static void hpi_disp_update_screens(void)
          {
             hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
          }
+         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
+         {
+            LOG_INF("HRV Screen: Lead ON detected ");
+            scr_hrv_lead_on_off_handler(false);  
+         }
+         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
+         {
+            LOG_INF("HRV Screen: Lead OFF detected");
+            scr_hrv_lead_on_off_handler(true);   
+         }
+         lv_disp_trig_activity(NULL);
+        break;
 
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
