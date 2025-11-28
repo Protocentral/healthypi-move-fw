@@ -75,17 +75,20 @@ extern lv_style_t style_numeric_large;
 K_MUTEX_DEFINE(Lead_on_off_handler_mutex);
 
 // HRV evaluation parameters
-#define HRV_MEASUREMENT_DURATION_S 60  // 30 seconds
+#define HRV_MEASUREMENT_DURATION_S 360  // 30 seconds
 
 // R-to-R interval data
 extern volatile uint16_t hrv_interval_count;
 extern struct hpi_hrv_interval_t hrv_intervals[];
 
+extern bool hrv_measurement_in_progress ;
 // Track measurement state
-static int64_t hrv_measurement_start_time = 0;
+ static int64_t hrv_measurement_start_time = 0;
+//int64_t hrv_measurement_start_time = 0;
 static bool scr_hrv_progress_active = false;  // Track if screen is currently active
 
-static void hrv_progress_update_timer_cb(lv_timer_t *timer)
+
+static void  hrv_progress_update_timer_cb(lv_timer_t *timer)
 {
     // Check if screen is still active before updating
     if (!scr_hrv_progress_active) {
@@ -108,9 +111,12 @@ static void hrv_progress_update_timer_cb(lv_timer_t *timer)
     if (hrv_measurement_start_time == 0) {
         hrv_measurement_start_time = k_uptime_get();
     }
-    
-    // Calculate elapsed time from screen creation
-    int64_t now = k_uptime_get();
+
+    int now = k_uptime_get(); 
+    // if(timer_paused)
+    // {
+    //     hrv_measurement_start_time = now;
+    // }
     uint32_t elapsed_ms = (now - hrv_measurement_start_time);
     uint32_t elapsed_s = elapsed_ms / 1000;
     uint32_t remaining_s = (elapsed_s >= HRV_MEASUREMENT_DURATION_S) ? 0 : (HRV_MEASUREMENT_DURATION_S - elapsed_s);
@@ -120,7 +126,6 @@ static void hrv_progress_update_timer_cb(lv_timer_t *timer)
     
     // Update progress arc (0-30 range, counting down from 30 to 0)
     if (arc_hrv_zone != NULL) {
-        // lv_arc_set_value(arc_hrv_zone, remaining_s);
         lv_arc_set_value(arc_hrv_zone, remaining_s);
     }
     
@@ -357,43 +362,42 @@ void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_
         y_max_ecg = -10000;
     }
 }
-void scr_ecg_lead_on_off_handler_hrv(bool lead_on_off)
+void scr_hrv_lead_on_off_handler(bool lead_off)
 {
-    LOG_INF("Screen handler called with lead_on_off=%s", lead_on_off ? "OFF" : "ON");
-    
-    if (label_ecg_lead_off == NULL) {
-        LOG_WRN("label_info_hrv is NULL, screen handler returning early");
+    LOG_INF("HRV Screen handler: lead_off=%s", lead_off ? "true" : "false");
+
+    if (!label_ecg_lead_off || !chart_ecg)
+    {
+        LOG_WRN("UI elements NULL, skipping update");
         return;
     }
 
-    // Update lead state tracking (thread-safe)
     k_mutex_lock(&Lead_on_off_handler_mutex, K_FOREVER);
-    lead_on_detected = !lead_on_off;  // ecg_lead_off == 0 means leads are ON
-    bool current_timer_running = timer_running;
-    bool current_timer_paused = timer_paused;
+    lead_on_detected = !lead_off; 
     k_mutex_unlock(&Lead_on_off_handler_mutex);
 
-    if (lead_on_off == false)  // Lead ON condition (ecg_lead_off == false)
-    {
-        LOG_INF("Handling Lead ON: showing chart and hiding info label");
-        
-        // Show the chart immediately when leads are detected
+    if (!lead_off) { 
         lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-        
-        // Hide the info label - timer update will manage its visibility during stabilization
         lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-    }
-    else  // Lead OFF condition (ecg_lead_off == true)
-    {
-        LOG_INF("Handling Lead OFF: showing info label and hiding chart");
+        if (hrv_measurement_in_progress && timer_paused)
+         {
+            timer_paused = false;
+            timer_running = true;
+             lv_timer_resume(hrv_progress_timer);        
+        }
+    } else 
+    { 
         lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-        
-        // Update message based on timer state
-        if (current_timer_running && !current_timer_paused) {
+        if (hrv_measurement_in_progress && !timer_paused && hrv_progress_timer != NULL) {
+            timer_paused = true;
+            timer_running = false;
+           // hpi_data_reset_hrv_record_buffer(); // Reset HRV data buffer on lead-off
+             lv_timer_pause(hrv_progress_timer);
+            LOG_INF("HRV Timer paused (Leads OFF)");
             lv_label_set_text(label_ecg_lead_off, "Leads disconnected\nTimer paused - reconnect to continue");
-        } else {
-            lv_label_set_text(label_ecg_lead_off, "Place fingers on electrodes\nTimer will start automatically");
         }
+        else 
+            lv_label_set_text(label_ecg_lead_off,"Place fingers on electrodes\nTimer will start automatically");
     }
 }
