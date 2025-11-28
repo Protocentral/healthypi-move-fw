@@ -406,8 +406,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32_t arg2, uin
 static void hrv_update_display(void);
 void hrv_check_and_transition(void);
 void scr_hrv_measure_btn_event_handler(lv_event_t *e);
-static void hrv_check_timer_handler(struct k_timer *timer);
-static void hrv_check_and_transition_work(struct k_work *work);
+
 
 //HRV frequnecy screen functions
 static void lvgl_update_cb(void *user_data);
@@ -506,17 +505,7 @@ extern uint16_t m_user_height;
 extern uint16_t m_user_weight;
 
 // HRV plot screen functions
-void draw_scr_ecg_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
-static void ecg_chart_reset_performance_counters_hrv(void);
-void hpi_ecg_disp_do_set_scale_hrv(int disp_window_size);
-void hpi_ecg_disp_add_samples_hrv(int num_samples);
-void hpi_ecg_disp_update_hr_hrv(int hr);
-void hpi_ecg_disp_update_timer_hrv(int time_left);
-void hpi_ecg_timer_start_hrv(void);
-void hpi_ecg_timer_pause_hrv(void);
-void hpi_ecg_timer_reset_hrv(void);
-bool hpi_ecg_timer_is_running_hrv(void);
 void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
-void scr_ecg_lead_on_off_handler_hrv(bool lead_on_off);
+void scr_hrv_lead_on_off_handler(bool lead_off);
 void gesture_down_scr_ecg_hrv(void);
 static void scr_hrv_btn_start_handler(lv_event_t *e);

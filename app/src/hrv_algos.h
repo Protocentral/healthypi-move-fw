@@ -32,9 +32,9 @@
 #include "arm_math.h"
 
 #define HRV_LIMIT 120
-#define MAX_RR_INTERVALS 300       // Maximum RR intervals to process
+#define MAX_RR_INTERVALS 600       // Maximum RR intervals to process
 #define INTERP_FS 4.0f             // Interpolation sampling frequency (Hz)
-#define FFT_SIZE 64                // Must be power of 2
+#define FFT_SIZE 256                // Must be power of 2
 #define WELCH_OVERLAP 0.5f         // 50% overlap for Welch method
 
 // Frequency band definitions (Hz)
