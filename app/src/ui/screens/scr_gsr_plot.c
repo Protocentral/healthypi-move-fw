@@ -232,7 +232,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     label_gsr_error = lv_label_create(scr_gsr_plot);
      lv_label_set_long_mode(label_gsr_error, LV_LABEL_LONG_WRAP);
      lv_obj_set_width(label_gsr_error, 300);
-    lv_label_set_text(label_gsr_error, "Place fingers on electrodes\nTimer will start automatically");
+    lv_label_set_text(label_gsr_error, "Make skin contact with the electrodes\nTimer will start automatically");
     lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, 0); // above chart
     lv_obj_add_style(label_gsr_error, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_gsr_error, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -261,7 +261,7 @@ void scr_gsr_lead_on_off_handler(bool lead_off)
     } else {
         lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(label_info, "Place fingers on electrodes\nTimer will start automatically");
+        lv_label_set_text(label_info, "Make skin contact with the electrodes\nTimer will start automatically");
     }
 }
 
