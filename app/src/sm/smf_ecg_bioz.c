@@ -76,22 +76,19 @@ K_SEM_DEFINE(sem_hrv_eval_cancel, 0, 1);
 K_SEM_DEFINE(sem_hrv_eval_complete, 0, 1);
 
 // HRV Measurement Timing (configurable duration, default 30 seconds for quick evaluation)
-#define HRV_MEASUREMENT_DURATION_S 360  // 30 seconds for quick HRV measurement with ECG plot
+#define HRV_MEASUREMENT_DURATION_S 60  // 30 seconds for quick HRV measurement with ECG plot
 static int64_t hrv_measurement_start_time = 0;
-//extern int64_t hrv_measurement_start_time;
-bool hrv_measurement_in_progress = false;
+static bool hrv_measurement_in_progress = false;
 static uint32_t hrv_last_status_pub_s = 0; // Last published elapsed seconds
-//bool timer_paused = false;
 
 // HRV state variables managed by data_module.c
 extern struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];
 extern volatile uint16_t hrv_interval_count;
-
-// K_SEM_DEFINE(sem_hrv_lead_on, 0, 1);
-// K_SEM_DEFINE(sem_hrv_lead_off, 0, 1);
-// static bool m_hrv_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
-
+static bool contact = false;
+static bool Prev_contact = false;
+ZBUS_CHAN_DECLARE(hrv_stat_chan);
 K_MUTEX_DEFINE(hrv_eval_mutex);
+K_MUTEX_DEFINE(hrv_timer_mutex);
 
 K_SEM_DEFINE(sem_ecg_lead_on, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
@@ -370,6 +367,19 @@ void hpi_ecg_reset_countdown_timer(void)
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 }
 
+// Function to reser HRV timer countdown to full duration (configurable)
+void hpi_hrv_reset_countdown_timer(void)
+{
+    struct hpi_hrv_status_t hrv_stat = {
+        .elapsed_s = 0,
+        .remaining_s = HRV_MEASUREMENT_DURATION_S,
+        .total_s = HRV_MEASUREMENT_DURATION_S,
+        .active = true
+       
+    };
+     zbus_chan_pub(&hrv_stat_chan, &hrv_stat, K_NO_WAIT);
+}
+
 static void set_ecg_stabilization_values(int stabilization_countdown, bool complete)
 {
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
@@ -478,6 +488,7 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
                         
                         // Signal display thread for UI update
                         LOG_INF("ECG SMF: Giving sem_ecg_lead_off semaphore");
+                        contact = false;
                         k_sem_give(&sem_ecg_lead_off);
                         
                         // Reset debounce state
@@ -504,6 +515,7 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
                 
                 // Signal display thread for UI update  
                 LOG_INF("ECG SMF: Giving sem_ecg_lead_on semaphore");
+                contact = true;
                 k_sem_give(&sem_ecg_lead_on);
             }
             // else: already in lead-on state, nothing to do
@@ -805,6 +817,7 @@ static void st_ecg_idle_entry(void *o)
         LOG_INF("Starting HRV evaluation for %d intervals", HRV_MEASUREMENT_DURATION_S);
         int ret = hw_max30001_ecg_enable();
         if (ret == 0) {
+            if(contact)
             hpi_data_set_hrv_eval_active(true);
             hrv_measurement_start_time = k_uptime_get();
             hrv_measurement_in_progress = true;
@@ -834,39 +847,66 @@ static void st_ecg_idle_entry(void *o)
         }
     }
     // Auto-complete HRV evaluation after duration
-    if (hrv_measurement_in_progress) {
-        int64_t now_ms    = k_uptime_get();
-        int64_t elapsed_ms = k_uptime_get() - hrv_measurement_start_time;
-        if (elapsed_ms >= (HRV_MEASUREMENT_DURATION_S * 1000)) {
+    if (hrv_measurement_in_progress)
+    {
+        bool contact_lost  =  contact;
+        bool contact_gained = (!Prev_contact && contact);
 
-             g_hrv_result.num_intervals          = hrv_interval_count;
-             g_hrv_result.total_duration_ms      = (uint32_t)elapsed_ms;
-             g_hrv_result.measurement_start_ts   = hw_get_synced_system_time();      // or stored earlier
-             g_hrv_result.measurement_complete_ts= g_hrv_result.measurement_start_ts+ (elapsed_ms / 1000);
-
-            LOG_INF("HRV evaluation complete after %d seconds - collected %d intervals", 
-            HRV_MEASUREMENT_DURATION_S, hrv_interval_count);
-            hw_max30001_ecg_disable();
-            hpi_data_set_hrv_eval_active(false);
-            hrv_measurement_in_progress = false;
-            if (!get_ecg_active()) {
-                k_timer_stop(&tmr_ecg_sampling);
-            }
-            hpi_data_hrv_record_to_file(true);
-            k_sem_give(&sem_hrv_eval_complete);
+  
+        if (!contact_lost)
+        {
+            hpi_hrv_reset_countdown_timer(); 
         }
-        else {
-            // Publish status once per second via ZBus (if HRV status channel defined)
-            uint32_t elapsed_s = elapsed_ms / 1000;
-            if (elapsed_s != hrv_last_status_pub_s && elapsed_s <= HRV_MEASUREMENT_DURATION_S) {
-                hrv_last_status_pub_s = elapsed_s;
-                // Status can be used for progress display if needed
-                LOG_DBG("HRV evaluation progress: %d/%d seconds, %d intervals captured", 
+
+        if (contact_gained)
+        {
+            hrv_measurement_start_time = k_uptime_get();
+            hrv_last_status_pub_s = 0;
+            LOG_INF("HRV contact regained → countdown restarted (%d s)", HRV_MEASUREMENT_DURATION_S);
+        }
+
+        Prev_contact = contact;
+        if(contact)
+        {
+                int64_t elapsed_ms = k_uptime_get() - hrv_measurement_start_time;
+                if (elapsed_ms >= (HRV_MEASUREMENT_DURATION_S * 1000))
+                {
+                    LOG_INF("HRV evaluation complete after %d seconds - collected %d intervals", 
+                    HRV_MEASUREMENT_DURATION_S, hrv_interval_count);
+                    hw_max30001_ecg_disable();
+                    hpi_data_set_hrv_eval_active(false);
+                    hrv_measurement_in_progress = false;
+                    if (!get_ecg_active()) {
+                        k_timer_stop(&tmr_ecg_sampling);
+                    }
+                    hpi_data_hrv_record_to_file(true);
+                    k_sem_give(&sem_hrv_eval_complete);
+                
+                }
+                else 
+                {
+                    // Publish status once per second via ZBus (if HRV status channel defined)
+                    uint32_t elapsed_s = elapsed_ms / 1000;
+                    if (elapsed_s != hrv_last_status_pub_s && elapsed_s <= HRV_MEASUREMENT_DURATION_S)
+                    {
+                        hrv_last_status_pub_s = elapsed_s;
+                        // Status can be used for progress display if needed
+                        struct hpi_hrv_status_t hrv_status = {
+                            .elapsed_s = (uint16_t)elapsed_s,
+                            .remaining_s = (uint16_t)((elapsed_s < HRV_MEASUREMENT_DURATION_S) ? (HRV_MEASUREMENT_DURATION_S - elapsed_s) : 0),
+                            .total_s = HRV_MEASUREMENT_DURATION_S,
+                            .active = true,
+                        };
+                        zbus_chan_pub(&hrv_stat_chan, &hrv_status, K_NO_WAIT);
+                        LOG_DBG("HRV evaluation progress: %d/%d seconds, %d intervals captured", 
                         elapsed_s, HRV_MEASUREMENT_DURATION_S, hrv_interval_count);
-            }
-        }
+                    }
+                }
+                
+            
+          }
     }
-}
+} 
 struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void)
 {
                 return g_hrv_result;   // return by value
