@@ -509,3 +509,6 @@ void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_
 void scr_hrv_lead_on_off_handler(bool lead_off);
 void gesture_down_scr_ecg_hrv(void);
 static void scr_hrv_btn_start_handler(lv_event_t *e);
+void hpi_hrv_timer_reset(void);
+void hpi_hrv_timer_start(void);
+void hpi_hrv_reset_countdown_timer(void);
