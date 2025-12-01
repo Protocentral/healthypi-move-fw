@@ -432,7 +432,8 @@ void hpi_data_reset_hrv_record_buffer(void)
     hrv_interval_count = 0;
     memset(hrv_intervals, 0, sizeof(hrv_intervals));
     LOG_INF("HRV recording buffer reset (discard incomplete data)");
-     k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    is_hrv_eval_active = false;
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
 }
 
 void data_thread(void)
