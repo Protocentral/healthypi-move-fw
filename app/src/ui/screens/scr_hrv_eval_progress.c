@@ -42,8 +42,6 @@
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv_eval_progress, LOG_LEVEL_DBG);
 
 lv_obj_t *scr_hrv_eval_progress;
-static lv_timer_t *hrv_progress_timer = NULL;
-
 // UI elements
 static lv_obj_t *label_timer = NULL;
 static lv_obj_t *label_ecg_lead_off = NULL;
@@ -51,6 +49,7 @@ static lv_obj_t *chart_ecg = NULL;
 static lv_chart_series_t *ser_ecg = NULL;
 static lv_obj_t *arc_hrv_zone = NULL;
 static lv_obj_t *label_intervals_count = NULL;
+//static lv_obj_t *label_ecg_info = NULL;
 
 // ECG chart state
 static float y_max_ecg = -10000;
@@ -73,24 +72,22 @@ extern lv_style_t style_caption;
 extern lv_style_t style_numeric_large;
 
 K_MUTEX_DEFINE(Lead_on_off_handler_mutex);
+extern struct k_sem sem_hrv_eval_cancel;
 
 // HRV evaluation parameters
-#define HRV_MEASUREMENT_DURATION_S 360  // 30 seconds
+#define HRV_MEASUREMENT_DURATION_S 60  // 30 seconds
 
 // R-to-R interval data
 extern volatile uint16_t hrv_interval_count;
 extern struct hpi_hrv_interval_t hrv_intervals[];
 
-extern bool hrv_measurement_in_progress ;
 // Track measurement state
- static int64_t hrv_measurement_start_time = 0;
-//int64_t hrv_measurement_start_time = 0;
+static int64_t hrv_measurement_start_time = 0;
 static bool scr_hrv_progress_active = false;  // Track if screen is currently active
 
-
-static void  hrv_progress_update_timer_cb(lv_timer_t *timer)
+void hpi_hrv_disp_update_timer(uint16_t remaining_s)
 {
-    // Check if screen is still active before updating
+     // Check if screen is still active before updating
     if (!scr_hrv_progress_active) {
         return;
     }
@@ -106,37 +103,21 @@ static void  hrv_progress_update_timer_cb(lv_timer_t *timer)
         scr_hrv_progress_active = false;
         return;
     }
-    
-    // Use screen's own measurement start time
-    if (hrv_measurement_start_time == 0) {
-        hrv_measurement_start_time = k_uptime_get();
+    // Optimize with caching to avoid unnecessary LVGL updates
+    static uint16_t last_remaining = 0xFFFF;
+    if (remaining_s != last_remaining) {
+        last_remaining = remaining_s;
+        lv_label_set_text_fmt(label_timer, "%02u", remaining_s);
+        if (arc_hrv_zone != NULL) {
+            lv_arc_set_value(arc_hrv_zone, remaining_s);
+        }
     }
 
-    int now = k_uptime_get(); 
-    // if(timer_paused)
-    // {
-    //     hrv_measurement_start_time = now;
-    // }
-    uint32_t elapsed_ms = (now - hrv_measurement_start_time);
-    uint32_t elapsed_s = elapsed_ms / 1000;
-    uint32_t remaining_s = (elapsed_s >= HRV_MEASUREMENT_DURATION_S) ? 0 : (HRV_MEASUREMENT_DURATION_S - elapsed_s);
-    
-    // Update timer display
-    lv_label_set_text_fmt(label_timer, "%d", remaining_s);
-    
-    // Update progress arc (0-30 range, counting down from 30 to 0)
-    if (arc_hrv_zone != NULL) {
-        lv_arc_set_value(arc_hrv_zone, remaining_s);
-    }
-    
     // Update interval count display
     if (label_intervals_count != NULL) {
         lv_label_set_text_fmt(label_intervals_count, "Intervals: %d", hrv_interval_count);
     }
-    // Lead status display is updated by the state machine via semaphores
-    // This timer callback focuses on timing and progress updates
 }
-
 void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_hrv_eval_progress = lv_obj_create(NULL);
@@ -243,8 +224,9 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_CLICK_FOCUSABLE);
     
     // Initialize chart with baseline values
-    lv_chart_set_all_value(chart_ecg, ser_ecg, 0);
-    
+    lv_chart_set_all_value(chart_ecg, ser_ecg, 0); 
+    lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+            
     // Lead status display - overlay on chart area
     label_ecg_lead_off = lv_label_create(scr_hrv_eval_progress);
     lv_label_set_long_mode(label_ecg_lead_off, LV_LABEL_LONG_WRAP);
@@ -271,12 +253,6 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     lv_obj_set_style_text_align(label_intervals_count, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_intervals_count, lv_color_hex(COLOR_SUCCESS_GREEN), LV_PART_MAIN);
 
-    // Start progress update timer - update every 500ms
-    if (hrv_progress_timer != NULL) {
-        lv_timer_del(hrv_progress_timer);
-    }
-    hrv_progress_timer = lv_timer_create(hrv_progress_update_timer_cb, 500, NULL);
-
     hpi_disp_set_curr_screen(SCR_SPL_HRV_EVAL_PROGRESS);
     hpi_show_screen(scr_hrv_eval_progress, m_scroll_dir);
 }
@@ -285,17 +261,8 @@ void gesture_down_scr_spl_hrv_eval_progress(void)
 {
     // Mark screen as inactive to prevent timer callback from updating
     scr_hrv_progress_active = false;
-    
-    // Clean up timer
-    if (hrv_progress_timer != NULL) {
-        lv_timer_del(hrv_progress_timer);
-        hrv_progress_timer = NULL;
-    }
-
-    // Handle gesture down event - cancel HRV evaluation
-    extern struct k_sem sem_hrv_eval_cancel;
+    hpi_hrv_timer_reset();
     k_sem_give(&sem_hrv_eval_cancel);
-    
     // Return to HRV home screen
     hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }
@@ -305,11 +272,6 @@ void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_
     // Early validation - LVGL 9.2 best practice
     if (chart_ecg == NULL || ser_ecg == NULL || data_ecg == NULL || num_samples <= 0) {
         return;
-    }
-
-    // Hide "Place fingers" message when ECG starts plotting
-    if (label_ecg_lead_off != NULL) {
-        lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
     }
 
     // Performance optimization: Skip processing if chart is hidden
@@ -365,39 +327,51 @@ void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_
 void scr_hrv_lead_on_off_handler(bool lead_off)
 {
     LOG_INF("HRV Screen handler: lead_off=%s", lead_off ? "true" : "false");
-
-    if (!label_ecg_lead_off || !chart_ecg)
-    {
-        LOG_WRN("UI elements NULL, skipping update");
+    if (label_ecg_lead_off == NULL) {
+        LOG_WRN("label_info is NULL, screen handler returning early");
         return;
     }
 
-    k_mutex_lock(&Lead_on_off_handler_mutex, K_FOREVER);
-    lead_on_detected = !lead_off; 
-    k_mutex_unlock(&Lead_on_off_handler_mutex);
-
-    if (!lead_off) { 
-        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
+    if (!lead_off )  // Lead ON condition (ecg_lead_off == false)
+    {
         lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
-        if (hrv_measurement_in_progress && timer_paused)
-         {
-            timer_paused = false;
-            timer_running = true;
-             lv_timer_resume(hrv_progress_timer);        
-        }
-    } else 
-    { 
+        lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);   
+    }
+    else  // Lead OFF condition (ecg_lead_off == true)
+    {
         lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);
-        if (hrv_measurement_in_progress && !timer_paused && hrv_progress_timer != NULL) {
-            timer_paused = true;
-            timer_running = false;
-           // hpi_data_reset_hrv_record_buffer(); // Reset HRV data buffer on lead-off
-             lv_timer_pause(hrv_progress_timer);
-            LOG_INF("HRV Timer paused (Leads OFF)");
-            lv_label_set_text(label_ecg_lead_off, "Leads disconnected\nTimer paused - reconnect to continue");
+        if (timer_running && !timer_paused) 
+        {
+            lv_label_set_text(label_ecg_lead_off, "Leads disconnected\nReconnect to continue");
+        } 
+        else
+        {
+           lv_label_set_text(label_ecg_lead_off, "Place fingers on electrodes\nTimer will start automatically");
         }
-        else 
-            lv_label_set_text(label_ecg_lead_off,"Place fingers on electrodes\nTimer will start automatically");
+        lv_obj_invalidate(label_ecg_lead_off);
     }
+
+}
+
+void hpi_hrv_timer_start(void)
+{
+    k_mutex_lock(&Lead_on_off_handler_mutex, K_FOREVER);
+    timer_running = true;
+    timer_paused = false;
+    k_mutex_unlock(&Lead_on_off_handler_mutex); 
+    scr_hrv_lead_on_off_handler(false);
+    LOG_INF("HRV timer STARTED - leads detected (running=%s, paused=%s)", 
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+}
+void hpi_hrv_timer_reset(void)
+{
+    k_mutex_lock(&Lead_on_off_handler_mutex, K_FOREVER);
+    timer_running = false;
+    timer_paused = true;
+    lead_on_detected = false;
+    k_mutex_unlock(&Lead_on_off_handler_mutex);
+    
+    LOG_INF("HRV timer RESET - ready for fresh start (running=%s, paused=%s)",
+            timer_running ? "true" : "false", timer_paused ? "true" : "false");
 }
