@@ -179,7 +179,7 @@ static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining
 
 // @brief HRV Screen variables
 extern struct k_sem sem_hrv_eval_complete;
-
+static int m_disp_hrv_timer = 0;
 
 struct s_disp_object
 {
@@ -946,21 +946,52 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
+         hpi_hrv_disp_update_timer(m_disp_hrv_timer);
          if(k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
          {
             hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
          }
          if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
          {
-            LOG_INF("HRV Screen: Lead ON detected ");
-            scr_hrv_lead_on_off_handler(false);  
-         }
-         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
-         {
-            LOG_INF("HRV Screen: Lead OFF detected");
-            scr_hrv_lead_on_off_handler(true);   
-         }
-         lv_disp_trig_activity(NULL);
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
+            scr_hrv_lead_on_off_handler(false);
+          
+            bool is_hrv_active = hpi_data_is_hrv_eval_active();
+            bool was_lead_off = m_lead_on_off;  // Previous state before this update
+            
+            m_lead_on_off = false;              // Update to leads ON
+            
+            LOG_INF("DISPLAY THREAD: HRV active=%s, was_lead_off=%s", 
+                    is_hrv_active ? "true" : "false", 
+                    was_lead_off ? "true" : "false");
+            if(!is_hrv_active)
+            {
+                hpi_data_set_hrv_eval_active(true);
+                 hpi_hrv_timer_start();
+            }
+            else if(was_lead_off)
+            {
+                hpi_hrv_timer_start();
+            }
+            
+        }
+        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore for HRV - calling UI handler");
+            scr_hrv_lead_on_off_handler(true); 
+            m_lead_on_off = true;             
+            bool is_hrv_active = hpi_data_is_hrv_eval_active();
+            LOG_INF("DISPLAY THREAD: HRV record active = %s", is_hrv_active ? "true" : "false");
+            if (is_hrv_active)
+            {
+                hpi_data_reset_hrv_record_buffer();
+                hpi_data_set_hrv_eval_active(false);
+                hpi_hrv_timer_reset();
+
+            }
+        }
+
+        lv_disp_trig_activity(NULL);
         break;
 
     case SCR_SPL_ECG_SCR2:
@@ -1493,6 +1524,14 @@ static void disp_ecg_stat_listener(const struct zbus_channel *chan)
     // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
+
+static void disp_hrv_stat_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
+    m_disp_hrv_timer = hrv_status->remaining_s;
+    // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
+}
+ZBUS_LISTENER_DEFINE(disp_hrv_stat_lis, disp_hrv_stat_listener);
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 static void disp_gsr_stress_listener(const struct zbus_channel *chan)
