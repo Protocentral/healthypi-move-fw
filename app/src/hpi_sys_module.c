@@ -676,6 +676,13 @@ static void sys_ecg_stat_list(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(sys_ecg_stat_lis, sys_ecg_stat_list);
 
+static void sys_hrv_stat_list(const struct zbus_channel *chan)
+{
+    const struct hpi_hrv_status_t *hpi_hrv = zbus_chan_const_msg(chan);
+    g_hpi_last_update.hrv_last_update_ts = hw_get_sys_time_ts();
+}
+ZBUS_LISTENER_DEFINE(sys_hrv_stat_lis, sys_hrv_stat_list);
+
 #define HPI_SYS_THREAD_STACKSIZE 2048
 #define HPI_SYS_THREAD_PRIORITY 5
 
