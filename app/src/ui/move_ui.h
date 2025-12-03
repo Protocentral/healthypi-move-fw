@@ -512,3 +512,4 @@ static void scr_hrv_btn_start_handler(lv_event_t *e);
 void hpi_hrv_timer_reset(void);
 void hpi_hrv_timer_start(void);
 void hpi_hrv_reset_countdown_timer(void);
+void unload_scr_hrv_eval_progress(void);
