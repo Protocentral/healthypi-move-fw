@@ -118,29 +118,36 @@ static void scr_gsr_measure_btn_event_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
-        if (!gsr_measurement_active) {
-            // Start GSR live view - no calculation, just monitoring
-            gsr_measurement_active = true;
-            gsr_measurement_start_ts = k_uptime_get();
-            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_STOP " Stop");
-         //   lv_label_set_text(label_gsr_status, "Live Monitoring");
+        hpi_load_scr_spl(SCR_SPL_PLOT_GSR, SCROLL_UP, (uint32_t)SCR_GSR, 0, 0, 0);
             
-            // Open live plot screen
-            hpi_load_scr_spl(SCR_SPL_PLOT_GSR, SCROLL_UP, (uint32_t)SCR_GSR, 0, 0, 0);
+        // Start GSR live view via semaphore
+        k_msleep(500);  // Allow screen transition
+        k_sem_give(&sem_gsr_start);
+
+        // if (!gsr_measurement_active) {
+        //     // Start GSR live view - no calculation, just monitoring
+        //     gsr_measurement_active = true;
+        //     gsr_measurement_start_ts = k_uptime_get();
+        //     lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_STOP " Stop");
+        //  //   lv_label_set_text(label_gsr_status, "Live Monitoring");
             
-            // Start GSR live view via semaphore
-            k_msleep(500);  // Allow screen transition
-            k_sem_give(&sem_gsr_start);
-        } else {
-            // Stop GSR live view
-            gsr_measurement_active = false;
-            gsr_measurement_start_ts = 0;
-            lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_EYE_OPEN " Live View");
-          //  lv_label_set_text(label_gsr_status, "Live View Only");
+        //     // Open live plot screen
+        //     hpi_load_scr_spl(SCR_SPL_PLOT_GSR, SCROLL_UP, (uint32_t)SCR_GSR, 0, 0, 0);
             
-            // Stop GSR via semaphore
-            k_sem_give(&sem_gsr_cancel);
-        }
+        //     // Start GSR live view via semaphore
+        //     k_msleep(500);  // Allow screen transition
+        //     k_sem_give(&sem_gsr_start);
+        // } else {
+        //     // Stop GSR live view
+        //     gsr_measurement_active = false;
+        //     gsr_measurement_start_ts = 0;
+        //     lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_EYE_OPEN " Live View");
+        //   //  lv_label_set_text(label_gsr_status, "Live View Only");
+            
+        //     // Stop GSR via semaphore
+        //     k_sem_give(&sem_gsr_cancel);
+        // }
+        
     }
 }
 
