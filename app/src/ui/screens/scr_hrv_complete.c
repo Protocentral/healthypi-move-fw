@@ -47,10 +47,14 @@ static void lvgl_update_cb(void *user_data)
 
 // Simplified stress assessment for compact display
 int get_stress_percentage(float lf, float hf) {
-    if (hf <= 0) return 100;
+    
+    if (hf <= 0.0f) return 100;
+
     float ratio = lf / hf;
-    int stress_pct = (int)((ratio / 4.0f) * 100);
-    return stress_pct > 100 ? 100 : stress_pct;
+    float stress = (ratio / (1.0f + ratio)) * 100.0f;
+
+    if (stress > 100.0f) stress = 100.0f;
+    return (int)stress;
 }
 
 static lv_color_t get_stress_arc_color(int stress_percentage) {
