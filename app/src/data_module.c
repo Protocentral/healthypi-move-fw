@@ -260,7 +260,7 @@ void hpi_data_hrv_record_to_file(bool active)
             for (int i = 0; i < hrv_interval_count; i++) {
                     rr_buffer[i] = hrv_intervals[i].rtor_ms;
             }
-
+            
             // Calling calculation function
              hpi_hrv_frequency_compact_update_spectrum(rr_buffer, hrv_interval_count);
 
@@ -398,7 +398,8 @@ void hpi_data_add_hrv_interval(uint16_t rtor_ms)
 {
     k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
     
-    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms > 0 && rtor_ms < 3000) {
+    // if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms > 0 && rtor_ms < 2000) {
+    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms >= 300 && rtor_ms <= 1700) {
         // Detect new beat: RtoR value should change between samples
         // Only add if different from last (to avoid duplicate intervals)
         if (rtor_ms != last_rtor_value) {
