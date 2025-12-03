@@ -76,7 +76,7 @@ K_SEM_DEFINE(sem_hrv_eval_cancel, 0, 1);
 K_SEM_DEFINE(sem_hrv_eval_complete, 0, 1);
 
 // HRV Measurement Timing (configurable duration, default 30 seconds for quick evaluation)
-#define HRV_MEASUREMENT_DURATION_S 60  // 30 seconds for quick HRV measurement with ECG plot
+#define HRV_MEASUREMENT_DURATION_S 120  // 30 seconds for quick HRV measurement with ECG plot
 static int64_t hrv_measurement_start_time = 0;
 static bool hrv_measurement_in_progress = false;
 static uint32_t hrv_last_status_pub_s = 0; // Last published elapsed seconds
