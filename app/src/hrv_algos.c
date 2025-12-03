@@ -56,7 +56,7 @@ static time_domain tm_metrics = {
 
 float hrv_calculate_mean(uint16_t *rr_buffer, int count)
 {
-    uint64_t sum = 0;
+    float sum = 0;
     for( int i = 0; i < count ; i++)
     {
           sum += rr_buffer[i];
@@ -141,17 +141,20 @@ static uint32_t interpolate_rr_intervals(uint16_t *rr_ms, uint32_t num_intervals
  {
     //Convert RR intervals to seconds and create time vector
     rr_time[0] = 0.0f;
-    rr_values[0] = rr_ms[0] / 1000.0f;
+    rr_values[0] = rr_ms[0] / 1000.0f;  // First interval at t=0
     
-    for (uint32_t i = 0; i < num_intervals; i++)
-     {
-        rr_values[i + 1] = rr_ms[i] / 1000.0f;
-        rr_time[i + 1] = rr_time[i] + rr_values[i + 1];
-     }    
+    for (uint32_t i = 1; i < num_intervals; i++) { 
+        rr_values[i] = rr_ms[i] / 1000.0f;
+        rr_time[i] = rr_time[i-1] + rr_values[i-1];    
+    }
 
     // Calculate number of interpolated samples
+    rr_time[num_intervals] = rr_time[num_intervals-1] + rr_values[num_intervals-1];
     float32_t total_time = rr_time[num_intervals];
+   
+    LOG_INF("Total RR time: %.2f seconds", total_time);
     uint32_t num_samples = (uint32_t)(total_time * fs);
+    LOG_INF("Number of interpolated samples: %d", num_samples);
   
     
     if (num_samples > max_interp_samples) {
@@ -174,7 +177,6 @@ static uint32_t interpolate_rr_intervals(uint16_t *rr_ms, uint32_t num_intervals
         if (idx >= num_intervals) 
             break;
         
-        
         // Linear interpolation
         interp_signal[i] = linear_interp(t, rr_time[idx], rr_time[idx + 1],rr_values[idx], rr_values[idx + 1]);
     }
@@ -186,25 +188,41 @@ static uint32_t interpolate_rr_intervals(uint16_t *rr_ms, uint32_t num_intervals
 
 static void create_hanning_window(float32_t *window, uint32_t size) {
     for (uint32_t i = 0; i < size; i++) {
-        window[i] = 0.5f - 0.5f * arm_cos_f32(2.0f * PI * i / (size - 1));
+         window[i] = 0.5f * (1.0f - arm_cos_f32(2.0f * PI * i / (size - 1)));
     }
 }
 
 /* Remove mean from signal using CMSIS-DSP */
 static void remove_mean(float32_t *signal, uint32_t length)
  {
-        float32_t sum = 0.0f;
-
-        for (uint32_t i = 0; i < length; i++) 
-        {
-            sum += signal[i];
-        }
-
-        float32_t mean = sum / length;
-
-        for (uint32_t i = 0; i < length; i++) {
-            signal[i] -= mean;
-        }
+        
+    if (length == 0) return;
+    
+    float32_t sum = 0.0f;
+    
+    // Calculate initial mean
+    for (uint32_t i = 0; i < length; i++) {
+        sum += signal[i];
+    }
+    
+    float32_t initial_mean = sum / length;
+    LOG_DBG("Initial mean: %.6f s (%.1f ms)", initial_mean, initial_mean * 1000.0f);
+    
+    // Remove mean
+    for (uint32_t i = 0; i < length; i++) {
+        signal[i] -= initial_mean;
+    }
+    
+    // Verify mean is now zero
+    sum = 0.0f;
+    for (uint32_t i = 0; i < length; i++) {
+        sum += signal[i];
+    }
+    
+    float32_t final_mean = sum / length;
+    LOG_DBG("Final mean after removal: %.10f s (should be ~0)", final_mean);
+    
+    
 
 }
 
@@ -213,13 +231,19 @@ static void remove_mean(float32_t *signal, uint32_t length)
 static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t *window, float32_t *fft_input,float32_t *fft_output, 
     float32_t *psd,uint32_t fft_size, float32_t fs) 
 {
-      if (signal_len < fft_size) {
-        LOG_WRN("signal_len (%u) < fft_size (%u) -> no PSD", signal_len, fft_size);
-        return;
-      }
+
+    if (signal_len < fft_size) {
+      LOG_WRN("signal_len (%u) < fft_size (%u) -> no PSD", signal_len, fft_size);
+      return;
+    }
     // Initialize PSD to zero
     memset(psd, 0, sizeof(float32_t) * fft_size);
     
+     float32_t window_power = 0.0f;
+    for (uint32_t i = 0; i < fft_size; i++) {
+        window_power += window[i] * window[i];
+    }
+     LOG_DBG("Window power: %.3f", window_power);
     // Calculate step size for 50% overlap
     uint32_t step = fft_size / 2;
     uint32_t num_segments = 0;
@@ -230,6 +254,7 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
     // Select appropriate FFT instance based on size
     switch(fft_size) {
         case 64 : fft_instance = &arm_cfft_sR_f32_len64; break;
+        case 128: fft_instance = &arm_cfft_sR_f32_len128; break;
         case 256:  fft_instance = &arm_cfft_sR_f32_len256; break;
         case 512:  fft_instance = &arm_cfft_sR_f32_len512; break;
         case 1024: fft_instance = &arm_cfft_sR_f32_len1024; break;
@@ -237,11 +262,12 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
     }
     
     // Process overlapping segments
-    for (uint32_t start = 0; start + fft_size <= signal_len; start += step) 
+   // for (uint32_t start = 0; start + fft_size <= signal_len; start += step) 
+   for (uint32_t start = 0; start <= signal_len - fft_size; start += step) 
     {
         // Copy segment and apply window
 
-        for (uint32_t i = 0; i < fft_size; i++) {
+         for (uint32_t i = 0; i < fft_size; i++) {
             float32_t windowed = signal[start + i] * window[i];
             fft_input[2 * i] = windowed;      // Real part
             fft_input[2 * i + 1] = 0.0f;      // Imaginary part
@@ -253,7 +279,8 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
         arm_cfft_f32(fft_instance, fft_output, 0, 1);
         
         // Calculate magnitude squared and accumulate
-        for (uint32_t i = 0; i < fft_size; i++) {
+        for (uint32_t i = 0; i < fft_size; i++) 
+        {
             float32_t real = fft_output[2 * i];
             float32_t imag = fft_output[2 * i + 1];
             psd[i] += (real * real + imag * imag);
@@ -261,15 +288,26 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
         
         num_segments++;
     }
+    LOG_INF("Processed %d segments (signal_len=%u, fft_size=%u, step=%u)", 
+            num_segments, signal_len, fft_size, step);
+
     if (num_segments == 0) {
       LOG_WRN("No PSD segments processed (signal_len=%u, fft_size=%u)", signal_len, fft_size);
       return;
       }
     // Average the PSD and normalize
-    if (num_segments > 0) {
-        //LOG_INF("Number of segments: %d", num_segments);
-        float32_t scale = 1.0f / (num_segments * fs * fft_size);
-        arm_scale_f32(psd, scale, psd, fft_size);
+     LOG_INF("Number of segments: %d", num_segments);
+     float32_t scale = 1.0f / (num_segments * window_power * fs );
+     LOG_DBG("Scaling factor: %.6f (window_power=%.3f, fs=%.1f, N=%d)", scale, window_power, fs, num_segments);
+     arm_scale_f32(psd, scale, psd, fft_size);
+
+    // Double the power for positive frequencies 
+     for (uint32_t i = 1; i < fft_size/2; i++) 
+        psd[i] *= 2.0f;
+
+    // Zero out the negative frequencies 
+    for (uint32_t i = fft_size/2 + 1; i < fft_size; i++) {
+        psd[i] = 0.0f;
     }
 }
 
@@ -288,7 +326,7 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     // Trapezoidal integration
     float32_t power = 0.0f;
     for (uint32_t i = idx_low; i < idx_high; i++) {
-        power += (psd[i] + psd[i + 1]) * 0.5f * df;
+      power += (psd[i] + psd[i + 1]) * 0.5f * df;
     }
     
     // Convert from s^2 to ms^2
@@ -299,14 +337,6 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
 
 void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals)
  {
-
-    //LOG_INF("Updating HRV Frequency Compact Spectrum with %d intervals", num_intervals);
-
-      // for(int i = 0; i < num_intervals ; i++)
-      // {
-      //   LOG_INF("RR interval[%d] : %d",i, rr_intervals[i]);
-      //   k_msleep(10);
-      // }
 
       tm_metrics.mean = hrv_calculate_mean(rr_intervals, num_intervals);
       tm_metrics.sdnn = hrv_calculate_sdnn(rr_intervals, num_intervals);
@@ -328,10 +358,10 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
 
       // Create Hanning window
      create_hanning_window(window, FFT_SIZE);
-
+     
      // Calculate PSD using Welch's method
      calculate_psd_welch(interp_signal, num_interp_samples, window, fft_input, fft_output, psd, FFT_SIZE, INTERP_FS);
-
+    
     // Integrate power in LF, HF bands    
     lf_power_compact = integrate_band_power(psd,FFT_SIZE, INTERP_FS, LF_LOW, LF_HIGH);
     hf_power_compact = integrate_band_power(psd, FFT_SIZE, INTERP_FS,HF_LOW, HF_HIGH);
@@ -346,9 +376,16 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
         hpi_sys_set_last_hrv_update((uint16_t)(ratio * 100), now_ts);
     }
 
+    float expected_total_power = tm_metrics.sdnn * tm_metrics.sdnn;
+    float actual_total_power = lf_power_compact + hf_power_compact;
+    float ratio_lf_hf = actual_total_power / expected_total_power;
+
     LOG_INF("LF Power (Compact): %f", lf_power_compact);
     LOG_INF("HF Power (Compact): %f", hf_power_compact);
-    LOG_INF("LF/HF Ratio (Compact): %f", lf_power_compact/hf_power_compact);
+    LOG_INF("LF/HF Ratio (Compact): %f", lf_power_compact / hf_power_compact);
+    LOG_INF("Total Power (Compact): %f", actual_total_power);
+    LOG_INF("Expected Total Power from SDNN: %f", expected_total_power);
+    LOG_INF("Power Ratio (Actual/Expected): %f", ratio_lf_hf);
     LOG_INF("Stress Score (Compact): %f", stress_score_compact);
     LOG_INF("SDNN : %f", sdnn_val);
     LOG_INF("RMSSD : %f", rmssd_val);
