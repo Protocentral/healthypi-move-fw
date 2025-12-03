@@ -43,8 +43,7 @@
 #include "ui/move_ui.h"
 
 LOG_MODULE_REGISTER(log_module, LOG_LEVEL_DBG);
-static int print_file_contents(const char *filepath);
-
+int print_file_contents(const char *filepath);
 // Error handling macro for file operations
 #define CHECK_FS_OP(op, fname, msg) do { \
     int ret = (op); \
@@ -109,8 +108,8 @@ static bool is_timestamp_valid(int64_t timestamp)
 static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_size, int64_t timestamp)
 { 
     struct fs_file_t file;
-    char fname[50];  // Increased size to accommodate full path
-    char base_path[20];
+    char fname[128];  // Increased size to accommodate full path
+    char base_path[32];
     
     // Validate timestamp before writing
     if (!is_timestamp_valid(timestamp)) {
@@ -130,13 +129,13 @@ static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_s
     
     LOG_DBG("Write to file... %s | Size: %zu", fname, data_size);
     
-    CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND ), "open", fname);
+    //CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND ), "open", fname);
+    CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_TRUNC ), "open", fname);
     CHECK_FS_OP(fs_write(&file, data, data_size), "write", fname);
     CHECK_FS_OP(fs_sync(&file), "sync", fname);  // Sync before close
     CHECK_FS_OP(fs_close(&file), "close", fname);
     return 0;
 }
-
 
 void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts)
 {
@@ -167,7 +166,6 @@ void hpi_write_hrv_record_file(uint16_t *hrv_record_buffer, uint16_t hrv_record_
         LOG_ERR("Invalid timestamp for HRV record: %" PRId64 " - refusing to write", start_ts);
         return;
     }
-    
     // Use generic writer for ECG records
     write_trend_to_file(HPI_LOG_TYPE_HRV_RECORD, hrv_record_buffer, 
                        hrv_record_length * sizeof(uint16_t), start_ts);
