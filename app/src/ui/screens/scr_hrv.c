@@ -162,7 +162,7 @@ static void hrv_update_display(void)
 {
 
     float ratio_norm;
-    float max_ratio = 5.0f;
+    float max_ratio = 10.0f;
     char last_meas_str[25];
     ratio = hpi_get_lf_hf_ratio();
     int m_hrv_last_value = 0;
@@ -191,12 +191,23 @@ static void hrv_update_display(void)
     int arc_val = (int)((ratio / max_ratio) * 100);
     lv_arc_set_value(lfhf_arc, arc_val);
 
-    // Color based on ratio range
-    if (ratio <= 1.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_SUCCESS_GREEN), LV_PART_INDICATOR);  // Green
-    } else if (ratio <= 2.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFFCC00), LV_PART_INDICATOR);  // Yellow
+    // Detailed color mapping based on LF/HF ratio (matches stress %)
+    if (ratio < 0.5f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x00FF88), LV_PART_INDICATOR);  // Bright Green (20%)
+    } else if (ratio < 1.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x32FF00), LV_PART_INDICATOR);  // Light Green (35%)
+    } else if (ratio < 2.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xCCFF00), LV_PART_INDICATOR);  // Yellow-Green (50%)
+    } else if (ratio < 3.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFFCC00), LV_PART_INDICATOR);  // Yellow (65%)
+    } else if (ratio < 4.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF9900), LV_PART_INDICATOR);  // Orange (75%)
+    } else if (ratio < 5.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF6600), LV_PART_INDICATOR);  // Dark Orange (80%)
+    } else if (ratio < 10.0f) {
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // Red (90%)
     } else {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // Red
+        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xCC0000), LV_PART_INDICATOR);  // Dark Red (95%)
     }
+
 }
