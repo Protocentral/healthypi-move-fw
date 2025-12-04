@@ -223,6 +223,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
     [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
     [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, unload_scr_gsr_plot},
+  //  [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, gesture_down_scr_gsr_plot},
     [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, unload_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
