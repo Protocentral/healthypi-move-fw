@@ -254,6 +254,7 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
 void gesture_down_scr_spl_hrv_eval_progress(void)
 {
     // Mark screen as inactive to prevent timer callback from updating
+    LOG_INF("Exiting HRV Evaluation Progress Screen via gesture");
     unload_scr_hrv_eval_progress(); 
     hpi_hrv_timer_reset();
     k_sem_give(&sem_hrv_eval_cancel);
@@ -335,7 +336,7 @@ void scr_hrv_lead_on_off_handler(bool lead_off)
     lead_on_detected = !lead_off;
     k_mutex_unlock(&Lead_on_off_handler_mutex);
 
-    if (!lead_off )  // Lead ON condition
+    if (lead_on_detected )  // Lead ON condition
     {
         lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN);   
