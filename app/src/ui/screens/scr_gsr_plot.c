@@ -282,8 +282,7 @@ static void gsr_chart_reset_performance_counters(void)
 }
 void scr_gsr_lead_on_off_handler(bool lead_off)
 {
-   // if (!label_info || !chart_gsr_trend) return;
-
+   
     LOG_INF("Screen handler called with lead_on_off=%s", lead_off ? "OFF" : "ON");
     
     if (label_info == NULL) {
