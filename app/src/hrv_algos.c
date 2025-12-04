@@ -16,15 +16,6 @@
 
 LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
 
-K_MUTEX_DEFINE(hrv_mutex);
-
-
-// extern struct k_sem sem_ecg_complete;
-
-bool collecting = false;
-//static uint16_t rr_interval_buffer[HRV_LIMIT];
-int64_t last_measurement_time = 0;
-
 // Required buffer sizes to process LF and HF power
 float32_t rr_time[MAX_RR_INTERVALS + 1]; // Time taken to collect samples (cumulative time processed from RR intervals)
 float32_t rr_values[MAX_RR_INTERVALS + 1]; // RR intervals in seconds
@@ -113,7 +104,10 @@ uint32_t hrv_calculate_min(uint16_t * rr_buffer, int count)
      if (count == 0) return 0;
     uint32_t min_val = rr_buffer[0];
     for (int i = 1; i < count; i++)
-        if (rr_buffer[i] < min_val) min_val = rr_buffer[i];
+    {
+        if (rr_buffer[i] < min_val) 
+            min_val = rr_buffer[i];
+    }
     return min_val;
 }
 
@@ -124,7 +118,10 @@ uint32_t hrv_calculate_max(uint16_t * rr_buffer, int count)
     if (count == 0) return 0;
     uint32_t max_val = rr_buffer[0];
     for (int i = 1; i < count; i++)
-        if (rr_buffer[i] > max_val) max_val = rr_buffer[i];
+    {
+        if (rr_buffer[i] > max_val) 
+             max_val = rr_buffer[i];
+    }
     return max_val;
 }
 
@@ -154,12 +151,12 @@ static uint32_t interpolate_rr_intervals(uint16_t *rr_ms, uint32_t num_intervals
    
     LOG_INF("Total RR time: %.2f seconds", total_time);
     uint32_t num_samples = (uint32_t)(total_time * fs);
-    LOG_INF("Number of interpolated samples: %d", num_samples);
-  
     
     if (num_samples > max_interp_samples) {
         num_samples = max_interp_samples;
     }
+
+    LOG_INF("Number of interpolated samples: %d", num_samples);
     
     // Interpolate using linear interpolation (simple and fast)
     float32_t dt = 1.0f / fs;
@@ -206,8 +203,7 @@ static void remove_mean(float32_t *signal, uint32_t length)
     }
     
     float32_t initial_mean = sum / length;
-    LOG_DBG("Initial mean: %.6f s (%.1f ms)", initial_mean, initial_mean * 1000.0f);
-    
+
     // Remove mean
     for (uint32_t i = 0; i < length; i++) {
         signal[i] -= initial_mean;
@@ -220,9 +216,7 @@ static void remove_mean(float32_t *signal, uint32_t length)
     }
     
     float32_t final_mean = sum / length;
-    LOG_DBG("Final mean after removal: %.10f s (should be ~0)", final_mean);
-    
-    
+    LOG_DBG("Final mean after removal: %.10f s (should be ~0)", final_mean);  
 
 }
 
@@ -301,14 +295,6 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
      LOG_DBG("Scaling factor: %.6f (window_power=%.3f, fs=%.1f, N=%d)", scale, window_power, fs, num_segments);
      arm_scale_f32(psd, scale, psd, fft_size);
 
-    // Double the power for positive frequencies 
-     for (uint32_t i = 1; i < fft_size/2; i++) 
-        psd[i] *= 2.0f;
-
-    // Zero out the negative frequencies 
-    for (uint32_t i = fft_size/2 + 1; i < fft_size; i++) {
-        psd[i] = 0.0f;
-    }
 }
 
 /* Integrate power in frequency band using trapezoidal rule */
@@ -316,8 +302,8 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
 static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_t fs, float32_t f_low, float32_t f_high)
  {
     float32_t df = fs / fft_size;
-    uint32_t idx_low = (uint32_t)(f_low / df);
-    uint32_t idx_high = (uint32_t)(f_high / df);
+    uint32_t idx_low = (uint32_t)roundf(f_low / df);
+    uint32_t idx_high = (uint32_t)roundf(f_high / df);
     
     // Clamp indices
     if (idx_high >= fft_size / 2) idx_high = fft_size / 2 - 1;
@@ -325,12 +311,22 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     
     // Trapezoidal integration
     float32_t power = 0.0f;
+
+    printk("---- Per-bin power ----\n");
+    for (uint32_t i = idx_low; i <= idx_high; i++) {
+
+        float32_t power_bin_s2 = psd[i] * df;            // in s^2
+        printk("Bin %3d | Freq = %.3f Hz | PSD = %.6f \n", i, i * df, psd[i]);
+    }
+    
     for (uint32_t i = idx_low; i < idx_high; i++) {
       power += (psd[i] + psd[i + 1]) * 0.5f * df;
     }
     
     // Convert from s^2 to ms^2
     power *= 1000000.0f;
+
+    printk("Integrated power from %.2f Hz to %.2f Hz: %.3f ms^2\n", f_low, f_high, power);
     
     return power;
 }
@@ -345,13 +341,12 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
       tm_metrics.hrv_min = (float)hrv_calculate_min(rr_intervals, num_intervals);
       tm_metrics.hrv_max = (float)hrv_calculate_max(rr_intervals, num_intervals);
 
-      LOG_INF("HRV interval Collection Completed: \nSamples : %d\nMean : %.1f\nSDNN : %.1f\nRMSSD : %.1f\nPnn50 : %.1f\nMAX : %.1f\nMIN : %.1f",
-        num_intervals,tm_metrics.mean, tm_metrics.sdnn,tm_metrics.rmssd, tm_metrics.pnn50, tm_metrics.hrv_max, tm_metrics.hrv_min);
 
     // Interpolate RR intervals
 
     uint32_t num_interp_samples = interpolate_rr_intervals(rr_intervals, num_intervals,INTERP_FS,rr_time,rr_values,
         interp_signal,FFT_SIZE * 4);
+
 
      // Remove mean
      remove_mean(interp_signal, num_interp_samples);
@@ -379,6 +374,9 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
     float expected_total_power = tm_metrics.sdnn * tm_metrics.sdnn;
     float actual_total_power = lf_power_compact + hf_power_compact;
     float ratio_lf_hf = actual_total_power / expected_total_power;
+
+     LOG_INF("HRV interval Collection Completed: \nSamples : %d\nMean : %.1f\nSDNN : %.1f\nRMSSD : %.1f\nPnn50 : %.1f\nMAX : %.1f\nMIN : %.1f",
+        num_intervals,tm_metrics.mean, tm_metrics.sdnn,tm_metrics.rmssd, tm_metrics.pnn50, tm_metrics.hrv_max, tm_metrics.hrv_min);
 
     LOG_INF("LF Power (Compact): %f", lf_power_compact);
     LOG_INF("HF Power (Compact): %f", hf_power_compact);
