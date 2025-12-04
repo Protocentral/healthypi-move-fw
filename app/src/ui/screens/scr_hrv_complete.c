@@ -24,6 +24,7 @@ static lv_obj_t *label_stress_level_compact;
 static lv_obj_t *arc_stress_gauge;
 static lv_obj_t *label_sdnn;
 static lv_obj_t *label_rmssd;
+static lv_obj_t *label_stress_text;
 // Externs
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
@@ -49,12 +50,15 @@ static void lvgl_update_cb(void *user_data)
 int get_stress_percentage(float lf, float hf) {
     
     if (hf <= 0.0f) return 100;
-
-    float ratio = lf / hf;
-    float stress = (ratio / (1.0f + ratio)) * 100.0f;
-
-    if (stress > 100.0f) stress = 100.0f;
-    return (int)stress;
+    float lf_hf = lf / hf;
+    if (lf_hf < 0.5f)   return 20; // Very relaxed
+    else if (lf_hf < 1.0f)  return 35; // Relaxed
+    else if (lf_hf < 2.0f)  return 50; // Normal
+    else if (lf_hf < 3.0f)  return 65; // Slightly stressed
+    else if (lf_hf < 4.0f)  return 80; // Stressed
+    else if (lf_hf < 5.0f)  return 75; // Highly stressed
+    else if (lf_hf < 10.0f) return 90; // Very stressed
+    else                    return 95; // Extremely stressed
 }
 
 static lv_color_t get_stress_arc_color(int stress_percentage) {
@@ -129,6 +133,7 @@ void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
         // --- Stress gauge ---
         arc_stress_gauge = lv_arc_create(cont_main);
+        // lv_obj_set_size(arc_stress_gauge, 170, 170);
         lv_obj_set_size(arc_stress_gauge, 170, 170);
         lv_arc_set_rotation(arc_stress_gauge, 135);
         lv_arc_set_bg_angles(arc_stress_gauge, 0, 270);
@@ -139,10 +144,12 @@ void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
         // Stress label inside arc
         label_stress_level_compact = lv_label_create(cont_main);
+        //lv_label_set_text(label_stress_level_compact, "Low");
         lv_label_set_text(label_stress_level_compact, "Low");
         lv_obj_add_style(label_stress_level_compact, &style_white_medium, 0);
         lv_obj_align_to(label_stress_level_compact, arc_stress_gauge, LV_ALIGN_CENTER, 0, 0);
 
+    
         // --- Bottom metrics (LF/HF + Stress %) ---
         lv_obj_t *cont_bottom = lv_obj_create(cont_main);
         lv_obj_set_size(cont_bottom, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -168,11 +175,12 @@ void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
 void hpi_hrv_frequency_compact_update_display(void)
 {
-
     float ratio = 0.0f;
+    int stress_pct = get_stress_percentage(lf_power_compact, hf_power_compact);  
    
     ratio = lf_power_compact / hf_power_compact;
 
+    // Format numbers with decimals
     int ratio_int = (int)ratio;
     int ratio_dec = (int)((ratio - ratio_int) * 100);
 
@@ -182,40 +190,35 @@ void hpi_hrv_frequency_compact_update_display(void)
     int rmssd_int = (int)rmssd_val;
     int rmssd_dec = (int)((rmssd_val - rmssd_int) * 100);
 
+    // Update metric labels
     if(label_sdnn)
-        lv_label_set_text_fmt(label_sdnn,"SDNN: %d.%02d",sdnn_int, abs(sdnn_dec));
+        lv_label_set_text_fmt(label_sdnn, "SDNN: %d.%02d", sdnn_int, abs(sdnn_dec));
     
     if(label_rmssd)
-        lv_label_set_text_fmt(label_rmssd,"RMSSD: %d.%02d", rmssd_int, abs(rmssd_dec));
+        lv_label_set_text_fmt(label_rmssd, "RMSSD: %d.%02d", rmssd_int, abs(rmssd_dec));
 
     if (label_lf_hf_ratio_compact)
         lv_label_set_text_fmt(label_lf_hf_ratio_compact, "LF/HF: %d.%02d", ratio_int, abs(ratio_dec));
 
-    
     // Update stress arc gauge
     if (arc_stress_gauge != NULL) {
-        lv_arc_set_value(arc_stress_gauge, (int)stress_score_compact);
-        lv_obj_set_style_arc_color(arc_stress_gauge, get_stress_arc_color((int)stress_score_compact), LV_PART_INDICATOR);
+        lv_arc_set_value(arc_stress_gauge, (int)stress_pct);
+        lv_obj_set_style_arc_color(arc_stress_gauge, get_stress_arc_color((int)stress_pct), LV_PART_INDICATOR);
     }
-    
-
-    // Update stress label with very short text
+    // Update stress level label
     if (label_stress_level_compact != NULL) {
-        const char* stress_text;
-        if (stress_score_compact < 25) {
-            stress_text = "Low";
-        } else if (stress_score_compact < 50) {
-            stress_text = "Med";
-        } else if (stress_score_compact < 75) {
-            stress_text = "High";
+        if (stress_pct <= 25) {
+            lv_label_set_text(label_stress_level_compact, "Low");
+        } else if (stress_pct <= 50) {
+            lv_label_set_text(label_stress_level_compact, "Med");
+        } else if (stress_pct <= 75) {
+            lv_label_set_text(label_stress_level_compact, "High");
         } else {
-            stress_text = "Max";
+            lv_label_set_text(label_stress_level_compact, "Max ");
         }
-        
-        lv_label_set_text(label_stress_level_compact, stress_text);
         lv_obj_set_style_text_color(label_stress_level_compact, get_stress_arc_color((int)stress_score_compact), 0);
     }
-    
+
    
 }
 
