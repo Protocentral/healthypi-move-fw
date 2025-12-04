@@ -41,6 +41,10 @@ static int32_t gsr_batch_data[32] __attribute__((aligned(4)));
 static uint32_t gsr_batch_count = 0;
 static bool gsr_chart_auto_refresh_enabled = true;
 
+// Function declarations for LVGL 9.2 optimized chart management
+static void gsr_chart_enable_performance_mode(bool enable);
+static void gsr_chart_reset_performance_counters(void);
+
 // Simple timer update function (called from display thread, mirrors ECG pattern)
 void hpi_gsr_disp_update_timer(uint16_t remaining_s)
 {
@@ -75,9 +79,8 @@ static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off)
 {
     
-    if (!gsr_contact_present  || lv_obj_has_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN))
-    return;
-
+    // if (!gsr_contact_present  || lv_obj_has_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN))
+    // return;
 
     // Early validation
     if (!plot_ready || chart_gsr_trend == NULL || ser_gsr_trend == NULL || data_gsr == NULL || num_samples <= 0) {
@@ -145,7 +148,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     // AMOLED: solid black background for power savings
     lv_obj_set_style_bg_color(scr_gsr_plot, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_gsr_plot, LV_OBJ_FLAG_SCROLLABLE);
-
+    
     // Progress Arc - outer ring showing countdown from 60s to 0s (blue theme for GSR)
     arc_gsr_progress = lv_arc_create(scr_gsr_plot);
     lv_obj_set_size(arc_gsr_progress, 370, 370);  // 185px radius
@@ -163,7 +166,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_arc_width(arc_gsr_progress, 6, LV_PART_INDICATOR);
     lv_obj_remove_style(arc_gsr_progress, NULL, LV_PART_KNOB);  // Remove knob
     lv_obj_clear_flag(arc_gsr_progress, LV_OBJ_FLAG_CLICKABLE);
-
+   
     // Title - positioned at top center
     lv_obj_t *label_title = lv_label_create(scr_gsr_plot);
     lv_label_set_text(label_title, "GSR Live");
@@ -175,7 +178,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     chart_gsr_trend = lv_chart_create(scr_gsr_plot);
     lv_obj_set_size(chart_gsr_trend, 340, 120);
     lv_obj_align(chart_gsr_trend, LV_ALIGN_CENTER, 0, -20);
-    
+
     // Configure chart properties
     lv_chart_set_type(chart_gsr_trend, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(chart_gsr_trend, GSR_DISP_WINDOW_SIZE);
@@ -204,6 +207,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_border_opa(chart_gsr_trend, LV_OPA_TRANSP, LV_PART_INDICATOR);
     
     // Performance optimizations for real-time GSR display
+    lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_IGNORE_LAYOUT);           // Skip layout calculations
     lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_CLICK_FOCUSABLE);
     
@@ -230,28 +234,62 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Sensor lead-off label
     label_gsr_error = lv_label_create(scr_gsr_plot);
-     lv_label_set_long_mode(label_gsr_error, LV_LABEL_LONG_WRAP);
-     lv_obj_set_width(label_gsr_error, 300);
+    lv_label_set_long_mode(label_gsr_error, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_gsr_error, 300);
     lv_label_set_text(label_gsr_error, "Make skin contact with the electrodes\nTimer will start automatically");
     lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, 0); // above chart
     lv_obj_add_style(label_gsr_error, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_gsr_error, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_gsr_error, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
    // lv_obj_add_flag(label_gsr_error, LV_OBJ_FLAG_HIDDEN); // hide by default
-
+  
     // Set reference for lead on/off handler
     label_info = label_gsr_error;
 
+    // Initialize performance optimization system
+    gsr_chart_reset_performance_counters();
+    gsr_chart_enable_performance_mode(true);  // Start in high-performance mode
     plot_ready = true;
 
     hpi_disp_set_curr_screen(SCR_SPL_PLOT_GSR);
     hpi_show_screen(scr_gsr_plot, m_scroll_dir);
 }
 
+// LVGL 9.2 optimized chart management functions
+static void gsr_chart_enable_performance_mode(bool enable)
+{
+    if (chart_gsr_trend == NULL) return;
+    
+    if (enable) {
+        // Enable performance optimizations
+        lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_IGNORE_LAYOUT);
+        gsr_chart_auto_refresh_enabled = false;
+    } else {
+        // Restore normal operation
+        lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_IGNORE_LAYOUT);
+        gsr_chart_auto_refresh_enabled = true;
+        lv_chart_refresh(chart_gsr_trend);
+    }
+}
 
+static void gsr_chart_reset_performance_counters(void)
+{
+    gsr_sample_counter = 0;
+    gsr_batch_count = 0;
+    // Initialize for proper range detection
+    y_max_gsr = -10000;
+    y_min_gsr = 10000;
+}
 void scr_gsr_lead_on_off_handler(bool lead_off)
 {
-    if (!label_info || !chart_gsr_trend) return;
+   // if (!label_info || !chart_gsr_trend) return;
+
+    LOG_INF("Screen handler called with lead_on_off=%s", lead_off ? "OFF" : "ON");
+    
+    if (label_info == NULL) {
+        LOG_WRN("label_info is NULL, screen handler returning early");
+        return;
+    }
 
     gsr_contact_present = !lead_off; // true if contact present
 
@@ -262,6 +300,13 @@ void scr_gsr_lead_on_off_handler(bool lead_off)
         lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
         lv_label_set_text(label_info, "Make skin contact with the electrodes\nTimer will start automatically");
+     //   lv_obj_add_flag(label_info, LV_OBJ_FLAG_IGNORE_LAYOUT); // <-- critical
+
+    }
+     // CRITICAL: Always bring STOP button to foreground
+    if (btn_stop) {
+        lv_obj_move_foreground(btn_stop);
+         lv_obj_add_flag(btn_stop, LV_OBJ_FLAG_CLICKABLE);
     }
 }
 
