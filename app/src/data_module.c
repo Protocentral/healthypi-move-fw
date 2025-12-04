@@ -540,7 +540,7 @@ void data_thread(void)
             }
             k_mutex_unlock(&mutex_is_ecg_record_active);
 
-            // HRV (Heart Rate Variability) Evaluation - Capture R-to-R intervals
+            // HRV interval capture
             if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
             {
                 // Capture R-to-R intervals for HRV analysis
