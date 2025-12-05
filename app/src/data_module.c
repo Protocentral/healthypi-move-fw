@@ -103,8 +103,7 @@ static int32_t gsr_record_buffer[GSR_RECORD_BUFFER_SAMPLES]; // e.g., 32Hz * 30s
 static volatile uint16_t gsr_record_counter = 0;
 K_MUTEX_DEFINE(mutex_is_gsr_record_active);
 
-
-int g_last_scr_count = 0;
+static int g_last_scr_count = 0;
 
 static bool is_gsr_measurement_active = false;
 K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
@@ -337,6 +336,12 @@ bool hpi_data_is_gsr_record_active(void)
     k_mutex_unlock(&mutex_is_gsr_record_active);
     return active;
 }
+
+int hpi_data_get_last_scr_count(void)
+{
+    return g_last_scr_count;
+}
+
 void hpi_data_reset_gsr_record_buffer(void)
 {
     k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);

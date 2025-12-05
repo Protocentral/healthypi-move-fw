@@ -3,13 +3,16 @@
 
 #include <stdint.h>
 
-#define SCR_THRESHOLD_DEFAULT 150    // Default threshold, adjust per calibration
-#define MIN_PEAK_GAP 10              // Minimum samples between SCR peaks (~0.3 sec at 32Hz)
-
-
-// Function to calculate SCR count from GSR buffer
+/**
+ * @brief Calculate SCR (Skin Conductance Response) count from GSR buffer
+ * 
+ * Processes raw BioZ samples to detect SCR peaks indicating arousal/stress responses.
+ * Uses signal smoothing, baseline removal, and peak detection algorithm.
+ * 
+ * @param gsr_buffer Pointer to raw 24-bit BioZ samples from MAX30001
+ * @param sample_count Number of samples in buffer (max 1024)
+ * @return Number of SCR events detected, or 0 on error
+ */
 int calculate_scr_count(int32_t *gsr_buffer, int sample_count);
-//int calculate_scr_count(int32_t *gsr_buffer, uint16_t sample_count);
-
 
 #endif // GSR_ALGO_H

@@ -791,7 +791,9 @@ static void st_ecg_idle_entry(void *o)
         if (ret == 0) {
             hpi_data_set_gsr_measurement_active(false);
             gsr_measurement_in_progress = false;
-           // hpi_data_set_gsr_record_active(false);   //  Stop recording
+            // Reset recording buffer (discard incomplete data on manual stop)
+            hpi_data_reset_gsr_record_buffer();
+            hpi_data_set_gsr_record_active(false);
             // Only stop bioz timer if ECG is not active
             if (!get_ecg_active()) {
                 k_timer_stop(&tmr_bioz_sampling);

@@ -237,14 +237,19 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_label_set_long_mode(label_gsr_error, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_gsr_error, 300);
     lv_label_set_text(label_gsr_error, "Make skin contact with the electrodes\nTimer will start automatically");
-    lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, 0); // above chart
+    lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, -20);  // Center but above button area
     lv_obj_add_style(label_gsr_error, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_gsr_error, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_gsr_error, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-   // lv_obj_add_flag(label_gsr_error, LV_OBJ_FLAG_HIDDEN); // hide by default
+    // Ensure label doesn't intercept touch events
+    lv_obj_clear_flag(label_gsr_error, LV_OBJ_FLAG_CLICKABLE);
   
     // Set reference for lead on/off handler
     label_info = label_gsr_error;
+
+    // CRITICAL: Move STOP button to foreground AFTER creating all other elements
+    // This ensures the button is always on top and can receive touch events
+    lv_obj_move_foreground(btn_stop);
 
     // Initialize performance optimization system
     gsr_chart_reset_performance_counters();
@@ -282,8 +287,7 @@ static void gsr_chart_reset_performance_counters(void)
 }
 void scr_gsr_lead_on_off_handler(bool lead_off)
 {
-   
-    LOG_INF("Screen handler called with lead_on_off=%s", lead_off ? "OFF" : "ON");
+    LOG_INF("Screen handler called with lead_off=%s", lead_off ? "OFF" : "ON");
     
     if (label_info == NULL) {
         LOG_WRN("label_info is NULL, screen handler returning early");
@@ -293,19 +297,24 @@ void scr_gsr_lead_on_off_handler(bool lead_off)
     gsr_contact_present = !lead_off; // true if contact present
 
     if (gsr_contact_present) {
+        // Contact OK - show chart, hide error message
         lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        if (chart_gsr_trend != NULL) {
+            lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        }
     } else {
+        // No contact - show error message, hide chart
         lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        if (chart_gsr_trend != NULL) {
+            lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        }
         lv_label_set_text(label_info, "Make skin contact with the electrodes\nTimer will start automatically");
-     //   lv_obj_add_flag(label_info, LV_OBJ_FLAG_IGNORE_LAYOUT); // <-- critical
-
     }
-     // CRITICAL: Always bring STOP button to foreground
-    if (btn_stop) {
+    
+    // CRITICAL: Always ensure STOP button remains clickable and on top
+    if (btn_stop != NULL) {
         lv_obj_move_foreground(btn_stop);
-         lv_obj_add_flag(btn_stop, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(btn_stop, LV_OBJ_FLAG_CLICKABLE);
     }
 }
 

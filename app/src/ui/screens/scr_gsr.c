@@ -123,31 +123,6 @@ static void scr_gsr_measure_btn_event_handler(lv_event_t *e)
         // Start GSR live view via semaphore
         k_msleep(500);  // Allow screen transition
         k_sem_give(&sem_gsr_start);
-
-        // if (!gsr_measurement_active) {
-        //     // Start GSR live view - no calculation, just monitoring
-        //     gsr_measurement_active = true;
-        //     gsr_measurement_start_ts = k_uptime_get();
-        //     lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_STOP " Stop");
-        //  //   lv_label_set_text(label_gsr_status, "Live Monitoring");
-            
-        //     // Open live plot screen
-        //     hpi_load_scr_spl(SCR_SPL_PLOT_GSR, SCROLL_UP, (uint32_t)SCR_GSR, 0, 0, 0);
-            
-        //     // Start GSR live view via semaphore
-        //     k_msleep(500);  // Allow screen transition
-        //     k_sem_give(&sem_gsr_start);
-        // } else {
-        //     // Stop GSR live view
-        //     gsr_measurement_active = false;
-        //     gsr_measurement_start_ts = 0;
-        //     lv_label_set_text(lv_obj_get_child(btn_gsr_measure, 0), LV_SYMBOL_EYE_OPEN " Live View");
-        //   //  lv_label_set_text(label_gsr_status, "Live View Only");
-            
-        //     // Stop GSR via semaphore
-        //     k_sem_give(&sem_gsr_cancel);
-        // }
-        
     }
 }
 
@@ -283,8 +258,8 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(label_scr_count, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_scr_count, &style_numeric_large, LV_PART_MAIN);  // BIG font
 
-    extern int g_last_scr_count;
-    lv_label_set_text_fmt(label_scr_count, "%d", g_last_scr_count);
+    int last_scr_count = hpi_data_get_last_scr_count();
+    lv_label_set_text_fmt(label_scr_count, "%d", last_scr_count);
 
 
      // Status info - centered below unit with proper spacing

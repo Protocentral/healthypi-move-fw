@@ -2,11 +2,11 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
-#include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include "gsr_algos.h"
 
+LOG_MODULE_REGISTER(gsr_algos, LOG_LEVEL_DBG);
 
 #define SCR_THRESHOLD    0.03f   // Threshold in µS (typical 0.03 µS)
 #define SCR_MIN_INTERVAL 32      // Minimum interval between SCRs (1 s at 32 Hz)
@@ -72,6 +72,12 @@ int calculate_scr_count(int32_t *raw_gsr_data, int length)
     int scr_count = 0;
     int last_peak_index = -SCR_MIN_INTERVAL;
 
+    // Bounds check to prevent buffer overflow
+    if (raw_gsr_data == NULL || length <= 0 || length > GSR_MAX_SAMPLES) {
+        LOG_ERR("Invalid GSR data: ptr=%p, length=%d, max=%d", raw_gsr_data, length, GSR_MAX_SAMPLES);
+        return 0;
+    }
+
     // 1. Convert raw counts to µS
     convert_raw_to_uS(raw_gsr_data, gsr_uS, length);
 
@@ -96,11 +102,9 @@ int calculate_scr_count(int32_t *raw_gsr_data, int length)
 
                     if (amplitude >= SCR_THRESHOLD && (peak_index - last_peak_index) >= SCR_MIN_INTERVAL) {
                         scr_count++;
-
-                    printf("SCR %d detected: trough=%d, peak=%d, amplitude=%f\n",
-                            scr_count, trough, peak_index, amplitude);
+                        LOG_DBG("SCR %d detected: trough=%d, peak=%d, amplitude=%.4f",
+                                scr_count, trough, peak_index, (double)amplitude);
                         last_peak_index = peak_index;
-
                     }
 
                     i = peak_index; // Skip to peak
