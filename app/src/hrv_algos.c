@@ -2,7 +2,6 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
-#include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include "hrv_algos.h"
@@ -11,7 +10,6 @@
 #include "hpi_sys.h"
 #include "arm_math.h"
 #include "arm_const_structs.h"
-#include <string.h>
 #include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(hrv_algos, LOG_LEVEL_DBG);
@@ -312,11 +310,10 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     // Trapezoidal integration
     float32_t power = 0.0f;
 
-    printk("---- Per-bin power ----\n");
+    LOG_DBG("---- Per-bin power (%.2f-%.2f Hz) ----", f_low, f_high);
     for (uint32_t i = idx_low; i <= idx_high; i++) {
-
         float32_t power_bin_s2 = psd[i] * df;            // in s^2
-        printk("Bin %3d | Freq = %.3f Hz | PSD = %.6f \n", i, i * df, psd[i]);
+        LOG_DBG("Bin %3d | Freq = %.3f Hz | PSD = %.6f", i, (double)(i * df), (double)psd[i]);
     }
     
     for (uint32_t i = idx_low; i < idx_high; i++) {
@@ -326,7 +323,7 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     // Convert from s^2 to ms^2
     power *= 1000000.0f;
 
-    printk("Integrated power from %.2f Hz to %.2f Hz: %.3f ms^2\n", f_low, f_high, power);
+    LOG_DBG("Integrated power from %.2f Hz to %.2f Hz: %.3f ms^2", (double)f_low, (double)f_high, (double)power);
     
     return power;
 }

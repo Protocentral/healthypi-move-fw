@@ -31,6 +31,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <lvgl.h>
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/drivers/sensor.h>
@@ -84,8 +85,12 @@ static uint32_t hrv_last_status_pub_s = 0; // Last published elapsed seconds
 // HRV state variables managed by data_module.c
 extern struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];
 extern volatile uint16_t hrv_interval_count;
-static bool contact = false;
-static bool Prev_contact = false;
+
+// RTOS-safe lead contact state using atomic operations
+// true = leads are in contact (on skin), false = leads are off
+static atomic_t hrv_lead_contact = ATOMIC_INIT(0);  // 0 = no contact, 1 = contact
+static atomic_t hrv_prev_lead_contact = ATOMIC_INIT(0);
+
 ZBUS_CHAN_DECLARE(hrv_stat_chan);
 K_MUTEX_DEFINE(hrv_eval_mutex);
 K_MUTEX_DEFINE(hrv_timer_mutex);
@@ -488,7 +493,7 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
                         
                         // Signal display thread for UI update
                         LOG_INF("ECG SMF: Giving sem_ecg_lead_off semaphore");
-                        contact = false;
+                        atomic_set(&hrv_lead_contact, 0);  // RTOS-safe: leads off
                         k_sem_give(&sem_ecg_lead_off);
                         
                         // Reset debounce state
@@ -515,7 +520,7 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
                 
                 // Signal display thread for UI update  
                 LOG_INF("ECG SMF: Giving sem_ecg_lead_on semaphore");
-                contact = true;
+                atomic_set(&hrv_lead_contact, 1);  // RTOS-safe: leads on
                 k_sem_give(&sem_ecg_lead_on);
             }
             // else: already in lead-on state, nothing to do
@@ -814,14 +819,17 @@ static void st_ecg_idle_entry(void *o)
     // Handle independent HRV (Heart Rate Variability) evaluation control
     if (k_sem_take(&sem_hrv_eval_start, K_NO_WAIT) == 0)
     {
-        LOG_INF("Starting HRV evaluation for %d intervals", HRV_MEASUREMENT_DURATION_S);
+        LOG_INF("Starting HRV evaluation for %d seconds", HRV_MEASUREMENT_DURATION_S);
         int ret = hw_max30001_ecg_enable();
         if (ret == 0) {
-            if(contact)
+            // Always start HRV eval - lead detection will handle timing
             hpi_data_set_hrv_eval_active(true);
             hrv_measurement_start_time = k_uptime_get();
             hrv_measurement_in_progress = true;
             hrv_interval_count = 0;
+            // Reset contact state for fresh measurement
+            atomic_set(&hrv_lead_contact, 0);
+            atomic_set(&hrv_prev_lead_contact, 0);
             memset(hrv_intervals, 0, sizeof(hrv_intervals));
             k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
             LOG_INF("HRV evaluation started successfully");
@@ -849,24 +857,33 @@ static void st_ecg_idle_entry(void *o)
     // Auto-complete HRV evaluation after duration
     if (hrv_measurement_in_progress)
     {
-        bool contact_lost  =  contact;
-        bool contact_gained = (!Prev_contact && contact);
+        // RTOS-safe: Read atomic contact state
+        bool contact_now = atomic_get(&hrv_lead_contact) != 0;
+        bool contact_prev = atomic_get(&hrv_prev_lead_contact) != 0;
+        
+        // Detect transitions
+        bool contact_lost = (contact_prev && !contact_now);   // Was on, now off
+        bool contact_gained = (!contact_prev && contact_now); // Was off, now on
 
-  
-        if (!contact_lost)
+        if (contact_lost)
         {
-            hpi_hrv_reset_countdown_timer(); 
+            // Lead disconnected - reset timer and buffer
+            hpi_hrv_reset_countdown_timer();
+            LOG_INF("HRV leads disconnected - timer reset");
         }
 
         if (contact_gained)
         {
+            // Lead reconnected - restart measurement from this point
             hrv_measurement_start_time = k_uptime_get();
             hrv_last_status_pub_s = 0;
-            LOG_INF("HRV contact regained → countdown restarted (%d s)", HRV_MEASUREMENT_DURATION_S);
+            LOG_INF("HRV contact regained - countdown restarted (%d s)", HRV_MEASUREMENT_DURATION_S);
         }
 
-        Prev_contact = contact;
-        if(contact)
+        // Update previous state atomically
+        atomic_set(&hrv_prev_lead_contact, contact_now ? 1 : 0);
+        
+        if (contact_now)
         {
                 int64_t elapsed_ms = k_uptime_get() - hrv_measurement_start_time;
                 if (elapsed_ms >= (HRV_MEASUREMENT_DURATION_S * 1000))

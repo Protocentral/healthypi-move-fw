@@ -47,18 +47,21 @@ static void lvgl_update_cb(void *user_data)
 }
 
 // Simplified stress assessment for compact display
+// LF/HF ratio interpretation: higher ratio = more sympathetic (stress) activity
 int get_stress_percentage(float lf, float hf) {
     
-    if (hf <= 0.0f) return 100;
+    if (hf <= 0.0f) return 100;  // Invalid data = max stress indicator
     float lf_hf = lf / hf;
-    if (lf_hf < 0.5f)   return 20; // Very relaxed
-    else if (lf_hf < 1.0f)  return 35; // Relaxed
-    else if (lf_hf < 2.0f)  return 50; // Normal
-    else if (lf_hf < 3.0f)  return 65; // Slightly stressed
-    else if (lf_hf < 4.0f)  return 80; // Stressed
-    else if (lf_hf < 5.0f)  return 75; // Highly stressed
-    else if (lf_hf < 10.0f) return 90; // Very stressed
-    else                    return 95; // Extremely stressed
+    
+    // Monotonically increasing stress levels based on LF/HF ratio
+    if (lf_hf < 0.5f)       return 15;  // Very relaxed (parasympathetic dominant)
+    else if (lf_hf < 1.0f)  return 30;  // Relaxed
+    else if (lf_hf < 1.5f)  return 45;  // Normal/balanced
+    else if (lf_hf < 2.0f)  return 55;  // Slightly elevated
+    else if (lf_hf < 3.0f)  return 70;  // Moderately stressed
+    else if (lf_hf < 5.0f)  return 80;  // Stressed
+    else if (lf_hf < 8.0f)  return 90;  // Highly stressed
+    else                    return 95;  // Very stressed (sympathetic dominant)
 }
 
 static lv_color_t get_stress_arc_color(int stress_percentage) {
