@@ -513,3 +513,4 @@ void hpi_hrv_timer_reset(void);
 void hpi_hrv_timer_start(void);
 void hpi_hrv_reset_countdown_timer(void);
 void unload_scr_hrv_eval_progress(void);
+void hpi_hrv_disp_update_timer(uint16_t remaining_s);
