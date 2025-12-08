@@ -68,7 +68,8 @@ void hpi_gsr_disp_update_timer(uint16_t remaining_s)
 static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED)
+    //if (code == LV_EVENT_CLICKED)
+    if (code == LV_EVENT_PRESSED) 
     {
         // Stop GSR measurement using semaphore control (same pattern as ECG)
         k_sem_give(&sem_gsr_cancel);
@@ -218,7 +219,9 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     btn_stop = hpi_btn_create_primary(scr_gsr_plot);
     lv_obj_set_size(btn_stop, 140, 48);
     lv_obj_align(btn_stop, LV_ALIGN_BOTTOM_MID, 0, -30);
-    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_CLICKED, NULL);
+//    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_PRESSED, NULL);
+
     lv_obj_set_style_radius(btn_stop, 22, LV_PART_MAIN);
     lv_obj_t *label_btn = lv_label_create(btn_stop);
     lv_label_set_text(label_btn, "Stop");
@@ -236,6 +239,8 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     label_gsr_error = lv_label_create(scr_gsr_plot);
     lv_label_set_long_mode(label_gsr_error, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_gsr_error, 300);
+    lv_obj_set_height(label_gsr_error, 70);
+
     lv_label_set_text(label_gsr_error, "Make skin contact with the electrodes\nTimer will start automatically");
     lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, -20);  // Center but above button area
     lv_obj_add_style(label_gsr_error, &style_caption, LV_PART_MAIN);
@@ -299,15 +304,19 @@ void scr_gsr_lead_on_off_handler(bool lead_off)
     if (gsr_contact_present) {
         // Contact OK - show chart, hide error message
         lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        if (chart_gsr_trend != NULL) {
-            lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
-        }
+      //  lv_obj_clear_flag(label_info, LV_OBJ_FLAG_CLICKABLE); // IMPORTANT
+        lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        // if (chart_gsr_trend != NULL) {
+        //     lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        // }
     } else {
         // No contact - show error message, hide chart
         lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        if (chart_gsr_trend != NULL) {
-            lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
-        }
+     //   lv_obj_clear_flag(label_info, LV_OBJ_FLAG_CLICKABLE); // CRITICAL
+        lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        // if (chart_gsr_trend != NULL) {
+        //     lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        // }
         lv_label_set_text(label_info, "Make skin contact with the electrodes\nTimer will start automatically");
     }
     
