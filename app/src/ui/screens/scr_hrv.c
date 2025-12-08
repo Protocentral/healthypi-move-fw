@@ -170,10 +170,13 @@ static void hrv_update_display(void)
     hpi_sys_get_last_hrv_update(&m_hrv_last_value, &m_hrv_last_update);
     hpi_helper_get_relative_time_str(m_hrv_last_update, last_meas_str, sizeof(last_meas_str));
 
-    if (ratio < 0.0f)
+    if (ratio < 0.0f || ratio == 0.0f)
      {
         m_hrv_ratio_int = 0;
         m_hrv_ratio_dec = 0;
+
+        lv_label_set_text(label_hrv_value, "--");
+        lv_label_set_text(label_hrv_status, "HeartRateVariability");
      }
      else 
      {
@@ -182,7 +185,8 @@ static void hrv_update_display(void)
 
         lv_label_set_text_fmt(label_hrv_value, "%d.%02d", m_hrv_ratio_int, m_hrv_ratio_dec);
         lv_label_set_text(label_hrv_status, last_meas_str);
-    }
+     }
+    
     // Normalize ratio to 0-100 for arc
    
     if (ratio < 0) ratio = 0;
@@ -196,15 +200,15 @@ static void hrv_update_display(void)
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x00FF88), LV_PART_INDICATOR);  // Bright Green (20%)
     } else if (ratio < 1.0f) {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x32FF00), LV_PART_INDICATOR);  // Light Green (35%)
-    } else if (ratio < 2.0f) {
+    } else if (ratio < 1.5f) {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xCCFF00), LV_PART_INDICATOR);  // Yellow-Green (50%)
-    } else if (ratio < 3.0f) {
+    } else if (ratio < 2.0f) {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFFCC00), LV_PART_INDICATOR);  // Yellow (65%)
-    } else if (ratio < 4.0f) {
+    } else if (ratio < 3.0f) {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF9900), LV_PART_INDICATOR);  // Orange (75%)
     } else if (ratio < 5.0f) {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF6600), LV_PART_INDICATOR);  // Dark Orange (80%)
-    } else if (ratio < 10.0f) {
+    } else if (ratio < 8.0f) {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // Red (90%)
     } else {
         lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xCC0000), LV_PART_INDICATOR);  // Dark Red (95%)
