@@ -382,8 +382,8 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
     LOG_INF("Expected Total Power from SDNN: %f", expected_total_power);
     LOG_INF("Power Ratio (Actual/Expected): %f", ratio_lf_hf);
     LOG_INF("Stress Score (Compact): %f", stress_score_compact);
-    LOG_INF("SDNN : %f", sdnn_val);
-    LOG_INF("RMSSD : %f", rmssd_val);
+    // LOG_INF("SDNN : %f", sdnn_val);
+    // LOG_INF("RMSSD : %f", rmssd_val);
 
     
  }
