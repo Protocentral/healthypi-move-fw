@@ -63,3 +63,4 @@ build
 app/src/ui/fonts/lv_font_conv/
 /temp-docs
 app/.DS_Store
+/temp_docs
