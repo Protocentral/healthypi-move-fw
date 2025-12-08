@@ -254,7 +254,7 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
 void gesture_down_scr_spl_hrv_eval_progress(void)
 {
     // Mark screen as inactive to prevent timer callback from updating
-    LOG_INF("Exiting HRV Evaluation Progress Screen via gesture");
+    printk("Exiting HRV Evaluation Progress Screen via gesture\n");
     unload_scr_hrv_eval_progress(); 
     hpi_hrv_timer_reset();
     k_sem_give(&sem_hrv_eval_cancel);
