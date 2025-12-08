@@ -947,6 +947,7 @@ static void hpi_disp_update_screens(void)
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
          hpi_hrv_disp_update_timer(m_disp_hrv_timer);
+         
          if(k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
          {
             hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
@@ -1529,7 +1530,6 @@ static void disp_hrv_stat_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
     m_disp_hrv_timer = hrv_status->remaining_s;
-    // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_hrv_stat_lis, disp_hrv_stat_listener);
 
