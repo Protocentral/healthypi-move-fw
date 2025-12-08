@@ -75,7 +75,7 @@ K_MUTEX_DEFINE(Lead_on_off_handler_mutex);
 extern struct k_sem sem_hrv_eval_cancel;
 
 // HRV evaluation parameters
-#define HRV_MEASUREMENT_DURATION_S 120  
+#define HRV_MEASUREMENT_DURATION_S 15  
 
 // R-to-R interval data
 extern volatile uint16_t hrv_interval_count;
@@ -120,7 +120,7 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     hrv_measurement_start_time = k_uptime_get();  // Record screen creation time
     timer_running = false;
     timer_paused = true;
-   // lead_on_detected = false;
+    lead_on_detected = false;
     y_max_ecg = -10000;
     y_min_ecg = 10000;
 
