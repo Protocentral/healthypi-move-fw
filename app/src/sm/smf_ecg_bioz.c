@@ -77,7 +77,7 @@ K_SEM_DEFINE(sem_hrv_eval_cancel, 0, 1);
 K_SEM_DEFINE(sem_hrv_eval_complete, 0, 1);
 
 // HRV Measurement Timing (configurable duration, default 30 seconds for quick evaluation)
-#define HRV_MEASUREMENT_DURATION_S 120  // 30 seconds for quick HRV measurement with ECG plot
+#define HRV_MEASUREMENT_DURATION_S 15  // 30 seconds for quick HRV measurement with ECG plot
 static int64_t hrv_measurement_start_time = 0;
 static bool hrv_measurement_in_progress = false;
 static uint32_t hrv_last_status_pub_s = 0; // Last published elapsed seconds
@@ -823,6 +823,8 @@ static void st_ecg_idle_entry(void *o)
         int ret = hw_max30001_ecg_enable();
         if (ret == 0) {
             // Always start HRV eval - lead detection will handle timing
+            // bool contact_now = atomic_get(&hrv_lead_contact);
+            // if(contact_now)
             hpi_data_set_hrv_eval_active(true);
             hrv_measurement_start_time = k_uptime_get();
             hrv_measurement_in_progress = true;
@@ -831,6 +833,13 @@ static void st_ecg_idle_entry(void *o)
             atomic_set(&hrv_lead_contact, 0);
             atomic_set(&hrv_prev_lead_contact, 0);
             memset(hrv_intervals, 0, sizeof(hrv_intervals));
+
+            bool hw_leads_off = get_ecg_lead_on_off();   // true = OFF, false = ON
+            if (!hw_leads_off) {
+                atomic_set(&hrv_lead_contact, 1);
+                atomic_set(&hrv_prev_lead_contact, 0);
+            }
+
             k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
             LOG_INF("HRV evaluation started successfully");
         } else {
