@@ -197,6 +197,8 @@ static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
 static bool ecg_stabilization_complete = false;
 
+static int remaining_timer_s;
+
 
 uint32_t gsr_countdown_val = 0;
 uint32_t gsr_last_timer_val = 0;
@@ -215,6 +217,10 @@ enum ecg_state
     HPI_ECG_STATE_STREAM,
     HPI_ECG_STATE_LEADOFF,
     HPI_ECG_STATE_COMPLETE,
+
+    HPI_ECG_STATE_GSR_MEASURE_ENTRY,
+    HPI_ECG_STATE_GSR_MEASURE_STREAM,
+    HPI_ECG_STATE_GSR_COMPLETE,
 };
 
 RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
@@ -223,7 +229,7 @@ static bool ecg_active = false;
 static bool gsr_active = false;  // Independent GSR (BioZ) state
 static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
 static bool gsr_contact_ok = false;
-
+static bool m_gsr_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
 static bool prev_gsr_contact_ok = false; // Track previous contact state
 
 static uint16_t m_ecg_hr = 0;
@@ -310,6 +316,18 @@ static void set_ecg_lead_on_off(bool state)
 {
     // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
     m_ecg_lead_on_off = state;
+}
+
+static bool get_gsr_lead_on_off(void)
+{
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return m_gsr_lead_on_off;
+}
+
+static void set_gsr_lead_on_off(bool state)
+{
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
+    m_gsr_lead_on_off = state;
 }
 
 static uint16_t get_ecg_hr(void)
@@ -600,12 +618,14 @@ static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
     {
         LOG_INF("BIOZ Lead OFF detected (no skin contact)");
         k_sem_give(&sem_gsr_lead_off);
+        set_gsr_lead_on_off(true);
          gsr_contact_ok = false;
 
     } else {
 
         LOG_INF("BIOZ Lead ON detected (skin contact OK)");
         k_sem_give(&sem_gsr_lead_on);
+        set_gsr_lead_on_off(false);
          gsr_contact_ok = true;
     }
 
@@ -764,7 +784,13 @@ static void st_ecg_idle_entry(void *o)
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
     }
     
-    // Handle independent GSR (BioZ) control
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_MEASURE_ENTRY]);
+    
+    }
+
+  /*  // Handle independent GSR (BioZ) control
     if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
     {
         LOG_INF("Starting GSR (BioZ) measurement for %d seconds", GSR_MEASUREMENT_DURATION_S);
@@ -855,9 +881,210 @@ static void st_ecg_idle_entry(void *o)
               }
             }
         }
+    }  */
+}
+
+static void st_gsr_entry_run(void *o)
+{
+    ARG_UNUSED(o);
+    
+    LOG_INF("GSR ENTRY State");
+
+    // Enable Measurement
+    hw_max30001_gsr_enable();
+    hpi_data_set_gsr_measurement_active(true);
+    hpi_data_set_gsr_record_active(true);
+    gsr_measurement_in_progress = true;
+
+    remaining_timer_s = GSR_MEASUREMENT_DURATION_S;
+    prev_gsr_contact_ok = true;  // reset state
+
+    k_timer_start(&tmr_bioz_sampling,
+                  K_MSEC(BIOZ_SAMPLING_INTERVAL_MS),
+                  K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
+
+    smf_set_state(SMF_CTX(&s_ecg_obj),
+                  &ecg_states[HPI_ECG_STATE_GSR_MEASURE_STREAM]);
+}
+
+
+static void st_gsr_stream_run(void *o)
+{
+    ARG_UNUSED(o);
+
+    // Handle STOP button
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("GSR STOP Triggered");
+        hw_max30001_gsr_disable();
+        hpi_data_set_gsr_measurement_active(false);
+        hpi_data_set_gsr_record_active(false);
+        k_timer_stop(&tmr_bioz_sampling);
+
+        smf_set_state(SMF_CTX(&s_ecg_obj),
+                      &ecg_states[HPI_ECG_STATE_IDLE]);
+        return;
+    }
+
+    // Lead OFF detected? Reset timer
+    bool contact = get_gsr_lead_on_off();
+    if (contact)
+    {
+        remaining_timer_s = GSR_MEASUREMENT_DURATION_S;
+        prev_gsr_contact_ok = false;
+        return;
+    }
+
+    // Lead regained
+    if (!prev_gsr_contact_ok && !contact)
+    {
+        remaining_timer_s = GSR_MEASUREMENT_DURATION_S;
+        prev_gsr_contact_ok = true;
+        LOG_INF("GSR Lead regained, restarting countdown");
+    }
+
+    // Count Timer
+    static int64_t last_update_time = 0;
+    int64_t now = k_uptime_get_32();
+    if (now - last_update_time >= 1000)
+    {
+        last_update_time = now;
+        remaining_timer_s--;
+
+        struct hpi_gsr_status_t status = {
+            .remaining_s = remaining_timer_s,
+            .total_s = GSR_MEASUREMENT_DURATION_S,
+            .active = true,
+        };
+        zbus_chan_pub(&gsr_status_chan, &status, K_NO_WAIT);
+
+        if (remaining_timer_s <= 0)
+        {
+            smf_set_state(SMF_CTX(&s_ecg_obj),
+                          &ecg_states[HPI_ECG_STATE_GSR_COMPLETE]);
+        }
     }
 }
 
+static void st_gsr_complete_run(void *o)
+{
+    ARG_UNUSED(o);
+
+    LOG_INF("GSR COMPLETE");
+
+    hw_max30001_gsr_disable();
+    hpi_data_set_gsr_measurement_active(false);
+    hpi_data_set_gsr_record_active(false);
+
+    k_timer_stop(&tmr_bioz_sampling);
+
+    struct hpi_gsr_status_t status = {
+        .remaining_s = 0,
+        .total_s = GSR_MEASUREMENT_DURATION_S,
+        .active = false,
+    };
+    zbus_chan_pub(&gsr_status_chan, &status, K_NO_WAIT);
+
+     hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+
+    smf_set_state(SMF_CTX(&s_ecg_obj),
+                  &ecg_states[HPI_ECG_STATE_IDLE]);
+}
+
+
+// static void st_gsr_entry(void *o)
+// {
+//     LOG_INF("GSR measurement starting");
+
+//     int ret = hw_max30001_gsr_enable();
+//     if (ret == 0) {
+//         hpi_data_set_gsr_measurement_active(true);
+//         hpi_data_set_gsr_record_active(true);
+
+//         gsr_measurement_start_time = k_uptime_get();
+//         gsr_measurement_in_progress = true;
+//         prev_gsr_contact_ok = gsr_contact_ok;
+
+//         k_timer_start(&tmr_bioz_sampling, K_MSEC(BIOZ_SAMPLING_INTERVAL_MS),
+//                       K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
+
+//         struct hpi_gsr_status_t gsr_status = {
+//                     .elapsed_s = 0,
+//                     .remaining_s = GSR_MEASUREMENT_DURATION_S,
+//                     .total_s = GSR_MEASUREMENT_DURATION_S,
+//                     .active = true,
+//                 };
+//                 zbus_chan_pub(&gsr_status_chan, &gsr_status, K_NO_WAIT);
+//                       // Initialize screen with current lead state - signal display thread
+//     bool current_lead_off = get_gsr_lead_on_off();
+//     if (current_lead_off) {
+//         k_sem_give(&sem_gsr_lead_off);
+//     } else {
+//         k_sem_give(&sem_gsr_lead_on);
+//     }
+
+//     } else {
+//         LOG_ERR("Failed to start GSR: %d", ret);
+//         gsr_measurement_in_progress = false;
+//     }
+
+    
+    
+// }
+
+// static void st_gsr_run(void *o)
+// {
+//     if (!gsr_measurement_in_progress) return;
+
+//     /* Contact handling */
+//     if (!gsr_contact_ok) {
+//         hpi_gsr_reset_countdown_timer();
+//     } else if (!prev_gsr_contact_ok && gsr_contact_ok) {
+//         gsr_measurement_start_time = k_uptime_get();
+//         gsr_last_status_pub_s = 0;
+//         LOG_INF("GSR contact regained - countdown restarted");
+//     }
+//     prev_gsr_contact_ok = gsr_contact_ok;
+
+//     /* Countdown logic */
+//     if (gsr_contact_ok) {
+//         int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
+//         if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
+//             LOG_INF("GSR measurement complete");
+//             smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+//         } else {
+//             uint32_t elapsed_s = elapsed_ms / 1000;
+//             if (elapsed_s != gsr_last_status_pub_s && elapsed_s <= GSR_MEASUREMENT_DURATION_S) {
+//                 gsr_last_status_pub_s = elapsed_s;
+
+//                 #if defined(CONFIG_HPI_GSR_SCREEN)
+//                 struct hpi_gsr_status_t gsr_status = {
+//                     .elapsed_s = (uint16_t)elapsed_s,
+//                     .remaining_s = (uint16_t)(GSR_MEASUREMENT_DURATION_S - elapsed_s),
+//                     .total_s = GSR_MEASUREMENT_DURATION_S,
+//                     .active = true,
+//                 };
+//                 zbus_chan_pub(&gsr_status_chan, &gsr_status, K_NO_WAIT);
+//                 #endif
+//             }
+//         }
+//     }
+//     }
+//     /* Manual cancel */
+//     if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0) {
+//         LOG_INF("GSR cancelled manually");
+//         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+//     }
+// }
+
+// static void st_gsr_exit(void *o)
+// {
+//     hw_max30001_gsr_disable();
+//     hpi_data_set_gsr_measurement_active(false);
+//     hpi_data_set_gsr_record_active(false);
+//     gsr_measurement_in_progress = false;
+//     k_timer_stop(&tmr_bioz_sampling);
+// }
 static void st_ecg_stream_entry(void *o)
 {
     int ret;
@@ -1213,6 +1440,10 @@ static const struct smf_state ecg_states[] = {
     [HPI_ECG_STATE_STREAM] = SMF_CREATE_STATE(st_ecg_stream_entry, st_ecg_stream_run, st_ecg_stream_exit, NULL, NULL),
     [HPI_ECG_STATE_LEADOFF] = SMF_CREATE_STATE(st_ecg_leadoff_entry, st_ecg_leadoff_run, NULL, NULL, NULL),
     [HPI_ECG_STATE_COMPLETE] = SMF_CREATE_STATE(st_ecg_complete_entry, st_ecg_complete_run, st_ecg_complete_exit, NULL, NULL),
+    
+    [HPI_ECG_STATE_GSR_MEASURE_ENTRY]  = SMF_CREATE_STATE(NULL, st_gsr_entry_run, NULL, NULL, NULL),
+    [HPI_ECG_STATE_GSR_MEASURE_STREAM] = SMF_CREATE_STATE(NULL, st_gsr_stream_run, NULL, NULL, NULL),
+    [HPI_ECG_STATE_GSR_COMPLETE]       = SMF_CREATE_STATE(NULL, st_gsr_complete_run, NULL, NULL, NULL),
 };
 
 void smf_ecg_thread(void)
