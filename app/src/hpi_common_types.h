@@ -348,11 +348,18 @@ struct hpi_hrv_eval_result_t
     int64_t measurement_complete_ts;  // Unix timestamp when measurement completed
 };
 
-struct hpi_hrv_status_t
-{
-    uint16_t elapsed_s;         // Seconds since measurement start
-    uint16_t remaining_s;       // Seconds remaining to target duration
-    uint16_t total_s;           // Total target duration
-    bool active;        // Current HRV measurement status
-};
+// struct hpi_hrv_status_t
+// {
+//     uint16_t elapsed_s;         // Seconds since measurement start
+//     uint16_t remaining_s;       // Seconds remaining to target duration
+//     uint16_t total_s;           // Total target duration
+//     bool active;        // Current HRV measurement status
+// };
+
+// struct hpi_hrv_status_t
+// {
+//     int64_t ts_complete;
+//     uint8_t status;
+//     uint16_t progress_timer;
+// };
 
