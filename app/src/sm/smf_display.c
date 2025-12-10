@@ -946,8 +946,9 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
-         hpi_hrv_disp_update_timer(m_disp_hrv_timer);
-         
+        
+         hpi_hrv_disp_update_timer(m_disp_ecg_timer);
+
          if(k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
          {
             hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
@@ -956,7 +957,7 @@ static void hpi_disp_update_screens(void)
          {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
             scr_hrv_lead_on_off_handler(false);
-          
+            hpi_data_set_hrv_eval_active(true);
             bool is_hrv_active = hpi_data_is_hrv_eval_active();
             bool was_lead_off = m_lead_on_off;  // Previous state before this update
             
@@ -965,15 +966,19 @@ static void hpi_disp_update_screens(void)
             LOG_INF("DISPLAY THREAD: HRV active=%s, was_lead_off=%s", 
                     is_hrv_active ? "true" : "false", 
                     was_lead_off ? "true" : "false");
-            if(!is_hrv_active)
+
+            if (is_hrv_active && !was_lead_off)
             {
-                hpi_data_set_hrv_eval_active(true);
-                 hpi_hrv_timer_start();
+                LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
+                // hpi_hrv_timer_start();
+                 hpi_ecg_timer_start();
             }
-            else if(was_lead_off)
+            else if(is_hrv_active && was_lead_off)
             {
-                hpi_hrv_timer_start();
-            }
+            LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
+                 // Signal state machine to enter stabilization before resuming recording
+                 k_sem_give(&sem_ecg_lead_on_stabilize);
+             }
             
         }
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
@@ -986,9 +991,9 @@ static void hpi_disp_update_screens(void)
             if (is_hrv_active)
             {
                 hpi_data_reset_hrv_record_buffer();
-                hpi_data_set_hrv_eval_active(false);
-                hpi_hrv_timer_reset();
-
+                hpi_ecg_timer_reset();
+                hpi_hrv_reset_countdown_timer();
+               // hpi_ecg_reset_countdown_timer();
             }
         }
 
@@ -1529,7 +1534,8 @@ ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
 static void disp_hrv_stat_listener(const struct zbus_channel *chan)
 {
     const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
-    m_disp_hrv_timer = hrv_status->remaining_s;
+      m_disp_hrv_timer = hrv_status->remaining_s;
+    // m_disp_hrv_timer = hrv_status->progress_timer;
 }
 ZBUS_LISTENER_DEFINE(disp_hrv_stat_lis, disp_hrv_stat_listener);
 
