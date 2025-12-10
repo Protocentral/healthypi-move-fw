@@ -19,12 +19,11 @@ LOG_MODULE_REGISTER(hpi_disp_scr_hrv_frequency_compact, LOG_LEVEL_DBG);
 lv_obj_t *scr_hrv_frequency_compact;
 // GUI Labels - minimal set
 static lv_obj_t *label_lf_hf_ratio_compact;
-static lv_obj_t *label_stress;
 static lv_obj_t *label_stress_level_compact;
 static lv_obj_t *arc_stress_gauge;
 static lv_obj_t *label_sdnn;
 static lv_obj_t *label_rmssd;
-static lv_obj_t *label_stress_text;
+
 // Externs
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
@@ -37,8 +36,6 @@ extern float stress_score_compact;
 extern float sdnn_val;
 extern float rmssd_val;
 
-extern bool hrv_active;
-extern bool check_gesture;
 extern struct k_sem hrv_state_set_mutex;
 
 static void lvgl_update_cb(void *user_data)
@@ -80,7 +77,6 @@ void gesture_handler(lv_event_t *e)
 {
     lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
     if (dir == LV_DIR_BOTTOM) {
-        //gesture_down_scr_spl_hrv();
         gesture_down_scr_spl_hrv_complete();
     }
 }
@@ -91,7 +87,6 @@ void gesture_handler(lv_event_t *e)
           hpi_load_screen(SCR_HRV, SCROLL_DOWN);
  }
 
-//void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
 
