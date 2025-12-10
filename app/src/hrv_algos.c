@@ -310,10 +310,10 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     // Trapezoidal integration
     float32_t power = 0.0f;
 
-    LOG_DBG("---- Per-bin power (%.2f-%.2f Hz) ----", f_low, f_high);
+   // LOG_DBG("---- Per-bin power (%.2f-%.2f Hz) ----", f_low, f_high);
     for (uint32_t i = idx_low; i <= idx_high; i++) {
         float32_t power_bin_s2 = psd[i] * df;            // in s^2
-        LOG_DBG("Bin %3d | Freq = %.3f Hz | PSD = %.6f", i, (double)(i * df), (double)psd[i]);
+      //  LOG_DBG("Bin %3d | Freq = %.3f Hz | PSD = %.6f", i, (double)(i * df), (double)psd[i]);
     }
     
     for (uint32_t i = idx_low; i < idx_high; i++) {
@@ -323,7 +323,7 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     // Convert from s^2 to ms^2
     power *= 1000000.0f;
 
-    LOG_DBG("Integrated power from %.2f Hz to %.2f Hz: %.3f ms^2", (double)f_low, (double)f_high, (double)power);
+   // LOG_DBG("Integrated power from %.2f Hz to %.2f Hz: %.3f ms^2", (double)f_low, (double)f_high, (double)power);
     
     return power;
 }
@@ -382,10 +382,7 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
     LOG_INF("Expected Total Power from SDNN: %f", expected_total_power);
     LOG_INF("Power Ratio (Actual/Expected): %f", ratio_lf_hf);
     LOG_INF("Stress Score (Compact): %f", stress_score_compact);
-    // LOG_INF("SDNN : %f", sdnn_val);
-    // LOG_INF("RMSSD : %f", rmssd_val);
-
-    
+   
  }
  float hpi_get_lf_hf_ratio(void) {
    
