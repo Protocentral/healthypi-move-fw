@@ -362,7 +362,7 @@ void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
 void gesture_down_scr_pulldown(void);
 void gesture_down_scr_bpt_cal_required(void);
-
+void gesture_down_scr_gsr_complete(void);
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);

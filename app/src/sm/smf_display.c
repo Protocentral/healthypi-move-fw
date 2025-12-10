@@ -85,6 +85,9 @@ K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
 
+
+K_SEM_DEFINE(sem_gsr_complete, 0, 1);
+//K_SEM_DEFINE(sem_gsr_complete_reset, 0, 1);
 /**
  * @brief Signal touch wakeup from sleep state
  * Called by input drivers (touch controller) when touch is detected.
@@ -224,7 +227,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
     [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, unload_scr_gsr_plot},
   //  [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, gesture_down_scr_gsr_plot},
-    [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, unload_scr_gsr_complete},
+    [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, gesture_down_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
 
@@ -1004,6 +1007,11 @@ static void hpi_disp_update_screens(void)
         // Update GSR countdown timer display (mirrors ECG pattern)
         hpi_gsr_disp_update_timer(m_disp_gsr_remaining);
 #endif
+        if (k_sem_take(&sem_gsr_complete, K_NO_WAIT) == 0)
+        {
+            hpi_load_scr_spl(SCR_SPL_GSR_COMPLETE, SCROLL_DOWN, 0, 0, 0, 0);
+          //  hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+        }
         
         if (k_sem_take(&sem_gsr_lead_on, K_NO_WAIT) == 0)
         {
@@ -1044,6 +1052,12 @@ static void hpi_disp_update_screens(void)
         hpi_ppg_check_signal_timeout();
         lv_disp_trig_activity(NULL);
         break;
+    // case SCR_SPL_GSR_COMPLETE:
+    //     if (k_sem_take(&sem_gsr_complete_reset, K_NO_WAIT) == 0)
+    //     {
+    //         hpi_load_screen(SCR_GSR, SCROLL_UP);
+    //     }
+    //     break;
     case SCR_SPL_ECG_COMPLETE:
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
