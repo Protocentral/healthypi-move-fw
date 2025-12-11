@@ -958,7 +958,7 @@ static void st_gsr_stream_run(void *o)
     // if (remaining_timer_s <= 0 && contact_ok) {
     //     smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_COMPLETE]);
     // }
-
+  
 
     bool contact_ok = (get_gsr_lead_on_off() == 0); // TRUE when skin contact
 
@@ -1008,6 +1008,8 @@ static void st_gsr_stream_run(void *o)
 
     if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0) {
         LOG_DBG("GSR cancelled");
+        hpi_data_reset_gsr_record_buffer();
+
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
     }
 
@@ -1019,32 +1021,18 @@ static void st_gsr_stream_exit(void *o)
     hpi_data_set_gsr_measurement_active(false);
     hpi_data_set_gsr_record_active(false);
     k_timer_stop(&tmr_bioz_sampling);
-//    hpi_gsr_reset_countdown_timer();
 }
 
 static void st_gsr_complete_run(void *o)
 {
     LOG_INF("GSR COMPLETE");
-    int  ret = hw_max30001_bioz_disable();
-    k_timer_stop(&tmr_bioz_sampling);
+    int  ret = hw_max30001_gsr_disable();
+
     if (ret != 0) {
         LOG_ERR("Failed to disable GSR in complete : %d", ret);
     }
 
     k_sem_give(&sem_gsr_complete);
-    
-    // hpi_data_set_gsr_measurement_active(false);
-    // hpi_data_set_gsr_record_active(false);
-
-
-    // struct hpi_gsr_status_t status = {
-    //     .remaining_s = 0,
-    //     .total_s = GSR_MEASUREMENT_DURATION_S,
-    //     .active = false,
-    // };
-    // zbus_chan_pub(&gsr_status_chan, &status, K_NO_WAIT);
-
-    // hpi_load_screen(SCR_GSR, SCROLL_DOWN);
 
     smf_set_state(SMF_CTX(&s_ecg_obj),
                   &ecg_states[HPI_ECG_STATE_IDLE]);
