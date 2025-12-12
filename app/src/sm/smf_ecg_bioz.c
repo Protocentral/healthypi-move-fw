@@ -197,8 +197,6 @@ static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
 static bool ecg_stabilization_complete = false;
 
-static int remaining_timer_s;
-
 
 // uint32_t gsr_countdown_val = 0;
 // uint32_t gsr_last_timer_val = 0;
@@ -929,44 +927,12 @@ static void st_gsr_stream_run(void *o)
 {
     ARG_UNUSED(o);
 
-       // Read current contact status
-    // bool contact_ok = (get_gsr_lead_on_off() == 0); // TRUE when skin contact
-
-    // // If no contact, freeze timer at 30
-    // if (!contact_ok) {
-    //     remaining_timer_s = GSR_MEASUREMENT_DURATION_S; // Always reset to 30
-    //     LOG_INF("No skin contact — timer frozen at 30");
-    // } else {
-    //     // Only decrement if contact present
-    //     static int64_t last_update_time = 0;
-    //     int64_t now = k_uptime_get_32();
-    //     if (now - last_update_time >= 1000) {
-    //         last_update_time = now;
-    //         remaining_timer_s--;
-    //     }
-    // }
-
-    // // Publish status to UI
-    // struct hpi_gsr_status_t status = {
-    //     .remaining_s = remaining_timer_s,
-    //     .total_s = GSR_MEASUREMENT_DURATION_S,
-    //     .active = contact_ok,
-    // };
-    // zbus_chan_pub(&gsr_status_chan, &status, K_NO_WAIT);
-
-    // // Complete state check
-    // if (remaining_timer_s <= 0 && contact_ok) {
-    //     smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_COMPLETE]);
-    // }
-  
-
     bool contact_ok = (get_gsr_lead_on_off() == 0); // TRUE when skin contact
 
     k_mutex_lock(&gsr_timer_mutex, K_FOREVER);
 
     if (!contact_ok) {
         // Reset the timer whenever contact is lost
-       // hpi_gsr_reset_countdown_timer();
         LOG_INF("No skin contact — timer frozen at 30");
     } else {
         // Decrement timer every second
@@ -1018,14 +984,14 @@ static void st_gsr_stream_run(void *o)
 static void st_gsr_stream_exit(void *o)
 {
     LOG_DBG("BioZ SM Stream Exit");
-    hpi_data_set_gsr_measurement_active(false);
-    hpi_data_set_gsr_record_active(false);
     k_timer_stop(&tmr_bioz_sampling);
 }
 
 static void st_gsr_complete_run(void *o)
 {
     LOG_INF("GSR COMPLETE");
+    hpi_data_set_gsr_measurement_active(false);
+    hpi_data_set_gsr_record_active(false);
     int  ret = hw_max30001_gsr_disable();
 
     if (ret != 0) {
