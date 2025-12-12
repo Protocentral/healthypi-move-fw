@@ -251,15 +251,24 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(label_scr_title, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_scr_title, &style_body_medium, LV_PART_MAIN);
 
+    int last_scr_count = hpi_data_get_last_scr_count();
     label_scr_count = lv_label_create(scr_gsr);
-    lv_label_set_text(label_scr_count, "--");
-    lv_obj_align(label_scr_count, LV_ALIGN_CENTER, 0, 15);   // Below the title
 
+    if(last_scr_count == 0)
+    {
+        lv_label_set_text(label_scr_count, "--");
+    }
+    else
+    {
+        lv_label_set_text_fmt(label_scr_count, "%d", last_scr_count);
+    }
+   // lv_label_set_text(label_scr_count, "--");
+    lv_obj_align(label_scr_count, LV_ALIGN_CENTER, 0, 15);   // Below the title
     lv_obj_set_style_text_color(label_scr_count, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_scr_count, &style_numeric_large, LV_PART_MAIN);  // BIG font
 
-    int last_scr_count = hpi_data_get_last_scr_count();
-    lv_label_set_text_fmt(label_scr_count, "%d", last_scr_count);
+    // int last_scr_count = hpi_data_get_last_scr_count();
+    // lv_label_set_text_fmt(label_scr_count, "%d", last_scr_count);
 
 
      // Status info - centered below unit with proper spacing
