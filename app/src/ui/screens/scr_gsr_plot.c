@@ -72,8 +72,8 @@ static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
     if (code == LV_EVENT_PRESSED) 
     {
         // Stop GSR measurement using semaphore control (same pattern as ECG)
-        k_sem_give(&sem_gsr_cancel);
         hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+        k_sem_give(&sem_gsr_cancel);
     }
 }
 // LVGL 9.2 optimized batch plot function (ECG-like flow adapted for GSR)
