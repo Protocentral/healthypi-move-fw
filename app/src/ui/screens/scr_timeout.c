@@ -5,8 +5,8 @@
 #include <stdio.h>
 
 #include "hpi_common_types.h"
-#include "ui/move_ui.h"
 #include "hw_module.h"
+#include "ui/move_ui.h"
 
 lv_obj_t *scr_finger_timeout;
 
