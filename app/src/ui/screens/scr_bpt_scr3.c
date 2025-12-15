@@ -48,6 +48,8 @@ extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
 extern struct k_sem sem_fi_spo2_est_cancel;
+extern struct k_sem sem_fi_bpt_est_cancel;
+extern struct k_sem sem_fi_bpt_cal_cancel;
 static int source = 0;
 
 void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
@@ -106,6 +108,8 @@ void gesture_down_scr_fi_sens_check(void)
     }
     else
     {
+      k_sem_give(&sem_fi_bpt_est_cancel);
+      k_sem_give(&sem_fi_bpt_cal_cancel);
       hpi_load_screen(SCR_BPT, SCROLL_DOWN);
     }
 }

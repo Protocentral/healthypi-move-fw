@@ -155,6 +155,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_HR_SCR2,
     SCR_SPL_PLOT_GSR,
     SCR_SPL_GSR_COMPLETE,
+    SCR_TIMEOUT,
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -512,3 +513,6 @@ static void scr_hrv_btn_start_handler(lv_event_t *e);
 void hpi_hrv_reset_countdown_timer(void);
 void unload_scr_hrv_eval_progress(void);
 void hpi_hrv_disp_update_timer(uint16_t remaining_s);
+
+void draw_scr_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_timeout(void);

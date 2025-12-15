@@ -45,10 +45,15 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_white_large_numeric;
+static int source = 0;
 
+extern struct k_sem sem_fi_spo2_est_cancel;
+extern struct k_sem sem_fi_bpt_est_cancel;
+extern struct k_sem sem_fi_bpt_cal_cancel;
 void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_spo2_timeout = lv_obj_create(NULL);
+    source = arg1;
     lv_obj_add_style(scr_spo2_timeout, &style_scr_black, 0);
     lv_obj_add_flag(scr_spo2_timeout, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     // draw_scr_common(scr_spo2_timeout);
@@ -83,5 +88,15 @@ void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
 void gesture_down_scr_spl_spo2_timeout(void)
 {
-    hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+    if(source == SCR_SPO2)
+    {
+        k_sem_give(&sem_fi_spo2_est_cancel);
+        hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+    }
+    else
+    {
+        k_sem_give(&sem_fi_bpt_est_cancel);
+        k_sem_give(&sem_fi_bpt_cal_cancel);
+        hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+    }
 }

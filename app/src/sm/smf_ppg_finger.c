@@ -52,6 +52,8 @@ K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
 K_SEM_DEFINE(sem_bpt_cal_start, 0, 1);
 K_SEM_DEFINE(sem_fi_spo2_est_start, 0, 1);
 K_SEM_DEFINE(sem_fi_spo2_est_cancel, 0, 1);
+K_SEM_DEFINE(sem_fi_bpt_est_cancel, 0, 1);
+K_SEM_DEFINE(sem_fi_bpt_cal_cancel, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_sensor_found, 0, 1);
 K_SEM_DEFINE(sem_spo2_sensor_found, 0, 1);
@@ -552,6 +554,11 @@ static void st_ppg_fing_bpt_cal_run(void *o)
         hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf, m_cal_index);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
     }
+    if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("BPT Calibration Cancelled by user");
+        hpi_bpt_abort();
+    }
 }
 
 static void st_ppg_fing_bpt_cal_done_entry(void *o)
@@ -584,6 +591,12 @@ static void st_ppg_fing_bpt_est_run(void *o)
         k_sem_give(&sem_stop_fi_sampling);
         k_sleep(K_MSEC(1000)); // Wait for the sampling to stop
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST_DONE]);
+    }
+
+    if(k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("BPT Estimation Cancelled by user");
+        hpi_bpt_abort();
     }
 }
 
@@ -637,13 +650,32 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
 
 static void sensor_check_timeout_work_handler(struct k_work *work)
 {
+    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)&sf_obj;
     LOG_ERR("Sensor check timeout: Sensor not found");
     hpi_hw_fi_sensor_off();
+    if( s -> ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
+    {
+        k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT);
+        LOG_DBG("SpO2 Estimation Cancelled on sensor check timeout");
+        hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_SPO2, 0, 0, 0);
+    }
+    else if( s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST )
+    {
+        k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT);
+        LOG_DBG("BPT Estimation Cancelled on sensor check timeout");
+        hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    }
+    else if( s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL )
+    {
+        k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT);
+        LOG_DBG("BPT Calibration Cancelled on sensor check timeout");
+        hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    }
+    
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
 K_WORK_DEFINE(sensor_check_timeout_work, sensor_check_timeout_work_handler);
-
 static void sensor_check_timeout_handler(struct k_timer *timer_id)
 {
     LOG_DBG("Sensor check timeout handler called, submitting work item");
@@ -702,6 +734,21 @@ static void st_ppg_fi_check_sensor_run(void *o)
     if (k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
     {
         LOG_DBG("SpO2 Estimation Cancelled");
+
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
+
+    if(k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("BPT Estimation Cancelled");
+
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
+    if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("BPT Calibration Cancelled");
 
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
         return;

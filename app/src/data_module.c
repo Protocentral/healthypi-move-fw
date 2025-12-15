@@ -399,7 +399,7 @@ void hpi_data_add_hrv_interval(uint16_t rtor_ms)
     k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
     
     // if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms > 0 && rtor_ms < 2000) {
-    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms >= 300 && rtor_ms <= 1350) {
+    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms >= 300 && rtor_ms <= 1500) {
         // Detect new beat: RtoR value should change between samples
         // Only add if different from last (to avoid duplicate intervals)
         if (rtor_ms != last_rtor_value) {
