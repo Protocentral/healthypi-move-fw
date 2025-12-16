@@ -242,7 +242,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, unload_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
-  //  [SCR_TIMEOUT] = {draw_scr_timeout, gesture_down_scr_timeout},
+    [SCR_SPL_SPO2_BPT_TIMEOUT] = {draw_scr_timeout, gesture_down_scr_timeout},
 
     [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
     [SCR_SPL_BPT_FAILED] = {draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed},
@@ -958,7 +958,7 @@ static void hpi_disp_update_screens(void)
          {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
             scr_hrv_lead_on_off_handler(false);
-            hpi_data_set_hrv_eval_active(true);
+            hpi_data_set_hrv_eval_active(true); 
             bool is_hrv_active = hpi_data_is_hrv_eval_active();
             bool was_lead_off = m_lead_on_off;  // Previous state before this update
             
@@ -971,7 +971,6 @@ static void hpi_disp_update_screens(void)
             if (is_hrv_active && !was_lead_off)
             {
                 LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
-                // hpi_hrv_timer_start();
                  hpi_ecg_timer_start();
             }
             else if(is_hrv_active && was_lead_off)
