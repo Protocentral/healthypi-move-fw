@@ -38,6 +38,8 @@
 #include "ui/move_ui.h"
 #include "hw_module.h"
 
+LOG_MODULE_REGISTER(scr_spo2_timeout, LOG_LEVEL_DBG);
+
 lv_obj_t *scr_spo2_timeout;
 
 // Externs
@@ -45,15 +47,13 @@ extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_white_large_numeric;
-static int source = 0;
+
 
 extern struct k_sem sem_fi_spo2_est_cancel;
-extern struct k_sem sem_fi_bpt_est_cancel;
-extern struct k_sem sem_fi_bpt_cal_cancel;
+
 void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_spo2_timeout = lv_obj_create(NULL);
-    source = arg1;
     lv_obj_add_style(scr_spo2_timeout, &style_scr_black, 0);
     lv_obj_add_flag(scr_spo2_timeout, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     // draw_scr_common(scr_spo2_timeout);
@@ -63,7 +63,8 @@ void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_set_size(cont_col, 350, 350); /* Fit within circular bounds */
     lv_obj_align_to(cont_col, NULL, LV_ALIGN_CENTER, 0, 0); /* Center the container */
     lv_obj_set_flex_flow(cont_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(cont_col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(cont_col, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_style(cont_col, &style_scr_black, 0);
     lv_obj_set_style_pad_all(cont_col, 20, LV_PART_MAIN); /* Add padding for circular bounds */
@@ -78,7 +79,7 @@ void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 280); /* Reduced width for circular display */
-    lv_label_set_text(label_info, "Poor skin contact, motion, or low perfusion detected.\n\nTry again with:\n• Better finger placement\n• Stay still during measurement\n\nFor help: move.protocentral.com");
+    lv_label_set_text(label_info, "Poor skin contact or motion\nTry again with:\n• Better finger placement\n• Stay still during measurement\n");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_style(label_info, &style_white_medium, 0); /* Consistent text styling */
 
@@ -88,15 +89,8 @@ void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
 void gesture_down_scr_spl_spo2_timeout(void)
 {
-    if(source == SCR_SPO2)
-    {
+    
         k_sem_give(&sem_fi_spo2_est_cancel);
         hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
-    }
-    else
-    {
-        k_sem_give(&sem_fi_bpt_est_cancel);
-        k_sem_give(&sem_fi_bpt_cal_cancel);
-        hpi_load_screen(SCR_BPT, SCROLL_DOWN);
-    }
+   
 }
