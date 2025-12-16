@@ -310,10 +310,10 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     // Trapezoidal integration
     float32_t power = 0.0f;
 
-    LOG_DBG("---- Per-bin power (%.2f-%.2f Hz) ----", f_low, f_high);
+   // LOG_DBG("---- Per-bin power (%.2f-%.2f Hz) ----", f_low, f_high);
     for (uint32_t i = idx_low; i <= idx_high; i++) {
         float32_t power_bin_s2 = psd[i] * df;            // in s^2
-        LOG_DBG("Bin %3d | Freq = %.3f Hz | PSD = %.6f", i, (double)(i * df), (double)psd[i]);
+      //  LOG_DBG("Bin %3d | Freq = %.3f Hz | PSD = %.6f", i, (double)(i * df), (double)psd[i]);
     }
     
     for (uint32_t i = idx_low; i < idx_high; i++) {
@@ -323,7 +323,7 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     // Convert from s^2 to ms^2
     power *= 1000000.0f;
 
-    LOG_DBG("Integrated power from %.2f Hz to %.2f Hz: %.3f ms^2", (double)f_low, (double)f_high, (double)power);
+   // LOG_DBG("Integrated power from %.2f Hz to %.2f Hz: %.3f ms^2", (double)f_low, (double)f_high, (double)power);
     
     return power;
 }
@@ -368,24 +368,16 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
         hpi_sys_set_last_hrv_update((uint16_t)(ratio * 100), now_ts);
     }
 
-    float expected_total_power = tm_metrics.sdnn * tm_metrics.sdnn;
-    float actual_total_power = lf_power_compact + hf_power_compact;
-    float ratio_lf_hf = actual_total_power / expected_total_power;
 
-     LOG_INF("HRV interval Collection Completed: \nSamples : %d\nMean : %.1f\nSDNN : %.1f\nRMSSD : %.1f\nPnn50 : %.1f\nMAX : %.1f\nMIN : %.1f",
-        num_intervals,tm_metrics.mean, tm_metrics.sdnn,tm_metrics.rmssd, tm_metrics.pnn50, tm_metrics.hrv_max, tm_metrics.hrv_min);
+    LOG_INF("HRV interval Collection Completed: \nSamples : %d\nMean : %.1f\nSDNN : %.1f\nRMSSD : %.1f\nPnn50 : %.1f\nMIN : %.1f ms - %.1f bpm\nMAX : %.1f ms - %.1f bpm",
+             num_intervals,tm_metrics.mean, sdnn_val,rmssd_val, tm_metrics.pnn50, 
+             tm_metrics.hrv_max, (60000/tm_metrics.hrv_max), tm_metrics.hrv_min, (60000/tm_metrics.hrv_min));
 
     LOG_INF("LF Power (Compact): %f", lf_power_compact);
     LOG_INF("HF Power (Compact): %f", hf_power_compact);
     LOG_INF("LF/HF Ratio (Compact): %f", lf_power_compact / hf_power_compact);
-    LOG_INF("Total Power (Compact): %f", actual_total_power);
-    LOG_INF("Expected Total Power from SDNN: %f", expected_total_power);
-    LOG_INF("Power Ratio (Actual/Expected): %f", ratio_lf_hf);
     LOG_INF("Stress Score (Compact): %f", stress_score_compact);
-    LOG_INF("SDNN : %f", sdnn_val);
-    LOG_INF("RMSSD : %f", rmssd_val);
-
-    
+   
  }
  float hpi_get_lf_hf_ratio(void) {
    

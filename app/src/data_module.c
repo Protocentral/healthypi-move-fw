@@ -270,7 +270,7 @@ void hpi_data_hrv_record_to_file(bool active)
     
              LOG_INF("HRV file write completed");
 
-             k_sem_give(&sem_hrv_eval_complete);
+           //  k_sem_give(&sem_hrv_eval_complete);
         }
     
     
@@ -399,7 +399,7 @@ void hpi_data_add_hrv_interval(uint16_t rtor_ms)
     k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
     
     // if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms > 0 && rtor_ms < 2000) {
-    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms >= 300 && rtor_ms <= 1700) {
+    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms >= 300 && rtor_ms <= 1500) {
         // Detect new beat: RtoR value should change between samples
         // Only add if different from last (to avoid duplicate intervals)
         if (rtor_ms != last_rtor_value) {
@@ -480,8 +480,9 @@ void data_thread(void)
 
             // ECG recording buffer management with mutex protection
             // Fixed: No circular buffer - linear recording only, stop when full
+            
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
-            if (is_ecg_record_active == true)
+            if (is_ecg_record_active == true && !is_hrv_eval_active)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
@@ -500,8 +501,8 @@ void data_thread(void)
                 {
                     // Copy samples to buffer
                     memcpy(&ecg_record_buffer[ecg_record_counter], 
-                           ecg_sensor_sample.ecg_samples, 
-                           samples_to_copy * sizeof(int32_t));
+                        ecg_sensor_sample.ecg_samples, 
+                        samples_to_copy * sizeof(int32_t));
                     ecg_record_counter += samples_to_copy;
                     
                     // Check if buffer is exactly full
@@ -509,14 +510,18 @@ void data_thread(void)
                     {
                         LOG_INF("ECG buffer full - collected %d samples (30.0 seconds @ 128Hz)", 
                                 ecg_record_counter);
-                        LOG_INF("Signaling state machine to stop recording");
                         
-                        // Signal state machine that buffer is full
-                        // State machine will call hpi_data_set_ecg_record_active(false)
-                        // which will write the file synchronously
-                        extern struct k_sem sem_ecg_complete;
-                        k_sem_give(&sem_ecg_complete);
-                    }
+                       
+                        
+                            LOG_INF("Signaling state machine to stop recording");
+                            
+                            // Signal state machine that buffer is full
+                            // State machine will call hpi_data_set_ecg_record_active(false)
+                            // which will write the file synchronously
+                            extern struct k_sem sem_ecg_complete;
+                            k_sem_give(&sem_ecg_complete);
+                        }
+                       
                 }
                 else
                 {
@@ -524,22 +529,27 @@ void data_thread(void)
                     if (space_left > 0)
                     {
                         memcpy(&ecg_record_buffer[ecg_record_counter], 
-                               ecg_sensor_sample.ecg_samples, 
-                               space_left * sizeof(int32_t));
+                            ecg_sensor_sample.ecg_samples, 
+                            space_left * sizeof(int32_t));
                         ecg_record_counter += space_left;
                     }
                     
                     LOG_WRN("ECG buffer full mid-batch - collected %d samples, discarded %d", 
                             ecg_record_counter, samples_to_copy - space_left);
+                  
                     LOG_INF("Signaling state machine to stop recording");
-                    
-                    // Signal completion
+                        
+                     // Signal state machine that buffer is full
                     extern struct k_sem sem_ecg_complete;
                     k_sem_give(&sem_ecg_complete);
+                    
+                          
                 }
+            
             }
+        
             k_mutex_unlock(&mutex_is_ecg_record_active);
-
+            
             // HRV interval capture
             if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
             {
@@ -547,8 +557,8 @@ void data_thread(void)
                 // RtoR value is in milliseconds from the MAX30001 sensor
                 hpi_data_add_hrv_interval(ecg_sensor_sample.rtor);
             }
+        
         }
-
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
             processed_data = true;

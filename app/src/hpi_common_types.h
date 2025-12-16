@@ -356,3 +356,10 @@ struct hpi_hrv_status_t
     bool active;        // Current HRV measurement status
 };
 
+// struct hpi_hrv_status_t
+// {
+//     int64_t ts_complete;
+//     uint8_t status;
+//     uint16_t progress_timer;
+// };
+

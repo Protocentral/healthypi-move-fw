@@ -1,32 +1,3 @@
-/*
- * HealthyPi Move
- * 
- * SPDX-License-Identifier: MIT
- *
- * Copyright (c) 2025 Protocentral Electronics
- *
- * Author: Ashwin Whitchurch, Protocentral Electronics
- * Contact: ashwin@protocentral.com
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -49,7 +20,6 @@ static lv_obj_t *chart_ecg = NULL;
 static lv_chart_series_t *ser_ecg = NULL;
 static lv_obj_t *arc_hrv_zone = NULL;
 static lv_obj_t *label_intervals_count = NULL;
-//static lv_obj_t *label_ecg_info = NULL;
 
 // ECG chart state
 static float y_max_ecg = -10000;
@@ -60,8 +30,6 @@ static uint32_t sample_counter = 0;
 static const uint32_t RANGE_UPDATE_INTERVAL = 128;
 
 // Lead and stabilization state
-static bool timer_running = false;
-static bool timer_paused = true;
 static bool lead_on_detected = false;
 
 // Externs
@@ -75,52 +43,82 @@ K_MUTEX_DEFINE(Lead_on_off_handler_mutex);
 extern struct k_sem sem_hrv_eval_cancel;
 
 // HRV evaluation parameters
-#define HRV_MEASUREMENT_DURATION_S 120  
+#define HRV_MEASUREMENT_DURATION_S 60  // 120 seconds for detailed HRV measurement  
 
 // R-to-R interval data
 extern volatile uint16_t hrv_interval_count;
 extern struct hpi_hrv_interval_t hrv_intervals[];
 
 // Track measurement state
-static int64_t hrv_measurement_start_time = 0;
+
 static bool scr_hrv_progress_active = false;  // Track if screen is currently active
 static bool hrv_plot_enabled = true; 
 
 void hpi_hrv_disp_update_timer(uint16_t remaining_s)
 {
-     // Check if screen is still active before updating
+    // Check if screen is still active before updating
     if (!scr_hrv_progress_active) {
         return;
     }
     
-    // Optimize with caching to avoid unnecessary LVGL updates
-    static uint16_t last_remaining = 0xFFFF;
-    if (remaining_s != last_remaining) {
-        last_remaining = remaining_s;
-        lv_label_set_text_fmt(label_timer, "%02u", remaining_s);
-        if (arc_hrv_zone != NULL) {
-            lv_arc_set_value(arc_hrv_zone, (HRV_MEASUREMENT_DURATION_S - remaining_s));
-        }
-    }
+    // > HRV_MEASUREMENT_DURATION_S  => stabilization (total = HRV + 5)
+    bool is_stabilizing = (remaining_s > HRV_MEASUREMENT_DURATION_S);
 
-    // Update interval count display
-    if (label_intervals_count != NULL) {
-        lv_label_set_text_fmt(label_intervals_count, "Intervals: %d", hrv_interval_count);
+    if (is_stabilizing) 
+    {
+        // Show stabilization countdown: (HRV+5 → HRV+1) to 5→1
+        uint16_t stabilization_time = remaining_s - HRV_MEASUREMENT_DURATION_S; 
+
+        if (label_timer != NULL) {
+            lv_label_set_text_fmt(label_timer, "%u", stabilization_time);
+        }
+
+        if (label_ecg_lead_off != NULL) {
+            lv_label_set_text(label_ecg_lead_off, "Signal stabilizing...\nPlease hold still");
+            lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+        }
+
+        lv_arc_set_range(arc_hrv_zone,0, 4);
+        if (arc_hrv_zone != NULL) {
+            uint16_t used = HRV_MEASUREMENT_DURATION_S + 5 - remaining_s; // 0 -> 5
+            lv_arc_set_value(arc_hrv_zone, used);
+        }
+        lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR); 
+    } 
+    else
+     {
+        // Normal HRV recording countdown (0 to HRV_MEASUREMENT_DURATION_S)
+        if (lead_on_detected && label_ecg_lead_off != NULL && remaining_s > 0) {
+            lv_obj_add_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+        }
+
+        if (label_timer != NULL) {
+
+            lv_label_set_text_fmt(label_timer, "%u", remaining_s);
+        }
+
+        lv_arc_set_range(arc_hrv_zone,0, HRV_MEASUREMENT_DURATION_S);
+        if (arc_hrv_zone != NULL) {
+            uint16_t used = HRV_MEASUREMENT_DURATION_S - remaining_s; // 0 to HRV_MEASUREMENT_DURATION_S
+            lv_arc_set_value(arc_hrv_zone, used);
+        }
+        lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x8B0000), LV_PART_INDICATOR); 
+
+        // Update interval count display
+        if (label_intervals_count != NULL) {
+            lv_label_set_text_fmt(label_intervals_count, "Intervals: %d", hrv_interval_count);
+        }
     }
 }
 void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_hrv_eval_progress = lv_obj_create(NULL);
-    // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_hrv_eval_progress, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_hrv_eval_progress, LV_OBJ_FLAG_SCROLLABLE);
 
     // Initialize state tracking
     scr_hrv_progress_active = true;  // Mark screen as active
-    hrv_measurement_start_time = k_uptime_get();  // Record screen creation time
-    timer_running = false;
-    timer_paused = true;
-   // lead_on_detected = false;
+    lead_on_detected = false;
     y_max_ecg = -10000;
     y_min_ecg = 10000;
 
@@ -135,7 +133,7 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     // Style the progress arc - pink/magenta theme for HRV measurement
     lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
     lv_obj_set_style_arc_width(arc_hrv_zone, 8, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x8B0000), LV_PART_INDICATOR);  // Deep pink progress
+    lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x8B0000), LV_PART_INDICATOR);  // Red progress
     lv_obj_set_style_arc_width(arc_hrv_zone, 8, LV_PART_INDICATOR);
     lv_obj_remove_style(arc_hrv_zone, NULL, LV_PART_KNOB);  // Remove knob
     lv_obj_clear_flag(arc_hrv_zone, LV_OBJ_FLAG_CLICKABLE);
@@ -159,7 +157,6 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
 
     // Timer value
     label_timer = lv_label_create(cont_timer);
-    //lv_label_set_text(label_timer, "30");
     lv_label_set_text_fmt(label_timer, "%d", HRV_MEASUREMENT_DURATION_S);
     lv_obj_add_style(label_timer, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer, lv_color_white(), LV_PART_MAIN);
@@ -171,7 +168,6 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
     lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer_unit, lv_color_white(), LV_PART_MAIN);  
 
-    // CENTRAL ZONE: ECG Chart (positioned in center area - similar to scr_ecg_scr2)
     chart_ecg = lv_chart_create(scr_hrv_eval_progress);
     lv_obj_set_size(chart_ecg, 340, 100);  // Smaller chart for circular design
     lv_obj_align(chart_ecg, LV_ALIGN_CENTER, 0, -10);  // Centered position
@@ -254,10 +250,11 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
 void gesture_down_scr_spl_hrv_eval_progress(void)
 {
     // Mark screen as inactive to prevent timer callback from updating
-    LOG_INF("Exiting HRV Evaluation Progress Screen via gesture");
+    printk("Exiting HRV Evaluation Progress Screen via gesture\n");
     unload_scr_hrv_eval_progress(); 
-    hpi_hrv_timer_reset();
+    hpi_ecg_timer_reset();
     k_sem_give(&sem_hrv_eval_cancel);
+
     // Return to HRV home screen
     hpi_load_screen(SCR_HRV, SCROLL_DOWN);
 }
@@ -270,10 +267,10 @@ void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_
     }
 
     if(ecg_lead_off)
-    {
-       
+    {  
         return;
     }
+
     // Performance optimization: Skip processing if chart is hidden
     if (lv_obj_has_flag(chart_ecg, LV_OBJ_FLAG_HIDDEN)) {
         return;
@@ -328,7 +325,7 @@ void scr_hrv_lead_on_off_handler(bool lead_off)
 {
     LOG_INF("HRV Screen handler: lead_off=%s", lead_off ? "true" : "false");
     if (label_ecg_lead_off == NULL || chart_ecg == NULL) {
-        LOG_WRN("label_info is NULL, screen handler returning early");
+        LOG_WRN("label_ecg_lead_off is NULL, screen handler returning early");
         return;
     }
 
@@ -349,28 +346,6 @@ void scr_hrv_lead_on_off_handler(bool lead_off)
         
     }
 
-}
-
-void hpi_hrv_timer_start(void)
-{
-    k_mutex_lock(&Lead_on_off_handler_mutex, K_FOREVER);
-    timer_running = true;
-    timer_paused = false;
-    lead_on_detected = true;
-    k_mutex_unlock(&Lead_on_off_handler_mutex); 
-    LOG_INF("HRV timer STARTED - leads detected (running=%s, paused=%s)", 
-            timer_running ? "true" : "false", timer_paused ? "true" : "false");
-}
-void hpi_hrv_timer_reset(void)
-{
-    k_mutex_lock(&Lead_on_off_handler_mutex, K_FOREVER);
-    timer_running = false;
-    timer_paused = true;
-    lead_on_detected = false;
-    k_mutex_unlock(&Lead_on_off_handler_mutex);
-    
-    LOG_INF("HRV timer RESET - ready for fresh start (running=%s, paused=%s)",
-            timer_running ? "true" : "false", timer_paused ? "true" : "false");
 }
 
 void unload_scr_hrv_eval_progress(void)

@@ -15,16 +15,17 @@
 
 LOG_MODULE_REGISTER(hpi_disp_scr_hrv_frequency_compact, LOG_LEVEL_DBG);
 
-// GUI Screen object
 lv_obj_t *scr_hrv_frequency_compact;
-// GUI Labels - minimal set
-static lv_obj_t *label_lf_hf_ratio_compact;
-static lv_obj_t *label_stress;
-static lv_obj_t *label_stress_level_compact;
-static lv_obj_t *arc_stress_gauge;
+
+static lv_obj_t *label_title;          // "HRV Complete"
+static lv_obj_t *label_stress_text;    // "Stress"
+static lv_obj_t *bar_stress;           // progress bar
+static lv_obj_t *label_stress_pct;     // "xx%"
 static lv_obj_t *label_sdnn;
 static lv_obj_t *label_rmssd;
-static lv_obj_t *label_stress_text;
+static lv_obj_t *label_lf_hf_ratio_compact;
+static lv_obj_t *label_stress_level_compact;
+
 // Externs
 extern lv_style_t style_white_large;
 extern lv_style_t style_white_medium;
@@ -37,8 +38,6 @@ extern float stress_score_compact;
 extern float sdnn_val;
 extern float rmssd_val;
 
-extern bool hrv_active;
-extern bool check_gesture;
 extern struct k_sem hrv_state_set_mutex;
 
 static void lvgl_update_cb(void *user_data)
@@ -80,7 +79,6 @@ void gesture_handler(lv_event_t *e)
 {
     lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
     if (dir == LV_DIR_BOTTOM) {
-        //gesture_down_scr_spl_hrv();
         gesture_down_scr_spl_hrv_complete();
     }
 }
@@ -91,137 +89,116 @@ void gesture_handler(lv_event_t *e)
           hpi_load_screen(SCR_HRV, SCROLL_DOWN);
  }
 
-//void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
 
-        scr_hrv_frequency_compact = lv_obj_create(NULL);
-        lv_obj_clear_flag(scr_hrv_frequency_compact, LV_OBJ_FLAG_SCROLLABLE);
-        draw_scr_common(scr_hrv_frequency_compact);
+    scr_hrv_frequency_compact = lv_obj_create(NULL);
+    lv_obj_clear_flag(scr_hrv_frequency_compact, LV_OBJ_FLAG_SCROLLABLE);
+    draw_scr_common(scr_hrv_frequency_compact);
 
-        lv_obj_t *cont_main = lv_obj_create(scr_hrv_frequency_compact);
-        lv_obj_set_size(cont_main, 360, 360);
-        lv_obj_center(cont_main);
-        lv_obj_add_style(cont_main, &style_scr_black, 0);
-        lv_obj_set_style_pad_all(cont_main, 10, LV_PART_MAIN);
-        lv_obj_set_style_border_width(cont_main, 0, LV_PART_MAIN);
+    lv_obj_t *cont_main = lv_obj_create(scr_hrv_frequency_compact);
+    lv_obj_set_size(cont_main, lv_pct(100), lv_pct(100));
+    lv_obj_align_to(cont_main, NULL, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_flex_flow(cont_main, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_main, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(cont_main, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_style(cont_main, &style_scr_black, 0);
 
-        // Title
-        lv_obj_t *label_title = lv_label_create(cont_main);
-        lv_label_set_text(label_title, "HRV Frequency");
-        lv_obj_add_style(label_title, &style_white_medium, 0);
-        lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 5);
+    // 1) Title: HRV Complete
+    label_title = lv_label_create(cont_main);
+    lv_label_set_text(label_title, "HRV Complete");
+    lv_obj_add_style(label_title, &style_white_medium, 0);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 5);
 
-        // --- Row container for LF & HF ---
-        lv_obj_t *cont_top = lv_obj_create(cont_main);
-        lv_obj_set_size(cont_top, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_add_style(cont_top, &style_scr_black, 0);
-        lv_obj_set_style_bg_opa(cont_top, LV_OPA_TRANSP, LV_PART_MAIN);
-        lv_obj_set_style_border_width(cont_top, 0, LV_PART_MAIN);
-        lv_obj_set_flex_flow(cont_top, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(cont_top, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_align(cont_top, LV_ALIGN_TOP_MID, 0, 40);
+    // 2) "Stress" text
+    label_stress_text = lv_label_create(cont_main);
+    lv_label_set_text(label_stress_text, "Stress");
+    lv_obj_add_style(label_stress_text, &style_white_small, 0);
+    lv_obj_set_style_text_align(label_stress_text, LV_TEXT_ALIGN_CENTER, 0);
 
-        // LF Power label
-        label_sdnn = lv_label_create(cont_top);
-        lv_label_set_text(label_sdnn, "SDNN: 0.00");
-        lv_obj_set_style_text_color(label_sdnn, lv_color_hex(0xFF7070), 0); 
-        lv_obj_add_style(label_sdnn, &style_white_small, 0);
 
-        // HF Power label
-        label_rmssd = lv_label_create(cont_top);
-        lv_label_set_text(label_rmssd, "RMSSD: 0.00");
-        lv_obj_set_style_text_color(label_rmssd, lv_color_hex(0x70A0FF), 0);  
-        lv_obj_add_style(label_rmssd, &style_white_small, 0);
+    // 3) Stress progress bar
+    bar_stress = lv_bar_create(cont_main);
+    lv_obj_set_size(bar_stress, 240, 12);
+    lv_bar_set_range(bar_stress, 0, 100);  // 0‑100% stress
+    lv_bar_set_value(bar_stress, 0, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(bar_stress, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(bar_stress, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(bar_stress, 6, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bar_stress, lv_palette_main(LV_PALETTE_GREEN), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(bar_stress, 6, LV_PART_INDICATOR);
 
-        // --- Stress gauge ---
-        arc_stress_gauge = lv_arc_create(cont_main);
-        // lv_obj_set_size(arc_stress_gauge, 170, 170);
-        lv_obj_set_size(arc_stress_gauge, 170, 170);
-        lv_arc_set_rotation(arc_stress_gauge, 135);
-        lv_arc_set_bg_angles(arc_stress_gauge, 0, 270);
-        lv_arc_set_value(arc_stress_gauge, 0);
-        lv_obj_clear_flag(arc_stress_gauge, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_remove_style(arc_stress_gauge, NULL, LV_PART_KNOB);
-        lv_obj_align(arc_stress_gauge, LV_ALIGN_CENTER, 0, 10);
+    // 4) Stress percentage label ("xx%")
+    label_stress_level_compact = lv_label_create(cont_main);
+    lv_label_set_text(label_stress_level_compact, "0%");
+    lv_obj_add_style(label_stress_level_compact, &style_white_medium, 0);
+    lv_obj_set_style_text_align(label_stress_level_compact, LV_TEXT_ALIGN_CENTER, 0);
 
-        // Stress label inside arc
-        label_stress_level_compact = lv_label_create(cont_main);
-        //lv_label_set_text(label_stress_level_compact, "Low");
-        lv_label_set_text(label_stress_level_compact, "Low");
-        lv_obj_add_style(label_stress_level_compact, &style_white_medium, 0);
-        lv_obj_align_to(label_stress_level_compact, arc_stress_gauge, LV_ALIGN_CENTER, 0, 0);
+    // 5) SDNN
+    label_sdnn = lv_label_create(cont_main);
+    lv_label_set_text(label_sdnn, "SDNN: --");
+    lv_obj_set_style_text_color(label_sdnn, lv_color_hex(0xFF7070), 0);
+    lv_obj_add_style(label_sdnn, &style_white_small, 0);
 
-    
-        // --- Bottom metrics (LF/HF + Stress %) ---
-        lv_obj_t *cont_bottom = lv_obj_create(cont_main);
-        lv_obj_set_size(cont_bottom, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_add_style(cont_bottom, &style_scr_black, 0);
-        lv_obj_set_style_bg_opa(cont_bottom, LV_OPA_TRANSP, LV_PART_MAIN);
-        lv_obj_set_style_border_width(cont_bottom, 0, LV_PART_MAIN);
-        lv_obj_set_flex_flow(cont_bottom, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(cont_bottom, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_align(cont_bottom, LV_ALIGN_BOTTOM_MID, 0, -10);
+    // 6) RMSSD
+    label_rmssd = lv_label_create(cont_main);
+    lv_label_set_text(label_rmssd, "RMSSD: --");
+    lv_obj_set_style_text_color(label_rmssd, lv_color_hex(0x70A0FF), 0);
+    lv_obj_add_style(label_rmssd, &style_white_small, 0);
 
-        label_lf_hf_ratio_compact = lv_label_create(cont_bottom);
-        lv_label_set_text(label_lf_hf_ratio_compact, "LF/HF: 0.00");
-        lv_obj_set_style_text_color(label_lf_hf_ratio_compact, lv_color_hex(0xC080FF), 0);  
-        lv_obj_add_style(label_lf_hf_ratio_compact, &style_white_small, 0);
+    // 7) LF/HF
+    label_lf_hf_ratio_compact = lv_label_create(cont_main);
+    lv_label_set_text(label_lf_hf_ratio_compact, "LF/HF: --");
+    lv_obj_set_style_text_color(label_lf_hf_ratio_compact, lv_color_hex(0xC080FF), 0);
+    lv_obj_add_style(label_lf_hf_ratio_compact, &style_white_small, 0);
 
-        // Gesture handler
-        lv_obj_add_event_cb(scr_hrv_frequency_compact, gesture_handler, LV_EVENT_GESTURE, NULL);
-        hpi_disp_set_curr_screen(SCR_SPL_HRV_FREQUENCY);
-        hpi_show_screen(scr_hrv_frequency_compact, m_scroll_dir);
-        lv_async_call(lvgl_update_cb, NULL);
+    // Gesture handler
+    lv_obj_add_event_cb(scr_hrv_frequency_compact, gesture_handler, LV_EVENT_GESTURE, NULL);
+    hpi_disp_set_curr_screen(SCR_SPL_HRV_FREQUENCY);
+    hpi_show_screen(scr_hrv_frequency_compact, m_scroll_dir);
+    lv_async_call(lvgl_update_cb, NULL);
 }
-
-
 void hpi_hrv_frequency_compact_update_display(void)
 {
     float ratio = 0.0f;
-    int stress_pct = get_stress_percentage(lf_power_compact, hf_power_compact);  
-   
-    ratio = lf_power_compact / hf_power_compact;
 
-    // Format numbers with decimals
-    int ratio_int = (int)ratio;
-    int ratio_dec = (int)((ratio - ratio_int) * 100);
+    int stress_pct = get_stress_percentage(lf_power_compact, hf_power_compact);
+    ratio = (hf_power_compact > 0.0f) ? (lf_power_compact / hf_power_compact) : 0.0f;
 
-    int sdnn_int = (int)sdnn_val;
-    int sdnn_dec = (int)((sdnn_val - sdnn_int) * 100);
+    int ratio_int  = (int)ratio;
+    int ratio_dec  = (int)((ratio - ratio_int) * 100);
 
-    int rmssd_int = (int)rmssd_val;
-    int rmssd_dec = (int)((rmssd_val - rmssd_int) * 100);
+    int sdnn_int   = (int)sdnn_val;
+    int sdnn_dec   = (int)((sdnn_val - sdnn_int) * 100);
 
-    // Update metric labels
-    if(label_sdnn)
+    int rmssd_int  = (int)rmssd_val;
+    int rmssd_dec  = (int)((rmssd_val - rmssd_int) * 100);
+
+    // SDNN and RMSSD
+    if (label_sdnn)
         lv_label_set_text_fmt(label_sdnn, "SDNN: %d.%02d", sdnn_int, abs(sdnn_dec));
-    
-    if(label_rmssd)
+
+    if (label_rmssd)
         lv_label_set_text_fmt(label_rmssd, "RMSSD: %d.%02d", rmssd_int, abs(rmssd_dec));
 
-    if (label_lf_hf_ratio_compact)
-        lv_label_set_text_fmt(label_lf_hf_ratio_compact, "LF/HF: %d.%02d", ratio_int, abs(ratio_dec));
-
-    // Update stress arc gauge
-    if (arc_stress_gauge != NULL) {
-        lv_arc_set_value(arc_stress_gauge, (int)stress_pct);
-        lv_obj_set_style_arc_color(arc_stress_gauge, get_stress_arc_color((int)stress_pct), LV_PART_INDICATOR);
-    }
-    // Update stress level label
-    if (label_stress_level_compact != NULL) {
-        if (stress_pct <= 25) {
-            lv_label_set_text(label_stress_level_compact, "Low");
-        } else if (stress_pct <= 50) {
-            lv_label_set_text(label_stress_level_compact, "Med");
-        } else if (stress_pct <= 75) {
-            lv_label_set_text(label_stress_level_compact, "High");
-        } else {
-            lv_label_set_text(label_stress_level_compact, "Max ");
-        }
-        lv_obj_set_style_text_color(label_stress_level_compact, get_stress_arc_color((int)stress_score_compact), 0);
+    // LF/HF ratio
+    if (label_lf_hf_ratio_compact) {
+        if (hf_power_compact > 0.0f)
+            lv_label_set_text_fmt(label_lf_hf_ratio_compact, "LF/HF: %d.%02d", ratio_int, abs(ratio_dec));
+        else
+            lv_label_set_text(label_lf_hf_ratio_compact, "LF/HF: --");
     }
 
-   
+    // Stress bar and percentage
+    if (bar_stress) {
+        lv_bar_set_value(bar_stress, stress_pct, LV_ANIM_OFF);
+        lv_obj_set_style_bg_color(bar_stress,get_stress_arc_color(stress_pct), LV_PART_INDICATOR);
+    }
+
+    if (label_stress_level_compact) {
+        lv_label_set_text_fmt(label_stress_level_compact, "%d%%", stress_pct);
+        lv_obj_set_style_text_color(label_stress_level_compact,get_stress_arc_color(stress_pct), 0);
+    }
 }
 

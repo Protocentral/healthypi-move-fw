@@ -38,7 +38,7 @@
 // FFT size must be power of 2. Larger = better frequency resolution.
 // With INTERP_FS=4Hz: FFT_SIZE=256 gives 0.0156 Hz resolution (sufficient for LF/HF)
 // LF band (0.04-0.15 Hz) will have ~7 bins, HF band (0.15-0.4 Hz) will have ~16 bins
-#define FFT_SIZE 256               // Increased from 64 for accurate LF/HF measurement
+#define FFT_SIZE 64               // Increased from 64 for accurate LF/HF measurement
 
 #define WELCH_OVERLAP 0.5f         // 50% overlap for Welch method
 

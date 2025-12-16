@@ -30,12 +30,14 @@ static lv_obj_t *btn_hrv_measure;
 static lv_obj_t *arc_hrv;
 static lv_obj_t *label_hrv_value;
 static lv_obj_t *label_hrv_status;
-static lv_obj_t *lfhf_arc;
 
 // Externs - Modern style system
 extern lv_style_t style_body_medium;
 extern lv_style_t style_numeric_large;
 extern lv_style_t style_caption;
+
+extern float lf_power_compact;
+extern float hf_power_compact ;
 
 /**
  * @brief Button event handler for starting HRV evaluation
@@ -76,7 +78,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_arc_set_range(arc_hrv, 0, 100);      
     lv_arc_set_bg_angles(arc_hrv, 135, 45);  
     lv_arc_set_angles(arc_hrv, 135, 135);   
-    lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
+    lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x333333), LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc_hrv, 8, LV_PART_MAIN);
     lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_INDICATOR); 
     lv_obj_set_style_arc_width(arc_hrv, 6, LV_PART_INDICATOR);
@@ -98,35 +100,39 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
-
-    // --- Gauge to represent sympathetic or parasympathetic ---
-    lfhf_arc = lv_arc_create(scr_hrv);
-    lv_obj_set_size(lfhf_arc, 115, 115);
-    lv_arc_set_rotation(lfhf_arc, 135);
-    lv_arc_set_bg_angles(lfhf_arc, 0, 270);
-    lv_arc_set_value(lfhf_arc, 0);
-    lv_obj_clear_flag(lfhf_arc, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_style(lfhf_arc, NULL, LV_PART_KNOB);
-    lv_obj_align(lfhf_arc, LV_ALIGN_CENTER, 0, 10);
-
     // --- LF/HF Ratio Value in the middle of the arc ---
+    // label_hrv_value = lv_label_create(scr_hrv);
+    // lv_label_set_text(label_hrv_value, "--"); 
+    // lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, 10);
+    // lv_obj_add_style(label_hrv_value, &style_numeric_large, LV_PART_MAIN);
+    // lv_obj_set_style_text_color(label_hrv_value, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
     label_hrv_value = lv_label_create(scr_hrv);
-    lv_label_set_text(label_hrv_value, "--"); 
-    lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, 10);
-    lv_obj_set_style_text_color(label_hrv_value, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_label_set_text(label_hrv_value, "--");
+    lv_obj_align(label_hrv_value, LV_ALIGN_CENTER, 0, -10);  // Centered, slightly above middle
+    lv_obj_set_style_text_color(label_hrv_value, lv_color_white(), LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_value, &style_numeric_large, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_hrv_value, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    lv_obj_t *label_hrv_unit = lv_label_create(scr_hrv);
+    lv_label_set_text(label_hrv_unit, "LF/HF");
+    lv_obj_align(label_hrv_unit, LV_ALIGN_CENTER, 0, 35);  // Below main value with gap
+    lv_obj_set_style_text_color(label_hrv_unit, lv_color_hex(0x8000FF), LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_hrv_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
 
-    /* --- LEFT LABEL: PARASYM --- */
-    lv_obj_t *label_para = lv_label_create(scr_hrv);
-    lv_label_set_text(label_para, "Par ");
-    lv_obj_set_style_text_color(label_para, lv_color_hex(COLOR_SUCCESS_GREEN), 0);
-    lv_obj_align_to(label_para, lfhf_arc, LV_ALIGN_OUT_LEFT_MID, -5, 0);
+    // /* --- LEFT LABEL: PARASYM --- */
+    // lv_obj_t *label_para = lv_label_create(scr_hrv);
+    // lv_label_set_text(label_para, "Par ");
+    // lv_obj_set_style_text_color(label_para, lv_color_hex(COLOR_SUCCESS_GREEN), 0);
+    // lv_obj_align_to(label_para, lfhf_arc, LV_ALIGN_OUT_LEFT_MID, -5, 0);
 
-    /* --- RIGHT LABEL: SYM --- */
-    lv_obj_t *label_sym = lv_label_create(scr_hrv);
-    lv_label_set_text(label_sym, " Sym");
-    lv_obj_set_style_text_color(label_sym, lv_color_hex(0xFF4E4E), 0);
-    lv_obj_align_to(label_sym, lfhf_arc, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    // /* --- RIGHT LABEL: SYM --- */
+    // lv_obj_t *label_sym = lv_label_create(scr_hrv);
+    // lv_label_set_text(label_sym, " Sym");
+    // lv_obj_set_style_text_color(label_sym, lv_color_hex(0xFF4E4E), 0);
+    // lv_obj_align_to(label_sym, lfhf_arc, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
 
 
     label_hrv_status = lv_label_create(scr_hrv);
@@ -161,8 +167,6 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
 static void hrv_update_display(void)
 {
 
-    float ratio_norm;
-    float max_ratio = 10.0f;
     char last_meas_str[25];
     ratio = hpi_get_lf_hf_ratio();
     int m_hrv_last_value = 0;
@@ -170,10 +174,13 @@ static void hrv_update_display(void)
     hpi_sys_get_last_hrv_update(&m_hrv_last_value, &m_hrv_last_update);
     hpi_helper_get_relative_time_str(m_hrv_last_update, last_meas_str, sizeof(last_meas_str));
 
-    if (ratio < 0.0f)
+    if (ratio < 0.0f || ratio == 0.0f)
      {
         m_hrv_ratio_int = 0;
         m_hrv_ratio_dec = 0;
+
+        lv_label_set_text(label_hrv_value, "--");
+        lv_label_set_text(label_hrv_status, "HeartRateVariability");
      }
      else 
      {
@@ -182,32 +189,9 @@ static void hrv_update_display(void)
 
         lv_label_set_text_fmt(label_hrv_value, "%d.%02d", m_hrv_ratio_int, m_hrv_ratio_dec);
         lv_label_set_text(label_hrv_status, last_meas_str);
-    }
-    // Normalize ratio to 0-100 for arc
-   
-    if (ratio < 0) ratio = 0;
-    if (ratio > max_ratio) ratio = max_ratio;
+     }
 
-    int arc_val = (int)((ratio / max_ratio) * 100);
-    lv_arc_set_value(lfhf_arc, arc_val);
-
-    // Detailed color mapping based on LF/HF ratio (matches stress %)
-    if (ratio < 0.5f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x00FF88), LV_PART_INDICATOR);  // Bright Green (20%)
-    } else if (ratio < 1.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0x32FF00), LV_PART_INDICATOR);  // Light Green (35%)
-    } else if (ratio < 2.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xCCFF00), LV_PART_INDICATOR);  // Yellow-Green (50%)
-    } else if (ratio < 3.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFFCC00), LV_PART_INDICATOR);  // Yellow (65%)
-    } else if (ratio < 4.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF9900), LV_PART_INDICATOR);  // Orange (75%)
-    } else if (ratio < 5.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xFF6600), LV_PART_INDICATOR);  // Dark Orange (80%)
-    } else if (ratio < 10.0f) {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // Red (90%)
-    } else {
-        lv_obj_set_style_arc_color(lfhf_arc, lv_color_hex(0xCC0000), LV_PART_INDICATOR);  // Dark Red (95%)
-    }
+    lv_arc_set_value(arc_hrv, get_stress_percentage(lf_power_compact, hf_power_compact));
+    lv_obj_set_style_arc_color(arc_hrv, lv_color_hex(0x8000FF), LV_PART_INDICATOR);
 
 }
