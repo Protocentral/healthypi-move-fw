@@ -864,8 +864,17 @@ static void st_ecg_stream_entry(void *o)
         k_timer_start(&tmr_ecg_sampling, K_MSEC(ECG_SAMPLING_INTERVAL_MS), K_MSEC(ECG_SAMPLING_INTERVAL_MS));
     }
     
-         // Start actual recording
-       hpi_data_set_ecg_record_active(true);
+    // Start actual recording
+    hpi_data_set_ecg_record_active(true);
+
+    if(get_hrv_active())
+    {
+        LOG_INF("HRV evaluation starting - initializing HRV data collection");
+        hrv_interval_count = 0;
+        memset(hrv_intervals, 0, sizeof(hrv_intervals));
+        hrv_last_status_pub_s = 0;
+  
+    }
     
     // Timer initialization - determine duration based on measurement type
     int measurement_duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
@@ -1046,7 +1055,6 @@ static void st_ecg_complete_entry(void *o)
         k_sem_give(&sem_hrv_eval_complete);
         // Reset HRV active flag
         set_hrv_active(false);
-       // hrv_measurement_in_progress = false;
     } else {
         // ECG recording complete - signal ECG completion
         k_sem_give(&sem_ecg_complete);
@@ -1146,19 +1154,14 @@ static void st_ecg_stabilizing_entry(void *o)
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
     set_ecg_timer_values(k_uptime_get_32(), 0);
     
-    // Initialize HRV if evaluation is being started
-    if (get_hrv_active()) {
-        LOG_INF("HRV evaluation starting - initializing HRV data collection");
-        hpi_data_set_hrv_eval_active(true);
-      //  hrv_measurement_start_time = k_uptime_get();
-      //  hrv_measurement_in_progress = true;
-        hrv_interval_count = 0;
-        // Reset contact state for fresh measurement
-        // atomic_set(&hrv_lead_contact, 0);
-        // atomic_set(&hrv_prev_lead_contact, 0);
-        memset(hrv_intervals, 0, sizeof(hrv_intervals));
-        hrv_last_status_pub_s = 0;
-    }
+     // Initialize HRV if evaluation is being started
+    //  if (get_hrv_active()) {
+    //      LOG_INF("HRV evaluation starting - initializing HRV data collection");
+    //      hpi_data_set_hrv_eval_active(true);
+    //      hrv_interval_count = 0;
+    //      memset(hrv_intervals, 0, sizeof(hrv_intervals));
+    //      hrv_last_status_pub_s = 0;
+    //  }
     
     int duration = is_recording_active ? ECG_RECORD_DURATION_S : HRV_MEASUREMENT_DURATION_S;
     // Publish status indicating stabilization phase
