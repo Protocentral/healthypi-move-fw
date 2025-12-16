@@ -103,11 +103,11 @@ void hpi_hrv_disp_update_timer(uint16_t remaining_s)
             lv_arc_set_value(arc_hrv_zone, used);
         }
         lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0x8B0000), LV_PART_INDICATOR); 
-    }
 
-   // Update interval count display
-    if (label_intervals_count != NULL) {
-        lv_label_set_text_fmt(label_intervals_count, "Intervals: %d", hrv_interval_count);
+        // Update interval count display
+        if (label_intervals_count != NULL) {
+            lv_label_set_text_fmt(label_intervals_count, "Intervals: %d", hrv_interval_count);
+        }
     }
 }
 void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
