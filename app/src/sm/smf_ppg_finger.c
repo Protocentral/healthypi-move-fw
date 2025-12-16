@@ -46,7 +46,7 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 
 #define PPG_FI_SAMPLING_INTERVAL_MS 20
 #define MAX30101_SENSOR_ID 0x15
-#define BPT_CAL_TIMEOUT_MS 60000
+#define BPT_CAL_TIMEOUT_MS 15000
 
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
 K_SEM_DEFINE(sem_bpt_cal_start, 0, 1);
@@ -495,7 +495,8 @@ static void st_ppg_fing_idle_run(void *o)
 static void bpt_cal_timeout_handler(struct k_timer *timer_id)
 {
     LOG_ERR("BPT Calibration Timeout");
-    k_sem_give(&sem_stop_fi_sampling);                                          // Stop sampling if needed
+    k_sem_give(&sem_stop_fi_sampling); // Stop sampling if needed
+    hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_FAIL]); // Transition to failure state
 }
 
@@ -559,6 +560,7 @@ static void st_ppg_fing_bpt_cal_run(void *o)
         LOG_DBG("BPT Calibration Cancelled by user");
         hpi_bpt_abort();
     }
+  
 }
 
 static void st_ppg_fing_bpt_cal_done_entry(void *o)
@@ -581,6 +583,7 @@ static void st_ppg_fing_bpt_est_entry(void *o)
     hpi_load_scr_spl(SCR_SPL_BPT_MEASURE, SCROLL_NONE, SCR_SPL_FI_SENS_CHECK, 0, 0, 0);
     hpi_hw_fi_sensor_on();
     hw_bpt_start_est();
+    LOG_INF("Signaling to start sampling for BPT estimation from entry");
     k_sem_give(&sem_start_fi_sampling);
 }
 
@@ -638,16 +641,6 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
 
 #define SENSOR_CHECK_TIMEOUT_MS 15000
 
-// static void sensor_check_timeout_handler(struct k_timer *timer_id)
-// {
-//     LOG_ERR("Sensor check timeout: Sensor not found");
-//     /* Ensure FI sensor rail is powered off on timeout */
-//     hpi_hw_fi_sensor_off();
-//     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-// }
-
-// K_TIMER_DEFINE(tmr_sensor_check_timeout, sensor_check_timeout_handler, NULL);
-
 static void sensor_check_timeout_work_handler(struct k_work *work)
 {
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)&sf_obj;
@@ -655,21 +648,15 @@ static void sensor_check_timeout_work_handler(struct k_work *work)
     hpi_hw_fi_sensor_off();
     if( s -> ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
     {
-        k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT);
+       // k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT);
         LOG_DBG("SpO2 Estimation Cancelled on sensor check timeout");
-        hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_SPO2, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_SPO2, 0, 0, 0);
     }
     else if( s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST )
     {
-        k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT);
+       // k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT);
         LOG_DBG("BPT Estimation Cancelled on sensor check timeout");
-        hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
-    }
-    else if( s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL )
-    {
-        k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT);
-        LOG_DBG("BPT Calibration Cancelled on sensor check timeout");
-        hpi_load_scr_spl(SCR_SPL_SPO2_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
     }
     
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
@@ -746,13 +733,7 @@ static void st_ppg_fi_check_sensor_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
         return;
     }
-    if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_DBG("BPT Calibration Cancelled");
-
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-        return;
-    }
+    
 
     if (sensor_id_get.val1 != MAX30101_SENSOR_ID)
     {
