@@ -46,7 +46,7 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ble_module.h"
-#include "algos.h"
+#include "hrv_algos.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
 
@@ -77,6 +77,8 @@ static bool settings_send_usb_enabled = false;
 static bool settings_send_ble_enabled = true;
 static bool settings_plot_enabled = true;
 
+extern struct k_sem sem_hrv_eval_complete;
+
 enum hpi5_data_format
 {
     DATA_FMT_OPENVIEW,
@@ -93,11 +95,25 @@ uint16_t current_session_log_id = 0;
 char session_id_str[5];
 
 static bool is_ecg_record_active = false;
+
 static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128 Hz * 30 seconds = 3840 samples (15.36KB)
 static volatile uint16_t ecg_record_counter = 0;
 K_MUTEX_DEFINE(mutex_is_ecg_record_active);
 
+K_MUTEX_DEFINE(mutex_is_hrv_record_active);
+static uint16_t rr_buffer[HRV_MAX_INTERVALS];
+
 static bool is_gsr_measurement_active = false;
+
+// HRV (Heart Rate Variability) Evaluation State - Separate from ECG recording
+static bool is_hrv_eval_active = false;
+static struct hpi_hrv_eval_result_t hrv_eval_result = {0};
+struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];  // R-to-R interval buffer (shared with state machine)
+volatile uint16_t hrv_interval_count = 0;                     // Number of intervals collected (shared with state machine)
+K_MUTEX_DEFINE(mutex_is_hrv_eval_active);
+
+// Track last R-to-R interval to detect new beats
+static uint16_t last_rtor_value = 0;
 K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
 
 static uint32_t last_hr_update_time = 0;
@@ -120,6 +136,7 @@ extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_ppg_fi;
 extern struct k_msgq q_plot_hrv;
 extern struct k_msgq q_plot_gsr;
+extern struct k_sem sem_ecg_complete;
 
 void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_t raw_ir, int32_t temp, uint8_t hr,
               uint8_t bpt_status, uint8_t spo2, bool _bioZSkipSample)
@@ -223,6 +240,44 @@ void send_data_text_1(int32_t in_sample)
     send_usb_cdc(data, strlen(data));
 }
 
+void hpi_data_hrv_record_to_file(bool active)
+{
+    k_mutex_lock(&mutex_is_hrv_record_active, K_FOREVER);
+
+        if(hrv_interval_count > 0)
+        {
+            if (hrv_interval_count > HRV_MAX_INTERVALS)
+            {
+                LOG_ERR("HRV counter overflow detected: %d > %d - clamping to max",
+                        hrv_interval_count, HRV_MAX_INTERVALS);
+                hrv_interval_count = HRV_MAX_INTERVALS;
+            }
+
+            struct tm tm_sys_time = hpi_sys_get_sys_time();
+            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+
+            // Copying intervals to rr_buffer
+            for (int i = 0; i < hrv_interval_count; i++) {
+                    rr_buffer[i] = hrv_intervals[i].rtor_ms;
+            }
+            
+            // Calling calculation function
+             hpi_hrv_frequency_compact_update_spectrum(rr_buffer, hrv_interval_count);
+
+             LOG_INF("HRV recording stopped - writing %d samples to file ",hrv_interval_count);
+
+             hpi_write_hrv_record_file(rr_buffer,hrv_interval_count, log_time);
+    
+             LOG_INF("HRV file write completed");
+
+           //  k_sem_give(&sem_hrv_eval_complete);
+        }
+    
+    
+         k_mutex_unlock(&mutex_is_hrv_record_active);
+    
+
+}
 void hpi_data_set_ecg_record_active(bool active)
 {
     k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
@@ -258,6 +313,7 @@ void hpi_data_set_ecg_record_active(bool active)
             hpi_write_ecg_record_file(ecg_record_buffer, ecg_record_counter, log_time);
             
             LOG_INF("ECG file write completed");
+
         }
         else
         {
@@ -302,6 +358,85 @@ bool hpi_data_is_gsr_measurement_active(void)
     return active;
 }
 
+/**
+ * @brief Set HRV evaluation active/inactive state
+ * @param active true to start evaluation, false to stop
+ */
+void hpi_data_set_hrv_eval_active(bool active)
+{
+    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    is_hrv_eval_active = active;
+    
+    if (active) {
+        // Reset result when starting new evaluation
+        memset(&hrv_eval_result, 0, sizeof(hrv_eval_result));
+        last_rtor_value = 0;
+        LOG_INF("HRV evaluation started - buffer reset");
+    }
+    
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
+}
+
+/**
+ * @brief Check if HRV evaluation is active
+ * @return true if evaluation in progress, false otherwise
+ */
+bool hpi_data_is_hrv_eval_active(void)
+{
+    bool active = false;
+    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    active = is_hrv_eval_active;
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
+    return active;
+}
+
+/**
+ * @brief Add R-to-R interval to HRV evaluation buffer
+ * @param rtor_ms R-to-R interval in milliseconds
+ */
+void hpi_data_add_hrv_interval(uint16_t rtor_ms)
+{
+    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    
+    // if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms > 0 && rtor_ms < 2000) {
+    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms >= 300 && rtor_ms <= 1500) {
+        // Detect new beat: RtoR value should change between samples
+        // Only add if different from last (to avoid duplicate intervals)
+        if (rtor_ms != last_rtor_value) {
+            LOG_INF("New RR interval detected : %d", rtor_ms);
+            hrv_intervals[hrv_interval_count].rtor_ms = rtor_ms;
+            hrv_intervals[hrv_interval_count].timestamp = k_uptime_get();
+            hrv_interval_count++;
+            last_rtor_value = rtor_ms;
+            
+            if (hrv_interval_count % 10 == 0) {
+                LOG_DBG("HRV: collected %d intervals", hrv_interval_count);
+            }
+        }
+    }
+    
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
+}
+
+/**
+ * @brief Get HRV evaluation results
+ * @return Pointer to HRV evaluation result structure
+ */
+struct hpi_hrv_eval_result_t *hpi_data_get_hrv_eval_result(void)
+{
+    return &hrv_eval_result;
+}
+void hpi_data_reset_hrv_record_buffer(void)
+{
+    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
+    // Reset buffer and counter without saving (for lead-off restart)
+    hrv_interval_count = 0;
+    memset(hrv_intervals, 0, sizeof(hrv_intervals));
+    LOG_INF("HRV recording buffer reset (discard incomplete data)");
+    is_hrv_eval_active = false;
+    k_mutex_unlock(&mutex_is_hrv_eval_active);
+}
+
 void data_thread(void)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
@@ -341,10 +476,13 @@ void data_thread(void)
                 }
             }
 
+            
+
             // ECG recording buffer management with mutex protection
             // Fixed: No circular buffer - linear recording only, stop when full
+            
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
-            if (is_ecg_record_active == true)
+            if (is_ecg_record_active == true && !is_hrv_eval_active)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
@@ -363,8 +501,8 @@ void data_thread(void)
                 {
                     // Copy samples to buffer
                     memcpy(&ecg_record_buffer[ecg_record_counter], 
-                           ecg_sensor_sample.ecg_samples, 
-                           samples_to_copy * sizeof(int32_t));
+                        ecg_sensor_sample.ecg_samples, 
+                        samples_to_copy * sizeof(int32_t));
                     ecg_record_counter += samples_to_copy;
                     
                     // Check if buffer is exactly full
@@ -372,14 +510,18 @@ void data_thread(void)
                     {
                         LOG_INF("ECG buffer full - collected %d samples (30.0 seconds @ 128Hz)", 
                                 ecg_record_counter);
-                        LOG_INF("Signaling state machine to stop recording");
                         
-                        // Signal state machine that buffer is full
-                        // State machine will call hpi_data_set_ecg_record_active(false)
-                        // which will write the file synchronously
-                        extern struct k_sem sem_ecg_complete;
-                        k_sem_give(&sem_ecg_complete);
-                    }
+                       
+                        
+                            LOG_INF("Signaling state machine to stop recording");
+                            
+                            // Signal state machine that buffer is full
+                            // State machine will call hpi_data_set_ecg_record_active(false)
+                            // which will write the file synchronously
+                            extern struct k_sem sem_ecg_complete;
+                            k_sem_give(&sem_ecg_complete);
+                        }
+                       
                 }
                 else
                 {
@@ -387,23 +529,36 @@ void data_thread(void)
                     if (space_left > 0)
                     {
                         memcpy(&ecg_record_buffer[ecg_record_counter], 
-                               ecg_sensor_sample.ecg_samples, 
-                               space_left * sizeof(int32_t));
+                            ecg_sensor_sample.ecg_samples, 
+                            space_left * sizeof(int32_t));
                         ecg_record_counter += space_left;
                     }
                     
                     LOG_WRN("ECG buffer full mid-batch - collected %d samples, discarded %d", 
                             ecg_record_counter, samples_to_copy - space_left);
+                  
                     LOG_INF("Signaling state machine to stop recording");
-                    
-                    // Signal completion
+                        
+                     // Signal state machine that buffer is full
                     extern struct k_sem sem_ecg_complete;
                     k_sem_give(&sem_ecg_complete);
+                    
+                          
                 }
+            
             }
+        
             k_mutex_unlock(&mutex_is_ecg_record_active);
+            
+            // HRV interval capture
+            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
+            {
+                // Capture R-to-R intervals for HRV analysis
+                // RtoR value is in milliseconds from the MAX30001 sensor
+                hpi_data_add_hrv_interval(ecg_sensor_sample.rtor);
+            }
+        
         }
-
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
             processed_data = true;

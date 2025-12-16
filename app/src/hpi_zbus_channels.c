@@ -101,6 +101,14 @@ ZBUS_CHAN_DEFINE(ecg_stat_chan, /* Name */
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
 
+ZBUS_CHAN_DEFINE(hrv_stat_chan, /* Name */
+                 struct hpi_hrv_status_t,
+                 NULL, /* Validator */
+                 NULL, /* User Data */
+                 ZBUS_OBSERVERS(disp_hrv_stat_lis, sys_hrv_stat_lis),
+                 ZBUS_MSG_INIT(0) /* Initial value {0} */
+);
+
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 ZBUS_CHAN_DEFINE(gsr_stress_chan, /* Name */
                  struct hpi_gsr_stress_index_t,

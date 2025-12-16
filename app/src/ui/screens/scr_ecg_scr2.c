@@ -447,8 +447,8 @@ void hpi_ecg_timer_start(void)
     timer_paused = false;
     k_mutex_unlock(&timer_state_mutex);
     
-    LOG_INF("ECG timer STARTED - leads detected (running=%s, paused=%s)", 
-            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+    // LOG_INF("ECG timer STARTED - leads detected (running=%s, paused=%s)", 
+    //         timer_running ? "true" : "false", timer_paused ? "true" : "false");
 }
 
 void hpi_ecg_timer_pause(void)
@@ -457,8 +457,8 @@ void hpi_ecg_timer_pause(void)
     timer_paused = true;
     k_mutex_unlock(&timer_state_mutex);
     
-    LOG_INF("ECG timer paused - leads off (running=%s, paused=%s)",
-            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+    // LOG_INF("ECG timer paused - leads off (running=%s, paused=%s)",
+    //         timer_running ? "true" : "false", timer_paused ? "true" : "false");
 }
 
 void hpi_ecg_timer_reset(void)
@@ -469,8 +469,8 @@ void hpi_ecg_timer_reset(void)
     lead_on_detected = false;
     k_mutex_unlock(&timer_state_mutex);
     
-    LOG_INF("ECG timer RESET - ready for fresh start (running=%s, paused=%s)",
-            timer_running ? "true" : "false", timer_paused ? "true" : "false");
+    // LOG_INF("ECG timer RESET - ready for fresh start (running=%s, paused=%s)",
+    //         timer_running ? "true" : "false", timer_paused ? "true" : "false");
 }
 
 bool hpi_ecg_timer_is_running(void)
@@ -479,10 +479,10 @@ bool hpi_ecg_timer_is_running(void)
     bool is_running = timer_running && !timer_paused;
     k_mutex_unlock(&timer_state_mutex);
     
-    LOG_DBG("Timer status check: running=%s, paused=%s, is_running=%s",
-            timer_running ? "true" : "false", 
-            timer_paused ? "true" : "false",
-            is_running ? "true" : "false");
+    // LOG_DBG("Timer status check: running=%s, paused=%s, is_running=%s",
+    //         timer_running ? "true" : "false", 
+    //         timer_paused ? "true" : "false",
+    //         is_running ? "true" : "false");
     return is_running;
 }
 

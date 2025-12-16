@@ -35,6 +35,7 @@ void hpi_sys_set_last_spo2_update(uint8_t spo2_last_value, int64_t spo2_last_upd
 void hpi_sys_set_last_bp_update(uint16_t bp_sys_last_value, uint16_t bp_dia_last_value, int64_t bp_last_update_ts);
 void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts);
 void hpi_sys_set_last_gsr_update(uint16_t gsr_last_value, int64_t gsr_last_update_ts);
+void hpi_sys_set_last_hrv_update(uint16_t hrv_last_value, int64_t hrv_last_update_ts);
 
 int hpi_sys_get_last_hr_update(uint16_t *hr_last_value, int64_t *hr_last_update_ts);
 int hpi_sys_get_last_spo2_update(uint8_t *spo2_last_value, int64_t *spo2_last_update_ts);
@@ -43,6 +44,7 @@ int hpi_sys_get_last_ecg_update(uint8_t *ecg_hr, int64_t *ecg_last_update_ts);
 int hpi_sys_get_last_steps_update(uint16_t *steps_last_value, int64_t *steps_last_update_ts);
 int hpi_sys_get_last_temp_update(uint16_t *temp_last_value_x100, int64_t *temp_last_update_ts);
 int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_update_ts);
+int hpi_sys_get_last_hrv_update(uint16_t *hrv_last_value, int64_t *hrv_last_update_ts);
 
 void hpi_sys_set_device_on_skin(bool on_skin);
 bool hpi_sys_get_device_on_skin(void);
@@ -66,5 +68,17 @@ void hpi_data_set_ecg_record_active(bool active);
 void hpi_data_reset_ecg_record_buffer(void);
 bool hpi_data_is_ecg_record_active(void);
 
+void hpi_data_set_hrv_record_active(bool active);
+void hpi_data_reset_hrv_record_buffer(void);
+bool hpi_data_is_hrv_record_active(void);
+
 void hpi_data_set_gsr_measurement_active(bool active);
 bool hpi_data_is_gsr_measurement_active(void);
+
+void hpi_data_set_hrv_eval_active(bool active);
+bool hpi_data_is_hrv_eval_active(void);
+struct hpi_hrv_eval_result_t *hpi_data_get_hrv_eval_result(void);
+void hpi_data_add_hrv_interval(uint16_t rtor_ms);
+void hpi_data_hrv_record_to_file(bool active);
+struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void);
+void hpi_data_reset_hrv_record_buffer(void);

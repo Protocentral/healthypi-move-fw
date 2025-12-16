@@ -29,27 +29,40 @@
 
 
 #pragma once
+#include "arm_math.h"
 
-#define SF_spo2 25 // sampling frequency
-#define BUFFER_SIZE (SF_spo2 * 4)
-#define MA4_SIZE 4 // DONOT CHANGE
-#define min(x, y) ((x) < (y) ? (x) : (y))
 
-#define FILTERORDER 161 /* DC Removal Numerator Coeff*/
-#define NRCOEFF (0.992)
-#define HRV_LIMIT 20
+#define MAX_RR_INTERVALS 300       // Maximum RR intervals to process
+#define INTERP_FS 4.0f             // Interpolation sampling frequency (Hz)
 
-void calculate_pnn_rmssd(unsigned int array[], float *pnn50, float *rmssd);
-float calculate_sdnn(unsigned int array[]);
-float calculate_mean(unsigned int array[]);
-int calculate_hrvmin(unsigned int array[]);
-int calculate_hrvmax(unsigned int array[]);
-//struct calculate_hrv(uint8_t heart_rate);
-void calculate_hrv (int32_t heart_rate, int32_t *hrv_max, int32_t *hrv_min, float *mean, float *sdnn, float *pnn, float *rmssd, bool *hrv_ready_flag);
+// FFT size must be power of 2. Larger = better frequency resolution.
+// With INTERP_FS=4Hz: FFT_SIZE=256 gives 0.0156 Hz resolution (sufficient for LF/HF)
+// LF band (0.04-0.15 Hz) will have ~7 bins, HF band (0.15-0.4 Hz) will have ~16 bins
+#define FFT_SIZE 64               // Increased from 64 for accurate LF/HF measurement
 
-// GSR Stress Index calculation
-#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
-#include "hpi_common_types.h"  // for struct hpi_gsr_stress_index_t
-void calculate_gsr_stress_index(uint16_t gsr_value_x100, struct hpi_gsr_stress_index_t *stress_index);
-void reset_gsr_stress_index(void);
-#endif
+#define WELCH_OVERLAP 0.5f         // 50% overlap for Welch method
+
+// Frequency band definitions (Hz)
+#define LF_LOW   0.04f
+#define LF_HIGH  0.15f
+#define HF_LOW   0.15f
+#define HF_HIGH  0.4f
+
+typedef struct 
+{
+  float mean;
+  float sdnn;
+  float rmssd;
+  float pnn50;
+  float hrv_min;
+  float hrv_max;
+
+}time_domain;
+
+float hrv_calculate_mean(uint16_t * rr_buffer, int count);
+float hrv_calculate_sdnn(uint16_t * rr_buffer, int count);
+float hrv_calculate_pnn50(uint16_t * rr_buffer, int count);
+uint32_t hrv_calculate_min(uint16_t * rr_buffer, int count);
+uint32_t hrv_calculate_max(uint16_t * rr_buffer, int count);
+void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals);
+float hpi_get_lf_hf_ratio(void);

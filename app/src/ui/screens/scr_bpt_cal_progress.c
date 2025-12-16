@@ -49,6 +49,8 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
+extern struct k_sem sem_fi_bpt_cal_cancel;
+
 void draw_scr_bpt_cal_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_cal_progress = lv_obj_create(NULL);
@@ -101,5 +103,6 @@ void scr_bpt_cal_progress_update_text(char *text)
 void gesture_down_scr_bpt_cal_progress(void)
 {
     // Handle gesture down event
+    k_sem_give(&sem_fi_bpt_cal_cancel);
     hpi_load_screen(SCR_BPT, SCROLL_DOWN);
 }

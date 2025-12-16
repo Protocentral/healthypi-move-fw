@@ -31,6 +31,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <lvgl.h>
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/drivers/sensor.h>
@@ -69,6 +70,29 @@ K_SEM_DEFINE(sem_gsr_cancel, 0, 1);
 static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
 static uint32_t gsr_last_status_pub_s = 0; // Last published elapsed seconds
+
+// HRV (Heart Rate Variability) Evaluation Control Semaphores - Independent from ECG
+K_SEM_DEFINE(sem_hrv_eval_start, 0, 1);
+K_SEM_DEFINE(sem_hrv_eval_cancel, 0, 1);
+K_SEM_DEFINE(sem_hrv_eval_complete, 0, 1);
+
+// HRV Measurement Timing (configurable duration, default 30 seconds for quick evaluation)
+#define HRV_MEASUREMENT_DURATION_S 60  
+
+static uint32_t hrv_last_status_pub_s = 0; // Last published elapsed seconds
+
+// HRV state variables managed by data_module.c
+extern struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];
+extern volatile uint16_t hrv_interval_count;
+
+// RTOS-safe lead contact state using atomic operations
+// true = leads are in contact (on skin), false = leads are off
+// static atomic_t hrv_lead_contact = ATOMIC_INIT(0);  // 0 = no contact, 1 = contact
+// static atomic_t hrv_prev_lead_contact = ATOMIC_INIT(0);
+
+ZBUS_CHAN_DECLARE(hrv_stat_chan);
+K_MUTEX_DEFINE(hrv_eval_mutex);
+K_MUTEX_DEFINE(hrv_timer_mutex);
 
 K_SEM_DEFINE(sem_ecg_lead_on, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
@@ -210,6 +234,7 @@ RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
 
 static bool ecg_active = false;
 static bool gsr_active = false;  // Independent GSR (BioZ) state
+static bool hrv_active = false;  // Independent HRV evaluation state
 static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
 
 static uint16_t m_ecg_hr = 0;
@@ -222,6 +247,7 @@ extern const struct device *const max30001_dev;
 extern struct k_sem sem_ecg_start;
 extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
+//extern bool hrv_active;
 
 /**
  * @brief Configure ECG leads based on hand worn setting
@@ -286,6 +312,18 @@ static void set_gsr_active(bool active)
     gsr_active = active;
 }
 
+static bool get_hrv_active(void)
+{
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return hrv_active;
+}
+
+static void set_hrv_active(bool active)
+{
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
+    hrv_active = active;
+}
+
 static bool get_ecg_lead_on_off(void)
 {
     // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
@@ -343,6 +381,25 @@ void hpi_ecg_reset_countdown_timer(void)
         .status = HPI_ECG_STATUS_STREAMING,
         .hr = get_ecg_hr(),
         .progress_timer = ECG_RECORD_DURATION_S};  // Show 30 seconds
+    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+}
+
+// Function to reser HRV timer countdown to full duration (configurable)
+void hpi_hrv_reset_countdown_timer(void)
+{
+   k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
+    ecg_countdown_val = HRV_MEASUREMENT_DURATION_S ; // Reset to 30 seconds
+    ecg_last_timer_val = k_uptime_get_32();     // Update timestamp
+    k_mutex_unlock(&ecg_timer_mutex);
+    
+    LOG_INF("ECG SMF: HRV Timer countdown RESET to %d seconds", HRV_MEASUREMENT_DURATION_S);
+    
+    // Immediately publish the reset timer value to update the display
+    struct hpi_ecg_status_t ecg_stat = {
+        .ts_complete = 0,
+        .status = HPI_ECG_STATUS_STREAMING,
+        .hr = get_ecg_hr(),
+        .progress_timer = HRV_MEASUREMENT_DURATION_S};  // Show 30 seconds
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 }
 
@@ -430,9 +487,9 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
 
         // Thread-safe lead detection logic with debouncing
         bool current_lead_state = get_ecg_lead_on_off();
-        LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s, debouncing=%s", 
-                edata->ecg_lead_off, current_lead_state ? "OFF" : "ON", 
-                lead_off_debouncing ? "yes" : "no");
+        // LOG_DBG("ECG sensor data: ecg_lead_off=%d, current_lead_state=%s, debouncing=%s", 
+        //         edata->ecg_lead_off, current_lead_state ? "OFF" : "ON", 
+        //         lead_off_debouncing ? "yes" : "no");
         
         // Handle Lead OFF with debounce
         if (edata->ecg_lead_off == 1)
@@ -454,6 +511,7 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
                         
                         // Signal display thread for UI update
                         LOG_INF("ECG SMF: Giving sem_ecg_lead_off semaphore");
+                       // atomic_set(&hrv_lead_contact, 0);  // RTOS-safe: leads off
                         k_sem_give(&sem_ecg_lead_off);
                         
                         // Reset debounce state
@@ -480,6 +538,7 @@ static void sensor_ecg_process_decode(uint8_t *buf, uint32_t buf_len)
                 
                 // Signal display thread for UI update  
                 LOG_INF("ECG SMF: Giving sem_ecg_lead_on semaphore");
+               // atomic_set(&hrv_lead_contact, 1);  // RTOS-safe: leads on
                 k_sem_give(&sem_ecg_lead_on);
             }
             // else: already in lead-on state, nothing to do
@@ -679,7 +738,7 @@ static int hw_max30001_gsr_disable(void)
     }
     return ret;
 }
-
+  struct hpi_hrv_eval_result_t g_hrv_result;
 static void st_ecg_idle_entry(void *o)
 {
     int ret;
@@ -774,6 +833,18 @@ static void st_ecg_idle_entry(void *o)
             }
         }
     }
+
+    // Handle independent HRV (Heart Rate Variability) evaluation control via state machine
+    if (k_sem_take(&sem_hrv_eval_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting HRV evaluation - transitioning to STABILIZING state");
+        set_hrv_active(true);
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
+    }
+} 
+struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void)
+{
+                return g_hrv_result;   // return by value
 }
 
 static void st_ecg_stream_entry(void *o)
@@ -795,17 +866,36 @@ static void st_ecg_stream_entry(void *o)
     
     // Start actual recording
     hpi_data_set_ecg_record_active(true);
+
+    if(get_hrv_active())
+    {
+        LOG_INF("HRV evaluation starting - initializing HRV data collection");
+        hrv_interval_count = 0;
+        memset(hrv_intervals, 0, sizeof(hrv_intervals));
+        hrv_last_status_pub_s = 0;
+  
+    }
     
-    // Timer initialization - start paused until lead ON is detected
-    set_ecg_timer_values(k_uptime_get_32(), ECG_RECORD_DURATION_S);
+    // Timer initialization - determine duration based on measurement type
+    int measurement_duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+    
+    // Start paused until lead ON is detected
+    set_ecg_timer_values(k_uptime_get_32(), measurement_duration);
     hpi_ecg_timer_reset();  // Start in reset state (paused, waiting for leads)
+    
+    // Log the measurement type being started
+    if (get_hrv_active()) {
+        LOG_INF("HRV evaluation recording started - duration %d seconds", measurement_duration);
+    } else {
+        LOG_INF("ECG recording started - duration %d seconds", measurement_duration);
+    }
     
     // Publish initial timer status to update display immediately
     struct hpi_ecg_status_t ecg_stat = {
         .ts_complete = 0,
         .status = HPI_ECG_STATUS_STREAMING,
         .hr = get_ecg_hr(),
-        .progress_timer = ECG_RECORD_DURATION_S};
+        .progress_timer = measurement_duration};
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
     
     // Initialize screen with current lead state - signal display thread
@@ -816,7 +906,7 @@ static void st_ecg_stream_entry(void *o)
         k_sem_give(&sem_ecg_lead_on);
     }
     
-    LOG_INF("ECG recording started - waiting for leads to be connected");
+    LOG_INF("Recording started - waiting for leads to be connected");
     LOG_INF("Timer will start automatically when leads are detected");
 }
 
@@ -913,6 +1003,14 @@ static void st_ecg_stream_run(void *o)
         LOG_DBG("ECG cancelled");
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
     }
+
+    if(k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("HRV evaluation cancelled");
+        set_hrv_active(false);
+        hpi_data_set_hrv_eval_active(false);
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+    }
 }
 
 static void st_ecg_stream_exit(void *o)
@@ -921,8 +1019,9 @@ static void st_ecg_stream_exit(void *o)
     
     // Reset timer when exiting stream state
     hpi_ecg_timer_reset();
-    
+        
     hpi_data_set_ecg_record_active(false);
+  
 
     // Reset timer
     set_ecg_timer_values(0, 0);
@@ -945,7 +1044,21 @@ static void st_ecg_complete_entry(void *o)
         LOG_ERR("Failed to disable ECG in complete entry: %d", ret);
     }
 
-    k_sem_give(&sem_ecg_complete);
+    // Handle HRV post-processing if HRV evaluation was active
+    if (get_hrv_active()) {
+        LOG_INF("HRV evaluation complete - processing results");
+        // Call HRV post-processing function (FFT, frequency analysis, stress index)
+        // This will update hrv_eval_result and write to file
+        hpi_data_hrv_record_to_file(true);
+        hpi_data_set_hrv_eval_active(false);
+        // Signal HRV complete
+        k_sem_give(&sem_hrv_eval_complete);
+        // Reset HRV active flag
+        set_hrv_active(false);
+    } else {
+        // ECG recording complete - signal ECG completion
+        k_sem_give(&sem_ecg_complete);
+    }
 }
 
 static void st_ecg_complete_run(void *o)
@@ -1041,12 +1154,22 @@ static void st_ecg_stabilizing_entry(void *o)
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
     set_ecg_timer_values(k_uptime_get_32(), 0);
     
+     // Initialize HRV if evaluation is being started
+    //  if (get_hrv_active()) {
+    //      LOG_INF("HRV evaluation starting - initializing HRV data collection");
+    //      hpi_data_set_hrv_eval_active(true);
+    //      hrv_interval_count = 0;
+    //      memset(hrv_intervals, 0, sizeof(hrv_intervals));
+    //      hrv_last_status_pub_s = 0;
+    //  }
+    
+    int duration = is_recording_active ? ECG_RECORD_DURATION_S : HRV_MEASUREMENT_DURATION_S;
     // Publish status indicating stabilization phase
     struct hpi_ecg_status_t ecg_stat = {
         .ts_complete = 0,
         .status = HPI_ECG_STATUS_STREAMING, // TODO: Consider adding HPI_ECG_STATUS_STABILIZING
         .hr = 0,
-        .progress_timer = ECG_RECORD_DURATION_S + ECG_STABILIZATION_DURATION_S};
+        .progress_timer = duration + ECG_STABILIZATION_DURATION_S};
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
     
     LOG_INF("ECG stabilization started - waiting %d seconds", ECG_STABILIZATION_DURATION_S);
@@ -1074,12 +1197,13 @@ static void st_ecg_stabilizing_run(void *o)
         set_ecg_timer_values(k_uptime_get_32(), 0);
         set_ecg_stabilization_values(stabilization_countdown, false);
 
+       int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
         // Update progress - total time includes stabilization + recording
         struct hpi_ecg_status_t ecg_stat = {
             .ts_complete = 0,
             .status = HPI_ECG_STATUS_STREAMING,
             .hr = get_ecg_hr(),
-            .progress_timer = ECG_RECORD_DURATION_S + stabilization_countdown};
+            .progress_timer = duration + stabilization_countdown};
         zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 
         if (stabilization_countdown <= 0)
@@ -1108,6 +1232,14 @@ static void st_ecg_stabilizing_run(void *o)
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0)
     {
         LOG_DBG("ECG cancelled during stabilization");
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+    }
+
+     if(k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("HRV evaluation cancelled during stabilization");
+        set_hrv_active(false);
+        hpi_data_set_hrv_eval_active(false);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
     }
 }
