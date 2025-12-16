@@ -550,9 +550,6 @@ void data_thread(void)
         
             k_mutex_unlock(&mutex_is_ecg_record_active);
             
-
-            // LOG_INF("HRV check: is_hrv_eval_active=%s",
-            //     is_hrv_eval_active ? "true" : "false");
             // HRV interval capture
             if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
             {
