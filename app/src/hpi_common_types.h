@@ -299,6 +299,9 @@ struct hpi_last_update_time_t
 
     uint16_t gsr_last_value; // GSR value * 100 (microsiemens)
     int64_t gsr_last_update_ts;
+
+    uint16_t hrv_last_value;
+    int64_t hrv_last_update_ts;
 };
 
 struct hpi_gsr_stress_index_t
@@ -320,3 +323,43 @@ struct hpi_gsr_status_t
     uint16_t total_s;      // Total target duration (e.g. 60)
     bool active;           // Measurement currently active
 };
+
+// HRV (Heart Rate Variability) evaluation - stores R-to-R intervals for analysis
+#define HRV_MAX_INTERVALS 300  // Maximum R-to-R intervals to store (typically ~5 minutes @ ~60 bpm)
+
+struct hpi_hrv_interval_t
+{
+    uint16_t rtor_ms;      // R-to-R interval in milliseconds
+    int64_t timestamp;     // Timestamp when interval was captured
+};
+
+// HRV evaluation results
+struct hpi_hrv_eval_result_t
+{
+    uint16_t num_intervals;           // Number of R-to-R intervals captured
+    uint32_t total_duration_ms;       // Total duration in milliseconds
+    uint16_t min_interval_ms;         // Minimum R-to-R interval
+    uint16_t max_interval_ms;         // Maximum R-to-R interval
+    float mean_interval_ms;           // Mean R-to-R interval
+    float sdnn_ms;                    // Standard deviation of R-to-R intervals (HRV indicator)
+    float pnn50_percent;              // Percentage of intervals differing > 50ms (HRV indicator)
+    float rmssd_ms;                   // Root mean square of successive differences (HRV indicator)
+    int64_t measurement_start_ts;     // Unix timestamp when measurement started
+    int64_t measurement_complete_ts;  // Unix timestamp when measurement completed
+};
+
+struct hpi_hrv_status_t
+{
+    uint16_t elapsed_s;         // Seconds since measurement start
+    uint16_t remaining_s;       // Seconds remaining to target duration
+    uint16_t total_s;           // Total target duration
+    bool active;        // Current HRV measurement status
+};
+
+// struct hpi_hrv_status_t
+// {
+//     int64_t ts_complete;
+//     uint8_t status;
+//     uint16_t progress_timer;
+// };
+

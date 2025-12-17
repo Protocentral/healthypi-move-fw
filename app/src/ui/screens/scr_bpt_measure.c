@@ -37,6 +37,7 @@
 #include "hw_module.h"
 #include "ui/move_ui.h"
 
+LOG_MODULE_REGISTER(scr_bpt_measure, LOG_LEVEL_DBG);
 lv_obj_t *scr_bpt_measure;
 
 static lv_obj_t *chart_bpt_ppg;
@@ -56,6 +57,8 @@ extern lv_style_t style_lbl_orange;
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
+
+extern struct k_sem sem_fi_bpt_est_cancel;
 
 void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
@@ -281,5 +284,7 @@ void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 void gesture_down_scr_bpt_measure(void)
 {
     // Handle gesture down event
+    LOG_INF("Gesture Down on BPT Measure Screen - Cancelling Measurement, giving cancel semaphore");
+    k_sem_give(&sem_fi_bpt_est_cancel);
     hpi_load_screen(SCR_BPT, SCROLL_DOWN);
 }

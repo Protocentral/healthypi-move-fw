@@ -629,7 +629,8 @@ static int max30001_chip_init(const struct device *dev)
     k_sleep(K_MSEC(100));
 
     //_max30001RegWrite(dev, MNGR_INT, 0x190000); // EFIT=4, BFIT=2
-    _max30001RegWrite(dev, MNGR_INT, 0x7B0000); // EFIT=16, BFIT=8
+     _max30001RegWrite(dev, MNGR_INT, 0x7B0000); // EFIT=16, BFIT=8
+    //_max30001RegWrite(dev, MNGR_INT, 0xFF0000); // EFIT=31, BFIT=15 (MAX)
     //_max30001RegWrite(dev, MNGR_INT, 0x3B0000); // EFIT=8, BFIT=4
     //_max30001RegWrite(dev, MNGR_INT, 0x080000); // EFIT=2, BFIT=2
     //_max30001RegWrite(dev, MNGR_INT, 0x000000); // EFIT=1, BFIT=1

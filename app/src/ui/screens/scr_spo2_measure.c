@@ -239,10 +239,12 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
         }
 
         float residual = (float)scaled - local_base;
+        residual *= 2.0f; /* amplify for better visibility */
         local_base = local_base * (1.0f - alpha) + ((float)scaled * alpha);
 
         /* Center residual to positive range for plotting */
         int32_t plot_val = (int32_t)(residual) + 2048; /* center offset */
+      
 
         float fplot = (float)plot_val;
 
