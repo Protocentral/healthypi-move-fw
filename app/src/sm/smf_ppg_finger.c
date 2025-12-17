@@ -55,8 +55,8 @@ K_SEM_DEFINE(sem_fi_spo2_est_cancel, 0, 1);
 K_SEM_DEFINE(sem_fi_bpt_est_cancel, 0, 1);
 K_SEM_DEFINE(sem_fi_bpt_cal_cancel, 0, 1);
 
-K_SEM_DEFINE(sem_bpt_sensor_found, 0, 1);
-K_SEM_DEFINE(sem_spo2_sensor_found, 0, 1);
+// Note: sem_bpt_sensor_found and sem_spo2_sensor_found removed - they were never consumed
+// If UI needs notification, use ZBus channel instead
 
 K_SEM_DEFINE(sem_start_fi_sampling, 0, 1);
 K_SEM_DEFINE(sem_stop_fi_sampling, 0, 1);
@@ -419,7 +419,15 @@ static void st_ppg_fing_idle_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Idle Entry");
     k_sem_give(&sem_stop_fi_sampling);
-    // k_thread_suspend(ppg_finger_sampling_thread_id);
+
+    // FIX: Reset process done flag to ensure clean state for next measurement
+    bpt_process_done = false;
+
+    // FIX: Reset decode mode to IDLE
+    sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
+
+    // Ensure sensor is powered off when entering idle
+    hpi_hw_fi_sensor_off();
 }
 
 // Add a new function to check if calibration data exists
@@ -469,7 +477,8 @@ static void st_ppg_fing_idle_run(void *o)
     {
         LOG_INF("sem_bpt_enter_mode_cal received - entering BPT calibration mode");
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
+        // Route through CHECK_SENSOR to ensure sensor is connected before showing wait screen
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 
     if (k_sem_take(&sem_fi_spo2_est_start, K_NO_WAIT) == 0)
@@ -478,17 +487,16 @@ static void st_ppg_fing_idle_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 
-    // FIX: Allow calibration to start directly from IDLE if app sends HPI_CMD_START_BPT_CAL_START
-    // without first sending HPI_CMD_BPT_SEL_CAL_MODE. This makes the device more tolerant
-    // of different app implementations.
+    // Allow calibration to start directly from IDLE if app sends HPI_CMD_START_BPT_CAL_START
+    // without first sending HPI_CMD_BPT_SEL_CAL_MODE. Route through CHECK_SENSOR first.
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
-        LOG_INF("BPT calibration start from IDLE - transitioning to CAL_WAIT then CAL");
+        LOG_INF("BPT calibration start from IDLE - checking sensor first");
         s->ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
-        // First enter CAL_WAIT to show the progress screen, then immediately transition to CAL
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
-        // Re-signal the semaphore so CAL_WAIT state can pick it up
-        k_sem_give(&sem_bpt_cal_start);
+        // Store that we have cal values ready and should proceed to calibration after sensor check
+        // The CHECK_SENSOR state will route to BPT_CAL_WAIT, then BPT_CAL_WAIT will see
+        // that cal values are set and can proceed
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_CHECK_SENSOR]);
     }
 }
 
@@ -607,6 +615,8 @@ static void st_ppg_fing_bpt_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Entry");
     hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2);
+    // FIX: Power off sensor when estimation is complete
+    hpi_hw_fi_sensor_off();
 }
 
 static void st_ppg_fing_bpt_est_done_run(void *o)
@@ -620,6 +630,8 @@ static void st_ppg_fing_bpt_est_done_run(void *o)
 static void st_ppg_fing_bpt_est_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Fail Entry");
+    hpi_load_scr_spl(SCR_SPL_BPT_FAILED, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    hpi_hw_fi_sensor_off();
 }
 
 static void st_ppg_fing_bpt_est_fail_run(void *o)
@@ -644,21 +656,28 @@ static void st_ppg_fing_bpt_cal_fail_run(void *o)
 static void sensor_check_timeout_work_handler(struct k_work *work)
 {
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)&sf_obj;
-    LOG_ERR("Sensor check timeout: Sensor not found");
+    LOG_ERR("Sensor check timeout: Sensor not found, op_mode=%d", s->ppg_fi_op_mode);
+
+    // Power off sensor first
     hpi_hw_fi_sensor_off();
-    if( s -> ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
+
+    // Show appropriate timeout screen based on operation mode
+    if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
     {
-       // k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT);
-        LOG_DBG("SpO2 Estimation Cancelled on sensor check timeout");
+        LOG_DBG("SpO2 Estimation timed out waiting for sensor");
         hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_SPO2, 0, 0, 0);
     }
-    else if( s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST )
+    else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
     {
-       // k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT);
-        LOG_DBG("BPT Estimation Cancelled on sensor check timeout");
+        LOG_DBG("BPT Estimation timed out waiting for sensor");
         hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
     }
-    
+    else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+    {
+        LOG_DBG("BPT Calibration timed out waiting for sensor");
+        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    }
+
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
@@ -674,14 +693,17 @@ K_TIMER_DEFINE(tmr_sensor_check_timeout, sensor_check_timeout_handler, NULL);
 static void st_ppg_fi_check_sensor_entry(void *o)
 {
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
-    LOG_DBG("PPG Finger SM Check Sensor Entry");
+    LOG_DBG("PPG Finger SM Check Sensor Entry, op_mode=%d", s->ppg_fi_op_mode);
 
-    if( s->ppg_fi_op_mode == PPG_FI_STATE_SPO2_EST)
+    // FIX: Use correct enum type (PPG_FI_OP_MODE_* not PPG_FI_STATE_*)
+    if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
     {
         hpi_load_scr_spl(SCR_SPL_FI_SENS_CHECK, SCROLL_NONE, SCR_SPO2, s->ppg_fi_op_mode, 0, 0);
     }
     else
-    hpi_load_scr_spl(SCR_SPL_FI_SENS_CHECK, SCROLL_NONE, SCR_BPT, s->ppg_fi_op_mode, 0, 0);
+    {
+        hpi_load_scr_spl(SCR_SPL_FI_SENS_CHECK, SCROLL_NONE, SCR_BPT, s->ppg_fi_op_mode, 0, 0);
+    }
 
     /* Ensure FI sensor rail is powered on for detection */
     hpi_hw_fi_sensor_on();
@@ -693,8 +715,35 @@ static void st_ppg_fi_check_sensor_entry(void *o)
 
 static void st_ppg_fi_check_sensor_run(void *o)
 {
-    // LOG_DBG("PPG Finger SM Check Sensor Running");
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
+
+    // Check for cancellation FIRST, before doing sensor work
+    if (k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("SpO2 Estimation Cancelled in CHECK_SENSOR");
+        k_timer_stop(&tmr_sensor_check_timeout);
+        hpi_hw_fi_sensor_off();  // FIX: Power off sensor on cancel
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
+
+    if (k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("BPT Estimation Cancelled in CHECK_SENSOR");
+        k_timer_stop(&tmr_sensor_check_timeout);
+        hpi_hw_fi_sensor_off();  // FIX: Power off sensor on cancel
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
+
+    if (k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("BPT Calibration Cancelled in CHECK_SENSOR");
+        k_timer_stop(&tmr_sensor_check_timeout);
+        hpi_hw_fi_sensor_off();  // FIX: Power off sensor on cancel
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
 
     struct sensor_value sensor_id_get;
     sensor_id_get.val1 = 0x00;
@@ -704,69 +753,57 @@ static void st_ppg_fi_check_sensor_run(void *o)
     int attempt;
     for (attempt = 1; attempt <= max_attempts; attempt++) {
         sensor_attr_get(max32664d_dev, SENSOR_CHAN_ALL, MAX32664D_ATTR_SENSOR_ID, &sensor_id_get);
-        LOG_DBG("AFE Sensor ID (attempt %d): %d", attempt, sensor_id_get.val1);
-        if (sensor_id_get.val1 != 0x00) {
-            break;
+        LOG_DBG("AFE Sensor ID (attempt %d): 0x%02X", attempt, sensor_id_get.val1);
+        if (sensor_id_get.val1 == MAX30101_SENSOR_ID) {
+            break;  // Found valid sensor
         }
 
-        LOG_WRN("Sensor ID read returned 0, attempt %d/%d - power-cycling FI rail", attempt, max_attempts);
-        hpi_hw_fi_sensor_off();
-        k_msleep(50);
-        hpi_hw_fi_sensor_on();
-        k_msleep(200);
+        if (attempt < max_attempts) {
+            LOG_WRN("Sensor ID read returned 0x%02X, attempt %d/%d - power-cycling FI rail",
+                    sensor_id_get.val1, attempt, max_attempts);
+            hpi_hw_fi_sensor_off();
+            k_msleep(50);
+            hpi_hw_fi_sensor_on();
+            k_msleep(200);
+        }
     }
-
-    // k_sem_give(&sem_ppg_fi_hide_loading);
-
-    if (k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_DBG("SpO2 Estimation Cancelled");
-
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-        return;
-    }
-
-    if(k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_DBG("BPT Estimation Cancelled");
-
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-        return;
-    }
-    
 
     if (sensor_id_get.val1 != MAX30101_SENSOR_ID)
     {
-        LOG_ERR("MAX30101 AFE sensor not found");
-        // return;
+        // FIX: Sensor not found after all retries - stay in this state and let timeout handle it
+        // Don't transition anywhere, the timeout will fire and go to IDLE with error screen
+        LOG_WRN("MAX30101 AFE sensor not found after %d attempts, waiting for timeout or retry", max_attempts);
+        return;
+    }
+
+    // Sensor found successfully
+    LOG_INF("MAX30101 sensor found!");
+
+    // Stop the timeout timer since sensor is found
+    k_timer_stop(&tmr_sensor_check_timeout);
+
+    // Route to appropriate state based on operation mode
+    if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
+    {
+        LOG_DBG("Transitioning to BPT_EST state");
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
+    }
+    else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
+    {
+        // FIX: Route calibration to CAL_WAIT first (to show "waiting for app" screen)
+        LOG_DBG("Transitioning to BPT_CAL_WAIT state");
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
+    }
+    else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
+    {
+        LOG_DBG("Transitioning to SPO2_EST state");
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST]);
     }
     else
     {
-        LOG_DBG("MAX30101 sensor found !");
-
-        // Stop the timeout timer since sensor is found
-        k_timer_stop(&tmr_sensor_check_timeout);
-
-        if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
-        {
-            k_sem_give(&sem_bpt_sensor_found);
-            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
-        }
-        else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
-        {
-            k_sem_give(&sem_bpt_sensor_found);
-            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
-        }
-        else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
-        {
-            k_sem_give(&sem_spo2_sensor_found);
-            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST]);
-        }
-        else
-        {
-            LOG_ERR("Unknown PPG Finger operation mode");
-            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SENSOR_FAIL]);
-        }
+        LOG_ERR("Unknown PPG Finger operation mode: %d", s->ppg_fi_op_mode);
+        hpi_hw_fi_sensor_off();
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SENSOR_FAIL]);
     }
 }
 
@@ -774,11 +811,14 @@ static void st_ppg_fi_sensor_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Sensor Fail Entry");
     hpi_hw_fi_sensor_off();
+    // Show error screen
+    hpi_load_scr_spl(SCR_SPL_BPT_FAILED, SCROLL_NONE, SCR_BPT, 0, 0, 0);
 }
 
 static void st_ppg_fi_sensor_fail_run(void *o)
 {
-    LOG_DBG("PPG Finger SM Sensor Fail Running");
+    // Transition back to IDLE after showing the error
+    smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
 static void st_ppg_fi_spo2_est_entry(void *o)
