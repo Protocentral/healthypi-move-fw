@@ -566,7 +566,7 @@ extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
 extern struct k_sem sem_spo2_cancel;
 
-extern struct k_sem sem_bpt_sensor_found;
+// Note: sem_bpt_sensor_found was removed from smf_ppg_finger.c - extern removed
 
 static void st_display_init_entry(void *o)
 {

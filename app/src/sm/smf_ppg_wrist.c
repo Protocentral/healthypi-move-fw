@@ -729,6 +729,26 @@ static void ppg_wrist_ctrl_thread(void)
             k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
         }
 
+        /* Handle user-initiated cancellation of SpO2 measurement */
+        if (k_sem_take(&sem_spo2_cancel, K_NO_WAIT) == 0)
+        {
+            if (spo2_measurement_in_progress)
+            {
+                LOG_DBG("Cancelling One Shot SpO2 (user initiated)");
+                k_timer_stop(&tmr_ppg_wrist_sampling);
+                spo2_measurement_in_progress = false;
+                hw_max32664c_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
+
+                k_msleep(600);
+
+                /* Return to continuous HR monitoring mode */
+                LOG_DBG("Switching to Continuous Sampling HR after cancel");
+                hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+                k_msleep(600);
+                k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+            }
+        }
+
         k_msleep(100);
     }
 }

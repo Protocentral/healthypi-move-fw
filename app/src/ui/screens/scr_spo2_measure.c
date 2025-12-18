@@ -60,6 +60,18 @@ static float y_min_ppg = 10000;
 
 static float gx = 0;
 
+/* Progress bar high-water mark to prevent regression */
+static int last_progress = 0;
+
+/* Finger PPG baseline tracking - resettable on screen entry */
+static float fi_baseline_ema = 0.0f;
+static bool fi_baseline_init = false;
+static int32_t fi_last_valid_plot_val = 2048;
+
+/* Wrist PPG baseline tracking - resettable on screen entry */
+static float wr_baseline_ema = 0.0f;
+static bool wr_baseline_init = false;
+
 // Externs
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large_numeric;
@@ -78,6 +90,22 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 {
     int parent_screen = arg1; // Parent screen passed from the previous screen
     spo2_source = arg2;       // SpO2 source passed from the previous screen
+
+    /* Reset all plotting state on screen entry */
+    hpi_ppg_autoscale_reset();
+    y_min_ppg = 10000;
+    y_max_ppg = 0;
+    gx = 0;
+    last_progress = 0;
+
+    /* Reset finger PPG baseline */
+    fi_baseline_init = false;
+    fi_baseline_ema = 0.0f;
+    fi_last_valid_plot_val = 2048;
+
+    /* Reset wrist PPG baseline */
+    wr_baseline_init = false;
+    wr_baseline_ema = 0.0f;
 
     scr_spo2_scr_measure = lv_obj_create(NULL);
     lv_obj_add_style(scr_spo2_scr_measure, &style_scr_black, 0);
@@ -188,6 +216,27 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     if (label_spo2_progress == NULL)
         return;
 
+    /* High-water mark protection: only allow progress to increase, never decrease.
+     * This prevents the progress bar from jumping back to 0 when the sensor
+     * temporarily reports lower values due to algorithm resets or motion. */
+    if (state == SPO2_MEAS_SUCCESS || state == SPO2_MEAS_TIMEOUT)
+    {
+        /* Measurement complete or failed - reset high-water mark for next measurement */
+        last_progress = 0;
+    }
+    else
+    {
+        /* During active measurement, only allow progress to increase */
+        if (progress < last_progress)
+        {
+            progress = last_progress; /* Don't allow regression */
+        }
+        else
+        {
+            last_progress = progress;
+        }
+    }
+
     lv_label_set_text_fmt(label_spo2_progress, "%d %%", progress);
     lv_bar_set_value(bar_spo2_progress, progress, LV_ANIM_ON);
 
@@ -216,35 +265,33 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     uint32_t *data_ppg = ppg_sensor_sample.raw_green;
 
     /* Simple DC removal: EMA baseline and plot residual centered to avoid LVGL coord wrap. */
-    static float baseline_ema = 0.0f;
-    static bool baseline_init = false;
     const float alpha = 0.005f; /* small alpha for slow baseline tracking */
 
     /* Cache locals to reduce repeated global accesses */
     int num = ppg_sensor_sample.ppg_num_samples;
     float local_ymin = y_min_ppg;
     float local_ymax = y_max_ppg;
-    float local_base = baseline_ema;
+    float local_base = wr_baseline_ema;
     int local_spo2_source = spo2_source;
 
     for (int i = 0; i < num; i++)
     {
-    /* Driver now provides normalized samples; use value directly. */
-    int32_t scaled = (int32_t)(data_ppg[i]);
+        /* Driver now provides normalized samples; use value directly. */
+        int32_t scaled = (int32_t)(data_ppg[i]);
 
-        if (!baseline_init)
+        if (!wr_baseline_init)
         {
             local_base = (float)scaled;
-            baseline_init = true;
+            wr_baseline_init = true;
         }
 
         float residual = (float)scaled - local_base;
-        residual *= 2.0f; /* amplify for better visibility */
+        /* Increased amplification from 2x to 8x for better visibility of small signals */
+        residual *= 8.0f;
         local_base = local_base * (1.0f - alpha) + ((float)scaled * alpha);
 
         /* Center residual to positive range for plotting */
         int32_t plot_val = (int32_t)(residual) + 2048; /* center offset */
-      
 
         float fplot = (float)plot_val;
 
@@ -261,8 +308,6 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
         /* Advance sample counter used by autoscaler and call helper */
         hpi_ppg_disp_add_samples(1);
 
-    (void)0;
-
         if (local_spo2_source == SPO2_SOURCE_PPG_WR) {
             hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
         } else {
@@ -273,7 +318,7 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     /* write back cached locals */
     y_min_ppg = local_ymin;
     y_max_ppg = local_ymax;
-    baseline_ema = local_base;
+    wr_baseline_ema = local_base;
 }
 
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
@@ -281,18 +326,21 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
     uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
     /* Simple DC removal for FI source similar to wrist plotting to reduce baseline wander */
-    static float fi_baseline_ema = 0.0f;
-    static bool fi_baseline_init = false;
     const float alpha_fi = 0.01f; /* slightly faster baseline tracking for finger */
 
     for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
     {
         float data_ppg_i = (float)(data_ppg[i]);
 
-        /* Guard against zero/invalid samples from driver */
+        /* Guard against zero/invalid samples from driver - use last valid value instead of skipping
+         * to prevent discontinuities in the waveform display */
         if (data_ppg_i == 0.0f)
         {
-            continue; /* skip this sample instead of aborting the whole batch */
+            /* Plot last valid value to maintain waveform continuity */
+            lv_chart_set_next_value(chart_ppg, ser_ppg, fi_last_valid_plot_val);
+            hpi_ppg_disp_add_samples(1);
+            hpi_ppg_disp_do_set_scale(BPT_DISP_WINDOW_SIZE * 2);
+            continue;
         }
 
         if (!fi_baseline_init)
@@ -306,6 +354,9 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 
         /* Center residual to positive range for LVGL plotting */
         int32_t plot_val = (int32_t)(residual) + 2048;
+
+        /* Store as last valid value for continuity on invalid samples */
+        fi_last_valid_plot_val = plot_val;
 
         if ((float)plot_val < y_min_ppg)
         {
@@ -324,13 +375,17 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
     }
 }
 
+extern struct k_sem sem_spo2_cancel;
+
 void gesture_down_scr_spo2_measure(void)
 {
-    // If finger-based measurement, signal cancel to the finger SM
+    // Signal cancellation to the appropriate state machine based on source
     if (spo2_source == SPO2_SOURCE_PPG_FI) {
         k_sem_give(&sem_fi_spo2_est_cancel);
+    } else if (spo2_source == SPO2_SOURCE_PPG_WR) {
+        k_sem_give(&sem_spo2_cancel);
     }
 
-    // Navigate back to selection screen
-    hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_DOWN, 0, 0, 0, 0);
+    // Navigate back to main SpO2 screen (simplified flow with Option B)
+    hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
 }

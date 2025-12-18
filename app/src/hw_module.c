@@ -572,10 +572,29 @@ static int hw_enable_pmic_callback(void)
     return 0;
 }
 
+/* Track finger sensor power state to avoid redundant/unsafe regulator calls */
+static bool fi_sensor_power_enabled = false;
+/* Flag to track if PMIC has been successfully initialized by hw_module_init.
+ * This prevents early access from other threads before PMIC is fully ready. */
+static bool pmic_fi_regulator_ready = false;
+
 void hpi_hw_fi_sensor_on(void)
 {
+    if (!pmic_fi_regulator_ready) {
+        LOG_WRN("PMIC FI regulator not initialized yet, skipping enable");
+        return;
+    }
+    if (dev_ldsw_fi_sens == NULL || !device_is_ready(dev_ldsw_fi_sens)) {
+        LOG_WRN("Finger sensor regulator not ready, skipping enable");
+        return;
+    }
+    if (fi_sensor_power_enabled) {
+        LOG_DBG("Finger sensor power already enabled, skipping");
+        return;
+    }
     int ret = regulator_enable(dev_ldsw_fi_sens);
     if (ret == 0) {
+        fi_sensor_power_enabled = true;
         LOG_INF("Finger sensor power enabled (LDO2)");
     } else {
         LOG_ERR("Failed to enable finger sensor power: %d", ret);
@@ -584,7 +603,25 @@ void hpi_hw_fi_sensor_on(void)
 
 void hpi_hw_fi_sensor_off(void)
 {
-    regulator_disable(dev_ldsw_fi_sens);
+    if (!pmic_fi_regulator_ready) {
+        LOG_DBG("PMIC FI regulator not initialized yet, skipping disable");
+        return;
+    }
+    if (dev_ldsw_fi_sens == NULL || !device_is_ready(dev_ldsw_fi_sens)) {
+        LOG_WRN("Finger sensor regulator not ready, skipping disable");
+        return;
+    }
+    if (!fi_sensor_power_enabled) {
+        LOG_DBG("Finger sensor power already disabled, skipping");
+        return;
+    }
+    int ret = regulator_disable(dev_ldsw_fi_sens);
+    if (ret == 0) {
+        fi_sensor_power_enabled = false;
+        LOG_INF("Finger sensor power disabled (LDO2)");
+    } else {
+        LOG_ERR("Failed to disable finger sensor power: %d", ret);
+    }
 }
 
 static bool hw_check_msbl_file_exists(const char *file_path)
@@ -649,11 +686,22 @@ void hw_module_init(void)
     regulator_enable(ldsw_disp_unit);
     k_msleep(500);
 
-    // Reset all sensors before starting (use wrapper for FI sensor)
-    hpi_hw_fi_sensor_off();
-    k_msleep(100);
-    hpi_hw_fi_sensor_on();
-    k_msleep(100);
+    // Reset finger sensor power rail - use direct regulator calls for boot sequence
+    // since the wrapper functions require pmic_fi_regulator_ready to be true
+    if (device_is_ready(dev_ldsw_fi_sens)) {
+        regulator_disable(dev_ldsw_fi_sens);
+        k_msleep(100);
+        int ret = regulator_enable(dev_ldsw_fi_sens);
+        if (ret == 0) {
+            fi_sensor_power_enabled = true;
+            LOG_INF("Finger sensor power enabled during boot (LDO2)");
+        }
+        k_msleep(100);
+        // Mark PMIC FI regulator as ready for other threads to use wrapper functions
+        pmic_fi_regulator_ready = true;
+    } else {
+        LOG_ERR("Finger sensor regulator (LDO2) not ready during boot");
+    }
 
     // Signal to start display state machine
     k_sem_give(&sem_disp_smf_start);
