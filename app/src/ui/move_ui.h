@@ -34,6 +34,7 @@
 #include <zephyr/drivers/rtc.h>
 
 #include "hpi_common_types.h"
+#include "recording_module.h"
 
 // Settings
 
@@ -53,6 +54,12 @@
 #define COLOR_WARNING_AMBER   0xFF9500
 #define COLOR_CRITICAL_RED    0xFF3B30
 #define COLOR_TEXT_SECONDARY  0xE5E5E7
+
+// Darker button background colors (better contrast with white text on AMOLED)
+#define COLOR_BTN_GREEN       0x1B5E20  // Dark green for start/action buttons
+#define COLOR_BTN_RED         0xB71C1C  // Dark red for stop/danger buttons
+#define COLOR_BTN_PURPLE      0x4A148C  // Dark purple for HRV buttons
+#define COLOR_BTN_BLUE        0x0D47A1  // Dark blue for BP buttons
 
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 256 // To be verified
@@ -113,6 +120,7 @@ enum hpi_disp_screens
     SCR_BPT,
     SCR_HRV,
     SCR_GSR,
+    SCR_RECORDING,  // Background recording control
     //SCR_HRV,
     SCR_LIST_END,
     // Should not go here
@@ -293,6 +301,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir);
 void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
 void hpi_home_steps_update(int steps);
+void hpi_scr_home_update_recording_status(struct hpi_recording_status_t *status);
 
 #if defined(CONFIG_HPI_TODAY_SCREEN)
 // Today Screen functions
@@ -326,6 +335,10 @@ void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 void draw_scr_spl_spo2_cancelled(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spl_low_battery(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+
+// Recording Screen functions
+void draw_scr_recording(enum scroll_dir m_scroll_dir);
+void hpi_scr_recording_update_status(struct hpi_recording_status_t *status);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);

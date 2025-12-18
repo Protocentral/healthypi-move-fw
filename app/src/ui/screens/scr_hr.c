@@ -138,25 +138,25 @@ void draw_scr_hr(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_hr_last_update_time, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_hr_last_update_time, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // BOTTOM: Single centered "Raw PPG" button at y=255
-    const int btn_width = 160;
-    const int btn_height = 44;
-    const int btn_y = 255;
+    // BOTTOM: Single centered "Raw PPG" button at y=250
+    const int btn_width = 200;
+    const int btn_height = 60;
+    const int btn_y = 250;
 
     lv_obj_t *btn_raw_ppg = hpi_btn_create_primary(scr_hr);
     lv_obj_set_size(btn_raw_ppg, btn_width, btn_height);
     lv_obj_set_pos(btn_raw_ppg, (390 - btn_width) / 2, btn_y);
-    lv_obj_set_style_radius(btn_raw_ppg, 22, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(btn_raw_ppg, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_radius(btn_raw_ppg, 30, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn_raw_ppg, lv_color_hex(COLOR_BTN_RED), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(btn_raw_ppg, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(btn_raw_ppg, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(btn_raw_ppg, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn_raw_ppg, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(btn_raw_ppg, 0, LV_PART_MAIN);
 
     lv_obj_t *label_btn_raw = lv_label_create(btn_raw_ppg);
     lv_label_set_text(label_btn_raw, LV_SYMBOL_PLAY " Raw PPG");
     lv_obj_center(label_btn_raw);
-    lv_obj_set_style_text_color(label_btn_raw, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    //lv_obj_set_style_text_font(label_btn_raw, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_btn_raw, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_raw_ppg, scr_hr_btn_raw_event_handler, LV_EVENT_CLICKED, NULL);
 
     hpi_disp_set_curr_screen(SCR_HR);

@@ -214,18 +214,21 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_bpt_last_update_time, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpt_last_update_time, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
-    // BOTTOM ZONE: Action Button (consistent with other screens)
+    // BOTTOM ZONE: Action Button (consistent with other screens - 200x60, dark background, white text)
     lv_obj_t *btn_bpt_measure = hpi_btn_create_primary(scr_bpt);
-    lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_measure_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_size(btn_bpt_measure, 180, 50);  // Standard size matching other screens
-    lv_obj_align(btn_bpt_measure, LV_ALIGN_BOTTOM_MID, 0, -30);
-    lv_obj_set_style_radius(btn_bpt_measure, 25, LV_PART_MAIN);
+    lv_obj_set_size(btn_bpt_measure, 200, 60);
+    lv_obj_align(btn_bpt_measure, LV_ALIGN_BOTTOM_MID, 0, -35);
+    lv_obj_set_style_radius(btn_bpt_measure, 30, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn_bpt_measure, lv_color_hex(COLOR_BTN_BLUE), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn_bpt_measure, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn_bpt_measure, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(btn_bpt_measure, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_measure_handler, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *label_btn_measure = lv_label_create(btn_bpt_measure);
-    lv_label_set_text(label_btn_measure, LV_SYMBOL_REFRESH " Measure");  // Use refresh symbol like SPO2
+    lv_label_set_text(label_btn_measure, LV_SYMBOL_PLAY " Measure");
     lv_obj_center(label_btn_measure);
-    //lv_obj_set_style_text_color(label_btn_raw, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
-    //lv_obj_add_style(label_btn_measure, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_btn_measure, lv_color_white(), LV_PART_MAIN);
 
     hpi_disp_set_curr_screen(SCR_BPT);
     hpi_show_screen(scr_bpt, m_scroll_dir);

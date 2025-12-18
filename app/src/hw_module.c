@@ -81,6 +81,7 @@
 #include "ble_module.h"
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
+#include "recording_module.h"
 
 #include <max32664_updater.h>
 
@@ -750,6 +751,10 @@ void hw_module_init(void)
     }
 
     fs_module_init();
+
+#if defined(CONFIG_HPI_RECORDING_MODULE)
+    hpi_recording_init();
+#endif
 
     // Init IMU device
     ret = device_init(imu_dev);

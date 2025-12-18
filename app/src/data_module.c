@@ -51,6 +51,7 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "hpi_sys.h"
 
 #include "log_module.h"
+#include "recording_module.h"
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 ZBUS_CHAN_DECLARE(gsr_stress_chan);
@@ -580,6 +581,12 @@ void data_thread(void)
                 }
             }
 
+            // Background recording: GSR samples
+            if (hpi_recording_is_signal_enabled(REC_SIGNAL_GSR))
+            {
+                hpi_rec_add_gsr_samples(bsample.bioz_samples, bsample.bioz_num_samples);
+            }
+
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
             // Calculate stress index from GSR samples
             if (is_gsr_measurement_active && bsample.bioz_num_samples > 0)
@@ -623,6 +630,14 @@ void data_thread(void)
             {
                 k_msgq_put(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT);
             }
+
+            // Background recording: PPG Finger samples
+            if (hpi_recording_is_signal_enabled(REC_SIGNAL_PPG_FINGER))
+            {
+                hpi_rec_add_ppg_finger_samples(ppg_fi_sensor_sample.raw_ir,
+                                                ppg_fi_sensor_sample.raw_red,
+                                                ppg_fi_sensor_sample.ppg_num_samples);
+            }
         }
 
         // Check if PPG data is available
@@ -636,6 +651,15 @@ void data_thread(void)
             if (settings_plot_enabled)
             {
                 k_msgq_put(&q_plot_ppg_wrist, &ppg_wr_sensor_sample, K_NO_WAIT);
+            }
+
+            // Background recording: PPG Wrist samples
+            if (hpi_recording_is_signal_enabled(REC_SIGNAL_PPG_WRIST))
+            {
+                hpi_rec_add_ppg_wrist_samples(ppg_wr_sensor_sample.raw_ir,
+                                               ppg_wr_sensor_sample.raw_red,
+                                               ppg_wr_sensor_sample.raw_green,
+                                               ppg_wr_sensor_sample.ppg_num_samples);
             }
 
             if (settings_send_usb_enabled)

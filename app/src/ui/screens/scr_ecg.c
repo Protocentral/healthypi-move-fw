@@ -155,25 +155,25 @@ void draw_scr_ecg(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_ecg_status, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_ecg_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // BOTTOM: Single centered "Start ECG" button at y=255
-    const int btn_width = 160;
-    const int btn_height = 44;
-    const int btn_y = 255;
+    // BOTTOM: Single centered "Start ECG" button at y=250
+    const int btn_width = 200;
+    const int btn_height = 60;
+    const int btn_y = 250;
 
     btn_ecg_measure = hpi_btn_create_primary(scr_ecg);
     lv_obj_set_size(btn_ecg_measure, btn_width, btn_height);
     lv_obj_set_pos(btn_ecg_measure, (390 - btn_width) / 2, btn_y);
-    lv_obj_set_style_radius(btn_ecg_measure, 22, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(btn_ecg_measure, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_radius(btn_ecg_measure, 30, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn_ecg_measure, lv_color_hex(COLOR_BTN_GREEN), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(btn_ecg_measure, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(btn_ecg_measure, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(btn_ecg_measure, lv_color_hex(COLOR_SUCCESS_GREEN), LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn_ecg_measure, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(btn_ecg_measure, 0, LV_PART_MAIN);
 
     lv_obj_t *label_btn_ecg_measure = lv_label_create(btn_ecg_measure);
     lv_label_set_text(label_btn_ecg_measure, LV_SYMBOL_PLAY " Start ECG");
     lv_obj_center(label_btn_ecg_measure);
-    lv_obj_set_style_text_color(label_btn_ecg_measure, lv_color_hex(COLOR_SUCCESS_GREEN), LV_PART_MAIN);
+    //lv_obj_set_style_text_font(label_btn_ecg_measure, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_btn_ecg_measure, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_ecg_measure, scr_ecg_start_btn_event_handler, LV_EVENT_CLICKED, NULL);
 
     hpi_disp_set_curr_screen(SCR_ECG);
