@@ -99,7 +99,7 @@ void draw_scr_bpt_cal_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
     // BOTTOM ZONE: Action Button (consistent with other screens)
     btn_bpt_measure = hpi_btn_create_primary(scr_bpt_cal_complete);
-    lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_btn_measure_handler, LV_EVENT_ALL, NULL);
+    lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_btn_measure_handler, LV_EVENT_CLICKED, NULL);
     lv_obj_set_size(btn_bpt_measure, 180, 50);  // Standard size matching other screens
     lv_obj_align(btn_bpt_measure, LV_ALIGN_BOTTOM_MID, 0, -30);  // Standard bottom positioning
     lv_obj_set_style_radius(btn_bpt_measure, 25, LV_PART_MAIN);
@@ -108,7 +108,7 @@ void draw_scr_bpt_cal_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_label_set_text(label_btn, LV_SYMBOL_OK " Close");
     lv_obj_center(label_btn);
     // Note: Do not apply style_body_medium - LVGL symbols require default LVGL font
-
+   
     hpi_disp_set_curr_screen(SCR_SPL_BPT_CAL_COMPLETE);
     hpi_show_screen(scr_bpt_cal_complete, m_scroll_dir);
 }
