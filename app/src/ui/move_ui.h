@@ -199,6 +199,7 @@ void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead
 void hpi_gsr_disp_update_timer(uint16_t remaining_s);
 void scr_gsr_lead_on_off_handler(bool lead_on);
 void hpi_gsr_reset_countdown_timer(void);
+void hpi_gsr_disp_update_us(float gsr_us);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
