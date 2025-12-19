@@ -54,7 +54,10 @@ static lv_obj_t *label_spo2_progress;
 static lv_obj_t *bar_spo2_progress;
 static lv_obj_t *label_spo2_status;
 static lv_obj_t *cont_progress;
+static lv_obj_t *label_contact;
 
+static bool contact_status;
+K_MUTEX_DEFINE(contact_status_mutex);
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
 
@@ -158,6 +161,16 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
+    // Lead off status label (positioned at bottom)
+    label_contact = lv_label_create(scr_spo2_scr_measure);
+    lv_label_set_long_mode(label_contact, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label_contact, 300);
+    lv_label_set_text(label_contact, "Place fingers on finger sensor\nMeasurement will start automatically");
+    lv_obj_align(label_contact, LV_ALIGN_CENTER, 0, 0);  // Centered overlay on chart
+    lv_obj_add_style(label_contact, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_contact, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_contact, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+
     // Draw BPM
     /*lv_obj_t *img_heart = lv_img_create(cont_hr);
     lv_img_set_src(img_heart, &img_heart_48px);
@@ -182,11 +195,22 @@ static void hpi_ppg_disp_do_set_scale(int disp_window_size)
 {
     hpi_ppg_disp_do_set_scale_shared(chart_ppg, &y_min_ppg, &y_max_ppg, &gx, disp_window_size);
 }
-
+ int last_progress = -1;   // -1 = "nothing shown yet"
 void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int spo2, int hr)
 {
     if (label_spo2_progress == NULL)
         return;
+
+    /* First valid update: accept whatever comes (0 or >0) */
+    if (last_progress < 0) {
+        last_progress = progress;
+    } else {
+        /* After first update, never go backwards */
+        if (progress < last_progress) {
+            progress = last_progress;
+        }
+        last_progress = progress;
+    }
 
     lv_label_set_text_fmt(label_spo2_progress, "%d %%", progress);
     lv_bar_set_value(bar_spo2_progress, progress, LV_ANIM_ON);
@@ -278,6 +302,10 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
+    if(label_contact != NULL)
+    {
+        lv_obj_add_flag(label_contact, LV_OBJ_FLAG_HIDDEN);
+    }
     uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
     /* Simple DC removal for FI source similar to wrist plotting to reduce baseline wander */
@@ -333,4 +361,35 @@ void gesture_down_scr_spo2_measure(void)
 
     // Navigate back to selection screen
     hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_DOWN, 0, 0, 0, 0);
+}
+
+void scr_ppg_finger_contact_handler(bool contact)
+{
+     LOG_INF("Screen handler called with contact = %s", contact ? "active" : "Inactive");
+
+     if(label_contact == NULL)
+     {
+        LOG_WRN("label_contact is NULL, screen handler returning early");
+        return;
+     }
+
+     k_mutex_lock(&contact_status_mutex, K_FOREVER);
+     contact_status = contact;
+     k_mutex_unlock(&contact_status_mutex);
+
+     if(contact_status)
+     {
+        LOG_INF("Handling Contact ON: hiding info, showing chart");
+        lv_obj_clear_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(label_contact, LV_OBJ_FLAG_HIDDEN);
+        
+     }
+     else 
+     {
+        LOG_INF("Handling Contact OFF: hiding chart, showing info");
+        lv_obj_clear_flag(label_contact, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(chart_ppg, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(label_contact, "Contact lost\n Reconnect to continue\n");
+        
+     }
 }
