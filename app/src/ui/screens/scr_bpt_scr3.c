@@ -49,14 +49,17 @@ extern lv_style_t style_tiny;
 
 extern struct k_sem sem_fi_spo2_est_cancel;
 extern struct k_sem sem_fi_bpt_est_cancel;
+extern struct k_sem sem_fi_bpt_cal_cancel;
 
-static int source = 0;
+static int next_screen= 0;
+static int parent_screen = 0;
 
 void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     
     scr_bpt_scr3 = lv_obj_create(NULL);
-    source = arg2;
+    next_screen = arg2;
+    parent_screen = arg3;
     // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_bpt_scr3, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE);
@@ -101,15 +104,22 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
 void gesture_down_scr_fi_sens_check(void)
 {
     // Handle gesture down event
-    if(source == SCR_SPO2)
+    if(next_screen == SCR_SPO2)
     {
-        k_sem_give(&sem_fi_spo2_est_cancel);
-        hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+       LOG_INF("User cancels SPO2 Measurement in Finger sensor check screen");
+       k_sem_give(&sem_fi_spo2_est_cancel);
+       hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+    }
+    else if(next_screen == SCR_BPT && parent_screen != SCR_BPT)
+    {
+      LOG_INF("User cancels BPT Measurement in finger sensor check screen");
+      k_sem_give(&sem_fi_bpt_est_cancel);
+      hpi_load_screen(SCR_BPT, SCROLL_DOWN);
     }
     else
     {
-      LOG_INF("Gesture Down on BPT Sensor Check Screen - Cancelling Measurement, giving cancel semaphore");
-      k_sem_give(&sem_fi_bpt_est_cancel);
+      LOG_INF("User cancels BPT Calibration in finger sensor check screen");
+      k_sem_give(&sem_fi_bpt_cal_cancel);
       hpi_load_screen(SCR_BPT, SCROLL_DOWN);
     }
 }
