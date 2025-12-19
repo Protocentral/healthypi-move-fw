@@ -244,6 +244,7 @@ extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
 
 extern struct k_sem sem_gsr_complete;
+extern struct k_sem sem_gsr_complete_reset;
 /**
  * @brief Configure ECG leads based on hand worn setting
  * @return 0 on success, negative error code on failure
@@ -613,7 +614,7 @@ static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
     sample.ecg_lead_off = edata->ecg_lead_off;
 
 
-    LOG_DBG("GSR sensor data: bioz_lead_off=%d", edata->bioz_lead_off);
+  //  LOG_DBG("GSR sensor data: bioz_lead_off=%d", edata->bioz_lead_off);
     
     if (edata->bioz_lead_off == 1) 
     {
@@ -952,8 +953,8 @@ static void st_gsr_stream_run(void *o)
         .active = contact_ok,
     };
 
-    LOG_INF("GSR SMF: Timer = %d/%d s", 
-            gsr_countdown_val, GSR_MEASUREMENT_DURATION_S);
+    // LOG_INF("GSR SMF: Timer = %d/%d s", 
+    //         gsr_countdown_val, GSR_MEASUREMENT_DURATION_S);
 
      // Publish status to UI
     zbus_chan_pub(&gsr_status_chan, &status, K_NO_WAIT);
@@ -998,7 +999,7 @@ static void st_gsr_complete_run(void *o)
         LOG_ERR("Failed to disable GSR in complete : %d", ret);
     }
 
-    k_sem_give(&sem_gsr_complete);
+    k_sem_give(&sem_gsr_complete_reset);
 
     smf_set_state(SMF_CTX(&s_ecg_obj),
                   &ecg_states[HPI_ECG_STATE_IDLE]);
