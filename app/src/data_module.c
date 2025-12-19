@@ -492,6 +492,28 @@ void data_thread(void)
 
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
+            /* ---------------------------------------
+            * 1. Convert RAW BioZ → GSR (µS)
+            * --------------------------------------- */
+            // float gsr_float[BIOZ_MAX_SAMPLES] = {0};
+            // convert_raw_to_uS(bsample.bioz_samples, gsr_float, bsample.bioz_num_samples);
+            // /* Create a new struct for safe message passing */
+            // struct hpi_bioz_sample_t gsr_sample = bsample;
+
+            // /* Copy converted float to int32_t buffer for BLE / plot / record */
+            // for (uint8_t i = 0; i < bsample.bioz_num_samples; i++)
+            // {
+            //     /* Multiply by 100 if you want to store as int with 2 decimal precision */
+            //     gsr_sample.bioz_samples[i] = (int32_t)(gsr_float[i] * 100.0f);
+            // }
+
+            // /* ---------------------------------------
+            // * 2. BLE notification
+            // * --------------------------------------- */
+            // if (settings_send_ble_enabled)
+            // {
+            //     ble_gsr_notify(gsr_sample.bioz_samples, gsr_sample.bioz_num_samples);
+            // }
             processed_data = true;
             if (settings_send_ble_enabled)
             {
@@ -511,44 +533,7 @@ void data_thread(void)
                 }
             }
 
-         k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
-        // if (is_gsr_record_active)
-        // {
-        //     int samples_to_copy = bsample.bioz_num_samples;
-        //     int space_left = GSR_RECORD_BUFFER_SAMPLES - gsr_record_counter;
-
-        //     if (space_left <= 0)
-        //     {
-        //         LOG_INF("GSR buffer full - stopping recording");
-        //         k_mutex_unlock(&mutex_is_gsr_record_active);
-        //         hpi_data_set_gsr_record_active(false);
-        //     }
-        //     else
-        //     {
-        //         int copy_count = (samples_to_copy <= space_left) ? samples_to_copy : space_left;
-        //         memcpy(&gsr_record_buffer[gsr_record_counter],
-        //             bsample.bioz_samples,
-        //             copy_count * sizeof(int32_t));
-        //         gsr_record_counter += copy_count;
-
-        //         if (copy_count < samples_to_copy)
-        //         {
-        //             LOG_WRN("GSR buffer full mid-batch - collected %d samples, discarded %d",
-        //                     gsr_record_counter, samples_to_copy - copy_count);
-        //             k_mutex_unlock(&mutex_is_gsr_record_active);
-        //             hpi_data_set_gsr_record_active(false);
-        //         }
-        //         else
-        //         {
-        //             k_mutex_unlock(&mutex_is_gsr_record_active);
-        //         }
-        //     }
-        // }
-        // else
-        // {
-        //     k_mutex_unlock(&mutex_is_gsr_record_active);
-        // }
-        // k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+        k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
 
         if (is_gsr_record_active == true)
         {
