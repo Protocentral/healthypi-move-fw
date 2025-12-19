@@ -59,7 +59,7 @@ extern int global_dev_status;
 
 extern struct k_sem sem_bpt_enter_mode_cal;
 extern struct k_sem sem_bpt_cal_start;
-extern struct k_sem sem_bpt_exit_mode_cal;
+extern struct k_sem sem_bpt_fi_exit_mode_cal;
 
 void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
 {
@@ -97,7 +97,7 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         break;
     case HPI_CMD_BPT_EXIT_CAL_MODE:
         LOG_DBG("RX CMD Exit BPT Cal Mode");
-        k_sem_give(&sem_bpt_exit_mode_cal);
+        k_sem_give(&sem_bpt_fi_exit_mode_cal);
         break;
     // File System Commands
     case HPI_CMD_LOG_GET_COUNT:
