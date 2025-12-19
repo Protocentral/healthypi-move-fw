@@ -239,7 +239,7 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_shadow_width(btn_gsr_measure, 0, LV_PART_MAIN);  // No shadow for AMOLED
     
     lv_obj_t *label_btn_gsr_measure = lv_label_create(btn_gsr_measure);
-    lv_label_set_text(label_btn_gsr_measure, LV_SYMBOL_EYE_OPEN " Live View");
+    lv_label_set_text(label_btn_gsr_measure, LV_SYMBOL_PLAY " Start GSR");
     lv_obj_center(label_btn_gsr_measure);
     lv_obj_set_style_text_color(label_btn_gsr_measure, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_gsr_measure, scr_gsr_measure_btn_event_handler, LV_EVENT_CLICKED, NULL);
@@ -251,23 +251,23 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_color(label_scr_title, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_scr_title, &style_body_medium, LV_PART_MAIN);
 
-    int last_scr_count = hpi_data_get_last_scr_count();
+    //int last_scr_count = hpi_data_get_last_scr_count();
     label_scr_count = lv_label_create(scr_gsr);
 
-    if(last_scr_count == 0)
+    if(gsr_value_stored == 0)
     {
         lv_label_set_text(label_scr_count, "--");
     }
     else
     {
-        lv_label_set_text_fmt(label_scr_count, "%d", last_scr_count);
+        lv_label_set_text_fmt(label_scr_count, "%d", gsr_value_stored);
     }
    // lv_label_set_text(label_scr_count, "--");
     lv_obj_align(label_scr_count, LV_ALIGN_CENTER, 0, 15);   // Below the title
     lv_obj_set_style_text_color(label_scr_count, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_scr_count, &style_numeric_large, LV_PART_MAIN);  // BIG font
 
-    // int last_scr_count = hpi_data_get_last_scr_count();
+     //int last_scr_count = hpi_data_get_last_scr_count();
     // lv_label_set_text_fmt(label_scr_count, "%d", last_scr_count);
 
 
