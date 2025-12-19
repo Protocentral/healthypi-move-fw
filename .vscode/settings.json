@@ -49,7 +49,8 @@
         "ostream": "c",
         "system_error": "c",
         "max32664_updater.h": "c",
-        "log_module.h": "c"
+        "log_module.h": "c",
+        "max32664d.h": "c"
     },
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/app/build": "Launch build",
