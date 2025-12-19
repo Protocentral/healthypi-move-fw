@@ -250,7 +250,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
             {
                 LOG_WRN("BioZ FIFO overflow at sample %d", i);
                 // Don't reset FIFO immediately - try to recover the valid samples first
-                // max30001_fifo_reset(dev);
+                 max30001_fifo_reset(dev);
                 break;
             }
             else

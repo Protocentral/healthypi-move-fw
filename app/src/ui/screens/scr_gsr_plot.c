@@ -23,7 +23,8 @@ static lv_obj_t *btn_stop;
 static lv_obj_t *label_timer; // shows remaining countdown
 static lv_obj_t *arc_gsr_progress; // progress arc for measurement duration
 static lv_obj_t *label_gsr_error;   // shows sensor disconnected / lead-off
-static lv_obj_t *label_info; // reference for lead on/off handler
+static lv_obj_t *label_info_gsr; // reference for lead on/off handler
+static lv_obj_t *label_gsr_value; // shows real-time GSR value
 
 static bool gsr_contact_present = false; // track GSR contact state
 
@@ -65,22 +66,76 @@ void hpi_gsr_disp_update_timer(uint16_t remaining_s)
     }
 }
 
-static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
+void hpi_gsr_disp_update_us(float gsr_us)
 {
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED)
-    {
-        // Stop GSR measurement using semaphore control (same pattern as ECG)
-        k_sem_give(&sem_gsr_cancel);
-        hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+    /* Check screen & label */
+    if (hpi_disp_get_curr_screen() != SCR_SPL_PLOT_GSR || label_gsr_value == NULL)
+        return;
+
+    // /* Clamp invalid values */
+    // if (gsr_us < 0.0f)
+    //     gsr_us = 0.0f;
+
+    /* Convert to fixed-point (µS × 100) */
+    int gsr_fp = (int)(gsr_us * 100.0f + 0.5f);  // rounded
+
+    if (gsr_fp == 0)
+        return;
+
+    /* Cache last value to avoid redundant LVGL updates */
+    static int last_gsr_fp = -1;
+    if (gsr_fp == last_gsr_fp)
+        return;
+
+    last_gsr_fp = gsr_fp;
+
+    /* Split integer and decimal parts */
+    int gsr_int = gsr_fp / 100;
+    int gsr_dec = gsr_fp % 100;
+
+    /* Format exactly like ECG HR (safe, predictable) */
+    static char gsr_buf[16];
+    snprintf(gsr_buf, sizeof(gsr_buf), "%d.%02d", gsr_int, gsr_dec);
+
+    lv_label_set_text(label_gsr_value, gsr_buf);
+
+    printk("Updated GSR uS value: %s\n", gsr_buf);
+}
+
+
+
+static void gsr_gesture_event_cb(lv_event_t *e)
+{
+    lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
+    if (dir == LV_DIR_BOTTOM) {
+        gesture_down_scr_gsr_plot();
     }
 }
+
+static void gsr_touch_event_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_PRESSED) {
+        /* Immediately exit screen */
+        gesture_down_scr_gsr_plot();
+    }
+}
+
+// static void scr_gsr_stop_btn_event_handler(lv_event_t *e)
+// {
+//     lv_event_code_t code = lv_event_get_code(e);
+//     //if (code == LV_EVENT_CLICKED)
+//     if (code == LV_EVENT_PRESSED) 
+//     {
+//         // Stop GSR measurement using semaphore control (same pattern as ECG)
+//         hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+//         k_sem_give(&sem_gsr_cancel);
+//     }
+// }
 // LVGL 9.2 optimized batch plot function (ECG-like flow adapted for GSR)
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off)
 {
-    
-    // if (!gsr_contact_present  || lv_obj_has_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN))
-    // return;
 
     // Early validation
     if (!plot_ready || chart_gsr_trend == NULL || ser_gsr_trend == NULL || data_gsr == NULL || num_samples <= 0) {
@@ -169,10 +224,41 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
    
     // Title - positioned at top center
     lv_obj_t *label_title = lv_label_create(scr_gsr_plot);
-    lv_label_set_text(label_title, "GSR Live");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 20);
+    lv_label_set_text(label_title, "GSR");
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+     // Screen title - properly positioned to avoid arc overlap
+    // MID-UPPER RING: Timer container with icon (following design pattern)
+    lv_obj_t *cont_timer = lv_obj_create(scr_gsr_plot);
+    lv_obj_set_size(cont_timer, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_timer, LV_ALIGN_TOP_MID, 0, 85);
+    lv_obj_set_style_bg_opa(cont_timer, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_timer, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_timer, 0, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_timer, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_timer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // Timer Icon
+    LV_IMG_DECLARE(timer_32);
+    lv_obj_t *img_timer = lv_img_create(cont_timer);
+    lv_img_set_src(img_timer, &timer_32);
+    lv_obj_set_style_img_recolor(img_timer, lv_color_hex(0xFFFFFF), LV_PART_MAIN);  // Orange theme
+    lv_obj_set_style_img_recolor_opa(img_timer, LV_OPA_COVER, LV_PART_MAIN);
+
+    // Timer value
+    label_timer = lv_label_create(cont_timer);
+    lv_label_set_text(label_timer, "30");
+    lv_obj_add_style(label_timer, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_timer, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_timer, 8, LV_PART_MAIN);
+
+    // Timer unit
+    lv_obj_t *label_timer_unit = lv_label_create(cont_timer);
+    lv_label_set_text(label_timer_unit, "s");
+    lv_obj_add_style(label_timer_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_timer_unit, lv_color_hex(0xFFFFFF), LV_PART_MAIN);  // Orange accent
 
     // Chart - positioned in center area
     chart_gsr_trend = lv_chart_create(scr_gsr_plot);
@@ -210,51 +296,84 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_IGNORE_LAYOUT);           // Skip layout calculations
     lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_CLICK_FOCUSABLE);
-    
+    /* Allow gesture to bubble up to screen */
+    lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_GESTURE_BUBBLE);
     // Initialize chart with baseline values
     lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 0);
 
+// GSR Container below chart (following design pattern)
+    lv_obj_t *cont_gsr_value = lv_obj_create(scr_gsr_plot);
+    lv_obj_set_size(cont_gsr_value, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_gsr_value, LV_ALIGN_CENTER, 0, 75);  // Below chart
+    lv_obj_set_style_bg_opa(cont_gsr_value, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_gsr_value, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_gsr_value, 0, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_gsr_value, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_gsr_value, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // GSR Value
+    float gsr_us = hpi_data_get_last_converted_us();
+   // printk("Initial GSR uS value: %.2f\n", gsr_us);
+
+    label_gsr_value = lv_label_create(cont_gsr_value);
+    if (gsr_us <= 0.0f) 
+    { 
+      lv_label_set_text(label_gsr_value, "--");
+    } 
+    else 
+    {
+        int gsr_fp  = (int)(gsr_us * 100.0f);
+        int gsr_int = gsr_fp / 100;
+        int gsr_dec = gsr_fp % 100;
+
+        lv_label_set_text_fmt(label_gsr_value, "%d.%02d", gsr_int, gsr_dec);
+    }
+    lv_obj_add_style(label_gsr_value, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_gsr_value, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(label_gsr_value, 8, LV_PART_MAIN);
+
+    // GSR Unit
+    lv_obj_t *label_gsr_usnit = lv_label_create(cont_gsr_value);
+    lv_label_set_text(label_gsr_usnit, "uS");
+    lv_obj_add_style(label_gsr_usnit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_gsr_usnit, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+
     // Stop button - positioned at bottom center
-    btn_stop = hpi_btn_create_primary(scr_gsr_plot);
-    lv_obj_set_size(btn_stop, 140, 48);
-    lv_obj_align(btn_stop, LV_ALIGN_BOTTOM_MID, 0, -30);
-    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_CLICKED, NULL);
-    lv_obj_set_style_radius(btn_stop, 22, LV_PART_MAIN);
-    lv_obj_t *label_btn = lv_label_create(btn_stop);
-    lv_label_set_text(label_btn, "Stop");
-    lv_obj_center(label_btn);
-    lv_obj_set_style_text_color(label_btn, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
+//     btn_stop = hpi_btn_create_primary(scr_gsr_plot);
+//     lv_obj_set_size(btn_stop, 140, 48);
+//     lv_obj_align(btn_stop, LV_ALIGN_BOTTOM_MID, 0, -30);
+// //    lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_CLICKED, NULL);
+//     lv_obj_add_event_cb(btn_stop, scr_gsr_stop_btn_event_handler, LV_EVENT_PRESSED, NULL);
 
-    // Timer label (remaining seconds) positioned below title
-    label_timer = lv_label_create(scr_gsr_plot);
-    lv_label_set_text(label_timer, "30");
-    lv_obj_align(label_timer, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_set_style_text_color(label_timer, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_timer, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+//     lv_obj_set_style_radius(btn_stop, 22, LV_PART_MAIN);
+//     lv_obj_t *label_btn = lv_label_create(btn_stop);
+//     lv_label_set_text(label_btn, "Stop");
+//     lv_obj_center(label_btn);
+//     lv_obj_set_style_text_color(label_btn, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
 
-    // Sensor lead-off label
+    // Lead off status label (positioned at bottom)
     label_gsr_error = lv_label_create(scr_gsr_plot);
     lv_label_set_long_mode(label_gsr_error, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_gsr_error, 300);
-    lv_label_set_text(label_gsr_error, "Make skin contact with the electrodes\nTimer will start automatically");
-    lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, -20);  // Center but above button area
+    lv_label_set_text(label_gsr_error, "Make skin contact\nwith electrodes\nTimer will start");
+    lv_obj_align(label_gsr_error, LV_ALIGN_CENTER, 0, 0);  // Centered overlay on chart
     lv_obj_add_style(label_gsr_error, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_gsr_error, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_gsr_error, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-    // Ensure label doesn't intercept touch events
-    lv_obj_clear_flag(label_gsr_error, LV_OBJ_FLAG_CLICKABLE);
-  
+    
     // Set reference for lead on/off handler
-    label_info = label_gsr_error;
+    label_info_gsr = label_gsr_error;
 
     // CRITICAL: Move STOP button to foreground AFTER creating all other elements
     // This ensures the button is always on top and can receive touch events
-    lv_obj_move_foreground(btn_stop);
+   // lv_obj_move_foreground(btn_stop);
 
     // Initialize performance optimization system
     gsr_chart_reset_performance_counters();
     gsr_chart_enable_performance_mode(true);  // Start in high-performance mode
     plot_ready = true;
+
+    lv_obj_add_event_cb(scr_gsr_plot, gsr_gesture_event_cb, LV_EVENT_GESTURE, NULL);
 
     hpi_disp_set_curr_screen(SCR_SPL_PLOT_GSR);
     hpi_show_screen(scr_gsr_plot, m_scroll_dir);
@@ -285,12 +404,13 @@ static void gsr_chart_reset_performance_counters(void)
     y_max_gsr = -10000;
     y_min_gsr = 10000;
 }
+
 void scr_gsr_lead_on_off_handler(bool lead_off)
 {
     LOG_INF("Screen handler called with lead_off=%s", lead_off ? "OFF" : "ON");
     
-    if (label_info == NULL) {
-        LOG_WRN("label_info is NULL, screen handler returning early");
+    if (label_info_gsr == NULL) {
+        LOG_WRN("label_info_gsr is NULL, screen handler returning early");
         return;
     }
 
@@ -298,24 +418,28 @@ void scr_gsr_lead_on_off_handler(bool lead_off)
 
     if (gsr_contact_present) {
         // Contact OK - show chart, hide error message
-        lv_obj_add_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        if (chart_gsr_trend != NULL) {
-            lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
-        }
+        lv_obj_add_flag(label_info_gsr, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+       
     } else {
         // No contact - show error message, hide chart
-        lv_obj_clear_flag(label_info, LV_OBJ_FLAG_HIDDEN);
-        if (chart_gsr_trend != NULL) {
-            lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
-        }
-        lv_label_set_text(label_info, "Make skin contact with the electrodes\nTimer will start automatically");
+        lv_obj_clear_flag(label_info_gsr, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(chart_gsr_trend, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(label_info_gsr, "Make skin contact\nwith electrodes\nTimer will start");
     }
-    
-    // CRITICAL: Always ensure STOP button remains clickable and on top
-    if (btn_stop != NULL) {
-        lv_obj_move_foreground(btn_stop);
-        lv_obj_add_flag(btn_stop, LV_OBJ_FLAG_CLICKABLE);
-    }
+
+    // // CRITICAL: Always ensure STOP button remains clickable and on top
+    // if (btn_stop != NULL) {
+    //     lv_obj_move_foreground(btn_stop);
+    //     lv_obj_add_flag(btn_stop, LV_OBJ_FLAG_CLICKABLE);
+    // }
+}
+
+void gesture_down_scr_gsr_plot(void)
+{
+    LOG_INF("Cancel GSR\n");
+    k_sem_give(&sem_gsr_cancel);
+    hpi_load_screen(SCR_GSR, SCROLL_DOWN);
 }
 
 void unload_scr_gsr_plot(void)
@@ -325,12 +449,4 @@ void unload_scr_gsr_plot(void)
         lv_obj_del(scr_gsr_plot);
         scr_gsr_plot = NULL;
     }
-}
-
-
-void gesture_down_scr_gsr_plot(void)
-{
-    printk("Cancel GSR\n");
-    k_sem_give(&sem_gsr_cancel);
-    hpi_load_screen(SCR_GSR, SCROLL_DOWN);
 }
