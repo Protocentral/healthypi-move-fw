@@ -232,6 +232,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
     [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
+    [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
     [SCR_SPL_ECG_COMPLETE] = {draw_scr_ecg_complete, gesture_down_scr_ecg_complete},
 
   //  [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
@@ -250,7 +251,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
     [SCR_SPL_SPO2_BPT_TIMEOUT] = {draw_scr_timeout, gesture_down_scr_timeout},
 
-    [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
+   
     [SCR_SPL_BPT_FAILED] = {draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed},
     [SCR_SPL_BPT_EST_COMPLETE] = {draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete},
     [SCR_SPL_BPT_CAL_REQUIRED] = {draw_scr_bpt_cal_required, gesture_down_scr_bpt_cal_required},
@@ -1138,6 +1139,7 @@ void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1,
 
     if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_func_table) && screen_func_table[m_screen].draw != NULL)
     {
+        k_mutex_lock(&mutex_curr_screen, K_FOREVER);
         g_screen = m_screen;
         g_scroll_dir = m_scroll_dir;
         g_scr_parent = arg1;
@@ -1147,6 +1149,7 @@ void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1,
         g_arg4 = arg4;
 
         k_sem_give(&sem_change_screen);
+        k_mutex_unlock(&mutex_curr_screen);
     }
     else
     {
