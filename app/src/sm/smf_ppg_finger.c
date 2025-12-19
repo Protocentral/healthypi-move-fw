@@ -66,7 +66,7 @@ K_SEM_DEFINE(sem_bpt_cal_complete, 0, 1);
 K_SEM_DEFINE(sem_spo2_est_complete, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_enter_mode_cal, 0, 1);
-K_SEM_DEFINE(sem_bpt_exit_mode_cal, 0, 1);
+K_SEM_DEFINE(sem_bpt_fi_exit_mode_cal, 0, 1);
 
 ZBUS_CHAN_DECLARE(bpt_chan);
 
@@ -76,6 +76,7 @@ SENSOR_DT_READ_IODEV(max32664d_iodev, DT_ALIAS(max32664d), {SENSOR_CHAN_VOLTAGE}
 RTIO_DEFINE(max32664d_read_rtio_poll_ctx, 8, 8);
 
 static const struct smf_state ppg_fi_states[];
+static int64_t smf_ppg_fi_spo2_last_measured_time;
 
 enum ppg_fi_op_modes
 {
@@ -242,6 +243,12 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
             // SpO2 Estimation done
             m_est_spo2 = edata->spo2;
             m_est_spo2_conf = edata->spo2_conf;
+
+            if(m_est_spo2 > 0 && m_est_spo2_conf >= 70)
+            {
+                smf_ppg_fi_spo2_last_measured_time = hw_get_sys_time_ts();
+                hpi_sys_set_last_spo2_update(m_est_spo2, smf_ppg_fi_spo2_last_measured_time);
+            }
 
             LOG_DBG("SpO2: %d | Confidence: %d", edata->spo2, edata->spo2_conf);
 
@@ -510,8 +517,9 @@ K_TIMER_DEFINE(tmr_bpt_cal_timeout, bpt_cal_timeout_handler, NULL);
 static void st_ppg_fi_cal_wait_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Wait Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+    hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, 0, 0, 0, 0);
 
+    k_msleep(1000);
     // Start the timeout timer
     // k_timer_start(&tmr_bpt_cal_timeout, K_MSEC(BPT_CAL_TIMEOUT_MS), K_NO_WAIT);
 }
@@ -531,8 +539,9 @@ static void st_ppg_fi_cal_wait_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
     }
 
-    if (k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
+    if (k_sem_take(&sem_bpt_fi_exit_mode_cal, K_NO_WAIT) == 0)
     {
+        LOG_INF("Exit BPT calibration mode");
         hpi_load_screen(SCR_BPT, SCROLL_UP);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
     }
@@ -613,6 +622,7 @@ static void st_ppg_fing_bpt_est_done_entry(void *o)
     hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2);
     // FIX: Power off sensor when estimation is complete
     hpi_hw_fi_sensor_off();
+    hpi_bpt_abort();
 }
 
 static void st_ppg_fing_bpt_est_done_run(void *o)
@@ -671,7 +681,7 @@ static void sensor_check_timeout_work_handler(struct k_work *work)
     else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
     {
         LOG_DBG("BPT Calibration timed out waiting for sensor");
-        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT,SCR_BPT, 0, 0);
     }
 
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
@@ -835,6 +845,7 @@ static void st_ppg_fi_spo2_est_run(void *o)
     {
         k_sem_give(&sem_stop_fi_sampling); // Stop the sampling
         k_sleep(K_MSEC(1000));             // Wait for the sampling to stop
+        hpi_hw_fi_sensor_off();
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST_DONE]);
         return;
     }
@@ -845,6 +856,7 @@ static void st_ppg_fi_spo2_est_run(void *o)
         LOG_DBG("SpO2 Estimation Cancelled (during measurement)");
         /* Use application abort helper to stop sampling, stop algorithm and go IDLE */
         hpi_bpt_abort();
+    
         return;
     }
 }
