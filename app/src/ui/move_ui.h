@@ -111,12 +111,8 @@ enum hpi_disp_screens
     SCR_ECG,
     SCR_TEMP,
     SCR_BPT,
-    SCR_GSR,
-    //SCR_SPL_PLOT_HRV,
-    SCR_HRV_SUMMARY,
     SCR_HRV,
     SCR_GSR,
-    //SCR_HRV,
     SCR_LIST_END,
     // Should not go here
     
@@ -146,7 +142,6 @@ enum hpi_disp_spl_screens
    
     SCR_SPL_HRV_FREQUENCY,
     SCR_SPL_PLOT_HRV,
-    SCR_SPL_HRV_FREQUENCY,
 
     SCR_SPL_HRV_EVAL_PROGRESS,
     SCR_SPL_HRV_COMPLETE,
@@ -437,7 +432,6 @@ void hpi_hrv_frequency_update_display(void);
 
 // HRV Frequency Compact screen functions (optimized for small round displays)
 void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir);
-void hpi_hrv_frequency_compact_update_spectrum(float *rr_intervals, int num_intervals);
 void hpi_hrv_frequency_compact_update_display(void);
 
 // Settings screen functions
@@ -536,3 +530,5 @@ void hpi_hrv_disp_update_timer(uint16_t remaining_s);
 
 void draw_scr_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void gesture_down_scr_timeout(void);
+
+void scr_ppg_finger_contact_handler(bool contact);
