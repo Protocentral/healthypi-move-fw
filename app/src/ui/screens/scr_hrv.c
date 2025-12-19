@@ -94,11 +94,17 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // --- MID-UPPER RING: Flame icon (clean, no container) ---
+    // lv_obj_t *img_hrv = lv_img_create(scr_hrv);
+    // lv_img_set_src(img_hrv, &img_calories_48);  // Using flame as HRV placeholder
+    // lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 80);  // Positioned below title
+    // lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
+    // lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
+
     lv_obj_t *img_hrv = lv_img_create(scr_hrv);
-    lv_img_set_src(img_hrv, &img_calories_48);  // Using flame as HRV placeholder
-    lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 80);  // Positioned below title
-    lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
-    lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
+    lv_img_set_src(img_hrv, &ecg_45);
+    lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), 0);
+    lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, 0);
+    lv_obj_align(img_hrv, LV_ALIGN_TOP_MID, 0, 85);  // Positioned above center for arc design
 
     // --- LF/HF Ratio Value in the middle of the arc ---
     // label_hrv_value = lv_label_create(scr_hrv);
