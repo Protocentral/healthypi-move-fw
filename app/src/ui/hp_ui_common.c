@@ -79,9 +79,11 @@ lv_style_t style_health_arc_bg;
 lv_style_t style_tiny;
 lv_style_t style_scr_black;
 lv_style_t style_red_medium;
+lv_style_t style_red_large;
 lv_style_t style_lbl_red_small;
 
 lv_style_t style_white_medium;
+lv_style_t style_white_small;
 
 lv_style_t style_scr_container;
 
@@ -521,7 +523,6 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_BPT:
         draw_scr_bpt(m_scroll_dir);
         break;
-
     case SCR_TEMP:
         draw_scr_temp(m_scroll_dir);
         break;
@@ -534,6 +535,9 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
 #else
     printk("GSR screen disabled by config\n");
 #endif
+        break;
+    case SCR_HRV:
+        draw_scr_hrv(m_scroll_dir, 0, 0, 0, 0);
         break;
 
     /*case SCR_PLOT_EDA:

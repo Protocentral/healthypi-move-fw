@@ -111,8 +111,9 @@ enum hpi_disp_screens
     SCR_ECG,
     SCR_TEMP,
     SCR_BPT,
+    SCR_HRV,
     SCR_GSR,
-
+    //SCR_HRV,
     SCR_LIST_END,
     // Should not go here
     
@@ -141,6 +142,10 @@ enum hpi_disp_spl_screens
     SCR_SPL_FI_SENS_WEAR,
 
     SCR_SPL_PLOT_HRV,
+    SCR_SPL_HRV_FREQUENCY,
+
+    SCR_SPL_HRV_EVAL_PROGRESS,
+    SCR_SPL_HRV_COMPLETE,
     SCR_SPL_SPO2_SELECT,
     SCR_SPL_SPO2_SCR2,
     SCR_SPL_SPO2_MEASURE,
@@ -150,6 +155,7 @@ enum hpi_disp_spl_screens
     SCR_SPL_HR_SCR2,
     SCR_SPL_PLOT_GSR,
     SCR_SPL_GSR_COMPLETE,
+    SCR_SPL_SPO2_BPT_TIMEOUT,
 
     SCR_SPL_PROGRESS,
     SCR_SPL_LOW_BATTERY,
@@ -349,6 +355,10 @@ void gesture_down_scr_bpt_measure(void);
 void gesture_down_scr_bpt_cal_complete(void);
 void gesture_down_scr_ecg_complete(void);
 void gesture_down_scr_hrv(void);
+void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_spl_hrv_complete(void);
+void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_spl_hrv_eval_progress(void);
 void gesture_down_scr_hr_scr2(void);
 void gesture_down_scr_spo2_scr2(void);
 void gesture_down_scr_spo2_measure(void);
@@ -396,16 +406,22 @@ void draw_scr_bpt_measure(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uin
 void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
 // HRV screen functions
-void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
-void hpi_disp_hrv_draw_plot_rtor(float rtor);
-void hpi_disp_hrv_update_rtor(int rtor);
-void hpi_disp_hrv_update_sdnn(int sdnn);
+void draw_scr_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+static void hrv_update_display(void);
+void hrv_check_and_transition(void);
+void scr_hrv_measure_btn_event_handler(lv_event_t *e);
 
-// HRV Scatter screen functions
-void draw_scr_hrv_scatter(enum scroll_dir m_scroll_dir);
-void hpi_disp_hrv_scatter_draw_plot_rtor(float rtor, float prev_rtor);
-void hpi_disp_hrv_scatter_update_rtor(int rtor);
-void hpi_disp_hrv_scatter_update_sdnn(int sdnn);
+
+//HRV frequnecy screen functions
+static void lvgl_update_cb(void *user_data);
+int get_stress_percentage(float lf, float hf);
+static lv_color_t get_stress_arc_color(int stress_percentage);
+void gesture_handler(lv_event_t *e);
+void gesture_down_scr_spl_hrv(void);
+void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void hpi_hrv_frequency_compact_update_display(void);
+float hpi_get_lf_hf_ratio(void);
+
 
 // Settings screen functions
 void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
@@ -491,3 +507,15 @@ void disp_screen_event(lv_event_t *e);
 // User settings variables
 extern uint16_t m_user_height;
 extern uint16_t m_user_weight;
+
+// HRV plot screen functions
+void hpi_ecg_disp_draw_plotECG_hrv(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
+void scr_hrv_lead_on_off_handler(bool lead_off);
+void gesture_down_scr_ecg_hrv(void);
+static void scr_hrv_btn_start_handler(lv_event_t *e);
+void hpi_hrv_reset_countdown_timer(void);
+void unload_scr_hrv_eval_progress(void);
+void hpi_hrv_disp_update_timer(uint16_t remaining_s);
+
+void draw_scr_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void gesture_down_scr_timeout(void);

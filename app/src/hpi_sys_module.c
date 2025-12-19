@@ -123,6 +123,9 @@ static struct hpi_last_update_time_t g_hpi_last_update = {
 
     .gsr_last_update_ts = 0,
     .gsr_last_value = 0,
+
+    .hrv_last_update_ts = 0,
+    .hrv_last_value = 0,
 };
 
 K_MUTEX_DEFINE(mutex_hpi_last_update_time);
@@ -472,6 +475,24 @@ void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts)
     k_mutex_unlock(&mutex_hpi_last_update_time);
 }
 
+void hpi_sys_set_last_hrv_update(uint16_t hrv_last_value, int64_t hrv_last_update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.hrv_last_value = hrv_last_value;
+    g_hpi_last_update.hrv_last_update_ts = hrv_last_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+}
+
+int hpi_sys_get_last_hrv_update(uint16_t *hrv_last_value, int64_t *hrv_last_update_ts)
+{
+     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+     *hrv_last_value = g_hpi_last_update.hrv_last_value;
+     *hrv_last_update_ts = g_hpi_last_update.hrv_last_update_ts;
+     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    return 0;
+}
+
 int hpi_sys_get_last_hr_update(uint16_t *hr_last_value, int64_t *hr_last_update_ts)
 {
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
@@ -654,6 +675,13 @@ static void sys_ecg_stat_list(const struct zbus_channel *chan)
     g_hpi_last_update.ecg_last_hr = hpi_ecg->hr;
 }
 ZBUS_LISTENER_DEFINE(sys_ecg_stat_lis, sys_ecg_stat_list);
+
+static void sys_hrv_stat_list(const struct zbus_channel *chan)
+{
+    const struct hpi_hrv_status_t *hpi_hrv = zbus_chan_const_msg(chan);
+    g_hpi_last_update.hrv_last_update_ts = hw_get_sys_time_ts();
+}
+ZBUS_LISTENER_DEFINE(sys_hrv_stat_lis, sys_hrv_stat_list);
 
 #define HPI_SYS_THREAD_STACKSIZE 2048
 #define HPI_SYS_THREAD_PRIORITY 5

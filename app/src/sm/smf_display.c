@@ -181,6 +181,10 @@ static bool m_lead_on_off = false;
 static uint16_t m_disp_gsr_remaining = 30; // countdown timer (seconds remaining)
 static float m_disp_gsr_us = 0.0f;
 
+// @brief HRV Screen variables
+extern struct k_sem sem_hrv_eval_complete;
+static int m_disp_hrv_timer = 0;
+
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -212,6 +216,14 @@ K_MUTEX_DEFINE(mutex_curr_screen);
 
 // Array of function pointers for screen drawing functions
 static const screen_func_table_entry_t screen_func_table[] = {
+    [SCR_HOME] = {draw_scr_home, NULL},
+    [SCR_HR] = {draw_scr_hr, NULL},
+    [SCR_SPO2] = {draw_scr_spo2, NULL},
+    [SCR_ECG] = {draw_scr_ecg, NULL},
+    [SCR_TEMP] = {draw_scr_temp, NULL},
+    [SCR_BPT] = {draw_scr_bpt, NULL},
+    [SCR_GSR] = {draw_scr_gsr, NULL},
+    [SCR_HRV] = {draw_scr_hrv, NULL},
     [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, gesture_down_scr_spl_raw_ppg},
     [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
@@ -219,7 +231,11 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
     [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
     [SCR_SPL_ECG_COMPLETE] = {draw_scr_ecg_complete, gesture_down_scr_ecg_complete},
-    [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
+
+  //  [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
+    [SCR_SPL_HRV_EVAL_PROGRESS] = {draw_scr_spl_hrv_eval_progress, gesture_down_scr_spl_hrv_eval_progress},
+    [SCR_SPL_HRV_COMPLETE] = {draw_scr_spl_hrv_complete, gesture_down_scr_spl_hrv_complete},
+
     //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
     [SCR_SPL_SPO2_SCR2] = {draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2},
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
@@ -230,6 +246,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, gesture_down_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
+    [SCR_SPL_SPO2_BPT_TIMEOUT] = {draw_scr_timeout, gesture_down_scr_timeout},
 
     [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
     [SCR_SPL_BPT_FAILED] = {draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed},
@@ -426,8 +443,9 @@ void disp_screen_event(lv_event_t *e)
 
         if ((curr_screen + 1) == SCR_LIST_END)
         {
-            printk("End of list\n");
-            return;
+            // Wrap around: go from last carousel screen back to HOME
+            printk("End of list, wrapping to HOME\n");
+            hpi_load_screen(SCR_HOME, SCROLL_LEFT);
         }
         else
         {
@@ -461,8 +479,11 @@ void disp_screen_event(lv_event_t *e)
         }
         if ((curr_screen - 1) == SCR_LIST_START)
         {
-            printk("Start of list\n");
-            return;
+            // Wrap around: go from HOME back to last carousel screen (SCR_HRV or SCR_GSR)
+            printk("Start of list, wrapping to last screen\n");
+            // Find the last regular screen before SCR_LIST_END
+            int last_screen = SCR_LIST_END - 1;
+            hpi_load_screen(last_screen, SCROLL_RIGHT);
         }
         else
         {
@@ -828,8 +849,9 @@ static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sens
     {
         hpi_ecg_disp_draw_plotECG(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
     }
-    else
+    else if (hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
     {
+        hpi_ecg_disp_draw_plotECG_hrv(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
     }
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
@@ -1042,6 +1064,60 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
         break;
+    case SCR_SPL_HRV_EVAL_PROGRESS:
+        
+         hpi_hrv_disp_update_timer(m_disp_ecg_timer);
+
+         if(k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
+         {
+            hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
+         }
+         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
+         {
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
+            scr_hrv_lead_on_off_handler(false);
+            hpi_data_set_hrv_eval_active(true); 
+            bool is_hrv_active = hpi_data_is_hrv_eval_active();
+            bool was_lead_off = m_lead_on_off;  // Previous state before this update
+            
+            m_lead_on_off = false;              // Update to leads ON
+            
+            LOG_INF("DISPLAY THREAD: HRV active=%s, was_lead_off=%s", 
+                    is_hrv_active ? "true" : "false", 
+                    was_lead_off ? "true" : "false");
+
+            if (is_hrv_active && !was_lead_off)
+            {
+                LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
+                 hpi_ecg_timer_start();
+            }
+            else if(is_hrv_active && was_lead_off)
+            {
+            LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
+                 // Signal state machine to enter stabilization before resuming recording
+                 k_sem_give(&sem_ecg_lead_on_stabilize);
+             }
+            
+        }
+        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore for HRV - calling UI handler");
+            scr_hrv_lead_on_off_handler(true); 
+            m_lead_on_off = true;             
+            bool is_hrv_active = hpi_data_is_hrv_eval_active();
+            LOG_INF("DISPLAY THREAD: HRV record active = %s", is_hrv_active ? "true" : "false");
+            if (is_hrv_active)
+            {
+                hpi_data_reset_hrv_record_buffer();
+                hpi_ecg_timer_reset();
+                hpi_hrv_reset_countdown_timer();
+               // hpi_ecg_reset_countdown_timer();
+            }
+        }
+
+        lv_disp_trig_activity(NULL);
+        break;
+
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
@@ -1611,6 +1687,14 @@ static void disp_ecg_stat_listener(const struct zbus_channel *chan)
     // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
+
+static void disp_hrv_stat_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
+      m_disp_hrv_timer = hrv_status->remaining_s;
+    // m_disp_hrv_timer = hrv_status->progress_timer;
+}
+ZBUS_LISTENER_DEFINE(disp_hrv_stat_lis, disp_hrv_stat_listener);
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 static void disp_gsr_stress_listener(const struct zbus_channel *chan)

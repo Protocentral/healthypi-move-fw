@@ -48,11 +48,15 @@ extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
 extern struct k_sem sem_fi_spo2_est_cancel;
+extern struct k_sem sem_fi_bpt_est_cancel;
+
+static int source = 0;
 
 void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     
     scr_bpt_scr3 = lv_obj_create(NULL);
+    source = arg2;
     // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_bpt_scr3, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE);
@@ -96,8 +100,16 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
 
 void gesture_down_scr_fi_sens_check(void)
 {
-    // Cancel SpO2 estimation if in progress
-    k_sem_give(&sem_fi_spo2_est_cancel);
     // Handle gesture down event
-    hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+    if(source == SCR_SPO2)
+    {
+        k_sem_give(&sem_fi_spo2_est_cancel);
+        hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+    }
+    else
+    {
+      LOG_INF("Gesture Down on BPT Sensor Check Screen - Cancelling Measurement, giving cancel semaphore");
+      k_sem_give(&sem_fi_bpt_est_cancel);
+      hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+    }
 }
