@@ -42,6 +42,8 @@ HealthyPi specific common data types
 #define BPT_PPG_POINTS_PER_SAMPLE 32
 
 #define ECG_RECORD_BUFFER_SAMPLES 3840 // Full 30 seconds at 128 Hz (128*30) - 15.36KB total
+#define GSR_RECORD_BUFFER_SAMPLES 960 // Full 30 seconds at 32 Hz (32*30) - 
+#define BIOZ_MAX_SAMPLES 64    // safe for 32 Hz, 1–2 s batch
 
 enum hpi_ppg_status 
 {

@@ -333,6 +333,16 @@ void hpi_init_fs_struct(void)
     {
         LOG_DBG("Created dir");
     }
+
+    ret = fs_mkdir("/lfs/gsr");
+    if (ret)
+    {
+        LOG_ERR("Unable to create /lfs/gsr dir (err %d)", ret);
+    }
+    else
+    {
+        LOG_DBG("Created /lfs/gsr dir");
+    }
 }
 
 int fs_load_file_to_buffer(char *m_file_name, uint8_t *buffer, uint32_t buffer_len)
@@ -453,14 +463,10 @@ void fs_module_init(void)
         lsdir("/lfs/trhr");
     }
 
-    // rc = lsdir("/lfs/hrv");
-    // if(rc < 0)
-    // {
-    //     LOG_INF("Creating HRV file");
-    //     rc = fs_mkdir("/lfs/hrv");
-    //     if(rc == 0)
-    //     {
-    //         LOG_INF("HRV file created succesfully");
-    //     }
-    // }
+    rc = lsdir("/lfs/gsr");
+    if (rc < 0) {
+        LOG_ERR("FAIL: lsdir /lfs/gsr: %d\n", rc);
+        LOG_WRN("/lfs/gsr directory missing — creating it now");
+    fs_mkdir("/lfs/gsr");
+    }
 }
