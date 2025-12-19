@@ -85,6 +85,7 @@ K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
 
+
 /**
  * @brief Signal touch wakeup from sleep state
  * Called by input drivers (touch controller) when touch is detected.
@@ -181,6 +182,9 @@ static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining
 extern struct k_sem sem_hrv_eval_complete;
 static int m_disp_hrv_timer = 0;
 
+// SPO2 and BPT semaphores
+extern struct k_sem sem_finger_contact_off;
+extern struct k_sem sem_finger_contact_on;
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -806,15 +810,16 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
     }
     else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
     {
-        lv_disp_trig_activity(NULL);
+     
         hpi_disp_spo2_plot_fi_ppg(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
+        lv_disp_trig_activity(NULL);
     }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE )
     {
         lv_disp_trig_activity(NULL);
         hpi_disp_spo2_plot_wrist_ppg(ppg_sensor_sample);
@@ -938,7 +943,7 @@ static void hpi_disp_update_screens(void)
         }
         break;
     case SCR_BPT:
-
+        
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
@@ -1065,6 +1070,21 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
 
         break;
+    case SCR_SPL_SPO2_MEASURE:
+        
+         if(k_sem_take(&sem_finger_contact_off, K_NO_WAIT) == 0)
+         {
+            LOG_INF("DISPLAY THREAD: Processing PPG finger Contact off semaphore - calling UI handler");
+            scr_ppg_finger_contact_handler(false);
+
+         }
+         if(k_sem_take(&sem_finger_contact_on, K_NO_WAIT) == 0)
+         {
+            LOG_INF("DISPLAY THREAD: Processing PPG finger Contact on semaphore - calling UI handler");
+            scr_ppg_finger_contact_handler(true);
+         }
+         lv_disp_trig_activity(NULL);
+         break;
     case SCR_SPL_PLOT_GSR:
 #if defined(CONFIG_HPI_GSR_SCREEN)
         // Update GSR countdown timer display (mirrors ECG pattern)
