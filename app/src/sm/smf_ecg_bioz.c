@@ -1162,7 +1162,7 @@ static void st_ecg_stabilizing_entry(void *o)
     //      memset(hrv_intervals, 0, sizeof(hrv_intervals));
     //      hrv_last_status_pub_s = 0;
     //  }
-    
+ 
     int duration = is_recording_active ? ECG_RECORD_DURATION_S : HRV_MEASUREMENT_DURATION_S;
     // Publish status indicating stabilization phase
     struct hpi_ecg_status_t ecg_stat = {
