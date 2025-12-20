@@ -145,19 +145,19 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
    
     // --- MEASURE BUTTON ---
     btn_hrv_measure = hpi_btn_create_primary(scr_hrv);
-    lv_obj_set_size(btn_hrv_measure, 180, 50);
-    lv_obj_align(btn_hrv_measure, LV_ALIGN_BOTTOM_MID, 0, -30);
-    lv_obj_set_style_radius(btn_hrv_measure, 25, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(btn_hrv_measure, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_size(btn_hrv_measure, 200, 60);
+    lv_obj_align(btn_hrv_measure, LV_ALIGN_BOTTOM_MID, 0, -35);
+    lv_obj_set_style_radius(btn_hrv_measure, 30, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn_hrv_measure, lv_color_hex(COLOR_BTN_PURPLE), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(btn_hrv_measure, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(btn_hrv_measure, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(btn_hrv_measure, lv_color_hex(0x8000FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(btn_hrv_measure, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(btn_hrv_measure, 0, LV_PART_MAIN);
 
     lv_obj_t *label_btn = lv_label_create(btn_hrv_measure);
     lv_label_set_text(label_btn, LV_SYMBOL_PLAY " Start HRV");
     lv_obj_center(label_btn);
-    lv_obj_set_style_text_color(label_btn, lv_color_hex(0x8000FF), LV_PART_MAIN);
+    //lv_obj_set_style_text_font(label_btn, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_btn, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_hrv_measure, scr_hrv_btn_start_handler, LV_EVENT_CLICKED, NULL);
     hrv_update_display();
     hpi_disp_set_curr_screen(SCR_HRV);

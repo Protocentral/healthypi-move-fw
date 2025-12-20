@@ -39,6 +39,7 @@
 #include "ble_module.h"
 #include "fs_module.h"
 #include "log_module.h"
+#include "recording_module.h"
 
 LOG_MODULE_REGISTER(hpi_cmd_module, LOG_LEVEL_DBG);
 
@@ -159,6 +160,98 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         LOG_DBG("RX CMD Recording Wipe Records");
         log_wipe_records();
         break;
+
+    // Background Recording Commands
+    case HPI_CMD_REC_CONFIGURE:
+        LOG_DBG("RX CMD Recording Configure");
+        {
+            struct hpi_recording_config_t rec_config = {
+                .duration_s = (uint16_t)(in_pkt_buf[1] | (in_pkt_buf[2] << 8)),
+                .signal_mask = in_pkt_buf[3],
+                .sample_decimation = in_pkt_buf[4],
+            };
+            int ret = hpi_recording_configure(&rec_config);
+            uint8_t status = (ret == 0) ? 0 : 1;
+            uint8_t rsp[3] = {CES_CMDIF_TYPE_CMD_RSP, HPI_CMD_REC_CONFIGURE, status};
+            hpi_ble_send_data(rsp, sizeof(rsp));
+        }
+        break;
+
+    case HPI_CMD_REC_START:
+        LOG_DBG("RX CMD Recording Start");
+        {
+            int ret = hpi_recording_start();
+            uint8_t status;
+            if (ret == 0) {
+                status = 0;  // Started
+            } else if (ret == -REC_ERR_ALREADY_RECORDING) {
+                status = 1;  // Already recording
+            } else {
+                status = 2;  // Not configured or other error
+            }
+            uint8_t rsp[3] = {CES_CMDIF_TYPE_CMD_RSP, HPI_CMD_REC_START, status};
+            hpi_ble_send_data(rsp, sizeof(rsp));
+        }
+        break;
+
+    case HPI_CMD_REC_STOP:
+        LOG_DBG("RX CMD Recording Stop");
+        {
+            int ret = hpi_recording_stop();
+            uint8_t status = (ret == 0) ? 0 : 1;
+            uint8_t rsp[3] = {CES_CMDIF_TYPE_CMD_RSP, HPI_CMD_REC_STOP, status};
+            hpi_ble_send_data(rsp, sizeof(rsp));
+        }
+        break;
+
+    case HPI_CMD_REC_GET_STATUS:
+        LOG_DBG("RX CMD Recording Get Status");
+        {
+            struct hpi_recording_status_t status;
+            hpi_recording_get_status(&status);
+            uint8_t rsp[8] = {
+                CES_CMDIF_TYPE_CMD_RSP,
+                HPI_CMD_REC_GET_STATUS,
+                status.state,
+                (uint8_t)(status.elapsed_s & 0xFF),
+                (uint8_t)((status.elapsed_s >> 8) & 0xFF),
+                (uint8_t)(status.remaining_s & 0xFF),
+                (uint8_t)((status.remaining_s >> 8) & 0xFF),
+                status.signal_mask
+            };
+            hpi_ble_send_data(rsp, sizeof(rsp));
+        }
+        break;
+
+    case HPI_CMD_REC_GET_SESSION_LIST:
+        LOG_DBG("RX CMD Recording Get Session List");
+        hpi_recording_get_session_list();
+        break;
+
+    case HPI_CMD_REC_DELETE_SESSION:
+        LOG_DBG("RX CMD Recording Delete Session");
+        {
+            int64_t session_ts = 0;
+            for (int i = 0; i < 8; i++) {
+                session_ts |= ((int64_t)in_pkt_buf[1 + i] << (8 * i));
+            }
+            int ret = hpi_recording_delete_session(session_ts);
+            uint8_t status = (ret == 0) ? 0 : 1;
+            uint8_t rsp[3] = {CES_CMDIF_TYPE_CMD_RSP, HPI_CMD_REC_DELETE_SESSION, status};
+            hpi_ble_send_data(rsp, sizeof(rsp));
+        }
+        break;
+
+    case HPI_CMD_REC_WIPE_ALL:
+        LOG_DBG("RX CMD Recording Wipe All");
+        {
+            int ret = hpi_recording_wipe_all();
+            uint8_t status = (ret == 0) ? 0 : 1;
+            uint8_t rsp[3] = {CES_CMDIF_TYPE_CMD_RSP, HPI_CMD_REC_WIPE_ALL, status};
+            hpi_ble_send_data(rsp, sizeof(rsp));
+        }
+        break;
+
     default:
         LOG_DBG("RX CMD Unknown");
         break;

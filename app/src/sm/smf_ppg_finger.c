@@ -411,6 +411,9 @@ void hpi_bpt_abort(void)
     /* Use the attribute-based stop (driver handles algorithm stop) */
     hpi_bpt_stop();
 
+    /* Power off sensor since idle entry no longer does this */
+    hpi_hw_fi_sensor_off();
+
     /* Ensure state machine goes to IDLE */
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
@@ -419,15 +422,8 @@ static void st_ppg_fing_idle_entry(void *o)
 {
     LOG_DBG("PPG Finger SM Idle Entry");
     k_sem_give(&sem_stop_fi_sampling);
-
-    // FIX: Reset process done flag to ensure clean state for next measurement
     bpt_process_done = false;
-
-    // FIX: Reset decode mode to IDLE
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
-
-    // Ensure sensor is powered off when entering idle
-    hpi_hw_fi_sensor_off();
 }
 
 // Add a new function to check if calibration data exists

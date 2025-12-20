@@ -42,6 +42,7 @@
 #include "max32664_updater.h"
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
+#include "recording_module.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
@@ -185,6 +186,10 @@ static float m_disp_gsr_us = 0.0f;
 extern struct k_sem sem_hrv_eval_complete;
 static int m_disp_hrv_timer = 0;
 
+// @brief Recording status variables (updated by ZBus listener, read by display thread)
+static struct hpi_recording_status_t m_disp_recording_status = {0};
+static bool m_disp_recording_status_updated = false;
+
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -224,6 +229,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_BPT] = {draw_scr_bpt, NULL},
     [SCR_GSR] = {draw_scr_gsr, NULL},
     [SCR_HRV] = {draw_scr_hrv, NULL},
+    [SCR_RECORDING] = {draw_scr_recording, NULL},
     [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, gesture_down_scr_spl_raw_ppg},
     [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
@@ -570,7 +576,7 @@ extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
 extern struct k_sem sem_spo2_cancel;
 
-extern struct k_sem sem_bpt_sensor_found;
+// Note: sem_bpt_sensor_found was removed from smf_ppg_finger.c - extern removed
 
 extern struct k_sem sem_gsr_lead_on;
 extern struct k_sem sem_gsr_lead_off;
@@ -1399,6 +1405,22 @@ static void st_display_active_run(void *o)
         }
     }
 
+    // Update recording status (from ZBus listener data)
+    if (m_disp_recording_status_updated)
+    {
+        m_disp_recording_status_updated = false;
+        int curr_screen = hpi_disp_get_curr_screen();
+
+        if (curr_screen == SCR_HOME)
+        {
+            hpi_scr_home_update_recording_status(&m_disp_recording_status);
+        }
+        else if (curr_screen == SCR_RECORDING)
+        {
+            hpi_scr_recording_update_status(&m_disp_recording_status);
+        }
+    }
+
     // Add button handlers
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
@@ -1725,6 +1747,19 @@ static void disp_gsr_status_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_gsr_status_lis, disp_gsr_status_listener);
 #endif
+
+// Recording status listener - stores data for display thread to update UI
+// NOTE: Do NOT call LVGL functions here - LVGL is not thread-safe
+static void disp_recording_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_recording_status_t *status = zbus_chan_const_msg(chan);
+    if (!status) return;
+
+    // Store status for display thread to process
+    m_disp_recording_status = *status;
+    m_disp_recording_status_updated = true;
+}
+ZBUS_LISTENER_DEFINE(disp_recording_lis, disp_recording_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 24576
 #define SMF_DISPLAY_THREAD_PRIORITY 5
