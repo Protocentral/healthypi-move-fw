@@ -427,7 +427,7 @@ void hpi_gsr_reset_countdown_timer(void)
 
     k_mutex_unlock(&gsr_timer_mutex);
 
-    LOG_INF("GSR SMF: Timer countdown RESET to %d seconds", GSR_MEASUREMENT_DURATION_S);
+    LOG_DBG("GSR SMF: Timer countdown RESET to %d seconds", GSR_MEASUREMENT_DURATION_S);
 
     // Immediately publish the reset timer value via ZBus
     struct hpi_gsr_status_t gsr_stat = {
@@ -675,16 +675,16 @@ static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
 
   //  LOG_DBG("GSR sensor data: bioz_lead_off=%d", edata->bioz_lead_off);
     
-    if (edata->bioz_lead_off == 1) 
+    if (edata->bioz_lead_off == 1)
     {
-        LOG_INF("BIOZ Lead OFF detected (no skin contact)");
+        LOG_DBG("BIOZ Lead OFF detected (no skin contact)");
         k_sem_give(&sem_gsr_lead_off);
         set_gsr_lead_on_off(true);
          gsr_contact_ok = false;
 
     } else {
 
-        LOG_INF("BIOZ Lead ON detected (skin contact OK)");
+        LOG_DBG("BIOZ Lead ON detected (skin contact OK)");
         k_sem_give(&sem_gsr_lead_on);
         set_gsr_lead_on_off(false);
          gsr_contact_ok = true;
@@ -848,7 +848,14 @@ static void st_ecg_idle_entry(void *o)
     if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
     {
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_MEASURE_ENTRY]);
-    
+    }
+
+    // Handle HRV evaluation start from idle state
+    if (k_sem_take(&sem_hrv_eval_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting HRV evaluation from IDLE - transitioning to STABILIZING state");
+        set_hrv_active(true);
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
     }
 
   /*  // Handle independent GSR (BioZ) control
@@ -992,8 +999,7 @@ static void st_gsr_stream_run(void *o)
     k_mutex_lock(&gsr_timer_mutex, K_FOREVER);
 
     if (!contact_ok) {
-        // Reset the timer whenever contact is lost
-        LOG_INF("No skin contact — timer frozen at 30");
+        // Timer frozen when no skin contact - no logging needed (high frequency)
     } else {
         // Decrement timer every second
         int64_t now = k_uptime_get_32();
@@ -1062,13 +1068,7 @@ static void st_gsr_complete_run(void *o)
 
     smf_set_state(SMF_CTX(&s_ecg_obj),
                   &ecg_states[HPI_ECG_STATE_IDLE]);
-    // Handle independent HRV (Heart Rate Variability) evaluation control via state machine
-    if (k_sem_take(&sem_hrv_eval_start, K_NO_WAIT) == 0)
-    {
-        LOG_INF("Starting HRV evaluation - transitioning to STABILIZING state");
-        set_hrv_active(true);
-        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
-    }
+    // Note: HRV eval start is now handled in st_ecg_idle_run() to ensure it's processed
 } 
 struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void)
 {

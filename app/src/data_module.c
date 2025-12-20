@@ -363,17 +363,43 @@ void hpi_data_set_gsr_record_active(bool active)
             hpi_write_gsr_record_file(gsr_record_buffer, gsr_record_counter, log_time);
             LOG_INF("GSR file write completed");
 
-            if (!is_gsr_record_active && gsr_record_counter > 0) 
-            { 
-                int scr_count = calculate_scr_count(gsr_record_buffer, gsr_record_counter); 
+            if (!is_gsr_record_active && gsr_record_counter > 0)
+            {
+                // Calculate duration in seconds
+                int duration_sec = gsr_record_counter / 32;  // 32 Hz sample rate
+                if (duration_sec < 1) {
+                    duration_sec = 1;
+                }
+
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+                // Calculate comprehensive stress index from buffered samples
+                static struct hpi_gsr_stress_index_t stress_data = {0};
+                calculate_gsr_stress_index(gsr_record_buffer, gsr_record_counter,
+                                           duration_sec, &stress_data);
+
+                if (stress_data.stress_data_ready) {
+                    // Publish stress data via ZBus
+                    zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
+                    LOG_INF("GSR stress published: level=%u, tonic=%u.%02u uS, SCR=%u/min",
+                            stress_data.stress_level,
+                            stress_data.tonic_level_x100 / 100,
+                            stress_data.tonic_level_x100 % 100,
+                            stress_data.peaks_per_minute);
+
+                    g_last_scr_count = stress_data.peaks_per_minute;
+                    // Store full stress data for persistent display
+                    hpi_sys_set_last_gsr_stress(stress_data.stress_level,
+                                                stress_data.tonic_level_x100,
+                                                stress_data.peaks_per_minute,
+                                                log_time);
+                }
+#else
+                int scr_count = calculate_scr_count(gsr_record_buffer, gsr_record_counter);
                 LOG_INF("SCR count: %d", scr_count);
-
-                g_last_scr_count = scr_count;   // <---- SAVE HERE
-                 // Update last GSR value
+                g_last_scr_count = scr_count;
                 hpi_sys_set_last_gsr_update(g_last_scr_count, log_time);
-
-
-             }
+#endif
+            }
         }
         else
         {
@@ -404,7 +430,7 @@ void hpi_data_reset_gsr_record_buffer(void)
     // Reset buffer and counter without saving (for contact lost / restart)
     gsr_record_counter = 0;
     memset(gsr_record_buffer, 0, sizeof(gsr_record_buffer));
-    LOG_INF("GSR recording buffer reset (discard incomplete data)");
+    LOG_DBG("GSR recording buffer reset");
     k_mutex_unlock(&mutex_is_gsr_record_active);
 
 }
@@ -750,38 +776,6 @@ void data_thread(void)
         }
 
         k_mutex_unlock(&mutex_is_gsr_record_active);
-
-
-#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
-            // Calculate stress index from GSR samples
-            if (is_gsr_measurement_active && bsample.bioz_num_samples > 0)
-            {
-                // Convert raw BioZ sample to GSR conductance value (μS * 100)
-                // MAX30001 BioZ output needs calibration - using average of samples
-                int32_t sum = 0;
-                for (uint8_t i = 0; i < bsample.bioz_num_samples; i++)
-                {
-                    sum += bsample.bioz_samples[i];
-                }
-                int32_t avg_bioz = sum / bsample.bioz_num_samples;
-
-                // Convert to GSR: Simplified linear mapping (tune based on calibration)
-                // Assuming ~10kΩ corresponds to ~10μS, adjust scaling as needed
-                uint16_t gsr_value_x100 = (uint16_t)((avg_bioz / 100) + 1000); // Offset + scale
-
-                // Update last GSR value
-                hpi_sys_set_last_gsr_update(gsr_value_x100, bsample.timestamp);
-
-                // Calculate and publish stress index
-                static struct hpi_gsr_stress_index_t stress_data = {0};
-                calculate_gsr_stress_index(gsr_value_x100, &stress_data);
-
-                if (stress_data.stress_data_ready)
-                {
-                    zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
-                }
-            }
-#endif
         }
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)

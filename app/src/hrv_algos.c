@@ -362,10 +362,20 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
     rmssd_val = tm_metrics.rmssd; 
 
     float ratio = hpi_get_lf_hf_ratio();
-    if (ratio > 0.0f) 
+    if (ratio > 0.0f)
     {
         int64_t now_ts = hw_get_sys_time_ts();
-        hpi_sys_set_last_hrv_update((uint16_t)(ratio * 100), now_ts);
+        // Convert to storage format: ratio*100, sdnn*10, rmssd*10
+        uint16_t lf_hf_x100 = (uint16_t)(ratio * 100);
+        uint16_t sdnn_x10 = (uint16_t)(sdnn_val * 10);
+        uint16_t rmssd_x10 = (uint16_t)(rmssd_val * 10);
+        LOG_INF("Saving HRV to settings: LF/HF=%u (ratio=%.2f), SDNN=%u, RMSSD=%u, ts=%lld",
+                lf_hf_x100, ratio, sdnn_x10, rmssd_x10, now_ts);
+        hpi_sys_set_last_hrv_update(lf_hf_x100, sdnn_x10, rmssd_x10, now_ts);
+    }
+    else
+    {
+        LOG_WRN("HRV ratio is zero or negative (%.2f), not saving to settings", ratio);
     }
 
 

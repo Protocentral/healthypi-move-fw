@@ -36,9 +36,10 @@
 #define INTERP_FS 4.0f             // Interpolation sampling frequency (Hz)
 
 // FFT size must be power of 2. Larger = better frequency resolution.
-// With INTERP_FS=4Hz: FFT_SIZE=256 gives 0.0156 Hz resolution (sufficient for LF/HF)
-// LF band (0.04-0.15 Hz) will have ~7 bins, HF band (0.15-0.4 Hz) will have ~16 bins
-#define FFT_SIZE 64               // Increased from 64 for accurate LF/HF measurement
+// With INTERP_FS=4Hz: FFT_SIZE=64 gives 0.0625 Hz resolution
+// LF band (0.04-0.15 Hz) will have ~2 bins, HF band (0.15-0.4 Hz) will have ~4 bins
+// Note: 64 chosen to work with shorter recordings (30-45 RR intervals = ~120-180 samples)
+#define FFT_SIZE 64               // 64-point FFT for reliable LF/HF with shorter recordings
 
 #define WELCH_OVERLAP 0.5f         // 50% overlap for Welch method
 
