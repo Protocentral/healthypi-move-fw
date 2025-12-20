@@ -123,6 +123,7 @@ static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf, uint8_t l_cal_
 static void hpi_bpt_stop(void);
 
 static bool bpt_process_done = false;
+static bool spo2_process_done = false;
 
 static uint8_t m_cal_index;
 static uint8_t m_cal_sys;
@@ -183,18 +184,18 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
         }
         else if (m_ppg_op_mode == PPG_FI_OP_MODE_SPO2_EST)
         {
-
             ppg_sensor_sample.spo2_valid_percent_complete = edata->spo2_conf;
             if (edata->spo2_conf < 70)
             {
-
                 ppg_sensor_sample.spo2_state = SPO2_MEAS_COMPUTATION;
             }
-            else
+            else if (spo2_process_done == false)
             {
                 ppg_sensor_sample.spo2_state = SPO2_MEAS_SUCCESS;
-                LOG_DBG("SpO2 Measurement Done");
+                LOG_INF("SpO2 Measurement Done");
+                hpi_bpt_stop();  // Stop the sensor algorithms
                 k_sem_give(&sem_spo2_est_complete);
+                spo2_process_done = true;
             }
         }
 
@@ -423,6 +424,7 @@ static void st_ppg_fing_idle_entry(void *o)
     LOG_DBG("PPG Finger SM Idle Entry");
     k_sem_give(&sem_stop_fi_sampling);
     bpt_process_done = false;
+    spo2_process_done = false;
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
 }
 
@@ -520,6 +522,16 @@ static void st_ppg_fi_cal_wait_run(void *o)
 {
     // LOG_DBG("PPG Finger SM BPT Calibration Wait Running");
 
+    // Check for user cancel first (from gesture swipe down on cal progress screen)
+    if (k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("BPT Calibration cancelled by user in CAL_WAIT state");
+        k_timer_stop(&tmr_bpt_cal_timeout);
+        hpi_hw_fi_sensor_off();  // Power off sensor since we're in wait state with sensor powered
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;  // Don't process other semaphores after cancel
+    }
+
     // LOG_DBG("PPG Finger SM BPT Calibration Running");
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
@@ -533,6 +545,7 @@ static void st_ppg_fi_cal_wait_run(void *o)
 
     if (k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
     {
+        hpi_hw_fi_sensor_off();  // Power off sensor when exiting calibration mode
         hpi_load_screen(SCR_BPT, SCROLL_UP);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
     }
@@ -821,6 +834,7 @@ static void st_ppg_fi_spo2_est_entry(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_SPO2_EST;
+    spo2_process_done = false;  // Reset completion flag for new measurement
     hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
     hpi_hw_fi_sensor_on();
     hw_bpt_start_est();                 // Start the BPT estimation for SpO2
