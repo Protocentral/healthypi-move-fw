@@ -323,6 +323,16 @@ static int max30001_sample_fetch(const struct device *dev,
         data->ecg_lead_off = 0;
     }
 
+     // --- BioZ lead-off detection ---
+    if ((max30001_status & BIOZ_LEAD_MASK) != 0)
+    {
+        data->bioz_lead_off = 1;
+    }
+    else
+    {
+        data->bioz_lead_off = 0;
+    }
+
     if ((max30001_status & MAX30001_STATUS_MASK_EINT) == MAX30001_STATUS_MASK_EINT) // EINT bit is set, FIFO is full
     {
         max30001_mngr_int = max30001_read_reg(dev, MNGR_INT);
@@ -622,6 +632,17 @@ static int max30001_chip_init(const struct device *dev)
 
     _max30001RegWrite(dev, CNFG_BMUX, data->chip_cfg.reg_cnfg_bmux.all);
     k_sleep(K_MSEC(100));
+
+    // Enable DC Leads-Off and BioZ compliance monitor
+    data->chip_cfg.reg_cnfg_gen.bit.en_bloff = 1;
+    _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
+    k_sleep(K_MSEC(10));
+
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 1;
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;
+    _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
+    k_sleep(K_MSEC(10));
+
 
     max30001_enable_rtor(dev);
 

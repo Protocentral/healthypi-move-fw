@@ -69,5 +69,6 @@ void hpi_steps_trend_wr_point_to_file(struct hpi_steps_t m_steps_point, int64_t 
 void hpi_bpt_trend_wr_point_to_file(struct hpi_bpt_point_t m_bpt_point, int64_t day_ts);
 
 void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts);
+void hpi_write_gsr_record_file(int32_t *samples, uint16_t num_samples, int64_t timestamp);
 void hpi_write_hrv_record_file(uint16_t *hrv_record_buffer, uint16_t hrv_record_length, int64_t start_ts);
 

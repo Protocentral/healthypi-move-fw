@@ -66,7 +66,7 @@ K_SEM_DEFINE(sem_gsr_start, 0, 1);
 K_SEM_DEFINE(sem_gsr_cancel, 0, 1);
 
 // GSR Measurement Timing (60 seconds for reliable stress index)
-#define GSR_MEASUREMENT_DURATION_S 60
+#define GSR_MEASUREMENT_DURATION_S 30
 static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
 static uint32_t gsr_last_status_pub_s = 0; // Last published elapsed seconds
@@ -99,6 +99,12 @@ K_SEM_DEFINE(sem_ecg_lead_off, 0, 1);
 
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
 K_SEM_DEFINE(sem_ecg_lead_off_local, 0, 1);
+
+
+K_SEM_DEFINE(sem_gsr_lead_on, 0, 1);
+K_SEM_DEFINE(sem_gsr_lead_off, 0, 1);
+
+ZBUS_CHAN_DECLARE(gsr_status_chan);
 
 // Semaphore for lead reconnection during recording (triggers re-stabilization)
 K_SEM_DEFINE(sem_ecg_lead_on_stabilize, 0, 1);
@@ -215,6 +221,13 @@ static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
 static bool ecg_stabilization_complete = false;
 
+
+// uint32_t gsr_countdown_val = 0;
+// uint32_t gsr_last_timer_val = 0;
+static int gsr_countdown_val = 0;
+static int64_t gsr_last_timer_val = 0;
+K_MUTEX_DEFINE(gsr_timer_mutex);
+
 static const struct smf_state ecg_states[];
 struct s_ecg_object
 {
@@ -228,6 +241,10 @@ enum ecg_state
     HPI_ECG_STATE_STREAM,
     HPI_ECG_STATE_LEADOFF,
     HPI_ECG_STATE_COMPLETE,
+
+    HPI_ECG_STATE_GSR_MEASURE_ENTRY,
+    HPI_ECG_STATE_GSR_MEASURE_STREAM,
+    HPI_ECG_STATE_GSR_COMPLETE,
 };
 
 RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
@@ -236,6 +253,9 @@ static bool ecg_active = false;
 static bool gsr_active = false;  // Independent GSR (BioZ) state
 static bool hrv_active = false;  // Independent HRV evaluation state
 static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
+static bool gsr_contact_ok = false;
+static bool m_gsr_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
+static bool prev_gsr_contact_ok = false; // Track previous contact state
 
 static uint16_t m_ecg_hr = 0;
 
@@ -249,6 +269,8 @@ extern struct k_sem sem_ecg_complete;
 extern struct k_sem sem_ecg_complete_reset;
 //extern bool hrv_active;
 
+extern struct k_sem sem_gsr_complete;
+extern struct k_sem sem_gsr_complete_reset;
 /**
  * @brief Configure ECG leads based on hand worn setting
  * @return 0 on success, negative error code on failure
@@ -336,6 +358,18 @@ static void set_ecg_lead_on_off(bool state)
     m_ecg_lead_on_off = state;
 }
 
+static bool get_gsr_lead_on_off(void)
+{
+    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
+    return m_gsr_lead_on_off;
+}
+
+static void set_gsr_lead_on_off(bool state)
+{
+    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
+    m_gsr_lead_on_off = state;
+}
+
 static uint16_t get_ecg_hr(void)
 {
     // Use atomic read for ISR safety - single uint16_t read is typically atomic on most architectures
@@ -383,6 +417,33 @@ void hpi_ecg_reset_countdown_timer(void)
         .progress_timer = ECG_RECORD_DURATION_S};  // Show 30 seconds
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 }
+
+void hpi_gsr_reset_countdown_timer(void)
+{
+    k_mutex_lock(&gsr_timer_mutex, K_FOREVER);
+
+    gsr_countdown_val = GSR_MEASUREMENT_DURATION_S;  // Reset to full duration (e.g., 30s)
+    gsr_last_timer_val = k_uptime_get_32();           // Update timestamp
+
+    k_mutex_unlock(&gsr_timer_mutex);
+
+    LOG_INF("GSR SMF: Timer countdown RESET to %d seconds", GSR_MEASUREMENT_DURATION_S);
+
+    // Immediately publish the reset timer value via ZBus
+    struct hpi_gsr_status_t gsr_stat = {
+        .elapsed_s = 0,
+        .remaining_s = GSR_MEASUREMENT_DURATION_S,
+        .total_s = GSR_MEASUREMENT_DURATION_S,
+        .active = false,  // Not active since timer just reset
+    };
+
+     //extern const struct zbus_channel gsr_status_chan;
+                zbus_chan_pub(&gsr_status_chan, &gsr_stat, K_NO_WAIT);
+   // zbus_chan_pub(&gsr_status_chan, &gsr_stat, K_NO_WAIT);
+
+
+}
+
 
 // Function to reser HRV timer countdown to full duration (configurable)
 void hpi_hrv_reset_countdown_timer(void)
@@ -611,6 +672,24 @@ static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
     sample.rtor = edata->rri;
     sample.ecg_lead_off = edata->ecg_lead_off;
 
+
+  //  LOG_DBG("GSR sensor data: bioz_lead_off=%d", edata->bioz_lead_off);
+    
+    if (edata->bioz_lead_off == 1) 
+    {
+        LOG_INF("BIOZ Lead OFF detected (no skin contact)");
+        k_sem_give(&sem_gsr_lead_off);
+        set_gsr_lead_on_off(true);
+         gsr_contact_ok = false;
+
+    } else {
+
+        LOG_INF("BIOZ Lead ON detected (skin contact OK)");
+        k_sem_give(&sem_gsr_lead_on);
+        set_gsr_lead_on_off(false);
+         gsr_contact_ok = true;
+    }
+
     if (get_gsr_active()) {
         struct hpi_bioz_sample_t bsample = {0};
         bsample.bioz_num_samples = sample.bioz_num_samples;
@@ -766,15 +845,24 @@ static void st_ecg_idle_entry(void *o)
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
     }
     
-    // Handle independent GSR (BioZ) control
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_MEASURE_ENTRY]);
+    
+    }
+
+  /*  // Handle independent GSR (BioZ) control
     if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
     {
         LOG_INF("Starting GSR (BioZ) measurement for %d seconds", GSR_MEASUREMENT_DURATION_S);
         int ret = hw_max30001_gsr_enable();
         if (ret == 0) {
             hpi_data_set_gsr_measurement_active(true);
+            hpi_data_set_gsr_record_active(true);   //  Start recording data 
+
             gsr_measurement_start_time = k_uptime_get();
             gsr_measurement_in_progress = true;
+            prev_gsr_contact_ok = gsr_contact_ok; // Initialize previous state
             k_timer_start(&tmr_bioz_sampling, K_MSEC(BIOZ_SAMPLING_INTERVAL_MS), K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
             LOG_INF("GSR (BioZ) measurement started successfully");
         } else {
@@ -790,6 +878,9 @@ static void st_ecg_idle_entry(void *o)
         if (ret == 0) {
             hpi_data_set_gsr_measurement_active(false);
             gsr_measurement_in_progress = false;
+            // Reset recording buffer (discard incomplete data on manual stop)
+            hpi_data_reset_gsr_record_buffer();
+            hpi_data_set_gsr_record_active(false);
             // Only stop bioz timer if ECG is not active
             if (!get_ecg_active()) {
                 k_timer_stop(&tmr_bioz_sampling);
@@ -801,39 +892,176 @@ static void st_ecg_idle_entry(void *o)
     }
     
     // Auto-complete GSR measurement after duration
-    if (gsr_measurement_in_progress) {
-        int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
-        if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
-            LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
-            hw_max30001_gsr_disable();
-            hpi_data_set_gsr_measurement_active(false);
-            gsr_measurement_in_progress = false;
-            if (!get_ecg_active()) {
-                k_timer_stop(&tmr_bioz_sampling);
-            }
-            
-            // Return to GSR home screen (no results to display for live view only)
-            hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+
+
+    if (gsr_measurement_in_progress)
+    {
+        // Detect skin contact change
+        if (!gsr_contact_ok) {
+            // No contact → reset timer display to 30 s
+            hpi_gsr_reset_countdown_timer();
+        } else if (!prev_gsr_contact_ok && gsr_contact_ok) {
+            // Contact regained → restart countdown from 30 s
+            gsr_measurement_start_time = k_uptime_get();
+            gsr_last_status_pub_s = 0;
+            LOG_INF("GSR contact regained: countdown restarted from %d s", GSR_MEASUREMENT_DURATION_S);
         }
-        else {
-            // Publish status once per second via ZBus
-            uint32_t elapsed_s = elapsed_ms / 1000;
-            if (elapsed_s != gsr_last_status_pub_s && elapsed_s <= GSR_MEASUREMENT_DURATION_S) {
-                gsr_last_status_pub_s = elapsed_s;
-#if defined(CONFIG_HPI_GSR_SCREEN)
+        prev_gsr_contact_ok = gsr_contact_ok;
+
+        // Countdown logic
+        if (gsr_contact_ok) 
+        {
+            int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
+            if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
+                // Measurement complete
+                LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
+                hw_max30001_gsr_disable();
+                hpi_data_set_gsr_measurement_active(false);
+                hpi_data_set_gsr_record_active(false);
+
+                gsr_measurement_in_progress = false;
+                if (!get_ecg_active()) {
+                    k_timer_stop(&tmr_bioz_sampling);
+                }
+                hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+            } else {
+                // Publish countdown status
+                uint32_t elapsed_s = elapsed_ms / 1000;
+                if (elapsed_s != gsr_last_status_pub_s && elapsed_s <= GSR_MEASUREMENT_DURATION_S) {
+                    gsr_last_status_pub_s = elapsed_s;
+
+                #if defined(CONFIG_HPI_GSR_SCREEN)
                 struct hpi_gsr_status_t gsr_status = {
-                    .elapsed_s = (uint16_t)elapsed_s,
-                    .remaining_s = (uint16_t)((elapsed_s < GSR_MEASUREMENT_DURATION_S) ? (GSR_MEASUREMENT_DURATION_S - elapsed_s) : 0),
-                    .total_s = GSR_MEASUREMENT_DURATION_S,
-                    .active = true,
+                .elapsed_s = (uint16_t)elapsed_s,
+                .remaining_s = (uint16_t)(GSR_MEASUREMENT_DURATION_S - elapsed_s),
+                .total_s = GSR_MEASUREMENT_DURATION_S,
+                .active = true,
                 };
-                extern const struct zbus_channel gsr_status_chan;
                 zbus_chan_pub(&gsr_status_chan, &gsr_status, K_NO_WAIT);
-#endif
+                #endif
+              }
+            }
+        }
+    }  */
+}
+
+static void st_gsr_entry_run(void *o)
+{
+    ARG_UNUSED(o);
+    
+    LOG_INF("Starting GSR (BioZ) measurement for %d seconds", GSR_MEASUREMENT_DURATION_S);
+
+    int ret = hw_max30001_gsr_enable();
+
+    if (ret != 0) 
+    {
+        LOG_ERR("Failed to enable GSR entry: %d", ret);
+        return;
+    }
+       
+    hpi_data_set_gsr_measurement_active(true);
+    hpi_data_set_gsr_record_active(true);
+    gsr_measurement_in_progress = true;
+
+   // remaining_timer_s = GSR_MEASUREMENT_DURATION_S;
+    gsr_countdown_val = GSR_MEASUREMENT_DURATION_S;
+    prev_gsr_contact_ok =  gsr_contact_ok;  // reset state
+
+    k_timer_start(&tmr_bioz_sampling,
+                  K_MSEC(BIOZ_SAMPLING_INTERVAL_MS),
+                  K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
+
+    bool current_lead_off = get_gsr_lead_on_off();
+    if (current_lead_off) {
+        k_sem_give(&sem_gsr_lead_off);
+    } else {
+        k_sem_give(&sem_gsr_lead_on);
+    }
+
+    smf_set_state(SMF_CTX(&s_ecg_obj),
+                  &ecg_states[HPI_ECG_STATE_GSR_MEASURE_STREAM]);
+}
+
+
+static void st_gsr_stream_run(void *o)
+{
+    ARG_UNUSED(o);
+
+    bool contact_ok = (get_gsr_lead_on_off() == 0); // TRUE when skin contact
+
+    k_mutex_lock(&gsr_timer_mutex, K_FOREVER);
+
+    if (!contact_ok) {
+        // Reset the timer whenever contact is lost
+        LOG_INF("No skin contact — timer frozen at 30");
+    } else {
+        // Decrement timer every second
+        int64_t now = k_uptime_get_32();
+        if (now - gsr_last_timer_val >= 1000) {
+            gsr_last_timer_val = now;
+            if (gsr_countdown_val > 0) {
+                gsr_countdown_val--;
             }
         }
     }
+  
+    // Prepare status for UI
+    struct hpi_gsr_status_t status = {
+        .remaining_s = gsr_countdown_val,
+        .total_s = GSR_MEASUREMENT_DURATION_S,
+        .active = contact_ok,
+    };
 
+    // LOG_INF("GSR SMF: Timer = %d/%d s", 
+    //         gsr_countdown_val, GSR_MEASUREMENT_DURATION_S);
+
+     // Publish status to UI
+    zbus_chan_pub(&gsr_status_chan, &status, K_NO_WAIT);
+
+    k_mutex_unlock(&gsr_timer_mutex);
+
+    // Complete state check
+    if (gsr_countdown_val <= 0 && contact_ok) {
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_COMPLETE]);
+    }
+
+
+    // Handle semaphores
+    if (k_sem_take(&sem_gsr_complete, K_NO_WAIT) == 0) {
+        LOG_INF("GSR SMF: Buffer full signal received - switching to COMPLETE state");
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_COMPLETE]);
+    }
+
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0) {
+        LOG_DBG("GSR cancelled");
+        hpi_data_reset_gsr_record_buffer();
+
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+    }
+
+    prev_gsr_contact_ok = contact_ok;
+}
+static void st_gsr_stream_exit(void *o)
+{
+    LOG_DBG("BioZ SM Stream Exit");
+    k_timer_stop(&tmr_bioz_sampling);
+}
+
+static void st_gsr_complete_run(void *o)
+{
+    LOG_INF("GSR COMPLETE");
+    hpi_data_set_gsr_measurement_active(false);
+    hpi_data_set_gsr_record_active(false);
+    int  ret = hw_max30001_gsr_disable();
+
+    if (ret != 0) {
+        LOG_ERR("Failed to disable GSR in complete : %d", ret);
+    }
+
+    k_sem_give(&sem_gsr_complete_reset);
+
+    smf_set_state(SMF_CTX(&s_ecg_obj),
+                  &ecg_states[HPI_ECG_STATE_IDLE]);
     // Handle independent HRV (Heart Rate Variability) evaluation control via state machine
     if (k_sem_take(&sem_hrv_eval_start, K_NO_WAIT) == 0)
     {
@@ -1263,6 +1491,10 @@ static const struct smf_state ecg_states[] = {
     [HPI_ECG_STATE_STREAM] = SMF_CREATE_STATE(st_ecg_stream_entry, st_ecg_stream_run, st_ecg_stream_exit, NULL, NULL),
     [HPI_ECG_STATE_LEADOFF] = SMF_CREATE_STATE(st_ecg_leadoff_entry, st_ecg_leadoff_run, NULL, NULL, NULL),
     [HPI_ECG_STATE_COMPLETE] = SMF_CREATE_STATE(st_ecg_complete_entry, st_ecg_complete_run, st_ecg_complete_exit, NULL, NULL),
+    
+    [HPI_ECG_STATE_GSR_MEASURE_ENTRY]  = SMF_CREATE_STATE(NULL, st_gsr_entry_run, NULL, NULL, NULL),
+    [HPI_ECG_STATE_GSR_MEASURE_STREAM] = SMF_CREATE_STATE(NULL, st_gsr_stream_run, st_gsr_stream_exit, NULL, NULL),
+    [HPI_ECG_STATE_GSR_COMPLETE]       = SMF_CREATE_STATE(NULL, st_gsr_complete_run, NULL, NULL, NULL),
 };
 
 void smf_ecg_thread(void)

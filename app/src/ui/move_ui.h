@@ -211,6 +211,9 @@ void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *result
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off);
 void hpi_gsr_disp_update_timer(uint16_t remaining_s);
+void scr_gsr_lead_on_off_handler(bool lead_on);
+void hpi_gsr_reset_countdown_timer(void);
+void hpi_gsr_disp_update_us(float gsr_us);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
@@ -383,7 +386,7 @@ void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
 void gesture_down_scr_pulldown(void);
 void gesture_down_scr_bpt_cal_required(void);
-
+void gesture_down_scr_gsr_complete(void);
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);

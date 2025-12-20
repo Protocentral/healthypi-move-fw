@@ -21,6 +21,15 @@
 #define MAX30001_STATUS_MASK_RRINT 0x000400
 #define MAX30001_STATUS_MASK_LONINT 0x800
 
+#define MAX30001_STATUS_MASK_BCGMON  0x08000   // Bit 15: BioZ DRVP/DRVN out of compliance
+#define MAX30001_STATUS_MASK_BCGMP   0x020000   // Bit 17: Positive drive electrode off
+#define MAX30001_STATUS_MASK_BCGMN   0x010000   // Bit 16: Negative drive electrode off
+
+/* --- BioZ Lead-Off Detection --- */
+#define BIOZ_LEAD_MASK (MAX30001_STATUS_MASK_BCGMON | \
+                        MAX30001_STATUS_MASK_BCGMP | \
+                        MAX30001_STATUS_MASK_BCGMN)
+						
 #define MAX30001_INT_MASK_EFIT 0xF80000
 #define MAX30001_INT_MASK_BFIT 0x070000
 
