@@ -44,10 +44,11 @@ void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *
             min_v = center - half_span;
             max_v = center + half_span;
         }
-        else if ((max_v - min_v) < 8)
+        else if ((max_v - min_v) < 64)
         {
+            /* Increased minimum range from 8 to 64 for better visibility of small signals */
             int32_t center = (min_v + max_v) / 2;
-            int32_t half = 16;
+            int32_t half = 64;
             min_v = center - half;
             max_v = center + half;
         }
@@ -63,20 +64,21 @@ void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *
 
         // Apply hysteresis to reduce jitter - only update if change is significant
         bool should_update = first_scale;
-        
+
         if (!first_scale)
         {
             int32_t current_range = last_applied_max - last_applied_min;
             int32_t new_range = max_v - min_v;
-            
+
             if (current_range > 0)
             {
                 float range_change_ratio = (float)abs(new_range - current_range) / (float)current_range;
                 float min_shift = (float)abs(min_v - last_applied_min) / (float)current_range;
                 float max_shift = (float)abs(max_v - last_applied_max) / (float)current_range;
-                
-                // Update if range changed by >15% OR min/max shifted by >20%
-                if (range_change_ratio > 0.15f || min_shift > 0.20f || max_shift > 0.20f)
+
+                // Update if range changed by >10% OR min/max shifted by >15%
+                // (Reduced thresholds for more responsive autoscaling)
+                if (range_change_ratio > 0.10f || min_shift > 0.15f || max_shift > 0.15f)
                 {
                     should_update = true;
                 }

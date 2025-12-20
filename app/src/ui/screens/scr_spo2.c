@@ -50,34 +50,63 @@ lv_obj_t *scr_spo2;
 static lv_obj_t *label_spo2_percent;
 static lv_obj_t *label_spo2_last_update_time;
 static lv_obj_t *btn_spo2_measure;
+static lv_obj_t *btn_spo2_finger;
 
 // Externs - Modern style system
 extern lv_style_t style_body_medium;
 extern lv_style_t style_numeric_large;
 extern lv_style_t style_caption;
 
+/* Extern semaphore to trigger wrist SpO2 one-shot measurement */
+extern struct k_sem sem_start_one_shot_spo2;
+
+/* Handler for primary "Measure" button - directly starts wrist SpO2 measurement */
 static void scr_spo2_btn_measure_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_CLICKED)
     {
-        //hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
-        hpi_load_scr_spl(SCR_SPL_SPO2_SELECT, SCROLL_UP, (uint8_t)SCR_SPO2, 0, 0, 0);
+        /* Smart default: Directly start wrist measurement */
+        LOG_DBG("Starting wrist SpO2 measurement");
+        k_sem_give(&sem_start_one_shot_spo2);
+    }
+}
+
+/* Handler for secondary "Finger" button - goes to finger instruction screen */
+static void scr_spo2_btn_finger_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED)
+    {
+        /* Show finger sensor instruction screen before starting */
+        LOG_DBG("Navigating to finger SpO2 instruction screen");
+        hpi_load_scr_spl(SCR_SPL_SPO2_SCR2, SCROLL_UP, (uint8_t)SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
     }
 }
 
 void draw_scr_spo2(enum scroll_dir m_scroll_dir)
 {
     scr_spo2 = lv_obj_create(NULL);
-    // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_spo2, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_spo2, LV_OBJ_FLAG_SCROLLABLE);
 
-    // CIRCULAR AMOLED-OPTIMIZED SPO2 SCREEN (BLUE THEME)
-    // Display center: (195, 195), Usable radius: ~185px
-    
-    // Get SpO2 data first
+    /*
+     * COMPACT LAYOUT FOR 390x390 ROUND AMOLED
+     * ========================================
+     * Vertical space budget (center at y=195):
+     *   Top safe zone: y=30 to y=60 (title area)
+     *   Upper zone: y=60 to y=110 (icon)
+     *   Center zone: y=110 to y=200 (value with inline unit)
+     *   Lower zone: y=200 to y=250 (last update)
+     *   Bottom zone: y=250 to y=310 (side-by-side buttons)
+     *   Bottom safe: y=320+ (curved edge)
+     *
+     * Inline unit (e.g., "97%") saves vertical space vs stacked layout.
+     */
+
+    // Get SpO2 data
     uint8_t spo2 = 0;
     int64_t last_update_ts = 0;
     if (hpi_sys_get_last_spo2_update(&spo2, &last_update_ts) != 0)
@@ -86,98 +115,104 @@ void draw_scr_spo2(enum scroll_dir m_scroll_dir)
         last_update_ts = 0;
     }
 
-    // OUTER RING: SpO2 Zone Progress Arc (Radius 170-185px)
-    lv_obj_t *arc_spo2_zone = lv_arc_create(scr_spo2);
-    lv_obj_set_size(arc_spo2_zone, 370, 370);  // 185px radius
-    lv_obj_center(arc_spo2_zone);
-    lv_arc_set_range(arc_spo2_zone, 70, 100);  // SpO2 range 70-100%
-    
-    // Background arc: Full 270° track (gray)
-    lv_arc_set_bg_angles(arc_spo2_zone, 135, 45);  // Full background arc
-    
-    // Indicator arc: Shows current SpO2 position from start
-    lv_arc_set_angles(arc_spo2_zone, 135, 135);  // Start at beginning, will extend based on value
-    
-    // Set arc value based on current SpO2
-    if (spo2 > 0) {
-        lv_arc_set_value(arc_spo2_zone, spo2);
-    } else {
-        lv_arc_set_value(arc_spo2_zone, 95);  // Default/good position
-    }
-    
-    // Style the progress arc - blue theme
-    lv_obj_set_style_arc_color(arc_spo2_zone, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
-    lv_obj_set_style_arc_width(arc_spo2_zone, 8, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_spo2_zone, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_INDICATOR);  // Progress indicator
-    lv_obj_set_style_arc_width(arc_spo2_zone, 6, LV_PART_INDICATOR);
-    lv_obj_remove_style(arc_spo2_zone, NULL, LV_PART_KNOB);  // Remove knob
-    lv_obj_clear_flag(arc_spo2_zone, LV_OBJ_FLAG_CLICKABLE);
-
-    // Screen title - properly centered at top (moved down to clear arc overlap)
+    // TOP: Title "SpO2" at y=40
     lv_obj_t *label_title = lv_label_create(scr_spo2);
     lv_label_set_text(label_title, "SpO2");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Moved down from 10px to 40px to clear arc
+    lv_obj_set_pos(label_title, 0, 40);
+    lv_obj_set_width(label_title, 390);
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
 
-    // MID-UPPER RING: SpO2 Icon (clean, no container - using smaller 30x35 icon)
+    // UPPER: Icon centered at y=75
     lv_obj_t *img_spo2 = lv_img_create(scr_spo2);
     lv_img_set_src(img_spo2, &icon_spo2_30x35);
-    lv_obj_align(img_spo2, LV_ALIGN_TOP_MID, 0, 95);  // Moved down from 65px to account for lower title
+    lv_obj_set_pos(img_spo2, (390 - 30) / 2, 75);
     lv_obj_set_style_img_recolor(img_spo2, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_spo2, LV_OPA_COVER, LV_PART_MAIN);
 
-    // CENTRAL ZONE: Main SpO2 Value (properly spaced from icon)
-    // Large central metric display for maximum readability
-    label_spo2_percent = lv_label_create(scr_spo2);
+    // CENTER: Large SpO2 value with inline "%" unit at y=125
+    // Use a container to center "97%" as a single unit
+    lv_obj_t *cont_value = lv_obj_create(scr_spo2);
+    lv_obj_remove_style_all(cont_value);
+    lv_obj_set_size(cont_value, 390, 70);
+    lv_obj_set_pos(cont_value, 0, 125);
+    lv_obj_set_style_bg_opa(cont_value, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_value, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_value, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
+
+    label_spo2_percent = lv_label_create(cont_value);
     if (spo2 == 0) {
         lv_label_set_text(label_spo2_percent, "--");
     } else {
         lv_label_set_text_fmt(label_spo2_percent, "%d", spo2);
     }
-    lv_obj_align(label_spo2_percent, LV_ALIGN_CENTER, 0, -10);  // Centered, slightly above middle
     lv_obj_set_style_text_color(label_spo2_percent, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_spo2_percent, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_spo2_percent, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // Unit label directly below main value with proper spacing
-    lv_obj_t *label_spo2_unit = lv_label_create(scr_spo2);
-    lv_label_set_text(label_spo2_unit, "%");  // Simplified from "SpO2%"
-    lv_obj_align(label_spo2_unit, LV_ALIGN_CENTER, 0, 35);  // Below main value with gap
+    // Inline "%" unit (smaller, colored, baseline-aligned)
+    lv_obj_t *label_spo2_unit = lv_label_create(cont_value);
+    lv_label_set_text(label_spo2_unit, "%");
     lv_obj_set_style_text_color(label_spo2_unit, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
-    lv_obj_add_style(label_spo2_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_spo2_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_add_style(label_spo2_unit, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(label_spo2_unit, 8, LV_PART_MAIN);  // Align with number baseline
 
-    // Status info - centered below unit with proper spacing
+    // LOWER: Last measurement time at y=205
     label_spo2_last_update_time = lv_label_create(scr_spo2);
     char last_meas_str[25];
     hpi_helper_get_relative_time_str(last_update_ts, last_meas_str, sizeof(last_meas_str));
     lv_label_set_text(label_spo2_last_update_time, last_meas_str);
-    lv_obj_align(label_spo2_last_update_time, LV_ALIGN_CENTER, 0, 80);  // Centered, below unit with gap
+    lv_obj_set_pos(label_spo2_last_update_time, 0, 205);
+    lv_obj_set_width(label_spo2_last_update_time, 390);
     lv_obj_set_style_text_color(label_spo2_last_update_time, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     lv_obj_add_style(label_spo2_last_update_time, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_spo2_last_update_time, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // BOTTOM ZONE: Action Button (properly centered at bottom)
+    /*
+     * BOTTOM: Side-by-side buttons at y=250
+     * For 390px wide round display, use two buttons with 8px gap
+     * Button width: 120px each, gap: 8px, total: 248px
+     */
+    const int btn_width = 120;
+    const int btn_height = 44;
+    const int btn_gap = 8;
+    const int total_width = btn_width * 2 + btn_gap;  // 248
+    const int btn_y = 250;
+    const int left_x = (390 - total_width) / 2;  // 71
+    const int right_x = left_x + btn_width + btn_gap;  // 199
+
+    // Left: Primary "Wrist" button (blue filled)
     btn_spo2_measure = hpi_btn_create_primary(scr_spo2);
-    lv_obj_set_size(btn_spo2_measure, 180, 50);  // Width for "Measure" text
-    lv_obj_align(btn_spo2_measure, LV_ALIGN_BOTTOM_MID, 0, -30);  // Centered at bottom with margin
-    lv_obj_set_style_radius(btn_spo2_measure, 25, LV_PART_MAIN);
-    
-    // AMOLED-optimized button styling - blue theme
-    lv_obj_set_style_bg_color(btn_spo2_measure, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_size(btn_spo2_measure, btn_width, btn_height);
+    lv_obj_set_pos(btn_spo2_measure, left_x, btn_y);
+    lv_obj_set_style_radius(btn_spo2_measure, 22, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn_spo2_measure, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(btn_spo2_measure, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(btn_spo2_measure, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(btn_spo2_measure, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
-    lv_obj_set_style_border_opa(btn_spo2_measure, LV_OPA_80, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(btn_spo2_measure, 0, LV_PART_MAIN);  // No shadow for AMOLED
-    
+    lv_obj_set_style_border_width(btn_spo2_measure, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(btn_spo2_measure, 0, LV_PART_MAIN);
+
     lv_obj_t *label_measure = lv_label_create(btn_spo2_measure);
-    lv_label_set_text(label_measure, LV_SYMBOL_REFRESH " Measure");
+    lv_label_set_text(label_measure, "Wrist");
     lv_obj_center(label_measure);
-    lv_obj_set_style_text_color(label_measure, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_measure, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_spo2_measure, scr_spo2_btn_measure_handler, LV_EVENT_CLICKED, NULL);
+
+    // Right: Secondary "Finger" button (outlined)
+    btn_spo2_finger = hpi_btn_create_secondary(scr_spo2);
+    lv_obj_set_size(btn_spo2_finger, btn_width, btn_height);
+    lv_obj_set_pos(btn_spo2_finger, right_x, btn_y);
+    lv_obj_set_style_radius(btn_spo2_finger, 22, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn_spo2_finger, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn_spo2_finger, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn_spo2_finger, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(btn_spo2_finger, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(btn_spo2_finger, 0, LV_PART_MAIN);
+
+    lv_obj_t *label_finger = lv_label_create(btn_spo2_finger);
+    lv_label_set_text(label_finger, "Finger");
+    lv_obj_center(label_finger);
+    lv_obj_set_style_text_color(label_finger, lv_color_hex(COLOR_PRIMARY_BLUE), LV_PART_MAIN);
+    lv_obj_add_event_cb(btn_spo2_finger, scr_spo2_btn_finger_handler, LV_EVENT_CLICKED, NULL);
 
     hpi_disp_set_curr_screen(SCR_SPO2);
     hpi_show_screen(scr_spo2, m_scroll_dir);
