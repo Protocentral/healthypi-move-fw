@@ -14,7 +14,7 @@
  * @return Number of SCR events detected, or 0 on error
  */
 int calculate_scr_count(int32_t *gsr_buffer, int sample_count);
-void convert_raw_to_uS(int32_t *raw_data, float *gsr_data, int length);
+void convert_raw_to_uS(const int32_t *raw_data, float *gsr_data, int length);
 void smooth_gsr(float *data, int length, int window);
 void remove_baseline(float *data, int length, int window);
 #endif // GSR_ALGO_H

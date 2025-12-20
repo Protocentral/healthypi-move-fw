@@ -43,7 +43,18 @@
 #include "ui/move_ui.h"
 
 LOG_MODULE_REGISTER(log_module, LOG_LEVEL_DBG);
+
+// Buffer size constants for consistent memory allocation
+#define HPI_LOG_PATH_MAX      64   // Max length for base directory paths
+#define HPI_LOG_FNAME_MAX     128  // Max length for full file paths (path + timestamp)
+#define HPI_LOG_ENTRY_NAME_MAX 64  // Max length for directory entry names
+
+// Timestamp validation bounds
+#define HPI_LOG_MIN_TIMESTAMP 1577836800LL  // Jan 1, 2020 00:00:00 UTC
+#define HPI_LOG_MAX_TIMESTAMP 1893456000LL  // Jan 1, 2030 00:00:00 UTC
+
 int print_file_contents(const char *filepath);
+
 // Error handling macro for file operations
 #define CHECK_FS_OP(op, fname, msg) do { \
     int ret = (op); \
@@ -74,18 +85,26 @@ static const char* const log_paths[] = {
 extern struct fs_mount_t *mp;
 extern const char *hpi_sys_update_time_file;
 
-static int hpi_log_get_path(char *m_path, uint8_t m_log_type)
+static int hpi_log_get_path(char *m_path, size_t path_size, uint8_t m_log_type)
 {
-    if (m_path == NULL) {
+    if (m_path == NULL || path_size == 0) {
         LOG_ERR("Invalid path parameter");
         return -EINVAL;
     }
 
+    const char *src_path;
     if (m_log_type < LOG_PATHS_COUNT && log_paths[m_log_type] != NULL) {
-        strcpy(m_path, log_paths[m_log_type]);
+        src_path = log_paths[m_log_type];
     } else {
-        strcpy(m_path, "/lfs/log/");
+        src_path = "/lfs/log/";
     }
+
+    size_t src_len = strlen(src_path);
+    if (src_len >= path_size) {
+        LOG_ERR("Path buffer too small: need %zu, have %zu", src_len + 1, path_size);
+        return -ENOMEM;
+    }
+    memcpy(m_path, src_path, src_len + 1);
 
     return 0;
 }
@@ -96,104 +115,72 @@ static int hpi_log_get_path(char *m_path, uint8_t m_log_type)
 // indicate system time is not properly synchronized or corrupted.
 static bool is_timestamp_valid(int64_t timestamp)
 {
-    // Define reasonable timestamp bounds for the HealthyPi Move device
-    // Jan 1, 2020 00:00:00 UTC = 1577836800 seconds since epoch
-    const int64_t MIN_VALID_TIMESTAMP = 1577836800L;
-    // Jan 1, 2030 00:00:00 UTC = 1893456000 seconds since epoch  
-    const int64_t MAX_VALID_TIMESTAMP = 1893456000L;
-    
-    return (timestamp >= MIN_VALID_TIMESTAMP && timestamp <= MAX_VALID_TIMESTAMP);
+    return (timestamp >= HPI_LOG_MIN_TIMESTAMP && timestamp <= HPI_LOG_MAX_TIMESTAMP);
 }
 
 // Generic file writer function to reduce code duplication
 static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_size, int64_t timestamp)
-{ 
+{
     struct fs_file_t file;
-    char fname[128];  // Increased size to accommodate full path
-    char base_path[32];
-    
+    char fname[HPI_LOG_FNAME_MAX];
+    char base_path[HPI_LOG_PATH_MAX];
+
     // Validate timestamp before writing
     if (!is_timestamp_valid(timestamp)) {
         LOG_ERR("Invalid timestamp: %" PRId64 " - refusing to write log file", timestamp);
         return -EINVAL;
     }
-    
+
     fs_file_t_init(&file);
-    
+
     // Get base path using existing function
-    if (hpi_log_get_path(base_path, log_type) != 0) {
+    if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
         LOG_ERR("Failed to get path for log type %d", log_type);
         return -EINVAL;
     }
-    
+
     snprintf(fname, sizeof(fname), "%s%" PRId64, base_path, timestamp);
-    
+
     LOG_DBG("Write to file... %s | Size: %zu", fname, data_size);
-    
-    //CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_APPEND ), "open", fname);
-    CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_TRUNC ), "open", fname);
+
+    CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_TRUNC), "open", fname);
     CHECK_FS_OP(fs_write(&file, data, data_size), "write", fname);
-    CHECK_FS_OP(fs_sync(&file), "sync", fname);  // Sync before close
+    CHECK_FS_OP(fs_sync(&file), "sync", fname);
     CHECK_FS_OP(fs_close(&file), "close", fname);
     return 0;
 }
 
-void hpi_write_ecg_record_file(int32_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts)
+void hpi_write_ecg_record_file(const int32_t *ecg_record_buffer, uint16_t ecg_record_length, int64_t start_ts)
 {
     if (ecg_record_buffer == NULL || ecg_record_length == 0) {
         LOG_ERR("Invalid ECG record parameters");
         return;
     }
-    
-    // Validate timestamp before writing
-    if (!is_timestamp_valid(start_ts)) {
-        LOG_ERR("Invalid timestamp for ECG record: %" PRId64 " - refusing to write", start_ts);
-        return;
-    }
-    
-    // Use generic writer for ECG records
-    write_trend_to_file(HPI_LOG_TYPE_ECG_RECORD, ecg_record_buffer, 
-                       ecg_record_length * sizeof(int32_t), start_ts);
+
+    write_trend_to_file(HPI_LOG_TYPE_ECG_RECORD, ecg_record_buffer,
+                        ecg_record_length * sizeof(int32_t), start_ts);
 }
 
-void hpi_write_gsr_record_file(int32_t *samples, uint16_t num_samples, int64_t timestamp)
+void hpi_write_gsr_record_file(const int32_t *samples, uint16_t num_samples, int64_t timestamp)
 {
     if (samples == NULL || num_samples == 0) {
         LOG_ERR("Invalid GSR record parameters");
         return;
     }
 
-    // Validate timestamp
-    if (!is_timestamp_valid(timestamp)) {
-        LOG_ERR("Invalid timestamp for GSR record: %" PRId64 " - refusing to write", timestamp);
-        return;
-    }
-
-    // --- Print samples to terminal ---
-    // printf("Timestamp: %" PRId64 "\n", timestamp);
-    // printf("GSR Samples (%u): ", num_samples);
-    // for (uint16_t i = 0; i < num_samples; i++) {
-    //     printf("%" PRId32 " ", samples[i]);
-    // }
-    // printf("\n");
-
-    // Write GSR data using generic function
-    write_trend_to_file(HPI_LOG_TYPE_GSR_RECORD, samples, 
+    write_trend_to_file(HPI_LOG_TYPE_GSR_RECORD, samples,
                         num_samples * sizeof(int32_t), timestamp);
-void hpi_write_hrv_record_file(uint16_t *hrv_record_buffer, uint16_t hrv_record_length, int64_t start_ts)
+}
+
+void hpi_write_hrv_record_file(const uint16_t *hrv_record_buffer, uint16_t hrv_record_length, int64_t start_ts)
 {
     if (hrv_record_buffer == NULL || hrv_record_length == 0) {
         LOG_ERR("Invalid HRV record parameters");
         return;
     }
-    // Validate timestamp before writing
-    if (!is_timestamp_valid(start_ts)) {
-        LOG_ERR("Invalid timestamp for HRV record: %" PRId64 " - refusing to write", start_ts);
-        return;
-    }
-    // Use generic writer for ECG records
-    write_trend_to_file(HPI_LOG_TYPE_HRV_RECORD, hrv_record_buffer, 
-                       hrv_record_length * sizeof(uint16_t), start_ts);
+
+    write_trend_to_file(HPI_LOG_TYPE_HRV_RECORD, hrv_record_buffer,
+                        hrv_record_length * sizeof(uint16_t), start_ts);
 }
 
 void hpi_hr_trend_wr_point_to_file(struct hpi_hr_trend_point_t m_trend_point, int64_t day_ts)
@@ -236,12 +223,15 @@ static int iterate_directory(uint8_t log_type, dir_operation_t operation)
 {
     int res;
     struct fs_dir_t dirp;
-    static struct fs_dirent entry;
+    struct fs_dirent entry;
     uint16_t log_count = 0;
-    char m_path[40] = "";
+    char m_path[HPI_LOG_PATH_MAX];
 
     fs_dir_t_init(&dirp);
-    hpi_log_get_path(m_path, log_type);
+    if (hpi_log_get_path(m_path, sizeof(m_path), log_type) != 0) {
+        LOG_ERR("Failed to get path for log type %d", log_type);
+        return -EINVAL;
+    }
 
     res = fs_opendir(&dirp, m_path);
     if (res) {
@@ -250,7 +240,7 @@ static int iterate_directory(uint8_t log_type, dir_operation_t operation)
     }
 
     LOG_DBG("%s operation on %s", (operation == DIR_OP_COUNT) ? "Count" : "Index", m_path);
-    
+
     for (;;) {
         res = fs_readdir(&dirp, &entry);
 
@@ -269,7 +259,7 @@ static int iterate_directory(uint8_t log_type, dir_operation_t operation)
             if (operation == DIR_OP_COUNT) {
                 log_count++;
             } else { // DIR_OP_INDEX
-                char file_name[300];  // Generous buffer size for file paths
+                char file_name[HPI_LOG_FNAME_MAX];
                 int path_ret = snprintf(file_name, sizeof(file_name), "%s%s", m_path, entry.name);
                 if (path_ret >= sizeof(file_name)) {
                     LOG_ERR("File path too long: %s%s", m_path, entry.name);
@@ -316,16 +306,16 @@ int log_get_index(uint8_t m_log_type)
 
 void log_get(uint8_t log_type, int64_t file_id)
 {
-    char base_path[40];
-    char file_path[60];
+    char base_path[HPI_LOG_PATH_MAX];
+    char file_path[HPI_LOG_FNAME_MAX];
 
     LOG_DBG("Getting Log type %d, File ID %" PRId64, log_type, file_id);
 
-    if (hpi_log_get_path(base_path, log_type) != 0) {
+    if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
         LOG_ERR("Failed to get path for log type %d", log_type);
         return;
     }
-    
+
     snprintf(file_path, sizeof(file_path), "%s%" PRId64, base_path, file_id);
     transfer_send_file(file_path);
 }
@@ -339,24 +329,23 @@ void log_delete(uint16_t file_id)
     fs_unlink(log_file_name);
 }
 
-void log_wipe_folder(char *folder_path)
+void log_wipe_folder(const char *folder_path)
 {
     int err = 0;
     struct fs_dir_t dir;
-    char file_name[100] = "";
+    char file_name[HPI_LOG_FNAME_MAX];
 
     fs_dir_t_init(&dir);
 
     err = fs_opendir(&dir, folder_path);
-    if (err)
-    {  
+    if (err) {
         LOG_DBG("Directory %s not found, creating it", folder_path);
         err = fs_mkdir(folder_path);
         if (err) {
             LOG_ERR("Failed to create directory %s: %d", folder_path, err);
             return;
         }
-        
+
         // Try to open the directory again after creating it
         err = fs_opendir(&dir, folder_path);
         if (err) {
@@ -365,27 +354,27 @@ void log_wipe_folder(char *folder_path)
         }
     }
 
-    while (1)
-    {
+    while (1) {
         struct fs_dirent entry;
 
         err = fs_readdir(&dir, &entry);
-        if (err)
-        {
+        if (err) {
             LOG_ERR("Unable to read directory");
             break;
         }
 
         /* Check for end of directory listing */
-        if (entry.name[0] == '\0')
-        {
+        if (entry.name[0] == '\0') {
             break;
         }
-        strcpy(file_name, folder_path);
-        strcat(file_name, entry.name);
+
+        int ret = snprintf(file_name, sizeof(file_name), "%s%s", folder_path, entry.name);
+        if (ret < 0 || ret >= (int)sizeof(file_name)) {
+            LOG_ERR("File path too long: %s%s", folder_path, entry.name);
+            continue;
+        }
 
         LOG_DBG("Deleting %s", file_name);
-
         fs_unlink(file_name);
     }
     fs_closedir(&dir);
@@ -394,12 +383,12 @@ void log_wipe_folder(char *folder_path)
 // Generic log wipe function to reduce duplication
 static void wipe_log_types(const uint8_t *log_types, size_t count, const char *description)
 {
-    char log_file_name[40];
-    
+    char log_file_name[HPI_LOG_PATH_MAX];
+
     LOG_DBG("Wiping %s", description);
-    
+
     for (size_t i = 0; i < count; i++) {
-        if (hpi_log_get_path(log_file_name, log_types[i]) == 0) {
+        if (hpi_log_get_path(log_file_name, sizeof(log_file_name), log_types[i]) == 0) {
             log_wipe_folder(log_file_name);
         }
     }
@@ -414,7 +403,7 @@ void log_wipe_trends(void)
         HPI_LOG_TYPE_TREND_STEPS,
         HPI_LOG_TYPE_TREND_BPT,
         HPI_LOG_TYPE_ECG_RECORD,
-        HPI_LOG_TYPE_GSR_RECORD 
+        HPI_LOG_TYPE_GSR_RECORD, 
         HPI_LOG_TYPE_HRV_RECORD,
     };
     
@@ -433,7 +422,7 @@ void log_wipe_records(void)
         HPI_LOG_TYPE_BIOZ_RECORD,
         HPI_LOG_TYPE_PPG_WRIST_RECORD,
         HPI_LOG_TYPE_PPG_FINGER_RECORD,
-        HPI_LOG_TYPE_GSR_RECORD 
+        HPI_LOG_TYPE_GSR_RECORD, 
         HPI_LOG_TYPE_HRV_RECORD
     };
     

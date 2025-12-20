@@ -17,14 +17,36 @@ static float gsr_uS[GSR_MAX_SAMPLES];
 static float smooth_temp[GSR_MAX_SAMPLES];
 static float baseline_temp[GSR_MAX_SAMPLES];
 
-// Convert raw 24-bit MAX30001 BIOZ counts to µS
-void convert_raw_to_uS(int32_t *raw_data, float *gsr_data, int length)
+// Hardware configuration from DTS (boards/protocentral/healthypi_move/nrf5340_cpuapp_common.dtsi):
+// bioz-gain = 1 → 20 V/V
+// bioz_cgmag = 2 → 16 µA
+#define BIOZ_V_REF      1.0f        // MAX30001 internal reference voltage (V)
+#define BIOZ_GAIN       20.0f       // bioz-gain=1 → 20 V/V
+#define BIOZ_I_MAG      16e-6f      // bioz_cgmag=2 → 16 µA excitation current
+#define BIOZ_FS_24BIT   8388608.0f  // 2^23 full scale for 24-bit signed ADC
+#define BIOZ_MIN_Z_OHMS 0.1f        // Minimum valid impedance to avoid divide-by-zero
+
+// Convert raw 24-bit MAX30001 BIOZ counts to µS (microsiemens)
+// Formula: Conductance (µS) = 1 / Impedance (Ω) × 1,000,000
+// Where: Impedance = V_electrode / I_excitation
+//        V_electrode = (raw / 2^23) × (Vref / Gain)
+void convert_raw_to_uS(const int32_t *raw_data, float *gsr_data, int length)
 {
     for (int i = 0; i < length; i++)
     {
-        // 24-bit signed ADC: counts range [-8388608, +8388607]
-        // Vref = 2400 mV, series resistor = 1 MOhm, convert to µS
-        gsr_data[i] = ((float)raw_data[i] * 2400.0f) / 8388607.0f / 1000.0f; 
+        // Step 1: Calculate electrode voltage from ADC counts
+        float v_electrode = ((float)raw_data[i] / BIOZ_FS_24BIT) * (BIOZ_V_REF / BIOZ_GAIN);
+
+        // Step 2: Calculate impedance (Z = V / I), use absolute value
+        float impedance = fabsf(v_electrode / BIOZ_I_MAG);
+
+        // Step 3: Convert to conductance in microsiemens (µS)
+        // Guard against divide-by-zero for short circuits or noise
+        if (impedance < BIOZ_MIN_Z_OHMS) {
+            gsr_data[i] = 0.0f;
+        } else {
+            gsr_data[i] = (1.0f / impedance) * 1e6f;
+        }
     }
 }
 

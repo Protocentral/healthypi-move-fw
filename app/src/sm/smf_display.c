@@ -912,10 +912,10 @@ static float convert_raw_sample_to_uS(int32_t raw)
     
     // return (1.0f / impedance) ;
 
-    // Constants from your hardware configuration
+    // Constants from hardware configuration (nrf5340_cpuapp_common.dtsi)
     const float V_REF = 1.0f;          // MAX30001 Internal Vref
-    const float GAIN = 40.0f;         // From your config->bioz_gain
-    const float I_MAG = 48e-6f;        // From your config->bioz_cgmag (48uA)
+    const float GAIN = 20.0f;          // bioz-gain=1 → 20 V/V
+    const float I_MAG = 16e-6f;        // bioz_cgmag=2 → 16 µA
     
     // Your driver produces a 24-bit signed value (due to the <<8 >>8 shift)
     // Full scale for 24-bit signed is 2^23
