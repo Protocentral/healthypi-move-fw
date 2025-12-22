@@ -1154,14 +1154,12 @@ static void st_ecg_stabilizing_entry(void *o)
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
     set_ecg_timer_values(k_uptime_get_32(), 0);
     
-     // Initialize HRV if evaluation is being started
-    //  if (get_hrv_active()) {
-    //      LOG_INF("HRV evaluation starting - initializing HRV data collection");
-    //      hpi_data_set_hrv_eval_active(true);
-    //      hrv_interval_count = 0;
-    //      memset(hrv_intervals, 0, sizeof(hrv_intervals));
-    //      hrv_last_status_pub_s = 0;
-    //  }
+     // Clear Buffer before starting
+     if (get_hrv_active()) {
+         hrv_interval_count = 0;
+         memset(hrv_intervals, 0, sizeof(hrv_intervals));
+         hrv_last_status_pub_s = 0;
+     }
  
     int duration = is_recording_active ? ECG_RECORD_DURATION_S : HRV_MEASUREMENT_DURATION_S;
     // Publish status indicating stabilization phase
