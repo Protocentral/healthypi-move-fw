@@ -74,7 +74,16 @@ enum hpi_cmds
     HPI_CMD_RECORDING_INDEX = 0x31,      // Needs recording type (uint8) as argument
     HPI_CMD_RECORDING_FETCH_FILE = 0x32, // Needs recording type (uint8) as argument
     HPI_CMD_RECORDING_DELETE = 0x33,     // Needs recording type (uint8) as argument
-    HPI_CMD_RECORDING_WIPE_ALL = 0x34, // No arguments
+    HPI_CMD_RECORDING_WIPE_ALL = 0x34,   // No arguments
+
+    // Background Recording Commands (0x70-0x7F)
+    HPI_CMD_REC_CONFIGURE = 0x70,        // Configure: [duration_lo][duration_hi][signal_mask][decimation]
+    HPI_CMD_REC_START = 0x71,            // Start recording
+    HPI_CMD_REC_STOP = 0x72,             // Stop recording
+    HPI_CMD_REC_GET_STATUS = 0x73,       // Get current recording status
+    HPI_CMD_REC_GET_SESSION_LIST = 0x74, // List all recording sessions
+    HPI_CMD_REC_DELETE_SESSION = 0x75,   // Delete session: [timestamp (8 bytes)]
+    HPI_CMD_REC_WIPE_ALL = 0x76,         // Delete all recordings
 };
 
 enum cmdif_pkt_type

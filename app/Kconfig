@@ -33,6 +33,34 @@ config HPI_GSR_STRESS_INDEX
 			Adds ~2KB flash and ~300 bytes RAM for history buffers.
 			Disable to save memory if only raw GSR values are needed.
 
+config HPI_RECORDING_MODULE
+		bool "Enable background recording module"
+		default y
+		help
+			Enable multi-signal background recording with BLE configuration.
+			Supports recording PPG (wrist/finger), IMU, and GSR data for
+			configurable durations. Data is stored in LittleFS and retrieved
+			via MCUMgr FS commands over BLE.
+
+config HPI_RECORDING_MAX_DURATION_S
+		int "Maximum recording duration in seconds"
+		default 3600
+		range 60 7200
+		depends on HPI_RECORDING_MODULE
+		help
+			Maximum allowed recording duration in seconds.
+			Default is 3600 (1 hour). Range: 60s to 7200s (2 hours).
+
+config HPI_RECORDING_BUFFER_SIZE
+		int "Recording buffer size per signal (bytes)"
+		default 1024
+		range 512 4096
+		depends on HPI_RECORDING_MODULE
+		help
+			Size of each dual-buffer for recording. Larger buffers reduce
+			write frequency but use more RAM. Each signal uses 2x this size.
+			Default is 1024 bytes (2KB per signal, 10KB total for 5 signals).
+
 endmenu
 
 source "Kconfig.zephyr"

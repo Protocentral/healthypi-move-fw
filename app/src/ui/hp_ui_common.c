@@ -539,6 +539,12 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     printk("GSR screen disabled by config\n");
 #endif
         break;
+    case SCR_HRV:
+        draw_scr_hrv(m_scroll_dir, 0, 0, 0, 0);
+        break;
+    case SCR_RECORDING:
+        draw_scr_recording(m_scroll_dir);
+        break;
 
     /*case SCR_PLOT_EDA:
         draw_scr_pre(m_scroll_dir);

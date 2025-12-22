@@ -51,6 +51,8 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "hpi_sys.h"
 
 #include "log_module.h"
+#include "recording_module.h"
+#include "gsr_algos.h"
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 ZBUS_CHAN_DECLARE(gsr_stress_chan);
@@ -100,6 +102,12 @@ static int32_t ecg_record_buffer[ECG_RECORD_BUFFER_SAMPLES]; // 128 Hz * 30 seco
 static volatile uint16_t ecg_record_counter = 0;
 K_MUTEX_DEFINE(mutex_is_ecg_record_active);
 
+static bool is_gsr_record_active = false;
+static int32_t gsr_record_buffer[GSR_RECORD_BUFFER_SAMPLES]; // e.g., 32Hz * 30s = 960 samples
+static volatile uint16_t gsr_record_counter = 0;
+K_MUTEX_DEFINE(mutex_is_gsr_record_active);
+
+static int g_last_scr_count = 0;
 K_MUTEX_DEFINE(mutex_is_hrv_record_active);
 static uint16_t rr_buffer[HRV_MAX_INTERVALS];
 
@@ -321,6 +329,110 @@ void hpi_data_set_ecg_record_active(bool active)
         }
     }
     k_mutex_unlock(&mutex_is_ecg_record_active);
+}
+
+void hpi_data_set_gsr_record_active(bool active)
+{
+    k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+    is_gsr_record_active = active;
+
+    if (active)
+    {
+        // Starting new recording
+        gsr_record_counter = 0;
+        memset(gsr_record_buffer, 0, sizeof(gsr_record_buffer));
+        LOG_INF("GSR recording started - buffer reset");
+    }
+    else
+    {
+        // Stopping recording - write file synchronously
+        if (gsr_record_counter > 0)
+        {
+            if (gsr_record_counter > GSR_RECORD_BUFFER_SAMPLES) {
+                LOG_ERR("GSR counter overflow detected: %d > %d - clamping to max",
+                        gsr_record_counter, GSR_RECORD_BUFFER_SAMPLES);
+                gsr_record_counter = GSR_RECORD_BUFFER_SAMPLES;
+            }
+
+            struct tm tm_sys_time = hpi_sys_get_sys_time();
+            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+
+            LOG_INF("GSR recording stopped - writing %d samples to file (%.1f seconds @ 32Hz)",
+                    gsr_record_counter, (float)gsr_record_counter / 32.0f);
+
+            hpi_write_gsr_record_file(gsr_record_buffer, gsr_record_counter, log_time);
+            LOG_INF("GSR file write completed");
+
+            if (!is_gsr_record_active && gsr_record_counter > 0)
+            {
+                // Calculate duration in seconds
+                int duration_sec = gsr_record_counter / 32;  // 32 Hz sample rate
+                if (duration_sec < 1) {
+                    duration_sec = 1;
+                }
+
+#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
+                // Calculate comprehensive stress index from buffered samples
+                static struct hpi_gsr_stress_index_t stress_data = {0};
+                calculate_gsr_stress_index(gsr_record_buffer, gsr_record_counter,
+                                           duration_sec, &stress_data);
+
+                if (stress_data.stress_data_ready) {
+                    // Publish stress data via ZBus
+                    zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
+                    LOG_INF("GSR stress published: level=%u, tonic=%u.%02u uS, SCR=%u/min",
+                            stress_data.stress_level,
+                            stress_data.tonic_level_x100 / 100,
+                            stress_data.tonic_level_x100 % 100,
+                            stress_data.peaks_per_minute);
+
+                    g_last_scr_count = stress_data.peaks_per_minute;
+                    // Store full stress data for persistent display
+                    hpi_sys_set_last_gsr_stress(stress_data.stress_level,
+                                                stress_data.tonic_level_x100,
+                                                stress_data.peaks_per_minute,
+                                                log_time);
+                }
+#else
+                int scr_count = calculate_scr_count(gsr_record_buffer, gsr_record_counter);
+                LOG_INF("SCR count: %d", scr_count);
+                g_last_scr_count = scr_count;
+                hpi_sys_set_last_gsr_update(g_last_scr_count, log_time);
+#endif
+            }
+        }
+        else
+        {
+            LOG_WRN("GSR recording stopped but no samples collected");
+        }
+    }
+
+    k_mutex_unlock(&mutex_is_gsr_record_active);
+}
+
+bool hpi_data_is_gsr_record_active(void)
+{
+    bool active;
+    k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+    active = is_gsr_record_active;
+    k_mutex_unlock(&mutex_is_gsr_record_active);
+    return active;
+}
+
+int hpi_data_get_last_scr_count(void)
+{
+    return g_last_scr_count;
+}
+
+void hpi_data_reset_gsr_record_buffer(void)
+{
+    k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+    // Reset buffer and counter without saving (for contact lost / restart)
+    gsr_record_counter = 0;
+    memset(gsr_record_buffer, 0, sizeof(gsr_record_buffer));
+    LOG_DBG("GSR recording buffer reset");
+    k_mutex_unlock(&mutex_is_gsr_record_active);
+
 }
 
 void hpi_data_reset_ecg_record_buffer(void)
@@ -550,8 +662,9 @@ void data_thread(void)
         
             k_mutex_unlock(&mutex_is_ecg_record_active);
             
-            // HRV interval capture
-            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
+            // HRV interval capture - only when leads are connected
+            // Skip when lead-off to prevent garbage values from corrupting HRV data
+            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0 && !ecg_sensor_sample.ecg_lead_off)
             {
                 // Capture R-to-R intervals for HRV analysis
                 // RtoR value is in milliseconds from the MAX30001 sensor
@@ -561,6 +674,28 @@ void data_thread(void)
         }
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
+            /* ---------------------------------------
+            * 1. Convert RAW BioZ → GSR (µS)
+            * --------------------------------------- */
+            // float gsr_float[BIOZ_MAX_SAMPLES] = {0};
+            // convert_raw_to_uS(bsample.bioz_samples, gsr_float, bsample.bioz_num_samples);
+            // /* Create a new struct for safe message passing */
+            // struct hpi_bioz_sample_t gsr_sample = bsample;
+
+            // /* Copy converted float to int32_t buffer for BLE / plot / record */
+            // for (uint8_t i = 0; i < bsample.bioz_num_samples; i++)
+            // {
+            //     /* Multiply by 100 if you want to store as int with 2 decimal precision */
+            //     gsr_sample.bioz_samples[i] = (int32_t)(gsr_float[i] * 100.0f);
+            // }
+
+            // /* ---------------------------------------
+            // * 2. BLE notification
+            // * --------------------------------------- */
+            // if (settings_send_ble_enabled)
+            // {
+            //     ble_gsr_notify(gsr_sample.bioz_samples, gsr_sample.bioz_num_samples);
+            // }
             processed_data = true;
             if (settings_send_ble_enabled)
             {
@@ -580,36 +715,68 @@ void data_thread(void)
                 }
             }
 
-#if defined(CONFIG_HPI_GSR_STRESS_INDEX)
-            // Calculate stress index from GSR samples
-            if (is_gsr_measurement_active && bsample.bioz_num_samples > 0)
+            // Background recording: GSR samples
+            if (hpi_recording_is_signal_enabled(REC_SIGNAL_GSR))
             {
-                // Convert raw BioZ sample to GSR conductance value (μS * 100)
-                // MAX30001 BioZ output needs calibration - using average of samples
-                int32_t sum = 0;
-                for (uint8_t i = 0; i < bsample.bioz_num_samples; i++)
+                hpi_rec_add_gsr_samples(bsample.bioz_samples, bsample.bioz_num_samples);
+            }
+        k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
+
+        if (is_gsr_record_active == true)
+        {
+            int samples_to_copy = bsample.bioz_num_samples;
+            int space_left = GSR_RECORD_BUFFER_SAMPLES - gsr_record_counter;
+
+            // Defensive check: prevent overflow
+            if (gsr_record_counter >= GSR_RECORD_BUFFER_SAMPLES)
+            {
+                LOG_ERR("GSR buffer overflow detected");
+                extern struct k_sem sem_gsr_complete;
+                k_sem_give(&sem_gsr_complete);
+                k_mutex_unlock(&mutex_is_gsr_record_active);
+                continue;
+            }
+
+            if (samples_to_copy <= space_left)
+            {
+                memcpy(&gsr_record_buffer[gsr_record_counter],
+                    bsample.bioz_samples,
+                    samples_to_copy * sizeof(int32_t));
+
+                gsr_record_counter += samples_to_copy;
+
+                // Completed exactly full buffer
+                if (gsr_record_counter >= GSR_RECORD_BUFFER_SAMPLES)
                 {
-                    sum += bsample.bioz_samples[i];
-                }
-                int32_t avg_bioz = sum / bsample.bioz_num_samples;
+                    LOG_WRN("GSR buffer full - collected %d samples(30.0 seconds @ 32Hz)", gsr_record_counter);
+                    LOG_INF("Signaling GSR state machine to stop recording");
 
-                // Convert to GSR: Simplified linear mapping (tune based on calibration)
-                // Assuming ~10kΩ corresponds to ~10μS, adjust scaling as needed
-                uint16_t gsr_value_x100 = (uint16_t)((avg_bioz / 100) + 1000); // Offset + scale
-
-                // Update last GSR value
-                hpi_sys_set_last_gsr_update(gsr_value_x100, bsample.timestamp);
-
-                // Calculate and publish stress index
-                static struct hpi_gsr_stress_index_t stress_data = {0};
-                calculate_gsr_stress_index(gsr_value_x100, &stress_data);
-
-                if (stress_data.stress_data_ready)
-                {
-                    zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
+                    extern struct k_sem sem_gsr_complete;
+                    k_sem_give(&sem_gsr_complete);
                 }
             }
-#endif
+            else
+            {
+                // Copy what fits
+                if (space_left > 0)
+                {
+                    memcpy(&gsr_record_buffer[gsr_record_counter],
+                        bsample.bioz_samples,
+                        space_left * sizeof(int32_t));
+
+                    gsr_record_counter += space_left;
+                }
+
+             //   LOG_WRN("GSR buffer full mid-batch - dropped samples");
+                LOG_WRN("GSR buffer full mid-batch - collected %d samples, discarded %d",gsr_record_counter, samples_to_copy - space_left);
+                LOG_INF("Signaling GSR state machine to stop recording");
+
+                extern struct k_sem sem_gsr_complete;
+                k_sem_give(&sem_gsr_complete);
+            }
+        }
+
+        k_mutex_unlock(&mutex_is_gsr_record_active);
         }
 
         if (k_msgq_get(&q_ppg_fi_sample, &ppg_fi_sensor_sample, K_NO_WAIT) == 0)
@@ -622,6 +789,14 @@ void data_thread(void)
             if (settings_plot_enabled)
             {
                 k_msgq_put(&q_plot_ppg_fi, &ppg_fi_sensor_sample, K_NO_WAIT);
+            }
+
+            // Background recording: PPG Finger samples
+            if (hpi_recording_is_signal_enabled(REC_SIGNAL_PPG_FINGER))
+            {
+                hpi_rec_add_ppg_finger_samples(ppg_fi_sensor_sample.raw_ir,
+                                                ppg_fi_sensor_sample.raw_red,
+                                                ppg_fi_sensor_sample.ppg_num_samples);
             }
         }
 
@@ -636,6 +811,15 @@ void data_thread(void)
             if (settings_plot_enabled)
             {
                 k_msgq_put(&q_plot_ppg_wrist, &ppg_wr_sensor_sample, K_NO_WAIT);
+            }
+
+            // Background recording: PPG Wrist samples
+            if (hpi_recording_is_signal_enabled(REC_SIGNAL_PPG_WRIST))
+            {
+                hpi_rec_add_ppg_wrist_samples(ppg_wr_sensor_sample.raw_ir,
+                                               ppg_wr_sensor_sample.raw_red,
+                                               ppg_wr_sensor_sample.raw_green,
+                                               ppg_wr_sensor_sample.ppg_num_samples);
             }
 
             if (settings_send_usb_enabled)

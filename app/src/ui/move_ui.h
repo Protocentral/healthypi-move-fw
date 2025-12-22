@@ -34,6 +34,7 @@
 #include <zephyr/drivers/rtc.h>
 
 #include "hpi_common_types.h"
+#include "recording_module.h"
 
 // Settings
 
@@ -53,6 +54,12 @@
 #define COLOR_WARNING_AMBER   0xFF9500
 #define COLOR_CRITICAL_RED    0xFF3B30
 #define COLOR_TEXT_SECONDARY  0xE5E5E7
+
+// Darker button background colors (better contrast with white text on AMOLED)
+#define COLOR_BTN_GREEN       0x1B5E20  // Dark green for start/action buttons
+#define COLOR_BTN_RED         0xB71C1C  // Dark red for stop/danger buttons
+#define COLOR_BTN_PURPLE      0x4A148C  // Dark purple for HRV buttons
+#define COLOR_BTN_BLUE        0x0D47A1  // Dark blue for BP buttons
 
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 256 // To be verified
@@ -113,6 +120,8 @@ enum hpi_disp_screens
     SCR_BPT,
     SCR_HRV,
     SCR_GSR,
+    SCR_RECORDING,  // Background recording control
+    //SCR_HRV,
     SCR_LIST_END,
     // Should not go here
     
@@ -202,6 +211,9 @@ void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *result
 void hpi_gsr_disp_plot_add_sample(uint16_t gsr_value_x100);
 void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead_off);
 void hpi_gsr_disp_update_timer(uint16_t remaining_s);
+void scr_gsr_lead_on_off_handler(bool lead_on);
+void hpi_gsr_reset_countdown_timer(void);
+void hpi_gsr_disp_update_us(float gsr_us);
 #else
 // Stubs when GSR is disabled
 static inline void draw_scr_gsr(enum scroll_dir m_scroll_dir) { ARG_UNUSED(m_scroll_dir); }
@@ -217,6 +229,7 @@ static inline void unload_scr_gsr_complete(void) { }
 static inline void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *r) { ARG_UNUSED(r); }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
 #endif
+LV_IMG_DECLARE(img_heart_35);
 LV_IMG_DECLARE(img_heart_70);
 LV_IMG_DECLARE(hpi_logo_90x92);
 LV_IMG_DECLARE(img_temp_100);
@@ -292,6 +305,7 @@ void draw_scr_home(enum scroll_dir m_scroll_dir);
 void hpi_scr_home_update_time_date(struct tm in_time);
 void hpi_home_hr_update(int hr);
 void hpi_home_steps_update(int steps);
+void hpi_scr_home_update_recording_status(struct hpi_recording_status_t *status);
 
 #if defined(CONFIG_HPI_TODAY_SCREEN)
 // Today Screen functions
@@ -325,6 +339,10 @@ void draw_scr_spl_spo2_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 void draw_scr_spl_spo2_cancelled(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spl_low_battery(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+
+// Recording Screen functions
+void draw_scr_recording(enum scroll_dir m_scroll_dir);
+void hpi_scr_recording_update_status(struct hpi_recording_status_t *status);
 
 // ECG Screen functions
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
@@ -369,7 +387,7 @@ void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
 void gesture_down_scr_pulldown(void);
 void gesture_down_scr_bpt_cal_required(void);
-
+void gesture_down_scr_gsr_complete(void);
 // PPG screen functions
 void hpi_disp_ppg_draw_plotPPG(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_ppg_disp_update_hr(int hr);

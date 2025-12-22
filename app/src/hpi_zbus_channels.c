@@ -36,6 +36,7 @@
 
 #include "hw_module.h"
 #include "hpi_common_types.h"
+#include "recording_module.h"
 
 ZBUS_CHAN_DEFINE(batt_chan,                     /* Name */
                  struct hpi_batt_status_t,      /* Message type */
@@ -128,3 +129,11 @@ ZBUS_CHAN_DEFINE(gsr_status_chan,
                  ZBUS_OBSERVERS(disp_gsr_status_lis),
                  ZBUS_MSG_INIT(0));
 #endif
+
+// Recording status channel (for UI updates during background recording)
+ZBUS_CHAN_DEFINE(recording_status_chan,
+                 struct hpi_recording_status_t,
+                 NULL,
+                 NULL,
+                 ZBUS_OBSERVERS(disp_recording_lis),
+                 ZBUS_MSG_INIT(0));

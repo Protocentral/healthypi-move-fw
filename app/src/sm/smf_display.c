@@ -42,6 +42,7 @@
 #include "max32664_updater.h"
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
+#include "recording_module.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
@@ -84,7 +85,8 @@ K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
-
+K_SEM_DEFINE(sem_gsr_complete, 0, 1);
+K_SEM_DEFINE(sem_gsr_complete_reset, 0, 1);
 
 /**
  * @brief Signal touch wakeup from sleep state
@@ -176,15 +178,17 @@ static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
 
 // @brief GSR Screen variables
-static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
+static uint16_t m_disp_gsr_remaining = 30; // countdown timer (seconds remaining)
+static float m_disp_gsr_us = 0.0f;
 
 // @brief HRV Screen variables
 extern struct k_sem sem_hrv_eval_complete;
 static int m_disp_hrv_timer = 0;
 
-// SPO2 and BPT semaphores
-extern struct k_sem sem_finger_contact_off;
-extern struct k_sem sem_finger_contact_on;
+// @brief Recording status variables (updated by ZBus listener, read by display thread)
+static struct hpi_recording_status_t m_disp_recording_status = {0};
+static bool m_disp_recording_status_updated = false;
+
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -224,6 +228,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_BPT] = {draw_scr_bpt, NULL},
     [SCR_GSR] = {draw_scr_gsr, NULL},
     [SCR_HRV] = {draw_scr_hrv, NULL},
+    [SCR_RECORDING] = {draw_scr_recording, NULL},
     [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, gesture_down_scr_spl_raw_ppg},
     [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
@@ -240,8 +245,8 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_SPO2_COMPLETE] = {draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete},
     [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
     [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
-    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, unload_scr_gsr_plot},
-    [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, unload_scr_gsr_complete},
+    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, gesture_down_scr_gsr_plot},
+    [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, gesture_down_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
     [SCR_SPL_SPO2_BPT_TIMEOUT] = {draw_scr_timeout, gesture_down_scr_timeout},
@@ -567,7 +572,13 @@ extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
 extern struct k_sem sem_spo2_cancel;
 
-extern struct k_sem sem_bpt_sensor_found;
+// Note: sem_bpt_sensor_found was removed from smf_ppg_finger.c - extern removed
+
+extern struct k_sem sem_gsr_lead_on;
+extern struct k_sem sem_gsr_lead_off;
+
+static bool m_gsr_lead_off = false;
+
 
 static void st_display_init_entry(void *o)
 {
@@ -850,6 +861,104 @@ static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sens
         hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
     }*/
 }
+float hpi_data_get_last_converted_us(void)
+{
+    return m_disp_gsr_us;
+}
+static inline int32_t bioz_extract_24bit(int32_t raw)
+{
+    raw >>= 8;              // remove unused bits
+    if (raw & 0x00800000)   // sign bit (bit 23)
+        raw |= 0xFF000000; // sign extend to 32-bit
+    return raw;
+}
+
+static float convert_raw_sample_to_uS(int32_t raw)
+{
+    // int32_t sample24 = bioz_extract_24bit(raw);
+    // // /* Same math you already validated */
+    // //  // Use absolute value for display magnitude
+    // // float abs_sample = (float)abs(sample24);
+
+    // // return ((float)abs_sample * 2400.0f) / 8388607.0f / 1000.0f;
+    //  /* Step 1: ADC → voltage (±1.2V) */
+    // float v_bioz = (float)sample24 * 1.2f / 8388607.0f;
+
+    // /* Step 2: voltage → impedance */
+    // const float I_bioz = 48e-6f;   // <-- CHANGE to your configured current
+    // float impedance = v_bioz / I_bioz;
+
+    // /* Protect against divide-by-zero */
+    // if (impedance <= 0.0f)
+    //     return 0.0f;
+
+    // /* Step 3: impedance → conductance */
+    // float gsr_uS = (1.0f / impedance) * 1e6f;
+
+    // return gsr_uS;
+
+    //  // Arithmetic shift to isolate 18-bit signed ADC counts from 32-bit raw word
+    // int32_t adc_counts = raw >> 14; 
+
+    // const float V_REF = 1.0f;
+    // const float GAIN = 40.0f;
+    // const float I_MAG = 48e-6f;
+    // const float ADC_FS = 131072.0f; // 2^17
+
+    // float v_electrode = ((float)adc_counts * V_REF) / (ADC_FS * GAIN);
+    
+    // // Use absolute value for impedance magnitude
+    // float impedance = fabsf(v_electrode / I_MAG);
+
+    // // Filter out zero/short-circuit values to avoid infinity
+    // if (impedance < 0.1f) return 0.0f; 
+    
+    // return (1.0f / impedance) ;
+
+    // Constants from hardware configuration (nrf5340_cpuapp_common.dtsi)
+    const float V_REF = 1.0f;          // MAX30001 Internal Vref
+    const float GAIN = 20.0f;          // bioz-gain=1 → 20 V/V
+    const float I_MAG = 16e-6f;        // bioz_cgmag=2 → 16 µA
+    
+    // Your driver produces a 24-bit signed value (due to the <<8 >>8 shift)
+    // Full scale for 24-bit signed is 2^23
+    const float FS_24BIT = 8388608.0f; 
+
+    /* Step 1: Calculate Voltage at electrodes */
+    // Voltage = (raw / 2^23) * (Vref / Gain)
+    float v_electrode = ((float)raw / FS_24BIT) * (V_REF / GAIN);
+
+    /* Step 2: Calculate Impedance (Ohms) */
+    // Z = V / I
+    float impedance = fabsf(v_electrode / I_MAG);
+
+    /* Step 3: Convert to Conductance (S) */
+    // If impedance is near zero, it's a short or noise
+    if (impedance < 0.1f) return 0.0f; 
+    
+    // G (uS) = (1 / Z) * 1,000,000
+    return (1.0f / impedance) * 1e6f ;
+
+    //   /* Step 1: Use magnitude only */
+    // int32_t mag = abs(raw);
+
+    // /* Protect against noise / zero */
+    // if (mag < 1000)
+    //     return 0.0f;
+
+    // /*
+    //  * BIOZ magnitude → impedance scaling
+    //  * This is a calibrated factor (NOT theoretical)
+    //  * Tune once using known resistor if needed
+    //  */
+    // const float BIOZ_OHMS_PER_COUNT = 0.05f;
+
+    // /* Step 2: Convert to impedance (Ohms) */
+    // float impedance = mag * BIOZ_OHMS_PER_COUNT;
+
+    // /* Step 3: Convert impedance → conductance (µS) */
+    // return (1.0f / impedance) * 1e6f;
+}
 
 static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sample)
 {
@@ -857,6 +966,15 @@ static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sa
     {
         // Call batched GSR plot function (bioz_samples contains multiple samples)
         hpi_gsr_disp_draw_plotGSR(gsr_sensor_sample.bioz_samples, gsr_sensor_sample.bioz_num_samples, gsr_sensor_sample.bioz_lead_off != 0);
+        if (gsr_sensor_sample.bioz_num_samples > 0)
+        {
+            /* Use latest sample (same as ECG uses latest RR) */
+            int32_t raw = gsr_sensor_sample.bioz_samples[gsr_sensor_sample.bioz_num_samples - 1];
+
+            m_disp_gsr_us = convert_raw_sample_to_uS(raw);
+           // hpi_gsr_disp_update_us(m_disp_gsr_us);
+        }
+        
     }
 }
 
@@ -1088,8 +1206,43 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_PLOT_GSR:
 #if defined(CONFIG_HPI_GSR_SCREEN)
         // Update GSR countdown timer display (mirrors ECG pattern)
+        hpi_gsr_disp_update_us(m_disp_gsr_us);
         hpi_gsr_disp_update_timer(m_disp_gsr_remaining);
 #endif
+        if (k_sem_take(&sem_gsr_complete_reset, K_NO_WAIT) == 0)
+        {
+            hpi_load_scr_spl(SCR_SPL_GSR_COMPLETE, SCROLL_DOWN, 0, 0, 0, 0);
+          //  hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+        }
+        
+        if (k_sem_take(&sem_gsr_lead_on, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("DISPLAY THREAD: Processing GSR Lead ON semaphore");
+
+            // UI handler: hide error message, update icon, etc.
+            scr_gsr_lead_on_off_handler(false);   // false = lead ON
+
+            m_gsr_lead_off = false;
+        }
+
+        if (k_sem_take(&sem_gsr_lead_off, K_NO_WAIT) == 0)
+        {
+            LOG_DBG("DISPLAY THREAD: Processing GSR Lead OFF semaphore");
+
+            // UI handler: show 'Finger not placed' message
+            scr_gsr_lead_on_off_handler(true);    // true = lead OFF
+
+            m_gsr_lead_off = true;
+            bool is_gsr_active = hpi_data_is_gsr_record_active();
+
+            if (is_gsr_active)
+            {
+                LOG_DBG("DISPLAY THREAD: Lead disconnected - resetting GSR buffer");
+                hpi_data_reset_gsr_record_buffer();
+                hpi_gsr_reset_countdown_timer();
+            }
+        }
+
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_RAW_PPG:
@@ -1256,6 +1409,22 @@ static void st_display_active_run(void *o)
         if (hpi_disp_get_curr_screen() == SCR_HOME)
         {
             hpi_scr_home_update_time_date(m_disp_sys_time);
+        }
+    }
+
+    // Update recording status (from ZBus listener data)
+    if (m_disp_recording_status_updated)
+    {
+        m_disp_recording_status_updated = false;
+        int curr_screen = hpi_disp_get_curr_screen();
+
+        if (curr_screen == SCR_HOME)
+        {
+            hpi_scr_home_update_recording_status(&m_disp_recording_status);
+        }
+        else if (curr_screen == SCR_RECORDING)
+        {
+            hpi_scr_recording_update_status(&m_disp_recording_status);
         }
     }
 
@@ -1585,6 +1754,19 @@ static void disp_gsr_status_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_gsr_status_lis, disp_gsr_status_listener);
 #endif
+
+// Recording status listener - stores data for display thread to update UI
+// NOTE: Do NOT call LVGL functions here - LVGL is not thread-safe
+static void disp_recording_listener(const struct zbus_channel *chan)
+{
+    const struct hpi_recording_status_t *status = zbus_chan_const_msg(chan);
+    if (!status) return;
+
+    // Store status for display thread to process
+    m_disp_recording_status = *status;
+    m_disp_recording_status_updated = true;
+}
+ZBUS_LISTENER_DEFINE(disp_recording_lis, disp_recording_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 24576
 #define SMF_DISPLAY_THREAD_PRIORITY 5

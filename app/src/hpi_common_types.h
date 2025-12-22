@@ -42,6 +42,8 @@ HealthyPi specific common data types
 #define BPT_PPG_POINTS_PER_SAMPLE 32
 
 #define ECG_RECORD_BUFFER_SAMPLES 3840 // Full 30 seconds at 128 Hz (128*30) - 15.36KB total
+#define GSR_RECORD_BUFFER_SAMPLES 960 // Full 30 seconds at 32 Hz (32*30) - 
+#define BIOZ_MAX_SAMPLES 64    // safe for 32 Hz, 1–2 s batch
 
 enum hpi_ppg_status 
 {
@@ -297,10 +299,17 @@ struct hpi_last_update_time_t
     uint16_t temp_last_value;
     int64_t temp_last_update_ts;
 
-    uint16_t gsr_last_value; // GSR value * 100 (microsiemens)
+    uint16_t gsr_last_value; // GSR value * 100 (microsiemens) - legacy, use stress_* fields
     int64_t gsr_last_update_ts;
 
-    uint16_t hrv_last_value;
+    // GSR Stress Index fields
+    uint8_t gsr_stress_level;           // 0-100 stress score
+    uint16_t gsr_tonic_level_x100;      // SCL in μS * 100
+    uint8_t gsr_peaks_per_minute;       // SCR rate
+
+    uint16_t hrv_lf_hf_ratio_x100;  // LF/HF ratio * 100
+    uint16_t hrv_sdnn_x10;          // SDNN in ms * 10
+    uint16_t hrv_rmssd_x10;         // RMSSD in ms * 10
     int64_t hrv_last_update_ts;
 };
 

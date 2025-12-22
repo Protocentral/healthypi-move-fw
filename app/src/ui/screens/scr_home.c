@@ -41,6 +41,8 @@
 #include "hw_module.h"
 #include "hpi_user_settings_api.h"
 #include "battery_module.h"
+#include "recording_module.h"
+#include "hpi_sys.h"
 
 LOG_MODULE_REGISTER(hpi_disp_scr_home, LOG_LEVEL_DBG);
 
@@ -67,6 +69,8 @@ static lv_obj_t *ui_home_label_min = NULL;
 static lv_obj_t *ui_home_label_date = NULL;
 static lv_obj_t *ui_home_label_ampm = NULL;
 static lv_obj_t *label_home_batt_val = NULL;  // Renamed to avoid conflicts with other screens
+static lv_obj_t *label_recording_status = NULL;  // Recording indicator
+static lv_obj_t *label_time_not_set = NULL;  // Time not set reminder
 
 // LVGL delete event callback - called when LVGL auto-deletes this screen
 static void scr_home_delete_event_cb(lv_event_t *e)
@@ -258,9 +262,11 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     ui_home_label_date = NULL;
     ui_home_label_ampm = NULL;
     label_home_batt_val = NULL;
+    label_recording_status = NULL;
+    label_time_not_set = NULL;
     home_step_disp = NULL;
     home_hr_disp = NULL;
-    
+
     scr_home = lv_obj_create(NULL);
 
     lv_obj_set_style_bg_color(scr_home, lv_color_black(), LV_STATE_DEFAULT);
@@ -427,6 +433,29 @@ void draw_scr_home(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_opa(label_home_batt_val, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(label_home_batt_val, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+    // Recording indicator - positioned below battery, hidden by default
+    label_recording_status = lv_label_create(scr_home);
+    lv_label_set_text(label_recording_status, "");
+    lv_obj_align(label_recording_status, LV_ALIGN_CENTER, 0, -110);  // Below battery indicator
+    lv_obj_set_style_text_color(label_recording_status, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    lv_obj_set_style_text_font(label_recording_status, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_recording_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_add_flag(label_recording_status, LV_OBJ_FLAG_HIDDEN);  // Hidden by default
+
+    // Time not set reminder - positioned at bottom, hidden when time is valid
+    label_time_not_set = lv_label_create(scr_home);
+    lv_label_set_text(label_time_not_set, LV_SYMBOL_WARNING " Set time from app");
+    lv_obj_align(label_time_not_set, LV_ALIGN_CENTER, 0, 150);  // Bottom center within circle
+    lv_obj_set_style_text_color(label_time_not_set, lv_color_hex(COLOR_WARNING_AMBER), LV_PART_MAIN);
+    lv_obj_set_style_text_font(label_time_not_set, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_time_not_set, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    // Show or hide based on current time validity
+    if (hpi_sys_is_time_valid()) {
+        lv_obj_add_flag(label_time_not_set, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_clear_flag(label_time_not_set, LV_OBJ_FLAG_HIDDEN);
+    }
+
     // Register delete callback to cleanup pointers when LVGL auto-deletes this screen
     lv_obj_add_event_cb(scr_home, scr_home_delete_event_cb, LV_EVENT_DELETE, NULL);
 
@@ -448,9 +477,9 @@ void hpi_scr_home_update_time_date(struct tm in_time)
 
     // Format unified time display according to user's 12/24 hour preference
     format_time_for_display(in_time, time_buf, ampm_buf);
-    
+
     lv_label_set_text(ui_home_label_hour, time_buf);
-    
+
     // Update AM/PM label if it exists
     if (ui_home_label_ampm != NULL) {
         lv_label_set_text(ui_home_label_ampm, ampm_buf);
@@ -458,6 +487,15 @@ void hpi_scr_home_update_time_date(struct tm in_time)
 
     sprintf(date_buf, "%02d %s %04d", in_time.tm_mday, mon_strs[in_time.tm_mon], in_time.tm_year + 1900);
     lv_label_set_text(ui_home_label_date, date_buf);
+
+    // Update time-not-set reminder visibility
+    if (label_time_not_set != NULL) {
+        if (hpi_sys_is_time_valid()) {
+            lv_obj_add_flag(label_time_not_set, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_clear_flag(label_time_not_set, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 }
 
 void hpi_home_hr_update(int hr)
@@ -517,10 +555,28 @@ void hpi_disp_home_update_batt_level(int batt_level, bool charging)
     // Use centralized helper functions for consistency
     const char* battery_symbol = hpi_get_battery_symbol(batt_level, charging);
     lv_color_t battery_color = hpi_get_battery_color(batt_level, charging);
-    
+
     // Update label with symbol and percentage
     lv_label_set_text_fmt(label_home_batt_val, "%s %d%%", battery_symbol, batt_level);
-    
+
     // Apply color coding
     lv_obj_set_style_text_color(label_home_batt_val, battery_color, LV_PART_MAIN);
+}
+
+void hpi_scr_home_update_recording_status(struct hpi_recording_status_t *status)
+{
+    if (label_recording_status == NULL || scr_home == NULL) {
+        return;
+    }
+
+    if (status->active && status->state == REC_STATE_RECORDING) {
+        // Show recording indicator with elapsed/remaining time
+        uint16_t mins = status->elapsed_s / 60;
+        uint16_t secs = status->elapsed_s % 60;
+        lv_label_set_text_fmt(label_recording_status, LV_SYMBOL_STOP " REC %02d:%02d", mins, secs);
+        lv_obj_clear_flag(label_recording_status, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        // Hide indicator when not recording
+        lv_obj_add_flag(label_recording_status, LV_OBJ_FLAG_HIDDEN);
+    }
 }

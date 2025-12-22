@@ -35,7 +35,9 @@ void hpi_sys_set_last_spo2_update(uint8_t spo2_last_value, int64_t spo2_last_upd
 void hpi_sys_set_last_bp_update(uint16_t bp_sys_last_value, uint16_t bp_dia_last_value, int64_t bp_last_update_ts);
 void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts);
 void hpi_sys_set_last_gsr_update(uint16_t gsr_last_value, int64_t gsr_last_update_ts);
-void hpi_sys_set_last_hrv_update(uint16_t hrv_last_value, int64_t hrv_last_update_ts);
+void hpi_sys_set_last_gsr_stress(uint8_t stress_level, uint16_t tonic_x100, uint8_t peaks_per_min, int64_t update_ts);
+void hpi_sys_set_last_hrv_update(uint16_t lf_hf_ratio_x100, uint16_t sdnn_x10,
+                                  uint16_t rmssd_x10, int64_t hrv_last_update_ts);
 
 int hpi_sys_get_last_hr_update(uint16_t *hr_last_value, int64_t *hr_last_update_ts);
 int hpi_sys_get_last_spo2_update(uint8_t *spo2_last_value, int64_t *spo2_last_update_ts);
@@ -44,7 +46,9 @@ int hpi_sys_get_last_ecg_update(uint8_t *ecg_hr, int64_t *ecg_last_update_ts);
 int hpi_sys_get_last_steps_update(uint16_t *steps_last_value, int64_t *steps_last_update_ts);
 int hpi_sys_get_last_temp_update(uint16_t *temp_last_value_x100, int64_t *temp_last_update_ts);
 int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_update_ts);
-int hpi_sys_get_last_hrv_update(uint16_t *hrv_last_value, int64_t *hrv_last_update_ts);
+int hpi_sys_get_last_gsr_stress(uint8_t *stress_level, uint16_t *tonic_x100, uint8_t *peaks_per_min, int64_t *update_ts);
+int hpi_sys_get_last_hrv_update(uint16_t *lf_hf_ratio_x100, uint16_t *sdnn_x10,
+                                 uint16_t *rmssd_x10, int64_t *hrv_last_update_ts);
 
 void hpi_sys_set_device_on_skin(bool on_skin);
 bool hpi_sys_get_device_on_skin(void);
@@ -57,6 +61,10 @@ int hpi_sys_set_sys_time(struct tm *tm);
 struct tm hpi_sys_get_sys_time(void);
 int64_t hw_get_sys_time_ts(void);
 
+// Time validation - checks if device time has been properly set
+// Returns true if time is valid (year >= 2020), false if time needs to be set
+bool hpi_sys_is_time_valid(void);
+
 // Time synchronization functions
 int64_t hw_get_synced_system_time(void);
 void hpi_sys_set_rtc_time(const struct tm *time_to_set);
@@ -68,6 +76,14 @@ void hpi_data_set_ecg_record_active(bool active);
 void hpi_data_reset_ecg_record_buffer(void);
 bool hpi_data_is_ecg_record_active(void);
 
+void hpi_data_set_gsr_record_active(bool active);
+bool hpi_data_is_gsr_record_active(void);
+void hpi_data_reset_gsr_record_buffer(void);
+int hpi_data_get_last_scr_count(void);
+
+void hpi_data_set_gsr_measurement_active(bool active);
+bool hpi_data_is_gsr_measurement_active(void);
+float hpi_data_get_last_converted_us(void);
 void hpi_data_set_hrv_record_active(bool active);
 void hpi_data_reset_hrv_record_buffer(void);
 bool hpi_data_is_hrv_record_active(void);

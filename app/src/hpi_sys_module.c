@@ -33,14 +33,10 @@
 #include <zephyr/device.h>
 #include <stdio.h>
 
-#include <zephyr/fs/fs.h>
-#include <zephyr/fs/littlefs.h>
 #include <time.h>
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/mgmt/mcumgr/mgmt/mgmt.h>
 #include <zephyr/mgmt/mcumgr/mgmt/callbacks.h>
-
-#include <time.h>
 #include <zephyr/posix/time.h>
 #include <zephyr/sys/timeutil.h>
 #include <zephyr/drivers/rtc.h>
@@ -48,6 +44,7 @@
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
 #include "hw_module.h"
+#include "hpi_measurement_settings.h"
 
 LOG_MODULE_REGISTER(hpi_sys_module, LOG_LEVEL_DBG);
 
@@ -94,7 +91,6 @@ enum mgmt_cb_return img_callback_func(uint32_t event, enum mgmt_cb_return prev_s
     return MGMT_CB_OK;
 }
 
-const char hpi_sys_update_time_file[] = "/lfs/sys/hpi_sys_update_time";
 
 static bool is_on_skin = false;
 K_MUTEX_DEFINE(mutex_on_skin);
@@ -124,44 +120,14 @@ static struct hpi_last_update_time_t g_hpi_last_update = {
     .gsr_last_update_ts = 0,
     .gsr_last_value = 0,
 
+    .hrv_lf_hf_ratio_x100 = 0,
+    .hrv_sdnn_x10 = 0,
+    .hrv_rmssd_x10 = 0,
     .hrv_last_update_ts = 0,
-    .hrv_last_value = 0,
 };
 
 K_MUTEX_DEFINE(mutex_hpi_last_update_time);
 
-static int hpi_sys_store_update_time(void)
-{
-    int ret = 0;
-
-    LOG_DBG("Storing last update time");
-
-    struct fs_file_t m_file;
-    fs_file_t_init(&m_file);
-
-    ret = fs_open(&m_file, hpi_sys_update_time_file, FS_O_CREATE | FS_O_WRITE);
-    if (ret != 0)
-    {
-        LOG_ERR("Error opening file %d", ret);
-        return ret;
-    }
-
-    ret = fs_write(&m_file, &g_hpi_last_update, sizeof(g_hpi_last_update));
-    if (ret < 0)
-    {
-        LOG_ERR("Error writing file %d", ret);
-        return ret;
-    }
-
-    ret = fs_close(&m_file);
-    if (ret != 0)
-    {
-        LOG_ERR("Error closing file %d", ret);
-        return ret;
-    }
-
-    return ret;
-}
 
 int hpi_sys_set_sys_time(struct tm *tm)
 {
@@ -184,6 +150,16 @@ int64_t hw_get_sys_time_ts(void)
 {
     int64_t sys_time_ts = timeutil_timegm64(&m_sys_sys_time);
     return sys_time_ts;
+}
+
+// Timestamp validation bounds (same as log_module.c)
+#define HPI_TIME_MIN_TIMESTAMP 1577836800LL  // Jan 1, 2020 00:00:00 UTC
+#define HPI_TIME_MAX_TIMESTAMP 1893456000LL  // Jan 1, 2030 00:00:00 UTC
+
+bool hpi_sys_is_time_valid(void)
+{
+    int64_t current_ts = hw_get_sys_time_ts();
+    return (current_ts >= HPI_TIME_MIN_TIMESTAMP && current_ts <= HPI_TIME_MAX_TIMESTAMP);
 }
 
 int64_t hw_get_synced_system_time(void)
@@ -376,72 +352,6 @@ int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_st
     return 0;
 }
 
-static int hpi_sys_load_update_time(void)
-{
-    int ret = 0;
-
-    struct hpi_last_update_time_t m_hpi_last_update_time = {
-        .bp_last_update_ts = 0,
-        .hr_last_update_ts = 0,
-        .spo2_last_update_ts = 0,
-        .ecg_last_update_ts = 0,
-
-        .hr_last_value = 0,
-        .spo2_last_value = 0,
-        .bp_sys_last_value = 0,
-        .bp_dia_last_value = 0,
-        .ecg_last_hr = 0,
-    };
-
-    struct fs_file_t m_file;
-    fs_file_t_init(&m_file);
-
-    ret = fs_open(&m_file, hpi_sys_update_time_file, FS_O_READ);
-    if (ret != 0)
-    {
-        LOG_ERR("Error opening file %d", ret);
-        return ret;
-    }
-
-    ret = fs_read(&m_file, &m_hpi_last_update_time, sizeof(m_hpi_last_update_time));
-    if (ret < 0)
-    {
-        LOG_ERR("Error reading file %d", ret);
-        return ret;
-    }
-
-    ret = fs_close(&m_file);
-    if (ret != 0)
-    {
-        LOG_ERR("Error closing file %d", ret);
-        return ret;
-    }
-
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.bp_last_update_ts = m_hpi_last_update_time.bp_last_update_ts;
-    g_hpi_last_update.bp_sys_last_value = m_hpi_last_update_time.bp_sys_last_value;
-    g_hpi_last_update.bp_dia_last_value = m_hpi_last_update_time.bp_dia_last_value;
-
-    g_hpi_last_update.hr_last_update_ts = m_hpi_last_update_time.hr_last_update_ts;
-    g_hpi_last_update.spo2_last_update_ts = m_hpi_last_update_time.spo2_last_update_ts;
-    g_hpi_last_update.ecg_last_update_ts = m_hpi_last_update_time.ecg_last_update_ts;
-    g_hpi_last_update.hr_last_value = m_hpi_last_update_time.hr_last_value;
-    g_hpi_last_update.spo2_last_value = m_hpi_last_update_time.spo2_last_value;
-
-    g_hpi_last_update.ecg_last_hr = m_hpi_last_update_time.ecg_last_hr;
-
-    g_hpi_last_update.temp_last_update_ts = m_hpi_last_update_time.temp_last_update_ts;
-    g_hpi_last_update.temp_last_value = m_hpi_last_update_time.temp_last_value;
-
-    g_hpi_last_update.steps_last_update_ts = m_hpi_last_update_time.steps_last_update_ts;
-    g_hpi_last_update.steps_last_value = m_hpi_last_update_time.steps_last_value;
-
-    g_hpi_last_update.gsr_last_update_ts = m_hpi_last_update_time.gsr_last_update_ts;
-    g_hpi_last_update.gsr_last_value = m_hpi_last_update_time.gsr_last_value;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    return ret;
-}
 
 void hpi_sys_set_last_hr_update(uint16_t hr_last_value, int64_t hr_last_update_ts)
 {
@@ -449,6 +359,9 @@ void hpi_sys_set_last_hr_update(uint16_t hr_last_value, int64_t hr_last_update_t
     g_hpi_last_update.hr_last_value = hr_last_value;
     g_hpi_last_update.hr_last_update_ts = hr_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_hr(hr_last_value, hr_last_update_ts);
 }
 
 void hpi_sys_set_last_spo2_update(uint8_t spo2_last_value, int64_t spo2_last_update_ts)
@@ -457,6 +370,9 @@ void hpi_sys_set_last_spo2_update(uint8_t spo2_last_value, int64_t spo2_last_upd
     g_hpi_last_update.spo2_last_value = spo2_last_value;
     g_hpi_last_update.spo2_last_update_ts = spo2_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_spo2(spo2_last_value, spo2_last_update_ts);
 }
 
 void hpi_sys_set_last_bp_update(uint16_t bp_sys_last_value, uint16_t bp_dia_last_value, int64_t bp_last_update_ts)
@@ -466,6 +382,9 @@ void hpi_sys_set_last_bp_update(uint16_t bp_sys_last_value, uint16_t bp_dia_last
     g_hpi_last_update.bp_dia_last_value = bp_dia_last_value;
     g_hpi_last_update.bp_last_update_ts = bp_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_bp((uint8_t)bp_sys_last_value, (uint8_t)bp_dia_last_value, bp_last_update_ts);
 }
 
 void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts)
@@ -473,22 +392,33 @@ void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts)
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     g_hpi_last_update.ecg_last_update_ts = ecg_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem - ECG HR saved from ZBus listener */
 }
 
-void hpi_sys_set_last_hrv_update(uint16_t hrv_last_value, int64_t hrv_last_update_ts)
+void hpi_sys_set_last_hrv_update(uint16_t lf_hf_ratio_x100, uint16_t sdnn_x10,
+                                  uint16_t rmssd_x10, int64_t hrv_last_update_ts)
 {
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.hrv_last_value = hrv_last_value;
+    g_hpi_last_update.hrv_lf_hf_ratio_x100 = lf_hf_ratio_x100;
+    g_hpi_last_update.hrv_sdnn_x10 = sdnn_x10;
+    g_hpi_last_update.hrv_rmssd_x10 = rmssd_x10;
     g_hpi_last_update.hrv_last_update_ts = hrv_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_hrv(lf_hf_ratio_x100, sdnn_x10, rmssd_x10, hrv_last_update_ts);
 }
 
-int hpi_sys_get_last_hrv_update(uint16_t *hrv_last_value, int64_t *hrv_last_update_ts)
+int hpi_sys_get_last_hrv_update(uint16_t *lf_hf_ratio_x100, uint16_t *sdnn_x10,
+                                 uint16_t *rmssd_x10, int64_t *hrv_last_update_ts)
 {
-     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-     *hrv_last_value = g_hpi_last_update.hrv_last_value;
-     *hrv_last_update_ts = g_hpi_last_update.hrv_last_update_ts;
-     k_mutex_unlock(&mutex_hpi_last_update_time);
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    *lf_hf_ratio_x100 = g_hpi_last_update.hrv_lf_hf_ratio_x100;
+    *sdnn_x10 = g_hpi_last_update.hrv_sdnn_x10;
+    *rmssd_x10 = g_hpi_last_update.hrv_rmssd_x10;
+    *hrv_last_update_ts = g_hpi_last_update.hrv_last_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
 
     return 0;
 }
@@ -549,6 +479,21 @@ void hpi_sys_set_last_gsr_update(uint16_t gsr_last_value, int64_t gsr_last_updat
     g_hpi_last_update.gsr_last_value = gsr_last_value;
     g_hpi_last_update.gsr_last_update_ts = gsr_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Note: GSR stress data saved via hpi_sys_set_last_gsr_stress() */
+}
+
+void hpi_sys_set_last_gsr_stress(uint8_t stress_level, uint16_t tonic_x100, uint8_t peaks_per_min, int64_t update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.gsr_stress_level = stress_level;
+    g_hpi_last_update.gsr_tonic_level_x100 = tonic_x100;
+    g_hpi_last_update.gsr_peaks_per_minute = peaks_per_min;
+    g_hpi_last_update.gsr_last_update_ts = update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_gsr_stress(stress_level, tonic_x100, peaks_per_min, update_ts);
 }
 
 int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_update_ts)
@@ -556,6 +501,17 @@ int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_upda
     k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
     *gsr_last_value = g_hpi_last_update.gsr_last_value;
     *gsr_last_update_ts = g_hpi_last_update.gsr_last_update_ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+    return 0;
+}
+
+int hpi_sys_get_last_gsr_stress(uint8_t *stress_level, uint16_t *tonic_x100, uint8_t *peaks_per_min, int64_t *update_ts)
+{
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    *stress_level = g_hpi_last_update.gsr_stress_level;
+    *tonic_x100 = g_hpi_last_update.gsr_tonic_level_x100;
+    *peaks_per_min = g_hpi_last_update.gsr_peaks_per_minute;
+    *update_ts = g_hpi_last_update.gsr_last_update_ts;
     k_mutex_unlock(&mutex_hpi_last_update_time);
     return 0;
 }
@@ -602,32 +558,116 @@ void hpi_sys_thread(void)
     // mgmt_callback_register(&img_callback);
     LOG_DBG("DFU callback registered");
 
-    // Load last update time
-    ret = hpi_sys_load_update_time();
+    // Initialize measurement settings (uses Zephyr settings subsystem)
+    ret = hpi_measurement_settings_init();
     if (ret != 0)
     {
-        LOG_ERR("Error loading last update time %d", ret);
+        LOG_ERR("Error initializing measurement settings: %d", ret);
     }
-    else
-    {
-        LOG_DBG("Last update time loaded");
 
-        if (is_timestamp_today(g_hpi_last_update.steps_last_update_ts))
+    // Load steps from settings and initialize if from today
+    uint16_t saved_steps = 0;
+    int64_t saved_steps_ts = 0;
+    if (hpi_meas_load_steps(&saved_steps, &saved_steps_ts) == 0 && saved_steps_ts > 0)
+    {
+        if (is_timestamp_today(saved_steps_ts))
         {
-            today_init_steps(g_hpi_last_update.steps_last_value);
-            // LOG_DBG("Today's steps initialized: %d", g_hpi_last_update.steps_last_value);
+            today_init_steps(saved_steps);
+            LOG_DBG("Steps initialized from settings: %u", saved_steps);
         }
         else
         {
             today_init_steps(0);
-            // LOG_DBG("Today's steps initialized to 0");
         }
     }
+    else
+    {
+        today_init_steps(0);
+    }
 
+    // Load other cached values from settings into RAM cache
+    uint16_t hr_val;
+    int64_t hr_ts;
+    if (hpi_meas_load_hr(&hr_val, &hr_ts) == 0 && hr_ts > 0)
+    {
+        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+        g_hpi_last_update.hr_last_value = hr_val;
+        g_hpi_last_update.hr_last_update_ts = hr_ts;
+        k_mutex_unlock(&mutex_hpi_last_update_time);
+    }
+
+    uint8_t spo2_val;
+    int64_t spo2_ts;
+    if (hpi_meas_load_spo2(&spo2_val, &spo2_ts) == 0 && spo2_ts > 0)
+    {
+        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+        g_hpi_last_update.spo2_last_value = spo2_val;
+        g_hpi_last_update.spo2_last_update_ts = spo2_ts;
+        k_mutex_unlock(&mutex_hpi_last_update_time);
+    }
+
+    uint8_t bp_sys, bp_dia;
+    int64_t bp_ts;
+    if (hpi_meas_load_bp(&bp_sys, &bp_dia, &bp_ts) == 0 && bp_ts > 0)
+    {
+        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+        g_hpi_last_update.bp_sys_last_value = bp_sys;
+        g_hpi_last_update.bp_dia_last_value = bp_dia;
+        g_hpi_last_update.bp_last_update_ts = bp_ts;
+        k_mutex_unlock(&mutex_hpi_last_update_time);
+    }
+
+    uint8_t ecg_hr;
+    int64_t ecg_ts;
+    if (hpi_meas_load_ecg(&ecg_hr, &ecg_ts) == 0 && ecg_ts > 0)
+    {
+        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+        g_hpi_last_update.ecg_last_hr = ecg_hr;
+        g_hpi_last_update.ecg_last_update_ts = ecg_ts;
+        k_mutex_unlock(&mutex_hpi_last_update_time);
+    }
+
+    uint16_t temp_val;
+    int64_t temp_ts;
+    if (hpi_meas_load_temp(&temp_val, &temp_ts) == 0 && temp_ts > 0)
+    {
+        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+        g_hpi_last_update.temp_last_value = temp_val;
+        g_hpi_last_update.temp_last_update_ts = temp_ts;
+        k_mutex_unlock(&mutex_hpi_last_update_time);
+    }
+
+    uint8_t gsr_stress, gsr_peaks;
+    uint16_t gsr_tonic;
+    int64_t gsr_ts;
+    if (hpi_meas_load_gsr_stress(&gsr_stress, &gsr_tonic, &gsr_peaks, &gsr_ts) == 0 && gsr_ts > 0)
+    {
+        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+        g_hpi_last_update.gsr_stress_level = gsr_stress;
+        g_hpi_last_update.gsr_tonic_level_x100 = gsr_tonic;
+        g_hpi_last_update.gsr_peaks_per_minute = gsr_peaks;
+        g_hpi_last_update.gsr_last_update_ts = gsr_ts;
+        k_mutex_unlock(&mutex_hpi_last_update_time);
+    }
+
+    uint16_t hrv_lf_hf, hrv_sdnn, hrv_rmssd;
+    int64_t hrv_ts;
+    if (hpi_meas_load_hrv(&hrv_lf_hf, &hrv_sdnn, &hrv_rmssd, &hrv_ts) == 0 && hrv_ts > 0)
+    {
+        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+        g_hpi_last_update.hrv_lf_hf_ratio_x100 = hrv_lf_hf;
+        g_hpi_last_update.hrv_sdnn_x10 = hrv_sdnn;
+        g_hpi_last_update.hrv_rmssd_x10 = hrv_rmssd;
+        g_hpi_last_update.hrv_last_update_ts = hrv_ts;
+        k_mutex_unlock(&mutex_hpi_last_update_time);
+    }
+
+    LOG_INF("Measurement settings loaded from persistent storage");
+
+    // Thread now just sleeps - all saves happen immediately via settings subsystem
     while (1)
     {
-        k_sleep(K_SECONDS(60));
-        hpi_sys_store_update_time();
+        k_sleep(K_FOREVER);
     }
 }
 
@@ -648,16 +688,32 @@ ZBUS_LISTENER_DEFINE(sys_hr_lis, sys_hr_list);
 static void sys_temp_list(const struct zbus_channel *chan)
 {
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
-    g_hpi_last_update.temp_last_value = (hpi_temp->temp_f * 100);
-    g_hpi_last_update.temp_last_update_ts = hw_get_sys_time_ts();
+    uint16_t temp_x100 = (uint16_t)(hpi_temp->temp_f * 100);
+    int64_t ts = hw_get_sys_time_ts();
+
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.temp_last_value = temp_x100;
+    g_hpi_last_update.temp_last_update_ts = ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_temp(temp_x100, ts);
 }
 ZBUS_LISTENER_DEFINE(sys_temp_lis, sys_temp_list);
 
 static void sys_steps_list(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
-    g_hpi_last_update.steps_last_value = hpi_steps->steps;
-    g_hpi_last_update.steps_last_update_ts = hw_get_sys_time_ts();
+    uint16_t steps = hpi_steps->steps;
+    int64_t ts = hw_get_sys_time_ts();
+
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.steps_last_value = steps;
+    g_hpi_last_update.steps_last_update_ts = ts;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_steps(steps, ts);
 }
 ZBUS_LISTENER_DEFINE(sys_steps_lis, sys_steps_list);
 
@@ -671,15 +727,30 @@ ZBUS_LISTENER_DEFINE(sys_sys_time_lis, sys_sys_time_list);
 static void sys_ecg_stat_list(const struct zbus_channel *chan)
 {
     const struct hpi_ecg_status_t *hpi_ecg = zbus_chan_const_msg(chan);
-    g_hpi_last_update.ecg_last_update_ts = hw_get_sys_time_ts();
-    g_hpi_last_update.ecg_last_hr = hpi_ecg->hr;
+    uint8_t hr = hpi_ecg->hr;
+    int64_t ts = hw_get_sys_time_ts();
+
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.ecg_last_update_ts = ts;
+    g_hpi_last_update.ecg_last_hr = hr;
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    /* Persist via settings subsystem */
+    hpi_meas_save_ecg(hr, ts);
 }
 ZBUS_LISTENER_DEFINE(sys_ecg_stat_lis, sys_ecg_stat_list);
 
 static void sys_hrv_stat_list(const struct zbus_channel *chan)
 {
     const struct hpi_hrv_status_t *hpi_hrv = zbus_chan_const_msg(chan);
-    g_hpi_last_update.hrv_last_update_ts = hw_get_sys_time_ts();
+    int64_t ts = hw_get_sys_time_ts();
+
+    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
+    g_hpi_last_update.hrv_last_update_ts = ts;
+    /* HRV value is set via hpi_sys_set_last_hrv_update() when result is available */
+    k_mutex_unlock(&mutex_hpi_last_update_time);
+
+    ARG_UNUSED(hpi_hrv);
 }
 ZBUS_LISTENER_DEFINE(sys_hrv_stat_lis, sys_hrv_stat_list);
 

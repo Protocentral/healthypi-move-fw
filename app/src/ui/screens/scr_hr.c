@@ -61,113 +61,102 @@ static void scr_hr_btn_raw_event_handler(lv_event_t *e);
 void draw_scr_hr(enum scroll_dir m_scroll_dir)
 {
     scr_hr = lv_obj_create(NULL);
-    // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_hr, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_hr, LV_OBJ_FLAG_SCROLLABLE);
 
-    // CIRCULAR AMOLED-OPTIMIZED HEART RATE SCREEN
-    // Display center: (195, 195), Usable radius: ~185px
-    
-    // Get heart rate data first
+    /*
+     * COMPACT LAYOUT FOR 390x390 ROUND AMOLED
+     * ========================================
+     * Inline unit layout (e.g., "72 BPM") saves vertical space:
+     *   Top safe zone: y=30 to y=60 (title area)
+     *   Upper zone: y=60 to y=110 (icon)
+     *   Center zone: y=110 to y=200 (value with inline unit)
+     *   Lower zone: y=200 to y=250 (last update)
+     *   Bottom zone: y=250 to y=310 (button)
+     *   Bottom safe: y=320+ (curved edge)
+     */
+
+    // Get heart rate data
     uint16_t hr = 0;
     int64_t last_update_ts = 0;
-    if(hpi_sys_get_last_hr_update(&hr, &last_update_ts) != 0)
+    if (hpi_sys_get_last_hr_update(&hr, &last_update_ts) != 0)
     {
         hr = 0;
         last_update_ts = 0;
     }
 
-    // OUTER RING: HR Zone Progress Arc (Radius 170-185px)
-    lv_obj_t *arc_hr_zone = lv_arc_create(scr_hr);
-    lv_obj_set_size(arc_hr_zone, 370, 370);  // 185px radius
-    lv_obj_center(arc_hr_zone);
-    lv_arc_set_range(arc_hr_zone, 60, 200);  // HR range 60-200 BPM
-    
-    // Background arc: Full 270° track (gray)
-    lv_arc_set_bg_angles(arc_hr_zone, 135, 45);  // Full background arc
-    
-    // Indicator arc: Shows current HR position from start
-    lv_arc_set_angles(arc_hr_zone, 135, 135);  // Start at beginning, will extend based on value
-    
-    // Set arc value based on current HR
-    if (hr > 0) {
-        lv_arc_set_value(arc_hr_zone, hr);
-    } else {
-        lv_arc_set_value(arc_hr_zone, 70);  // Default/resting position
-    }
-    
-    // Style the progress arc
-    lv_obj_set_style_arc_color(arc_hr_zone, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
-    lv_obj_set_style_arc_width(arc_hr_zone, 8, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_hr_zone, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_INDICATOR);  // Progress indicator
-    lv_obj_set_style_arc_width(arc_hr_zone, 6, LV_PART_INDICATOR);
-    lv_obj_remove_style(arc_hr_zone, NULL, LV_PART_KNOB);  // Remove knob
-    lv_obj_clear_flag(arc_hr_zone, LV_OBJ_FLAG_CLICKABLE);
-
-    // Screen title - clean and simple positioning
+    // TOP: Title "Heart Rate" at y=40
     lv_obj_t *label_title = lv_label_create(scr_hr);
     lv_label_set_text(label_title, "Heart Rate");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 40);  // Centered at top, clear of arc
+    lv_obj_set_pos(label_title, 0, 40);
+    lv_obj_set_width(label_title, 390);
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
 
-    // MID-UPPER RING: Heart Icon (clean, no container - using smaller 35px heart icon)
+    // UPPER: Heart icon centered at y=75
     lv_obj_t *img_hr = lv_img_create(scr_hr);
     lv_img_set_src(img_hr, &img_heart_48px);
-    lv_obj_align(img_hr, LV_ALIGN_TOP_MID, 0, 95);  // Moved down from 65px to account for lower title
+    lv_obj_set_pos(img_hr, (390 - 48) / 2, 75);
     lv_obj_set_style_img_recolor(img_hr, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hr, LV_OPA_COVER, LV_PART_MAIN);
 
-    // CENTRAL ZONE: Main HR Value (properly spaced from heart icon)
-    // Large central metric display for maximum readability
-    label_hr_bpm = lv_label_create(scr_hr);
+    // CENTER: Large HR value with inline "BPM" unit at y=130
+    // Use a container to center "72 BPM" as a single unit
+    lv_obj_t *cont_value = lv_obj_create(scr_hr);
+    lv_obj_remove_style_all(cont_value);
+    lv_obj_set_size(cont_value, 390, 70);
+    lv_obj_set_pos(cont_value, 0, 130);
+    lv_obj_set_style_bg_opa(cont_value, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_value, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_value, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
+
+    label_hr_bpm = lv_label_create(cont_value);
     if (hr == 0) {
         lv_label_set_text(label_hr_bpm, "--");
     } else {
         lv_label_set_text_fmt(label_hr_bpm, "%d", hr);
     }
-    lv_obj_align(label_hr_bpm, LV_ALIGN_CENTER, 0, -10);  // Centered, slightly above middle
     lv_obj_set_style_text_color(label_hr_bpm, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_style(label_hr_bpm, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_hr_bpm, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // Unit label directly below main value with proper spacing
-    lv_obj_t *label_hr_unit = lv_label_create(scr_hr);
-    lv_label_set_text(label_hr_unit, "BPM");
-    lv_obj_align(label_hr_unit, LV_ALIGN_CENTER, 0, 35);  // Below main value with gap
+    // Inline "BPM" unit (smaller, colored, baseline-aligned)
+    lv_obj_t *label_hr_unit = lv_label_create(cont_value);
+    lv_label_set_text(label_hr_unit, " BPM");
     lv_obj_set_style_text_color(label_hr_unit, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
-    lv_obj_add_style(label_hr_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_hr_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_add_style(label_hr_unit, &style_body_medium, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(label_hr_unit, 8, LV_PART_MAIN);  // Align with number baseline
 
-    // Status info - centered below BPM unit with proper spacing
+    // LOWER: Last measurement time at y=210
     label_hr_last_update_time = lv_label_create(scr_hr);
     char last_meas_str[25];
     hpi_helper_get_relative_time_str(last_update_ts, last_meas_str, sizeof(last_meas_str));
     lv_label_set_text(label_hr_last_update_time, last_meas_str);
-    lv_obj_align(label_hr_last_update_time, LV_ALIGN_CENTER, 0, 80);  // Centered, below BPM with gap
+    lv_obj_set_pos(label_hr_last_update_time, 0, 210);
+    lv_obj_set_width(label_hr_last_update_time, 390);
     lv_obj_set_style_text_color(label_hr_last_update_time, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     lv_obj_add_style(label_hr_last_update_time, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_hr_last_update_time, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // BOTTOM ZONE: Action Button (properly centered at bottom)
+    // BOTTOM: Single centered "Raw PPG" button at y=250
+    const int btn_width = 200;
+    const int btn_height = 60;
+    const int btn_y = 250;
+
     lv_obj_t *btn_raw_ppg = hpi_btn_create_primary(scr_hr);
-    lv_obj_set_size(btn_raw_ppg, 180, 50);  // Width for "Raw PPG" text
-    lv_obj_align(btn_raw_ppg, LV_ALIGN_BOTTOM_MID, 0, -30);  // Centered at bottom with margin
-    lv_obj_set_style_radius(btn_raw_ppg, 25, LV_PART_MAIN);
-    
-    // AMOLED-optimized button styling
-    lv_obj_set_style_bg_color(btn_raw_ppg, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_size(btn_raw_ppg, btn_width, btn_height);
+    lv_obj_set_pos(btn_raw_ppg, (390 - btn_width) / 2, btn_y);
+    lv_obj_set_style_radius(btn_raw_ppg, 30, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(btn_raw_ppg, lv_color_hex(COLOR_BTN_RED), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(btn_raw_ppg, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(btn_raw_ppg, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(btn_raw_ppg, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
-    lv_obj_set_style_border_opa(btn_raw_ppg, LV_OPA_80, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(btn_raw_ppg, 0, LV_PART_MAIN);  // No shadow for AMOLED
-    
+    lv_obj_set_style_border_width(btn_raw_ppg, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(btn_raw_ppg, 0, LV_PART_MAIN);
+
     lv_obj_t *label_btn_raw = lv_label_create(btn_raw_ppg);
     lv_label_set_text(label_btn_raw, LV_SYMBOL_PLAY " Raw PPG");
     lv_obj_center(label_btn_raw);
-    lv_obj_set_style_text_color(label_btn_raw, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    //lv_obj_set_style_text_font(label_btn_raw, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_btn_raw, lv_color_white(), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_raw_ppg, scr_hr_btn_raw_event_handler, LV_EVENT_CLICKED, NULL);
 
     hpi_disp_set_curr_screen(SCR_HR);
