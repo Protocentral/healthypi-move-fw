@@ -692,7 +692,7 @@ static void sensor_check_timeout_work_handler(struct k_work *work)
     else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
     {
         LOG_DBG("BPT Calibration timed out waiting for sensor");
-        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, SCR_BPT, 0, 0);
     }
 
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);

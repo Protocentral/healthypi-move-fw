@@ -190,6 +190,13 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
         lv_obj_set_style_text_color(label_hr_unit, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
     }
 
+    lv_obj_t *label_swipe = lv_label_create(scr_bpt_est_complete);
+    lv_label_set_text(label_swipe, "Swipe down to return");
+    lv_obj_set_pos(label_swipe, 0, 290);
+    lv_obj_set_width(label_swipe, 390);
+    lv_obj_add_style(label_swipe, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_swipe, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_swipe, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     hpi_disp_set_curr_screen(SCR_SPL_BPT_EST_COMPLETE);
     hpi_show_screen(scr_bpt_est_complete, m_scroll_dir);
 }

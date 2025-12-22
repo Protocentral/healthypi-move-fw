@@ -1123,7 +1123,7 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
-        if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
             hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
         }
@@ -1250,11 +1250,11 @@ static void hpi_disp_update_screens(void)
         hpi_ppg_check_signal_timeout();
         lv_disp_trig_activity(NULL);
         break;
-    case SCR_SPL_ECG_COMPLETE:
-        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
-        {
-            hpi_load_screen(SCR_ECG, SCROLL_UP);
-        }
+    // case SCR_SPL_ECG_COMPLETE:
+    //     if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
+    //     {
+    //         hpi_load_screen(SCR_ECG, SCROLL_UP);
+    //     }
         break;
     case SCR_SPL_SPO2_COMPLETE:
         /*if (k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
