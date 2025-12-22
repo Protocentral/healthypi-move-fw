@@ -38,16 +38,17 @@ void draw_scr_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
     lv_obj_set_style_pad_all(cont_col, 20, LV_PART_MAIN); /* Add padding for circular bounds */
     lv_obj_set_style_pad_row(cont_col, 0, LV_PART_MAIN);  
 
-
     lv_obj_t *label_signal = lv_label_create(cont_col);
-    lv_label_set_text(label_signal, "Timeout occured");
-    lv_obj_add_style(label_signal, &style_red_large, 0); 
-    lv_obj_set_style_text_color(label_signal, lv_color_hex(0x8B0000), LV_PART_MAIN);
+    lv_label_set_text(label_signal, "Sensor Timeout");
+    lv_obj_add_style(label_signal, &style_red_medium, 0); 
+
+    lv_obj_t *img1 = lv_img_create(cont_col);
+    lv_img_set_src(img1, &img_failed_80);
 
     lv_obj_t *label_info = lv_label_create(cont_col);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 280); /* Reduced width for circular display */
-    lv_label_set_text(label_info, "Finger sensor not connected\nPlease ensure proper connection and try again.");
+    lv_label_set_text(label_info, "No Finger sensor detected\nCheck connection and retry");
     lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_style(label_info, &style_white_medium, 0); /* Consistent text styling */
 
