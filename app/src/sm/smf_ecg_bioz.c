@@ -1476,11 +1476,13 @@ static void st_ecg_stabilizing_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stabilizing Exit");
     set_ecg_stabilization_values(0, true);
-    
-    // If this was a re-stabilization during recording, restart the timer
+
+    // If this was a re-stabilization during recording (ECG or HRV), restart the timer
     bool is_recording_active = hpi_data_is_ecg_record_active();
-    if (is_recording_active) {
-        LOG_INF("Stabilization complete - resuming recording with timer start");
+    bool is_hrv_active = get_hrv_active();
+    if (is_recording_active || is_hrv_active) {
+        LOG_INF("Stabilization complete - resuming %s with timer start",
+                is_hrv_active ? "HRV evaluation" : "ECG recording");
         hpi_ecg_timer_start();
     }
 }

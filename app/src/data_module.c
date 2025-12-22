@@ -662,8 +662,9 @@ void data_thread(void)
         
             k_mutex_unlock(&mutex_is_ecg_record_active);
             
-            // HRV interval capture
-            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
+            // HRV interval capture - only when leads are connected
+            // Skip when lead-off to prevent garbage values from corrupting HRV data
+            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0 && !ecg_sensor_sample.ecg_lead_off)
             {
                 // Capture R-to-R intervals for HRV analysis
                 // RtoR value is in milliseconds from the MAX30001 sensor
