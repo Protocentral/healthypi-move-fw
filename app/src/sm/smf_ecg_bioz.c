@@ -1192,7 +1192,7 @@ static void st_ecg_complete_entry(void *o)
         set_hrv_active(false);
     } else {
         // ECG recording complete - signal ECG completion
-        k_sem_give(&sem_ecg_complete);
+        k_sem_give(&sem_ecg_complete_reset);
     }
 }
 
