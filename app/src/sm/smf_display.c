@@ -1123,7 +1123,7 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
-        if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
             hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
         }
@@ -1188,21 +1188,6 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
 
         break;
-    case SCR_SPL_SPO2_MEASURE:
-        
-         if(k_sem_take(&sem_finger_contact_off, K_NO_WAIT) == 0)
-         {
-            LOG_INF("DISPLAY THREAD: Processing PPG finger Contact off semaphore - calling UI handler");
-            scr_ppg_finger_contact_handler(false);
-
-         }
-         if(k_sem_take(&sem_finger_contact_on, K_NO_WAIT) == 0)
-         {
-            LOG_INF("DISPLAY THREAD: Processing PPG finger Contact on semaphore - calling UI handler");
-            scr_ppg_finger_contact_handler(true);
-         }
-         lv_disp_trig_activity(NULL);
-         break;
     case SCR_SPL_PLOT_GSR:
 #if defined(CONFIG_HPI_GSR_SCREEN)
         // Update GSR countdown timer display (mirrors ECG pattern)
@@ -1250,11 +1235,11 @@ static void hpi_disp_update_screens(void)
         hpi_ppg_check_signal_timeout();
         lv_disp_trig_activity(NULL);
         break;
-    case SCR_SPL_ECG_COMPLETE:
-        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
-        {
-            hpi_load_screen(SCR_ECG, SCROLL_UP);
-        }
+    // case SCR_SPL_ECG_COMPLETE:
+    //     if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
+    //     {
+    //         hpi_load_screen(SCR_ECG, SCROLL_UP);
+    //     }
         break;
     case SCR_SPL_SPO2_COMPLETE:
         /*if (k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
