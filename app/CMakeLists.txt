@@ -41,6 +41,9 @@ target_sources(app PRIVATE ${app_sources})
 # Explicitly include autoscale helper (ensure CMake picks it up if globbing was run earlier)
 target_sources(app PRIVATE src/ui/hpi_ppg_autoscale.c)
 
+# Explicitly include measurement settings (ensure CMake picks it up if globbing was run earlier)
+target_sources(app PRIVATE src/hpi_measurement_settings.c)
+
 if(CONFIG_MAX32664_UPDATER)
     FILE(GLOB max32664_updater_sources 
          src/max32664_updater/max32664_updater.c)

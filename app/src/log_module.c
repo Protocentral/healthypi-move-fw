@@ -83,7 +83,6 @@ static const char* const log_paths[] = {
 
 // Externs
 extern struct fs_mount_t *mp;
-extern const char *hpi_sys_update_time_file;
 
 static int hpi_log_get_path(char *m_path, size_t path_size, uint8_t m_log_type)
 {
@@ -408,10 +407,10 @@ void log_wipe_trends(void)
     };
     
     wipe_log_types(trend_types, sizeof(trend_types), "all trend logs");
-    
-    fs_unlink(hpi_sys_update_time_file);
+
+    /* Legacy file removed - measurement data now stored via Zephyr settings subsystem */
     hpi_disp_reset_all_last_updated();
-    
+
     LOG_DBG("All trend logs wiped");
 }
 

@@ -68,38 +68,9 @@ void hpi_gsr_disp_update_timer(uint16_t remaining_s)
 
 void hpi_gsr_disp_update_us(float gsr_us)
 {
-    /* Check screen & label */
-    if (hpi_disp_get_curr_screen() != SCR_SPL_PLOT_GSR || label_gsr_value == NULL)
-        return;
-
-    // /* Clamp invalid values */
-    // if (gsr_us < 0.0f)
-    //     gsr_us = 0.0f;
-
-    /* Convert to fixed-point (µS × 100) */
-    int gsr_fp = (int)(gsr_us * 100.0f + 0.5f);  // rounded
-
-    if (gsr_fp == 0)
-        return;
-
-    /* Cache last value to avoid redundant LVGL updates */
-    static int last_gsr_fp = -1;
-    if (gsr_fp == last_gsr_fp)
-        return;
-
-    last_gsr_fp = gsr_fp;
-
-    /* Split integer and decimal parts */
-    int gsr_int = gsr_fp / 100;
-    int gsr_dec = gsr_fp % 100;
-
-    /* Format exactly like ECG HR (safe, predictable) */
-    static char gsr_buf[16];
-    snprintf(gsr_buf, sizeof(gsr_buf), "%d.%02d", gsr_int, gsr_dec);
-
-    lv_label_set_text(label_gsr_value, gsr_buf);
-
-    printk("Updated GSR uS value: %s\n", gsr_buf);
+    // Real-time uS display disabled - final tonic level shown on results screen
+    // This function is intentionally left empty
+    (void)gsr_us;
 }
 
 
@@ -301,42 +272,9 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     // Initialize chart with baseline values
     lv_chart_set_all_value(chart_gsr_trend, ser_gsr_trend, 0);
 
-// GSR Container below chart (following design pattern)
-    lv_obj_t *cont_gsr_value = lv_obj_create(scr_gsr_plot);
-    lv_obj_set_size(cont_gsr_value, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_align(cont_gsr_value, LV_ALIGN_CENTER, 0, 75);  // Below chart
-    lv_obj_set_style_bg_opa(cont_gsr_value, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(cont_gsr_value, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(cont_gsr_value, 0, LV_PART_MAIN);
-    lv_obj_set_flex_flow(cont_gsr_value, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_gsr_value, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    // GSR Value
-    float gsr_us = hpi_data_get_last_converted_us();
-   // printk("Initial GSR uS value: %.2f\n", gsr_us);
-
-    label_gsr_value = lv_label_create(cont_gsr_value);
-    if (gsr_us <= 0.0f) 
-    { 
-      lv_label_set_text(label_gsr_value, "--");
-    } 
-    else 
-    {
-        int gsr_fp  = (int)(gsr_us * 100.0f);
-        int gsr_int = gsr_fp / 100;
-        int gsr_dec = gsr_fp % 100;
-
-        lv_label_set_text_fmt(label_gsr_value, "%d.%02d", gsr_int, gsr_dec);
-    }
-    lv_obj_add_style(label_gsr_value, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_gsr_value, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_pad_left(label_gsr_value, 8, LV_PART_MAIN);
-
-    // GSR Unit
-    lv_obj_t *label_gsr_usnit = lv_label_create(cont_gsr_value);
-    lv_label_set_text(label_gsr_usnit, "uS");
-    lv_obj_add_style(label_gsr_usnit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_gsr_usnit, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
+    // Note: Real-time uS display disabled - final tonic level shown on results screen
+    // Set label_gsr_value to NULL since we're not creating it
+    label_gsr_value = NULL;
 
     // Stop button - positioned at bottom center
 //     btn_stop = hpi_btn_create_primary(scr_gsr_plot);
@@ -407,8 +345,8 @@ static void gsr_chart_reset_performance_counters(void)
 
 void scr_gsr_lead_on_off_handler(bool lead_off)
 {
-    LOG_INF("Screen handler called with lead_off=%s", lead_off ? "OFF" : "ON");
-    
+    LOG_DBG("GSR screen handler: lead_off=%s", lead_off ? "OFF" : "ON");
+
     if (label_info_gsr == NULL) {
         LOG_WRN("label_info_gsr is NULL, screen handler returning early");
         return;
@@ -437,7 +375,7 @@ void scr_gsr_lead_on_off_handler(bool lead_off)
 
 void gesture_down_scr_gsr_plot(void)
 {
-    LOG_INF("Cancel GSR\n");
+    LOG_DBG("Cancel GSR");
     k_sem_give(&sem_gsr_cancel);
     hpi_load_screen(SCR_GSR, SCROLL_DOWN);
 }

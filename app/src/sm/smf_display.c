@@ -975,7 +975,6 @@ static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sa
             int32_t raw = gsr_sensor_sample.bioz_samples[gsr_sensor_sample.bioz_num_samples - 1];
 
             m_disp_gsr_us = convert_raw_sample_to_uS(raw);
-             LOG_INF("GSR DISP: raw=%d uS=%.2f", raw, m_disp_gsr_us);
            // hpi_gsr_disp_update_us(m_disp_gsr_us);
         }
         
@@ -1206,7 +1205,7 @@ static void hpi_disp_update_screens(void)
         
         if (k_sem_take(&sem_gsr_lead_on, K_NO_WAIT) == 0)
         {
-            LOG_INF("DISPLAY THREAD: Processing GSR Lead ON semaphore");
+            LOG_DBG("DISPLAY THREAD: Processing GSR Lead ON semaphore");
 
             // UI handler: hide error message, update icon, etc.
             scr_gsr_lead_on_off_handler(false);   // false = lead ON
@@ -1216,22 +1215,18 @@ static void hpi_disp_update_screens(void)
 
         if (k_sem_take(&sem_gsr_lead_off, K_NO_WAIT) == 0)
         {
-            LOG_INF("DISPLAY THREAD: Processing GSR Lead OFF semaphore");
+            LOG_DBG("DISPLAY THREAD: Processing GSR Lead OFF semaphore");
 
             // UI handler: show 'Finger not placed' message
             scr_gsr_lead_on_off_handler(true);    // true = lead OFF
 
             m_gsr_lead_off = true;
             bool is_gsr_active = hpi_data_is_gsr_record_active();
-            
+
             if (is_gsr_active)
             {
-                LOG_INF("DISPLAY THREAD: Lead disconnected - resetting recording buffer for continuous capture");     
-                // (Optional) reset GSR recording if your workflow requires it
+                LOG_DBG("DISPLAY THREAD: Lead disconnected - resetting GSR buffer");
                 hpi_data_reset_gsr_record_buffer();
-
-                // Reset ECG SMF countdown to 30s
-                LOG_INF("DISPLAY THREAD: Resetting GSR SMF countdown to 30s");
                 hpi_gsr_reset_countdown_timer();
             }
         }

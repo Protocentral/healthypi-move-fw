@@ -229,6 +229,7 @@ static inline void unload_scr_gsr_complete(void) { }
 static inline void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *r) { ARG_UNUSED(r); }
 static inline void hpi_gsr_disp_plot_add_sample(uint16_t v) { ARG_UNUSED(v); }
 #endif
+LV_IMG_DECLARE(img_heart_35);
 LV_IMG_DECLARE(img_heart_70);
 LV_IMG_DECLARE(hpi_logo_90x92);
 LV_IMG_DECLARE(img_temp_100);
