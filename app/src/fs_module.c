@@ -469,4 +469,12 @@ void fs_module_init(void)
         LOG_WRN("/lfs/gsr directory missing — creating it now");
     fs_mkdir("/lfs/gsr");
     }
+
+    rc = lsdir("/lfs/hrv");
+    if(rc < 0)
+    {
+         LOG_ERR("FAIL: lsdir /lfs/hrv: %d\n", rc);
+        LOG_WRN("/lfs/hrv directory missing — creating it now");
+    fs_mkdir("/lfs/hrv");
+    }
 }
