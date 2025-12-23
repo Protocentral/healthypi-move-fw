@@ -183,6 +183,10 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
 
+    /* Initialize chart with baseline value to show a flat line instead of junk
+     * during the warmup period. The value 2048 matches the DC offset used in plotting. */
+    lv_chart_set_all_value(chart_ppg, ser_ppg, 2048);
+
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
@@ -218,6 +222,18 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 {
     if (label_spo2_progress == NULL)
         return;
+
+    /* Clamp progress to valid 0-100 range.
+     * The sensor may report garbage values (e.g., 178) during initialization
+     * or algorithm warmup. Clamping ensures the UI always shows valid progress. */
+    if (progress < 0)
+    {
+        progress = 0;
+    }
+    else if (progress > 100)
+    {
+        progress = 100;
+    }
 
     /* High-water mark protection: only allow progress to increase, never decrease.
      * This prevents the progress bar from jumping back to 0 when the sensor

@@ -186,6 +186,15 @@ void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lead_on_detected = false;
     timer_display_last_time = -1;  // Reset cache to ensure first update goes through
 
+    // Enable chart updates for plotting (may have been disabled by previous unload)
+    chart_ecg_update = true;
+
+    // Reset plotting state for fresh start
+    batch_count = 0;
+    sample_counter = 0;
+    y_max_ecg = -10000;
+    y_min_ecg = 10000;
+
     // CENTRAL ZONE: ECG Chart (positioned in center area)
     chart_ecg = lv_chart_create(scr_ecg_scr2);
     lv_obj_set_size(chart_ecg, 340, 100);  // Smaller chart for circular design

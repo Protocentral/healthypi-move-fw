@@ -1092,6 +1092,9 @@ static void st_ecg_stream_entry(void *o)
     }
 }
 
+// Flag to indicate re-stabilization is in progress (don't reset recording state)
+static bool ecg_restabilization_pending = false;
+
 static void st_ecg_stream_run(void *o)
 {
     // Check for lead placement timeout - cancel if user hasn't placed leads within timeout
@@ -1133,6 +1136,10 @@ static void st_ecg_stream_run(void *o)
         // Note: We don't reset FIFO here - the sensor is already running
         // and FIFO reset during active operation might cause issues
         // The stabilization period will naturally discard transient samples
+
+        // Set flag to preserve recording state during stream_exit
+        // This prevents st_ecg_stream_exit from resetting ecg_record_active
+        ecg_restabilization_pending = true;
 
         // Transition to stabilizing state
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
@@ -1227,16 +1234,28 @@ static void st_ecg_stream_run(void *o)
 static void st_ecg_stream_exit(void *o)
 {
     LOG_DBG("ECG/BioZ SM Stream Exit");
-    
+
+    // Check if we're exiting for re-stabilization (leads reconnected during recording)
+    // In this case, preserve the recording state - don't reset everything
+    if (ecg_restabilization_pending) {
+        LOG_INF("ECG SMF: Stream exit for re-stabilization - preserving recording state");
+        ecg_restabilization_pending = false;  // Clear flag
+        // Don't reset timer or recording state - stabilizing_exit will handle timer restart
+        return;
+    }
+
+    // Normal exit (complete, cancel, timeout) - reset everything
+    LOG_INF("ECG SMF: Stream exit (normal) - resetting all state");
+
     // Reset timer when exiting stream state
     hpi_ecg_timer_reset();
-        
+
     hpi_data_set_ecg_record_active(false);
-  
+
 
     // Reset timer
     set_ecg_timer_values(0, 0);
-    set_ecg_stabilization_values(0, false); 
+    set_ecg_stabilization_values(0, false);
 }
 
 static void st_ecg_complete_entry(void *o)

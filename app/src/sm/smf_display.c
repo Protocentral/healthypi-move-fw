@@ -320,6 +320,7 @@ int hpi_disp_reset_all_last_updated(void)
     m_disp_bp_dia = 0;
     m_disp_ecg_hr = 0;
     m_disp_ecg_timer = 0;
+    m_lead_on_off = false;  // Reset to "leads ON" state for fresh measurement start
 
     m_disp_hr_updated_ts = 0;
     m_disp_spo2_last_refresh_ts = 0;
@@ -1170,30 +1171,36 @@ static void hpi_disp_update_screens(void)
          {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
             scr_hrv_lead_on_off_handler(false);
-            // Note: hpi_data_set_hrv_eval_active(true) is now called in st_ecg_idle_run
-            // when HRV starts, to ensure it's set BEFORE ecg_record_active is set
+
             bool is_hrv_active = hpi_data_is_hrv_eval_active();
-            bool was_lead_off = m_lead_on_off;  // Previous state before this update
-            
-            m_lead_on_off = false;              // Update to leads ON
-            
-            LOG_INF("DISPLAY THREAD: HRV active=%s, was_lead_off=%s", 
-                    is_hrv_active ? "true" : "false", 
+            bool was_lead_off = m_lead_on_off;
+
+            m_lead_on_off = false;  // Update to leads ON
+
+            LOG_INF("DISPLAY THREAD: HRV active=%s, was_lead_off=%s",
+                    is_hrv_active ? "true" : "false",
                     was_lead_off ? "true" : "false");
 
-            if (is_hrv_active && !was_lead_off)
+            // Determine if this is a reconnection during active recording:
+            // - Recording is active AND
+            // - Previous state was lead off (leads disconnected mid-measurement)
+            // Note: We don't check timer_was_running because timer is reset/paused when leads go off
+            bool is_reconnection = is_hrv_active && was_lead_off;
+
+            if (is_reconnection)
             {
-                LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
-                hpi_ecg_clear_lead_placement_timeout();  // Clear timeout since leads are on
+                LOG_INF("DISPLAY THREAD: Lead reconnected mid-measurement - triggering stabilization phase");
+                // Clear any pending lead placement timeout
+                hpi_ecg_clear_lead_placement_timeout();
+                k_sem_give(&sem_ecg_lead_on_stabilize);
+            }
+            else if (is_hrv_active)
+            {
+                // Initial lead detection - leads were not previously off, start the timer
+                LOG_INF("DISPLAY THREAD: Initial lead detection - starting timer");
+                hpi_ecg_clear_lead_placement_timeout();
                 hpi_ecg_timer_start();
             }
-            else if(is_hrv_active && was_lead_off)
-            {
-            LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
-                 // Signal state machine to enter stabilization before resuming recording
-                 k_sem_give(&sem_ecg_lead_on_stabilize);
-             }
-            
         }
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
         {
@@ -1237,32 +1244,34 @@ static void hpi_disp_update_screens(void)
         {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
             scr_ecg_lead_on_off_handler(false); // false = leads ON
-            
-            // Only trigger stabilization if this is a reconnection (previous state was leads OFF)
+
             bool is_ecg_active = hpi_data_is_ecg_record_active();
             bool was_lead_off = m_lead_on_off;  // Previous state before this update
-            
+
             m_lead_on_off = false;              // Update to leads ON
-            
-            LOG_INF("DISPLAY THREAD: ECG active=%s, was_lead_off=%s", 
-                    is_ecg_active ? "true" : "false", 
+
+            LOG_INF("DISPLAY THREAD: ECG active=%s, was_lead_off=%s",
+                    is_ecg_active ? "true" : "false",
                     was_lead_off ? "true" : "false");
-            
-            // Only trigger re-stabilization if:
-            // 1. Recording is active AND
-            // 2. This is a reconnection (previous state was lead off)
-            if (is_ecg_active && was_lead_off)
+
+            // Determine if this is a reconnection during active recording:
+            // - Recording is active AND
+            // - Previous state was lead off (leads disconnected mid-measurement)
+            // Note: We don't check timer_was_running because timer is reset/paused when leads go off
+            bool is_reconnection = is_ecg_active && was_lead_off;
+
+            if (is_reconnection)
             {
-                LOG_INF("DISPLAY THREAD: Lead reconnected - triggering stabilization phase");
-                
-                // Signal state machine to enter stabilization before resuming recording
+                LOG_INF("DISPLAY THREAD: Lead reconnected mid-measurement - triggering stabilization phase");
+                // Clear any pending lead placement timeout
+                hpi_ecg_clear_lead_placement_timeout();
                 k_sem_give(&sem_ecg_lead_on_stabilize);
             }
-            // Start timer if this is first lead-on (not a reconnection)
-            else if (is_ecg_active && !was_lead_off)
+            else if (is_ecg_active)
             {
-                LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
-                hpi_ecg_clear_lead_placement_timeout();  // Clear timeout since leads are on
+                // Initial lead detection - leads were not previously off, start the timer
+                LOG_INF("DISPLAY THREAD: Initial lead detection - starting timer");
+                hpi_ecg_clear_lead_placement_timeout();
                 hpi_ecg_timer_start();
             }
         }
