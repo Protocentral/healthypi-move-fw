@@ -392,5 +392,4 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
  float hpi_get_lf_hf_ratio(void) {
    
     return (hf_power_compact == 0.0f) ? 0.0f : lf_power_compact / hf_power_compact;
-
 }

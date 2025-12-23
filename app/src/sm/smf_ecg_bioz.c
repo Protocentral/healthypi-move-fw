@@ -857,99 +857,6 @@ static void st_ecg_idle_entry(void *o)
         set_hrv_active(true);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
     }
-
-  /*  // Handle independent GSR (BioZ) control
-    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
-    {
-        LOG_INF("Starting GSR (BioZ) measurement for %d seconds", GSR_MEASUREMENT_DURATION_S);
-        int ret = hw_max30001_gsr_enable();
-        if (ret == 0) {
-            hpi_data_set_gsr_measurement_active(true);
-            hpi_data_set_gsr_record_active(true);   //  Start recording data 
-
-            gsr_measurement_start_time = k_uptime_get();
-            gsr_measurement_in_progress = true;
-            prev_gsr_contact_ok = gsr_contact_ok; // Initialize previous state
-            k_timer_start(&tmr_bioz_sampling, K_MSEC(BIOZ_SAMPLING_INTERVAL_MS), K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
-            LOG_INF("GSR (BioZ) measurement started successfully");
-        } else {
-            LOG_ERR("Failed to start GSR (BioZ) measurement: %d", ret);
-            gsr_measurement_in_progress = false;
-        }
-    }
-    
-    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_INF("Stopping GSR (BioZ) measurement");
-        int ret = hw_max30001_gsr_disable();
-        if (ret == 0) {
-            hpi_data_set_gsr_measurement_active(false);
-            gsr_measurement_in_progress = false;
-            // Reset recording buffer (discard incomplete data on manual stop)
-            hpi_data_reset_gsr_record_buffer();
-            hpi_data_set_gsr_record_active(false);
-            // Only stop bioz timer if ECG is not active
-            if (!get_ecg_active()) {
-                k_timer_stop(&tmr_bioz_sampling);
-            }
-            LOG_INF("GSR (BioZ) measurement stopped successfully");
-        } else {
-            LOG_ERR("Failed to stop GSR (BioZ) measurement: %d", ret);
-        }
-    }
-    
-    // Auto-complete GSR measurement after duration
-
-
-    if (gsr_measurement_in_progress)
-    {
-        // Detect skin contact change
-        if (!gsr_contact_ok) {
-            // No contact → reset timer display to 30 s
-            hpi_gsr_reset_countdown_timer();
-        } else if (!prev_gsr_contact_ok && gsr_contact_ok) {
-            // Contact regained → restart countdown from 30 s
-            gsr_measurement_start_time = k_uptime_get();
-            gsr_last_status_pub_s = 0;
-            LOG_INF("GSR contact regained: countdown restarted from %d s", GSR_MEASUREMENT_DURATION_S);
-        }
-        prev_gsr_contact_ok = gsr_contact_ok;
-
-        // Countdown logic
-        if (gsr_contact_ok) 
-        {
-            int64_t elapsed_ms = k_uptime_get() - gsr_measurement_start_time;
-            if (elapsed_ms >= (GSR_MEASUREMENT_DURATION_S * 1000)) {
-                // Measurement complete
-                LOG_INF("GSR measurement complete after %d seconds", GSR_MEASUREMENT_DURATION_S);
-                hw_max30001_gsr_disable();
-                hpi_data_set_gsr_measurement_active(false);
-                hpi_data_set_gsr_record_active(false);
-
-                gsr_measurement_in_progress = false;
-                if (!get_ecg_active()) {
-                    k_timer_stop(&tmr_bioz_sampling);
-                }
-                hpi_load_screen(SCR_GSR, SCROLL_DOWN);
-            } else {
-                // Publish countdown status
-                uint32_t elapsed_s = elapsed_ms / 1000;
-                if (elapsed_s != gsr_last_status_pub_s && elapsed_s <= GSR_MEASUREMENT_DURATION_S) {
-                    gsr_last_status_pub_s = elapsed_s;
-
-                #if defined(CONFIG_HPI_GSR_SCREEN)
-                struct hpi_gsr_status_t gsr_status = {
-                .elapsed_s = (uint16_t)elapsed_s,
-                .remaining_s = (uint16_t)(GSR_MEASUREMENT_DURATION_S - elapsed_s),
-                .total_s = GSR_MEASUREMENT_DURATION_S,
-                .active = true,
-                };
-                zbus_chan_pub(&gsr_status_chan, &gsr_status, K_NO_WAIT);
-                #endif
-              }
-            }
-        }
-    }  */
 }
 
 static void st_gsr_entry_run(void *o)
@@ -1285,7 +1192,7 @@ static void st_ecg_complete_entry(void *o)
         set_hrv_active(false);
     } else {
         // ECG recording complete - signal ECG completion
-        k_sem_give(&sem_ecg_complete);
+        k_sem_give(&sem_ecg_complete_reset);
     }
 }
 
@@ -1382,15 +1289,13 @@ static void st_ecg_stabilizing_entry(void *o)
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
     set_ecg_timer_values(k_uptime_get_32(), 0);
     
-     // Initialize HRV if evaluation is being started
-    //  if (get_hrv_active()) {
-    //      LOG_INF("HRV evaluation starting - initializing HRV data collection");
-    //      hpi_data_set_hrv_eval_active(true);
-    //      hrv_interval_count = 0;
-    //      memset(hrv_intervals, 0, sizeof(hrv_intervals));
-    //      hrv_last_status_pub_s = 0;
-    //  }
-    
+     // Clear Buffer before starting
+     if (get_hrv_active()) {
+         hrv_interval_count = 0;
+         memset(hrv_intervals, 0, sizeof(hrv_intervals));
+         hrv_last_status_pub_s = 0;
+     }
+ 
     int duration = is_recording_active ? ECG_RECORD_DURATION_S : HRV_MEASUREMENT_DURATION_S;
     // Publish status indicating stabilization phase
     struct hpi_ecg_status_t ecg_stat = {

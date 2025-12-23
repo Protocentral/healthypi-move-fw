@@ -84,6 +84,10 @@ void hpi_hrv_disp_update_timer(uint16_t remaining_s)
             lv_arc_set_value(arc_hrv_zone, used);
         }
         lv_obj_set_style_arc_color(arc_hrv_zone, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR); 
+
+        if (label_intervals_count != NULL) {
+            lv_label_set_text_fmt(label_intervals_count, "Intervals: %d", 0);
+        }
     } 
     else
      {

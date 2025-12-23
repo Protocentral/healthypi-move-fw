@@ -148,9 +148,9 @@ enum hpi_disp_spl_screens
     SCR_SPL_BPT_CAL_REQUIRED,
 
     SCR_SPL_FI_SENS_WEAR,
-
-    SCR_SPL_PLOT_HRV,
+   
     SCR_SPL_HRV_FREQUENCY,
+    SCR_SPL_PLOT_HRV,
 
     SCR_SPL_HRV_EVAL_PROGRESS,
     SCR_SPL_HRV_COMPLETE,
@@ -432,10 +432,25 @@ int get_stress_percentage(float lf, float hf);
 static lv_color_t get_stress_arc_color(int stress_percentage);
 void gesture_handler(lv_event_t *e);
 void gesture_down_scr_spl_hrv(void);
-void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+//void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void hpi_hrv_frequency_compact_update_display(void);
 float hpi_get_lf_hf_ratio(void);
 
+
+// HRV Summary screen functions
+void draw_scr_hrv_summary(enum scroll_dir m_scroll_dir);
+void hpi_hrv_summary_update_metrics(float sdnn, float rmssd, float pnn50, float mean_rr);
+void hpi_hrv_summary_draw_rr_plot(float rr_interval);
+void hpi_hrv_summary_set_update_enabled(bool enabled);
+
+// HRV Frequency Analysis screen functions
+void draw_scr_hrv_frequency(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+void hpi_hrv_frequency_update_spectrum(float *rr_intervals, int num_intervals);
+void hpi_hrv_frequency_update_display(void);
+
+// HRV Frequency Compact screen functions (optimized for small round displays)
+void draw_scr_hrv_frequency_compact(enum scroll_dir m_scroll_dir);
+void hpi_hrv_frequency_compact_update_display(void);
 
 // Settings screen functions
 void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
@@ -533,3 +548,5 @@ void hpi_hrv_disp_update_timer(uint16_t remaining_s);
 
 void draw_scr_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void gesture_down_scr_timeout(void);
+
+void scr_ppg_finger_contact_handler(bool contact);

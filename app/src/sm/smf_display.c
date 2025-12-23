@@ -85,10 +85,9 @@ K_SEM_DEFINE(sem_disp_ready, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete, 0, 1);
 K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
-
-
 K_SEM_DEFINE(sem_gsr_complete, 0, 1);
 K_SEM_DEFINE(sem_gsr_complete_reset, 0, 1);
+
 /**
  * @brief Signal touch wakeup from sleep state
  * Called by input drivers (touch controller) when touch is detected.
@@ -237,11 +236,9 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
     [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
     [SCR_SPL_ECG_COMPLETE] = {draw_scr_ecg_complete, gesture_down_scr_ecg_complete},
-
   //  [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
     [SCR_SPL_HRV_EVAL_PROGRESS] = {draw_scr_spl_hrv_eval_progress, gesture_down_scr_spl_hrv_eval_progress},
     [SCR_SPL_HRV_COMPLETE] = {draw_scr_spl_hrv_complete, gesture_down_scr_spl_hrv_complete},
-
     //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
     [SCR_SPL_SPO2_SCR2] = {draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2},
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
@@ -253,7 +250,6 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
     [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
     [SCR_SPL_SPO2_BPT_TIMEOUT] = {draw_scr_timeout, gesture_down_scr_timeout},
-
     [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
     [SCR_SPL_BPT_FAILED] = {draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed},
     [SCR_SPL_BPT_EST_COMPLETE] = {draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete},
@@ -825,15 +821,16 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
     }
     else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
     {
-        lv_disp_trig_activity(NULL);
+     
         hpi_disp_spo2_plot_fi_ppg(ppg_sensor_sample);
         hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
+        lv_disp_trig_activity(NULL);
     }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
+    if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE )
     {
         lv_disp_trig_activity(NULL);
         hpi_disp_spo2_plot_wrist_ppg(ppg_sensor_sample);
@@ -1064,7 +1061,7 @@ static void hpi_disp_update_screens(void)
         }
         break;
     case SCR_BPT:
-
+        
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
         lv_disp_trig_activity(NULL);
@@ -1126,7 +1123,7 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
-        if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0)
+        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
             hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
         }
@@ -1238,11 +1235,11 @@ static void hpi_disp_update_screens(void)
         hpi_ppg_check_signal_timeout();
         lv_disp_trig_activity(NULL);
         break;
-    case SCR_SPL_ECG_COMPLETE:
-        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
-        {
-            hpi_load_screen(SCR_ECG, SCROLL_UP);
-        }
+    // case SCR_SPL_ECG_COMPLETE:
+    //     if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
+    //     {
+    //         hpi_load_screen(SCR_ECG, SCROLL_UP);
+    //     }
         break;
     case SCR_SPL_SPO2_COMPLETE:
         /*if (k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)

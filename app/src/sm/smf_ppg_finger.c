@@ -141,6 +141,8 @@ K_MUTEX_DEFINE(mutex_bpt_cal_set);
 extern const struct device *const max32664d_dev;
 extern struct k_sem sem_ppg_finger_sm_start;
 
+static int64_t smf_ppg_fi_spo2_last_measured_time;
+
 void hpi_bpt_set_cal_vals(uint8_t cal_index, uint8_t cal_sys, uint8_t cal_dia)
 {
     k_mutex_lock(&mutex_bpt_cal_set, K_FOREVER);
@@ -243,6 +245,12 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
             // SpO2 Estimation done
             m_est_spo2 = edata->spo2;
             m_est_spo2_conf = edata->spo2_conf;
+
+            if(m_est_spo2 > 0 && m_est_spo2_conf > 50)
+            {
+                smf_ppg_fi_spo2_last_measured_time = hw_get_sys_time_ts();
+                hpi_sys_set_last_spo2_update(m_est_spo2, smf_ppg_fi_spo2_last_measured_time);
+            }
 
             LOG_DBG("SpO2: %d | Confidence: %d", edata->spo2, edata->spo2_conf);
 
@@ -684,7 +692,7 @@ static void sensor_check_timeout_work_handler(struct k_work *work)
     else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
     {
         LOG_DBG("BPT Calibration timed out waiting for sensor");
-        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+        hpi_load_scr_spl(SCR_SPL_SPO2_BPT_TIMEOUT, SCROLL_NONE, SCR_BPT, SCR_BPT, 0, 0);
     }
 
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
