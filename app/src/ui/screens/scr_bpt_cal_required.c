@@ -80,12 +80,12 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
 
-    // Warning icon (centered above message)
-    lv_obj_t *img_warning = lv_img_create(scr_bpt_cal_required);
-    lv_label_set_text(img_warning, LV_SYMBOL_WARNING);
-    lv_obj_align(img_warning, LV_ALIGN_CENTER, 0, -40);
-    lv_obj_set_style_text_color(img_warning, lv_color_hex(0x4A90E2), LV_PART_MAIN);  // Blue accent
-    lv_obj_set_style_text_font(img_warning, &lv_font_montserrat_24, LV_PART_MAIN);
+    // Warning icon (centered above message) - use label for LVGL symbol
+    lv_obj_t *label_warning = lv_label_create(scr_bpt_cal_required);
+    lv_label_set_text(label_warning, LV_SYMBOL_WARNING);
+    lv_obj_align(label_warning, LV_ALIGN_CENTER, 0, -40);
+    lv_obj_set_style_text_color(label_warning, lv_color_hex(0x4A90E2), LV_PART_MAIN);  // Blue accent
+    lv_obj_set_style_text_font(label_warning, &lv_font_montserrat_24, LV_PART_MAIN);
 
     // Main message (centered)
     label_bpt_cal_required = lv_label_create(scr_bpt_cal_required);
