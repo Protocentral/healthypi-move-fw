@@ -592,9 +592,11 @@ void data_thread(void)
 
             // ECG recording buffer management with mutex protection
             // Fixed: No circular buffer - linear recording only, stop when full
-            
+            // IMPORTANT: Only record samples when leads are connected (not lead-off)
+            // This prevents buffer from filling with garbage data when leads are removed
+
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
-            if (is_ecg_record_active == true && !is_hrv_eval_active)
+            if (is_ecg_record_active == true && !is_hrv_eval_active && !ecg_sensor_sample.ecg_lead_off)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;

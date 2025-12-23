@@ -41,7 +41,7 @@ static lv_obj_t *indicator_balance;
 
 // Externs - Modern style system
 extern lv_style_t style_body_medium;
-extern lv_style_t style_numeric_medium;
+extern lv_style_t style_numeric_large;
 extern lv_style_t style_caption;
 
 // Balance bar dimensions (smaller for home screen)
@@ -145,14 +145,14 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     /*
      * SPACED LAYOUT FOR 390x390 ROUND AMOLED
      * ======================================
-     * Layout with balance bar and proper spacing (24px font for value):
+     * Layout with balance bar and large numeric font:
      *   y=55:  Title "HRV"
      *   y=90:  HRV icon (35px) -> ends at y=125
-     *   y=135: LF/HF value with unit (35px container, 24px font) -> ends at y=170
-     *   y=180: Balance state text
-     *   y=215: Balance gradient bar with indicator
-     *   y=260: Last update time
-     *   y=305: Start button
+     *   y=120: LF/HF value with unit (80px container, large font) -> ends at y=200
+     *   y=210: Balance state text
+     *   y=240: Balance gradient bar with indicator
+     *   y=285: Last update time
+     *   y=315: Start button
      */
 
     // TOP: Title at y=55
@@ -171,11 +171,11 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_set_style_img_recolor(img_hrv, lv_color_hex(0x8000FF), LV_PART_MAIN);
     lv_obj_set_style_img_recolor_opa(img_hrv, LV_OPA_COVER, LV_PART_MAIN);
 
-    // CENTER: LF/HF value with inline unit at y=135 (35px container for 24px font)
+    // CENTER: LF/HF value with inline unit at y=120 (80px container for large font)
     lv_obj_t *cont_value = lv_obj_create(scr_hrv);
     lv_obj_remove_style_all(cont_value);
-    lv_obj_set_size(cont_value, 390, 35);
-    lv_obj_set_pos(cont_value, 0, 135);
+    lv_obj_set_size(cont_value, 390, 80);
+    lv_obj_set_pos(cont_value, 0, 120);
     lv_obj_set_style_bg_opa(cont_value, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_flex_flow(cont_value, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(cont_value, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
@@ -183,7 +183,7 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     label_hrv_value = lv_label_create(cont_value);
     lv_label_set_text(label_hrv_value, "--");
     lv_obj_set_style_text_color(label_hrv_value, lv_color_white(), LV_PART_MAIN);
-    lv_obj_add_style(label_hrv_value, &style_numeric_medium, LV_PART_MAIN);
+    lv_obj_add_style(label_hrv_value, &style_numeric_large, LV_PART_MAIN);
 
     // Inline "LF/HF" unit
     lv_obj_t *label_hrv_unit = lv_label_create(cont_value);
@@ -192,20 +192,20 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_add_style(label_hrv_unit, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_pad_bottom(label_hrv_unit, 6, LV_PART_MAIN);
 
-    // Balance state text at y=180
+    // Balance state text at y=210
     label_balance_state = lv_label_create(scr_hrv);
     lv_label_set_text(label_balance_state, "");
-    lv_obj_set_pos(label_balance_state, 0, 180);
+    lv_obj_set_pos(label_balance_state, 0, 210);
     lv_obj_set_width(label_balance_state, 390);
     lv_obj_add_style(label_balance_state, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_balance_state, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_balance_state, lv_color_hex(COLOR_BALANCED), LV_PART_MAIN);
 
-    // Balance gradient bar at y=215
+    // Balance gradient bar at y=240
     bar_balance_bg = lv_obj_create(scr_hrv);
     lv_obj_remove_style_all(bar_balance_bg);
     lv_obj_set_size(bar_balance_bg, HRV_HOME_BAR_WIDTH, HRV_HOME_BAR_HEIGHT);
-    lv_obj_set_pos(bar_balance_bg, (390 - HRV_HOME_BAR_WIDTH) / 2, 215);
+    lv_obj_set_pos(bar_balance_bg, (390 - HRV_HOME_BAR_WIDTH) / 2, 240);
     lv_obj_set_style_radius(bar_balance_bg, HRV_HOME_BAR_HEIGHT / 2, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bar_balance_bg, LV_OPA_COVER, LV_PART_MAIN);
 
@@ -244,12 +244,12 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_set_style_bg_color(center_marker, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(center_marker, LV_OPA_70, LV_PART_MAIN);
 
-    // Balance indicator (circle) - positioned below bar at y=215
+    // Balance indicator (circle) - positioned below bar at y=240
     indicator_balance = lv_obj_create(scr_hrv);
     lv_obj_remove_style_all(indicator_balance);
     lv_obj_set_size(indicator_balance, HRV_HOME_INDICATOR_SIZE, HRV_HOME_INDICATOR_SIZE);
     int initial_x = (390 - HRV_HOME_BAR_WIDTH) / 2 + (HRV_HOME_BAR_WIDTH / 2) - (HRV_HOME_INDICATOR_SIZE / 2);
-    lv_obj_set_pos(indicator_balance, initial_x, 215 + HRV_HOME_BAR_HEIGHT + 2);
+    lv_obj_set_pos(indicator_balance, initial_x, 240 + HRV_HOME_BAR_HEIGHT + 2);
     lv_obj_set_style_bg_color(indicator_balance, lv_color_hex(COLOR_BALANCED), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(indicator_balance, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(indicator_balance, HRV_HOME_INDICATOR_SIZE / 2, LV_PART_MAIN);
@@ -260,19 +260,19 @@ void draw_scr_hrv(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
     lv_obj_add_flag(bar_balance_bg, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(indicator_balance, LV_OBJ_FLAG_HIDDEN);
 
-    // Last measurement time at y=260
+    // Last measurement time at y=285
     label_hrv_status = lv_label_create(scr_hrv);
     lv_label_set_text(label_hrv_status, "No measurement yet");
-    lv_obj_set_pos(label_hrv_status, 0, 260);
+    lv_obj_set_pos(label_hrv_status, 0, 285);
     lv_obj_set_width(label_hrv_status, 390);
     lv_obj_set_style_text_color(label_hrv_status, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     lv_obj_add_style(label_hrv_status, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_hrv_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // Start HRV button at y=305
+    // Start HRV button at y=315
     const int btn_width = 180;
     const int btn_height = 50;
-    const int btn_y = 305;
+    const int btn_y = 315;
 
     btn_hrv_measure = hpi_btn_create_primary(scr_hrv);
     lv_obj_set_size(btn_hrv_measure, btn_width, btn_height);
@@ -359,7 +359,7 @@ static void hrv_update_display(void)
                 indicator_x = bar_start_x + HRV_HOME_BAR_WIDTH - HRV_HOME_INDICATOR_SIZE / 2;
             }
 
-            lv_obj_set_pos(indicator_balance, indicator_x, 215 + HRV_HOME_BAR_HEIGHT + 2);
+            lv_obj_set_pos(indicator_balance, indicator_x, 240 + HRV_HOME_BAR_HEIGHT + 2);
             lv_obj_set_style_bg_color(indicator_balance,
                                        get_balance_indicator_color(balance_pos), LV_PART_MAIN);
         }

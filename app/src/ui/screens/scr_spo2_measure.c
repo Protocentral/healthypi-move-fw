@@ -67,6 +67,8 @@ static int last_progress = 0;
 static float fi_baseline_ema = 0.0f;
 static bool fi_baseline_init = false;
 static int32_t fi_last_valid_plot_val = 2048;
+static int fi_warmup_samples = 0;  // Count samples for warmup period
+#define FI_WARMUP_COUNT 50  // Skip first 50 samples (~0.5 sec at 100Hz) to avoid initial junk
 
 /* Wrist PPG baseline tracking - resettable on screen entry */
 static float wr_baseline_ema = 0.0f;
@@ -102,6 +104,7 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     fi_baseline_init = false;
     fi_baseline_ema = 0.0f;
     fi_last_valid_plot_val = 2048;
+    fi_warmup_samples = 0;
 
     /* Reset wrist PPG baseline */
     wr_baseline_init = false;
@@ -180,6 +183,10 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
 
+    /* Initialize chart with baseline value to show a flat line instead of junk
+     * during the warmup period. The value 2048 matches the DC offset used in plotting. */
+    lv_chart_set_all_value(chart_ppg, ser_ppg, 2048);
+
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
@@ -215,6 +222,18 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 {
     if (label_spo2_progress == NULL)
         return;
+
+    /* Clamp progress to valid 0-100 range.
+     * The sensor may report garbage values (e.g., 178) during initialization
+     * or algorithm warmup. Clamping ensures the UI always shows valid progress. */
+    if (progress < 0)
+    {
+        progress = 0;
+    }
+    else if (progress > 100)
+    {
+        progress = 100;
+    }
 
     /* High-water mark protection: only allow progress to increase, never decrease.
      * This prevents the progress bar from jumping back to 0 when the sensor
@@ -336,11 +355,36 @@ void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
          * to prevent discontinuities in the waveform display */
         if (data_ppg_i == 0.0f)
         {
+            /* During warmup, just count but don't plot */
+            if (fi_warmup_samples < FI_WARMUP_COUNT)
+            {
+                fi_warmup_samples++;
+                continue;
+            }
             /* Plot last valid value to maintain waveform continuity */
             lv_chart_set_next_value(chart_ppg, ser_ppg, fi_last_valid_plot_val);
             hpi_ppg_disp_add_samples(1);
             hpi_ppg_disp_do_set_scale(BPT_DISP_WINDOW_SIZE * 2);
             continue;
+        }
+
+        /* Warmup period: collect samples to build baseline but don't plot yet.
+         * This avoids showing initial junk data on screen. */
+        if (fi_warmup_samples < FI_WARMUP_COUNT)
+        {
+            fi_warmup_samples++;
+            /* Build baseline during warmup using faster alpha for quicker convergence */
+            if (!fi_baseline_init)
+            {
+                fi_baseline_ema = data_ppg_i;
+                fi_baseline_init = true;
+            }
+            else
+            {
+                /* Use faster alpha (0.1) during warmup for quick baseline lock */
+                fi_baseline_ema = fi_baseline_ema * 0.9f + (data_ppg_i * 0.1f);
+            }
+            continue;  /* Skip plotting during warmup */
         }
 
         if (!fi_baseline_init)
