@@ -434,6 +434,12 @@ static void st_ppg_fing_idle_entry(void *o)
     bpt_process_done = false;
     spo2_process_done = false;
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_IDLE;
+
+    // Clear any stale cancel semaphores to prevent issues on next measurement attempt
+    // These might have been given during cancellation and not consumed
+    k_sem_reset(&sem_fi_spo2_est_cancel);
+    k_sem_reset(&sem_fi_bpt_est_cancel);
+    k_sem_reset(&sem_fi_bpt_cal_cancel);
 }
 
 // Add a new function to check if calibration data exists
@@ -787,9 +793,11 @@ static void st_ppg_fi_check_sensor_run(void *o)
 
     if (sensor_id_get.val1 != MAX30101_SENSOR_ID)
     {
-        // FIX: Sensor not found after all retries - stay in this state and let timeout handle it
-        // Don't transition anywhere, the timeout will fire and go to IDLE with error screen
-        LOG_WRN("MAX30101 AFE sensor not found after %d attempts, waiting for timeout or retry", max_attempts);
+        // Sensor not found after all retries - add a short delay and return to retry
+        // The main state machine loop has 1s delay, but we want faster sensor detection
+        // so we add a 200ms delay here to allow user to connect sensor
+        LOG_DBG("MAX30101 AFE sensor not found, will retry in 200ms");
+        k_msleep(200);
         return;
     }
 

@@ -183,6 +183,7 @@ static float m_disp_gsr_us = 0.0f;
 
 // @brief HRV Screen variables
 extern struct k_sem sem_hrv_eval_complete;
+extern struct k_sem sem_ecg_lead_timeout;  // Signaled when lead placement times out
 static int m_disp_hrv_timer = 0;
 
 // @brief Recording status variables (updated by ZBus listener, read by display thread)
@@ -431,6 +432,86 @@ static void hpi_disp_clear_saved_state(void)
     k_mutex_unlock(&mutex_screen_sleep_state);
 
     LOG_DBG("Saved screen state cleared");
+}
+
+// Toast notification support
+static lv_obj_t *toast_obj = NULL;
+static lv_timer_t *toast_timer = NULL;
+
+/**
+ * @brief Timer callback to hide and delete the toast notification
+ */
+static void toast_hide_timer_cb(lv_timer_t *timer)
+{
+    if (toast_obj != NULL && lv_obj_is_valid(toast_obj))
+    {
+        lv_obj_del(toast_obj);
+        toast_obj = NULL;
+    }
+    if (toast_timer != NULL)
+    {
+        lv_timer_del(toast_timer);
+        toast_timer = NULL;
+    }
+}
+
+/**
+ * @brief Display a toast notification message
+ *
+ * Creates a small overlay message at the center of the screen that
+ * auto-dismisses after the specified duration. The toast appears on top
+ * of the current screen and doesn't block user interaction.
+ *
+ * @param message The message text to display
+ * @param duration_ms How long to show the toast (in milliseconds)
+ */
+void hpi_disp_show_toast(const char *message, uint32_t duration_ms)
+{
+    // Clean up any existing toast
+    if (toast_obj != NULL && lv_obj_is_valid(toast_obj))
+    {
+        lv_obj_del(toast_obj);
+        toast_obj = NULL;
+    }
+    if (toast_timer != NULL)
+    {
+        lv_timer_del(toast_timer);
+        toast_timer = NULL;
+    }
+
+    // Create toast container on the active screen
+    lv_obj_t *active_scr = lv_scr_act();
+    if (active_scr == NULL)
+    {
+        LOG_WRN("No active screen for toast");
+        return;
+    }
+
+    toast_obj = lv_obj_create(active_scr);
+    lv_obj_set_size(toast_obj, 320, 70);
+    lv_obj_align(toast_obj, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(toast_obj, lv_color_make(40, 40, 40), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(toast_obj, LV_OPA_90, LV_PART_MAIN);
+    lv_obj_set_style_radius(toast_obj, 15, LV_PART_MAIN);
+    lv_obj_set_style_border_width(toast_obj, 0, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(toast_obj, 20, LV_PART_MAIN);
+    lv_obj_set_style_shadow_opa(toast_obj, LV_OPA_30, LV_PART_MAIN);
+    lv_obj_clear_flag(toast_obj, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Create message label
+    lv_obj_t *label = lv_label_create(toast_obj);
+    lv_label_set_text(label, message);
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(label, 300);
+    lv_obj_center(label);
+
+    // Create timer to auto-hide the toast
+    toast_timer = lv_timer_create(toast_hide_timer_cb, duration_ms, NULL);
+    lv_timer_set_repeat_count(toast_timer, 1);
+
+    LOG_INF("Toast displayed: %s (duration: %d ms)", message, duration_ms);
 }
 
 void disp_screen_event(lv_event_t *e)
@@ -1067,8 +1148,19 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
-        
+
          hpi_hrv_disp_update_timer(m_disp_ecg_timer);
+
+         // Check for lead placement timeout - return to HRV home screen
+         if (k_sem_take(&sem_ecg_lead_timeout, K_NO_WAIT) == 0)
+         {
+            LOG_INF("DISPLAY THREAD: Lead placement timeout - returning to HRV home screen");
+            unload_scr_hrv_eval_progress();
+            hpi_load_screen(SCR_HRV, SCROLL_DOWN);
+            // Show toast notification on the new screen
+            hpi_disp_show_toast("Measurement cancelled\nNo leads detected", 3000);
+            break;
+         }
 
          if(k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
          {
@@ -1078,7 +1170,8 @@ static void hpi_disp_update_screens(void)
          {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
             scr_hrv_lead_on_off_handler(false);
-            hpi_data_set_hrv_eval_active(true); 
+            // Note: hpi_data_set_hrv_eval_active(true) is now called in st_ecg_idle_run
+            // when HRV starts, to ensure it's set BEFORE ecg_record_active is set
             bool is_hrv_active = hpi_data_is_hrv_eval_active();
             bool was_lead_off = m_lead_on_off;  // Previous state before this update
             
@@ -1091,7 +1184,8 @@ static void hpi_disp_update_screens(void)
             if (is_hrv_active && !was_lead_off)
             {
                 LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
-                 hpi_ecg_timer_start();
+                hpi_ecg_clear_lead_placement_timeout();  // Clear timeout since leads are on
+                hpi_ecg_timer_start();
             }
             else if(is_hrv_active && was_lead_off)
             {
@@ -1123,6 +1217,18 @@ static void hpi_disp_update_screens(void)
     case SCR_SPL_ECG_SCR2:
         hpi_ecg_disp_update_hr(m_disp_ecg_hr);
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
+
+        // Check for lead placement timeout - return to ECG home screen
+        if (k_sem_take(&sem_ecg_lead_timeout, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Lead placement timeout - returning to ECG home screen");
+            unload_scr_ecg_scr2();
+            hpi_load_screen(SCR_ECG, SCROLL_DOWN);
+            // Show toast notification on the new screen
+            hpi_disp_show_toast("Measurement cancelled\nNo leads detected", 3000);
+            break;
+        }
+
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
             hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
@@ -1156,6 +1262,7 @@ static void hpi_disp_update_screens(void)
             else if (is_ecg_active && !was_lead_off)
             {
                 LOG_INF("DISPLAY THREAD: Leads already on - starting timer");
+                hpi_ecg_clear_lead_placement_timeout();  // Clear timeout since leads are on
                 hpi_ecg_timer_start();
             }
         }
@@ -1460,10 +1567,11 @@ static void st_display_active_run(void *o)
     // Get current sleep timeout based on user settings
     uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
 
-    // Prevent sleep during low battery conditions or if auto sleep is disabled
+    // Prevent sleep during low battery conditions, active recording, or if auto sleep is disabled
     if (sleep_timeout_ms != UINT32_MAX &&
         inactivity_time > sleep_timeout_ms &&
-        !hw_is_low_battery())
+        !hw_is_low_battery() &&
+        !hpi_recording_is_active())
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
     }

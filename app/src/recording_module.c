@@ -814,6 +814,9 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
 
         LOG_INF("Starting recording...");
 
+        /* Reset stop semaphore to clear any stale signals from previous recordings */
+        k_sem_reset(&sem_rec_stop);
+
         /* Get current timestamp */
         struct tm sys_time = hpi_sys_get_sys_time();
         int64_t start_ts = timeutil_timegm64(&sys_time);
