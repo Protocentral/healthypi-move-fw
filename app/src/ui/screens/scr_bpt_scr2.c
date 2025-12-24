@@ -59,8 +59,10 @@ static void scr_bpt_btn_proceed_handler(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED)
     {
+        // Only signal the state machine - it will handle screen transitions
+        // This prevents race conditions when calibration is required
         k_sem_give(&sem_bpt_est_start);
-        hpi_load_scr_spl(next_screen, SCROLL_UP, parent_screen, 0, 0, 0);
+        // State machine will load appropriate screen (CHECK_SENSOR or CAL_REQUIRED)
     }
 }
 

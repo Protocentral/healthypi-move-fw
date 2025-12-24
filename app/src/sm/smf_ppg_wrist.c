@@ -195,7 +195,8 @@ static int get_measured_spo2(uint16_t *spo2_value, enum spo2_meas_state *status)
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 {
     const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
-    struct hpi_ppg_wr_data_t ppg_sensor_sample;
+    /* Initialize to zero to prevent garbage values in unused fields */
+    struct hpi_ppg_wr_data_t ppg_sensor_sample = {0};
 
     uint16_t _n_samples = edata->num_samples;
 

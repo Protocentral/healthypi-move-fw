@@ -51,15 +51,17 @@ extern struct k_sem sem_fi_spo2_est_cancel;
 extern struct k_sem sem_fi_bpt_est_cancel;
 extern struct k_sem sem_fi_bpt_cal_cancel;
 
-static int next_source = 0;
-static int parent_source = 0;
+static int parent_screen = 0;
+static int op_mode = 0;
 
 void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
-    
+
     scr_bpt_scr3 = lv_obj_create(NULL);
-    next_source = arg2;
-    parent_source = arg3;
+    // arg1 = parent screen (SCR_BPT or SCR_SPO2)
+    // arg2 = operation mode (PPG_FI_OP_MODE_*)
+    parent_screen = arg1;
+    op_mode = arg2;
     // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_bpt_scr3, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_bpt_scr3, LV_OBJ_FLAG_SCROLLABLE);
@@ -103,20 +105,26 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
 
 void gesture_down_scr_fi_sens_check(void)
 {
-    // Handle gesture down event
-    if(next_source == SCR_SPO2)
+    // Handle gesture down event - cancel the current operation
+    // op_mode values: 0=IDLE, 1=BPT_EST, 2=BPT_CAL, 3=SPO2_EST
+    LOG_INF("Gesture Down on Sensor Check Screen - parent=%d, op_mode=%d", parent_screen, op_mode);
+
+    if (parent_screen == SCR_SPO2)
     {
+        // SpO2 estimation cancel
         k_sem_give(&sem_fi_spo2_est_cancel);
-        hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
     }
-    else if(next_source == SCR_BPT && parent_source != SCR_BPT)
+    else if (op_mode == 2)  // PPG_FI_OP_MODE_BPT_CAL
     {
-      LOG_INF("Gesture Down on BPT Sensor Check Screen - Cancelling Measurement, giving cancel semaphore");
-      k_sem_give(&sem_fi_bpt_est_cancel);
-      hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+        // BPT calibration cancel
+        k_sem_give(&sem_fi_bpt_cal_cancel);
     }
-    else{
-      k_sem_give(&sem_fi_bpt_cal_cancel);
-      hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+    else
+    {
+        // BPT estimation cancel (op_mode == 1 or default)
+        k_sem_give(&sem_fi_bpt_est_cancel);
     }
+
+    // Navigate back to the parent screen
+    hpi_load_screen(parent_screen, SCROLL_DOWN);
 }

@@ -72,27 +72,27 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     // Display center: (195, 195), Usable radius: ~185px
     // Blue theme for blood pressure consistency
 
-    // Screen title - properly positioned to avoid arc overlap
+    // Warning icon - large, centered near top
+    lv_obj_t *label_warning = lv_label_create(scr_bpt_cal_required);
+    lv_label_set_text(label_warning, LV_SYMBOL_WARNING);
+    lv_obj_align(label_warning, LV_ALIGN_TOP_MID, 0, 55);
+    lv_obj_set_style_text_color(label_warning, lv_color_hex(0xFFAA00), LV_PART_MAIN);  // Amber/orange for warning
+    lv_obj_set_style_text_font(label_warning, &lv_font_montserrat_24, LV_PART_MAIN);   // Larger icon
+
+    // Screen title - positioned below the warning icon
     lv_obj_t *label_title = lv_label_create(scr_bpt_cal_required);
     lv_label_set_text(label_title, "Calibration Required");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 115);
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
 
-    // Warning icon (centered above message)
-    lv_obj_t *img_warning = lv_img_create(scr_bpt_cal_required);
-    lv_label_set_text(img_warning, LV_SYMBOL_WARNING);
-    lv_obj_align(img_warning, LV_ALIGN_CENTER, 0, -40);
-    lv_obj_set_style_text_color(img_warning, lv_color_hex(0x4A90E2), LV_PART_MAIN);  // Blue accent
-    lv_obj_set_style_text_font(img_warning, &lv_font_montserrat_24, LV_PART_MAIN);
-
-    // Main message (centered)
+    // Main message (centered below title)
     label_bpt_cal_required = lv_label_create(scr_bpt_cal_required);
     lv_label_set_long_mode(label_bpt_cal_required, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_bpt_cal_required, 300);
-    lv_label_set_text(label_bpt_cal_required, "Calibration is required before taking BP measurements. Use the HealthyPi Mobile App to complete calibration.");
-    lv_obj_align(label_bpt_cal_required, LV_ALIGN_CENTER, 0, 20);
+    lv_label_set_text(label_bpt_cal_required, "Please complete calibration using the HealthyPi Mobile App before taking BP measurements.");
+    lv_obj_align(label_bpt_cal_required, LV_ALIGN_CENTER, 0, 10);
     lv_obj_add_style(label_bpt_cal_required, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_bpt_cal_required, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpt_cal_required, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);

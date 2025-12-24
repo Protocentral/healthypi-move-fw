@@ -5,6 +5,7 @@
 static int32_t last_applied_min = 0;
 static int32_t last_applied_max = 65535;
 static bool first_scale = true;
+static int32_t stable_scale_count = 0;  // Count consecutive updates without scale change
 
 /* Reset autoscale state - call when screen is initialized */
 void hpi_ppg_autoscale_reset(void)
@@ -12,6 +13,7 @@ void hpi_ppg_autoscale_reset(void)
     first_scale = true;
     last_applied_min = 0;
     last_applied_max = 65535;
+    stable_scale_count = 0;
 }
 
 void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *y_max_ppg, float *gx, int disp_window_size)
@@ -82,13 +84,45 @@ void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *
                 {
                     should_update = true;
                 }
+
+                // IMPORTANT: Always allow scale-UP if new range is significantly larger
+                // This prevents getting stuck with a small waveform when signal improves
+                if (new_range > current_range * 1.2f)  // 20% larger - force rescale up
+                {
+                    should_update = true;
+                }
+
+                // Also check if signal is clipping (close to current bounds) - force rescale
+                int32_t headroom_min = min_v - last_applied_min;
+                int32_t headroom_max = last_applied_max - max_v;
+                int32_t clip_threshold = current_range / 10;  // 10% of range
+                if (headroom_min < clip_threshold || headroom_max < clip_threshold)
+                {
+                    should_update = true;
+                }
             }
             else
             {
                 should_update = true;
             }
+
+            // Periodic forced rescale: after N stable windows, force an update to catch
+            // gradual amplitude changes that don't trigger hysteresis thresholds
+            if (!should_update)
+            {
+                stable_scale_count++;
+                if (stable_scale_count >= 8)  // Force rescale every 8 windows (~2-3 seconds)
+                {
+                    should_update = true;
+                    stable_scale_count = 0;
+                }
+            }
+            else
+            {
+                stable_scale_count = 0;
+            }
         }
-        
+
         if (should_update)
         {
             lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, min_v, max_v);
