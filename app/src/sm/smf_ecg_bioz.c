@@ -414,6 +414,10 @@ void hpi_ecg_clear_lead_placement_timeout(void)
 // Function to reset ECG timer countdown to full duration (30s)
 void hpi_ecg_reset_countdown_timer(void)
 {
+    if (ecg_stabilization_countdown > 0) {  // Already in stabilization!
+        LOG_INF("Skipping reset - stabilizing");
+        return;
+    }
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
     ecg_countdown_val = ECG_RECORD_DURATION_S;  // Reset to 30 seconds
     ecg_last_timer_val = k_uptime_get_32();     // Update timestamp
@@ -460,6 +464,10 @@ void hpi_gsr_reset_countdown_timer(void)
 // Function to reset HRV timer countdown to full duration (60 seconds)
 void hpi_hrv_reset_countdown_timer(void)
 {
+    if (ecg_stabilization_countdown > 0) {  // Already in stabilization!
+        LOG_INF("Skipping reset - stabilizing");
+        return;
+    }
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
     ecg_countdown_val = HRV_MEASUREMENT_DURATION_S;  // Reset to 60 seconds
     ecg_last_timer_val = k_uptime_get_32();          // Update timestamp
@@ -879,7 +887,7 @@ static void st_ecg_idle_entry(void *o)
         set_hrv_active(true);
         // Set HRV eval active flag in data_module IMMEDIATELY to prevent ECG buffer recording
         // This must be set before transitioning to STREAM state where ecg_record_active is set
-        hpi_data_set_hrv_eval_active(true);
+       // hpi_data_set_hrv_eval_active(true);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
     }
 }
@@ -1442,7 +1450,6 @@ static void st_ecg_stabilizing_run(void *o)
             smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STREAM]);
         }
     }
-
     // Handle GSR start/stop during ECG stabilization
     if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
     {
@@ -1481,6 +1488,14 @@ static void st_ecg_stabilizing_exit(void *o)
 
     // Only handle re-stabilization here (when recording is already active)
     // For initial start, st_ecg_stream_entry handles all initialization
+
+    bool leads_off = get_ecg_lead_on_off();
+    if (leads_off){  // Leads OFF?
+        LOG_INF("STABILIZATION EXIT: Leads OFF detected");
+        hpi_ecg_timer_pause(); 
+        k_sem_give(&sem_ecg_lead_off);
+        //return;  // Don't reset timer!
+    }
     bool is_recording_active = hpi_data_is_ecg_record_active();
     if (is_recording_active) {
         // Re-stabilization after lead reconnection - reset timer to full duration and start
@@ -1490,7 +1505,10 @@ static void st_ecg_stabilizing_exit(void *o)
 
         LOG_INF("Re-stabilization complete - resuming %s with timer reset to %d seconds",
                 is_hrv_active ? "HRV evaluation" : "ECG recording", measurement_duration);
-        hpi_ecg_timer_start();
+        if(!leads_off)
+        {
+          hpi_ecg_timer_start();
+        }
     }
 }
 
