@@ -559,6 +559,7 @@ static void st_ppg_fi_cal_wait_run(void *o)
 
     if (k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
     {
+        LOG_INF("sem_bpt_exit_mode_cal received - exiting BPT calibration mode");
         hpi_hw_fi_sensor_off();  // Power off sensor when exiting calibration mode
         hpi_load_screen(SCR_BPT, SCROLL_UP);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
