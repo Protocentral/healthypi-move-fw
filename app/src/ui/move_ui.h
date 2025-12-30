@@ -348,7 +348,7 @@ void hpi_scr_recording_update_status(struct hpi_recording_status_t *status);
 void draw_scr_ecg(enum scroll_dir m_scroll_dir);
 void hpi_ecg_disp_draw_plotECG(int32_t *data_ecg, int num_samples, bool ecg_lead_off);
 void hpi_ecg_disp_update_hr(int hr);
-void hpi_ecg_disp_update_timer(int timer);
+void hpi_ecg_disp_update_timer(uint16_t remaining_s);
 void draw_scr_ecg_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_ecg_scr2(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void scr_ecg_lead_on_off_handler(bool lead_on_off);
