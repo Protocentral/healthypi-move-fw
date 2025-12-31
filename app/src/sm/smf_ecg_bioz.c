@@ -414,6 +414,10 @@ void hpi_ecg_clear_lead_placement_timeout(void)
 // Function to reset ECG timer countdown to full duration (30s)
 void hpi_ecg_reset_countdown_timer(void)
 {
+    if (ecg_stabilization_countdown > 0) {  // Already in stabilization!
+        LOG_INF("Skipping reset - stabilizing");
+        return;
+    }
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
     ecg_countdown_val = ECG_RECORD_DURATION_S;  // Reset to 30 seconds
     ecg_last_timer_val = k_uptime_get_32();     // Update timestamp
@@ -460,6 +464,10 @@ void hpi_gsr_reset_countdown_timer(void)
 // Function to reset HRV timer countdown to full duration (60 seconds)
 void hpi_hrv_reset_countdown_timer(void)
 {
+    if (ecg_stabilization_countdown > 0) {  // Already in stabilization!
+        LOG_INF("Skipping reset - stabilizing");
+        return;
+    }
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
     ecg_countdown_val = HRV_MEASUREMENT_DURATION_S;  // Reset to 60 seconds
     ecg_last_timer_val = k_uptime_get_32();          // Update timestamp
@@ -879,7 +887,7 @@ static void st_ecg_idle_entry(void *o)
         set_hrv_active(true);
         // Set HRV eval active flag in data_module IMMEDIATELY to prevent ECG buffer recording
         // This must be set before transitioning to STREAM state where ecg_record_active is set
-        hpi_data_set_hrv_eval_active(true);
+       // hpi_data_set_hrv_eval_active(true);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
     }
 }
@@ -1014,7 +1022,10 @@ static void st_ecg_stream_entry(void *o)
     // Check if this is a re-stabilization (recording already active) or initial start
     // For re-stabilization: recording is already active, timer was reset by lead-off handler
     // For initial start: recording is not active yet, need full initialization
-    bool is_restabilization = hpi_data_is_ecg_record_active();
+    // bool is_ecg_recording = hpi_data_is_ecg_record_active();
+    // bool is_hrv_recording = hpi_data_is_hrv_eval_active();
+    // bool is_restabilization = is_ecg_recording || is_hrv_recording;
+     bool is_restabilization = hpi_data_is_ecg_record_active();
 
     if (!is_restabilization) {
         // Initial start - enable ECG hardware and start sampling timer
@@ -1087,20 +1098,39 @@ static void st_ecg_stream_entry(void *o)
             .progress_timer = measurement_duration};
         zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 
+        // bool sensor_leads_off = get_ecg_lead_on_off();
+        // bool timer_running = hpi_ecg_timer_is_running();
+
+        // LOG_INF("*** RE-STAB DEBUG: sensor=%s, timer=%s ***", 
+        //         sensor_leads_off ? "OFF" : "ON", 
+        //         timer_running ? "RUNNING" : "PAUSED");
+
         // No lead placement timeout for re-stabilization (leads were just connected)
-        lead_placement_wait_start = 0;
+         //if (sensor_leads_off || !timer_running) {
+        if(get_ecg_lead_on_off()) {
+            LOG_INF("Re-stabilization: leads STILL OFF → PRESERVE timeout!");
+        } else {
+            lead_placement_wait_start = 0;  // Only clear if leads ON
+            LOG_DBG("Re-stabilization: leads ON → clear timeout");
+        }
+       
     }
 }
 
 // Flag to indicate re-stabilization is in progress (don't reset recording state)
 static bool ecg_restabilization_pending = false;
-
+int last_remaining_s = 0;
 static void st_ecg_stream_run(void *o)
 {
     // Check for lead placement timeout - cancel if user hasn't placed leads within timeout
     if (lead_placement_wait_start != 0)
     {
         int64_t elapsed_ms = k_uptime_get() - lead_placement_wait_start;
+        int remaining_s = ECG_LEAD_PLACEMENT_TIMEOUT_S - (elapsed_ms / 1000);
+        if (remaining_s > 0 && remaining_s != last_remaining_s) {
+            last_remaining_s = remaining_s;
+            LOG_INF("LEAD TIMEOUT: %ds remaining", remaining_s);
+        }
         if (elapsed_ms >= (ECG_LEAD_PLACEMENT_TIMEOUT_S * 1000))
         {
             LOG_INF("ECG SMF: Lead placement timeout after %d seconds - cancelling", ECG_LEAD_PLACEMENT_TIMEOUT_S);
@@ -1287,6 +1317,7 @@ static void st_ecg_complete_entry(void *o)
         set_hrv_active(false);
     } else {
         // ECG recording complete - signal ECG completion
+       // hpi_data_set_ecg_record_active(false);
         k_sem_give(&sem_ecg_complete_reset);
     }
 }
@@ -1355,7 +1386,7 @@ static void st_ecg_stabilizing_entry(void *o)
     int ret;
 
     // Check if this is initial stabilization or re-stabilization during recording
-    bool is_recording_active = hpi_data_is_ecg_record_active();
+     bool is_recording_active = hpi_data_is_ecg_record_active();
 
     // Always reset ECG smoothing filter for clean start
     ecg_smooth_reset();
@@ -1442,7 +1473,6 @@ static void st_ecg_stabilizing_run(void *o)
             smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STREAM]);
         }
     }
-
     // Handle GSR start/stop during ECG stabilization
     if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
     {
@@ -1481,6 +1511,14 @@ static void st_ecg_stabilizing_exit(void *o)
 
     // Only handle re-stabilization here (when recording is already active)
     // For initial start, st_ecg_stream_entry handles all initialization
+
+    bool leads_off = get_ecg_lead_on_off();
+    if (leads_off){  // Leads OFF; 
+        LOG_INF("STABILIZING_EXIT: Leads OFF - SETTING timeout");
+        lead_placement_wait_start = k_uptime_get();
+        k_sem_give(&sem_ecg_lead_off);
+    }
+   
     bool is_recording_active = hpi_data_is_ecg_record_active();
     if (is_recording_active) {
         // Re-stabilization after lead reconnection - reset timer to full duration and start
@@ -1490,8 +1528,12 @@ static void st_ecg_stabilizing_exit(void *o)
 
         LOG_INF("Re-stabilization complete - resuming %s with timer reset to %d seconds",
                 is_hrv_active ? "HRV evaluation" : "ECG recording", measurement_duration);
-        hpi_ecg_timer_start();
+        // Start timer running
+        if(!leads_off) 
+          hpi_ecg_timer_start();
+        
     }
+    
 }
 
 static const struct smf_state ecg_states[] = {

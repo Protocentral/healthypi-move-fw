@@ -666,6 +666,7 @@ void data_thread(void)
             
             // HRV interval capture - only when leads are connected
             // Skip when lead-off to prevent garbage values from corrupting HRV data
+           // LOG_INF("HRV Eval Active : %s", is_hrv_eval_active ? "True" : "False");
             if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0 && !ecg_sensor_sample.ecg_lead_off)
             {
                 // Capture R-to-R intervals for HRV analysis
