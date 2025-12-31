@@ -1171,6 +1171,7 @@ static void hpi_disp_update_screens(void)
          {
             LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
             scr_hrv_lead_on_off_handler(false);
+            hpi_data_set_hrv_eval_active(true);
 
             bool is_hrv_active = hpi_data_is_hrv_eval_active();
             bool was_lead_off = m_lead_on_off;
