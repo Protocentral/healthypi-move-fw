@@ -1149,73 +1149,41 @@ static void hpi_disp_update_screens(void)
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
+        hpi_hrv_disp_update_timer(m_disp_ecg_timer);
 
-         hpi_hrv_disp_update_timer(m_disp_ecg_timer);
-
-         // Check for lead placement timeout - return to HRV home screen
-         if (k_sem_take(&sem_ecg_lead_timeout, K_NO_WAIT) == 0)
-         {
+        // Check for lead placement timeout - return to HRV home screen
+        // (signaled by ECG SMF when user doesn't place leads within timeout)
+        if (k_sem_take(&sem_ecg_lead_timeout, K_NO_WAIT) == 0)
+        {
             LOG_INF("DISPLAY THREAD: Lead placement timeout - returning to HRV home screen");
             unload_scr_hrv_eval_progress();
             hpi_load_screen(SCR_HRV, SCROLL_DOWN);
-            // Show toast notification on the new screen
             hpi_disp_show_toast("Measurement cancelled\nNo leads detected", 3000);
             break;
-         }
-
-         if(k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
-         {
-            hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
-         }
-         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
-         {
-            LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore for HRV - calling UI handler");
-            scr_hrv_lead_on_off_handler(false);
-
-            bool is_hrv_active = hpi_data_is_hrv_eval_active();
-            bool was_lead_off = m_lead_on_off;
-
-            m_lead_on_off = false;  // Update to leads ON
-
-            LOG_INF("DISPLAY THREAD: HRV active=%s, was_lead_off=%s",
-                    is_hrv_active ? "true" : "false",
-                    was_lead_off ? "true" : "false");
-
-            // Determine if this is a reconnection during active recording:
-            // - Recording is active AND
-            // - Previous state was lead off (leads disconnected mid-measurement)
-            // Note: We don't check timer_was_running because timer is reset/paused when leads go off
-            bool is_reconnection = is_hrv_active && was_lead_off;
-
-            if (is_reconnection)
-            {
-                LOG_INF("DISPLAY THREAD: Lead reconnected mid-measurement - triggering stabilization phase");
-                // Clear any pending lead placement timeout
-                hpi_ecg_clear_lead_placement_timeout();
-                k_sem_give(&sem_ecg_lead_on_stabilize);
-            }
-            else if (is_hrv_active)
-            {
-                // Initial lead detection - leads were not previously off, start the timer
-                LOG_INF("DISPLAY THREAD: Initial lead detection - starting timer");
-                hpi_ecg_clear_lead_placement_timeout();
-                hpi_ecg_timer_start();
-            }
         }
+
+        // Check for HRV evaluation complete - show completion screen
+        if (k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: HRV evaluation complete");
+            hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
+            break;
+        }
+
+        // Handle lead ON/OFF UI updates (signaled by ECG SMF)
+        // Note: State transitions are handled by the SMF, display just updates UI
+        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: HRV Lead ON - updating UI");
+            scr_hrv_lead_on_off_handler(false); // false = leads ON
+            m_lead_on_off = false;
+        }
+
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
         {
-            LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore for HRV - calling UI handler");
-            scr_hrv_lead_on_off_handler(true); 
-            m_lead_on_off = true;             
-            bool is_hrv_active = hpi_data_is_hrv_eval_active();
-            LOG_INF("DISPLAY THREAD: HRV record active = %s", is_hrv_active ? "true" : "false");
-            if (is_hrv_active)
-            {
-                hpi_data_reset_hrv_record_buffer();
-                hpi_ecg_timer_reset();
-                hpi_hrv_reset_countdown_timer();
-               // hpi_ecg_reset_countdown_timer();
-            }
+            LOG_INF("DISPLAY THREAD: HRV Lead OFF - updating UI");
+            scr_hrv_lead_on_off_handler(true); // true = leads OFF
+            m_lead_on_off = true;
         }
 
         lv_disp_trig_activity(NULL);
@@ -1226,83 +1194,41 @@ static void hpi_disp_update_screens(void)
         hpi_ecg_disp_update_timer(m_disp_ecg_timer);
 
         // Check for lead placement timeout - return to ECG home screen
+        // (signaled by ECG SMF when user doesn't place leads within timeout)
         if (k_sem_take(&sem_ecg_lead_timeout, K_NO_WAIT) == 0)
         {
             LOG_INF("DISPLAY THREAD: Lead placement timeout - returning to ECG home screen");
             unload_scr_ecg_scr2();
             hpi_load_screen(SCR_ECG, SCROLL_DOWN);
-            // Show toast notification on the new screen
             hpi_disp_show_toast("Measurement cancelled\nNo leads detected", 3000);
             break;
         }
 
+        // Check for ECG recording complete - show completion screen
         if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
         {
+            LOG_INF("DISPLAY THREAD: ECG recording complete");
             hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
+            break;
         }
+
+        // Handle lead ON/OFF UI updates (signaled by ECG SMF)
+        // Note: State transitions are handled by the SMF, display just updates UI
         if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
         {
-            LOG_INF("DISPLAY THREAD: Processing ECG Lead ON semaphore - calling UI handler");
+            LOG_INF("DISPLAY THREAD: ECG Lead ON - updating UI");
             scr_ecg_lead_on_off_handler(false); // false = leads ON
-
-            bool is_ecg_active = hpi_data_is_ecg_record_active();
-            bool was_lead_off = m_lead_on_off;  // Previous state before this update
-
-            m_lead_on_off = false;              // Update to leads ON
-
-            LOG_INF("DISPLAY THREAD: ECG active=%s, was_lead_off=%s",
-                    is_ecg_active ? "true" : "false",
-                    was_lead_off ? "true" : "false");
-
-            // Determine if this is a reconnection during active recording:
-            // - Recording is active AND
-            // - Previous state was lead off (leads disconnected mid-measurement)
-            // Note: We don't check timer_was_running because timer is reset/paused when leads go off
-            bool is_reconnection = is_ecg_active && was_lead_off;
-
-            if (is_reconnection)
-            {
-                LOG_INF("DISPLAY THREAD: Lead reconnected mid-measurement - triggering stabilization phase");
-                // Clear any pending lead placement timeout
-                hpi_ecg_clear_lead_placement_timeout();
-                k_sem_give(&sem_ecg_lead_on_stabilize);
-            }
-            else if (is_ecg_active)
-            {
-                // Initial lead detection - leads were not previously off, start the timer
-                LOG_INF("DISPLAY THREAD: Initial lead detection - starting timer");
-                hpi_ecg_clear_lead_placement_timeout();
-                hpi_ecg_timer_start();
-            }
+            m_lead_on_off = false;
         }
+
         if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
         {
-            LOG_INF("DISPLAY THREAD: Processing ECG Lead OFF semaphore - calling UI handler");
+            LOG_INF("DISPLAY THREAD: ECG Lead OFF - updating UI");
             scr_ecg_lead_on_off_handler(true); // true = leads OFF
-            m_lead_on_off = true;              // true = leads OFF
-
-            // Reset recording to ensure continuous 30s data when leads come back on
-            bool is_ecg_active = hpi_data_is_ecg_record_active();
-            LOG_INF("DISPLAY THREAD: ECG record active = %s", is_ecg_active ? "true" : "false");
-            if (is_ecg_active)
-            {
-                LOG_INF("DISPLAY THREAD: Lead disconnected - resetting recording buffer for continuous capture");
-                
-                // Reset the recording buffer without saving incomplete data
-                hpi_data_reset_ecg_record_buffer();
-                
-                // Reset UI timer state
-                LOG_INF("DISPLAY THREAD: Resetting UI timer state");
-                hpi_ecg_timer_reset();
-                
-                // Reset ECG SMF countdown to 30s
-                LOG_INF("DISPLAY THREAD: Resetting ECG SMF countdown to 30s");
-                hpi_ecg_reset_countdown_timer();
-            }
+            m_lead_on_off = true;
         }
 
         lv_disp_trig_activity(NULL);
-
         break;
     case SCR_SPL_PLOT_GSR:
 #if defined(CONFIG_HPI_GSR_SCREEN)
