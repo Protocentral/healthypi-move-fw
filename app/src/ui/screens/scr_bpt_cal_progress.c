@@ -105,5 +105,4 @@ void gesture_down_scr_bpt_cal_progress(void)
     // Handle gesture down event
     LOG_INF("Gesture Down on BPT calibration progress Screen - Cancelling Measurement, giving cancel semaphore");
     k_sem_give(&sem_fi_bpt_cal_cancel);
-    hpi_load_screen(SCR_BPT, SCROLL_DOWN);
 }
