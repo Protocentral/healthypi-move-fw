@@ -345,7 +345,7 @@ static void gsr_chart_reset_performance_counters(void)
 
 void scr_gsr_lead_on_off_handler(bool lead_off)
 {
-    LOG_DBG("GSR screen handler: lead_off=%s", lead_off ? "OFF" : "ON");
+   // LOG_DBG("GSR screen handler: lead_off=%s", lead_off ? "OFF" : "ON");
 
     if (label_info_gsr == NULL) {
         LOG_WRN("label_info_gsr is NULL, screen handler returning early");
