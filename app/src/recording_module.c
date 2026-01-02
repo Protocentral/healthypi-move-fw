@@ -864,6 +864,10 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
         atomic_set(&g_recording_signal_mask, current_session.signal_mask);
         atomic_set(&g_recording_active, 1);
 
+        if (current_session.signal_mask & REC_SIGNAL_GSR) {
+            gsr_background_start();
+        }
+
         LOG_INF("Recording started: session=%" PRId64 ", signals=0x%02X, duration=%ds",
                 start_ts, current_session.signal_mask, current_session.duration_s);
 
@@ -874,6 +878,7 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
         atomic_set(&g_recording_active, 0);
         atomic_set(&g_recording_signal_mask, 0);
 
+        gsr_background_stop();
         LOG_INF("Recording stopped, finalizing...");
 
         /* Update state */
