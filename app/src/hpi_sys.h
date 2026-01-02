@@ -98,3 +98,6 @@ void hpi_data_add_hrv_interval(uint16_t rtor_ms);
 void hpi_data_hrv_record_to_file(bool active);
 struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void);
 void hpi_data_reset_hrv_record_buffer(void);
+
+void gsr_background_start(void);
+void gsr_background_stop(void);

@@ -269,6 +269,7 @@ static bool prev_gsr_contact_ok = false; // Track previous contact state
 
 static uint16_t m_ecg_hr = 0;
 
+static atomic_t g_gsr_bg_active = ATOMIC_INIT(0);
 static int hw_max30001_ecg_enable(void);
 static int hw_max30001_ecg_disable(void);
 
@@ -676,20 +677,20 @@ static void sensor_bioz_only_process_decode(uint8_t *buf, uint32_t buf_len)
     
     if (edata->bioz_lead_off == 1)
     {
-        LOG_DBG("BIOZ Lead OFF detected (no skin contact)");
+      //  LOG_DBG("BIOZ Lead OFF detected (no skin contact)");
         k_sem_give(&sem_gsr_lead_off);
         set_gsr_lead_on_off(true);
          gsr_contact_ok = false;
 
     } else {
 
-        LOG_DBG("BIOZ Lead ON detected (skin contact OK)");
+       // LOG_DBG("BIOZ Lead ON detected (skin contact OK)");
         k_sem_give(&sem_gsr_lead_on);
         set_gsr_lead_on_off(false);
          gsr_contact_ok = true;
     }
 
-    if (get_gsr_active()) {
+    if (get_gsr_active() || hpi_recording_is_signal_enabled(REC_SIGNAL_GSR)) {
         struct hpi_bioz_sample_t bsample = {0};
         bsample.bioz_num_samples = sample.bioz_num_samples;
         bsample.bioz_lead_off = sample.bioz_lead_off;
@@ -731,7 +732,7 @@ static void ecg_sampling_handler(struct k_timer *dummy)
 
 static void bioz_sampling_handler(struct k_timer *dummy)
 {
-    if (get_gsr_active()) {
+    if (get_gsr_active() || hpi_recording_is_signal_enabled(REC_SIGNAL_GSR)) {
         k_work_submit(&work_bioz_sample);
     }
 }
@@ -816,6 +817,47 @@ static int hw_max30001_gsr_disable(void)
     }
     return ret;
 }
+
+void gsr_background_start(void)
+{
+    /* Already running? do nothing */
+    if (atomic_get(&g_gsr_bg_active)) {
+        return;
+    }
+
+    LOG_INF("GSR background START");
+
+    atomic_set(&g_gsr_bg_active, 1);
+    set_gsr_active(true);
+    hpi_data_set_gsr_measurement_active(false);
+    hpi_data_reset_gsr_record_buffer();
+    hpi_data_set_gsr_record_active(false);
+    hw_max30001_gsr_enable();
+
+    k_timer_start(&tmr_bioz_sampling,
+                  K_MSEC(BIOZ_SAMPLING_INTERVAL_MS),
+                  K_MSEC(BIOZ_SAMPLING_INTERVAL_MS));
+}
+
+void gsr_background_stop(void)
+{
+    /* Not running? do nothing */
+    if (!atomic_get(&g_gsr_bg_active)) {
+        return;
+    }
+
+    LOG_INF("GSR background STOP");
+
+    atomic_set(&g_gsr_bg_active, 0);
+
+    if( !hpi_data_is_gsr_measurement_active() ) {
+      set_gsr_active(false);
+      k_timer_stop(&tmr_bioz_sampling);
+      hw_max30001_gsr_disable();
+    }
+    
+}
+
 struct hpi_hrv_eval_result_t g_hrv_result;
 
 static void st_ecg_idle_entry(void *o)
@@ -971,19 +1013,25 @@ static void st_gsr_stream_run(void *o)
 static void st_gsr_stream_exit(void *o)
 {
     LOG_DBG("BioZ SM Stream Exit");
-    k_timer_stop(&tmr_bioz_sampling);
+     // k_timer_stop(&tmr_bioz_sampling);
+   if (!hpi_recording_is_signal_enabled(REC_SIGNAL_GSR))
+    {
+        hpi_data_set_gsr_measurement_active(false);
+        k_timer_stop(&tmr_bioz_sampling);
+        int  ret = hw_max30001_gsr_disable();
+
+        if (ret != 0) {
+            LOG_ERR("Failed to disable GSR in complete : %d", ret);
+        }
+    }
 }
 
 static void st_gsr_complete_run(void *o)
 {
     LOG_INF("GSR COMPLETE");
-    hpi_data_set_gsr_measurement_active(false);
+   // hpi_data_set_gsr_measurement_active(false);
     hpi_data_set_gsr_record_active(false);
-    int  ret = hw_max30001_gsr_disable();
-
-    if (ret != 0) {
-        LOG_ERR("Failed to disable GSR in complete : %d", ret);
-    }
+   
 
     k_sem_give(&sem_gsr_complete_reset);
 

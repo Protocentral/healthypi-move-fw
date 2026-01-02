@@ -1244,7 +1244,7 @@ static void hpi_disp_update_screens(void)
         
         if (k_sem_take(&sem_gsr_lead_on, K_NO_WAIT) == 0)
         {
-            LOG_DBG("DISPLAY THREAD: Processing GSR Lead ON semaphore");
+           // LOG_DBG("DISPLAY THREAD: Processing GSR Lead ON semaphore");
 
             // UI handler: hide error message, update icon, etc.
             scr_gsr_lead_on_off_handler(false);   // false = lead ON
@@ -1254,7 +1254,7 @@ static void hpi_disp_update_screens(void)
 
         if (k_sem_take(&sem_gsr_lead_off, K_NO_WAIT) == 0)
         {
-            LOG_DBG("DISPLAY THREAD: Processing GSR Lead OFF semaphore");
+          //  LOG_DBG("DISPLAY THREAD: Processing GSR Lead OFF semaphore");
 
             // UI handler: show 'Finger not placed' message
             scr_gsr_lead_on_off_handler(true);    // true = lead OFF
@@ -1264,7 +1264,7 @@ static void hpi_disp_update_screens(void)
 
             if (is_gsr_active)
             {
-                LOG_DBG("DISPLAY THREAD: Lead disconnected - resetting GSR buffer");
+              //  LOG_DBG("DISPLAY THREAD: Lead disconnected - resetting GSR buffer");
                 hpi_data_reset_gsr_record_buffer();
                 hpi_gsr_reset_countdown_timer();
             }

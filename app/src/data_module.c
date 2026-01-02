@@ -722,6 +722,11 @@ void data_thread(void)
             if (hpi_recording_is_signal_enabled(REC_SIGNAL_GSR))
             {
                 hpi_rec_add_gsr_samples(bsample.bioz_samples, bsample.bioz_num_samples);
+                 if(!is_gsr_record_active)
+                {
+                    hpi_data_set_gsr_measurement_active(false);
+                    hpi_data_reset_gsr_record_buffer();
+                }
             }
         k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
 
