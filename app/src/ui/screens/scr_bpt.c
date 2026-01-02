@@ -51,19 +51,6 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_bg_color(scr_bpt, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
 
-    /*
-     * COMPACT LAYOUT FOR 390x390 ROUND AMOLED
-     * ========================================
-     * Blood pressure needs special handling for dual SYS/DIA values
-     * Layout:
-     *   Top: y=40 (title)
-     *   Upper: y=85 (SYS/DIA labels)
-     *   Center: y=115 (large values side by side)
-     *   Lower: y=185 (mmHg units)
-     *   Status: y=215 (last update)
-     *   Bottom: y=260 (button)
-     */
-
     // Get blood pressure data
     uint8_t bpt_sys = 0;
     uint8_t bpt_dia = 0;
@@ -84,73 +71,91 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
 
-    // UPPER: SYS / DIA labels at y=85
-    lv_obj_t *label_sys_title = lv_label_create(scr_bpt);
-    lv_label_set_text(label_sys_title, "SYS");
-    lv_obj_set_pos(label_sys_title, 70, 85);
-    lv_obj_set_width(label_sys_title, 100);
-    lv_obj_add_style(label_sys_title, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_sys_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_sys_title, lv_color_hex(COLOR_BP_SYS), LV_PART_MAIN);
+    // CENTRAL ZONE: BP Values Container (centered)
+    lv_obj_t *cont_bp_values = lv_obj_create(scr_bpt);
+    lv_obj_set_size(cont_bp_values, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(cont_bp_values, LV_ALIGN_CENTER, 0, -40);  // Moved up for better vertical distribution
+    lv_obj_set_style_bg_opa(cont_bp_values, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_bp_values, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_bp_values, 0, LV_PART_MAIN);
+    lv_obj_set_flex_flow(cont_bp_values, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont_bp_values, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *label_dia_title = lv_label_create(scr_bpt);
-    lv_label_set_text(label_dia_title, "DIA");
-    lv_obj_set_pos(label_dia_title, 220, 85);
-    lv_obj_set_width(label_dia_title, 100);
-    lv_obj_add_style(label_dia_title, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_dia_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_dia_title, lv_color_hex(COLOR_BP_DIA), LV_PART_MAIN);
+    // SYS Column (left side)
+    lv_obj_t *cont_sys = lv_obj_create(cont_bp_values);
+    lv_obj_set_size(cont_sys, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(cont_sys, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_sys, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_sys, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(cont_sys, 15, LV_PART_MAIN);  // Spacing between SYS and DIA
+    lv_obj_set_flex_flow(cont_sys, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_sys, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // CENTER: Large SYS and DIA values at y=115
-    label_bpt_sys = lv_label_create(scr_bpt);
+    // SYS Label
+    lv_obj_t *label_sys = lv_label_create(cont_sys);
+    lv_label_set_text(label_sys, "SYS");
+    lv_obj_add_style(label_sys, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_sys, lv_color_hex(0x4A90E2), LV_PART_MAIN);  // Blue accent
+    lv_obj_set_style_text_align(label_sys, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    label_bpt_sys = lv_label_create(cont_sys);
     if (bpt_sys == 0) {
         lv_label_set_text(label_bpt_sys, "--");
     } else {
         lv_label_set_text_fmt(label_bpt_sys, "%d", bpt_sys);
     }
-    lv_obj_set_pos(label_bpt_sys, 70, 115);
-    lv_obj_set_width(label_bpt_sys, 100);
     lv_obj_add_style(label_bpt_sys, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_bpt_sys, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpt_sys, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_bpt_sys, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    // SYS Unit
+    lv_obj_t *label_sys_unit = lv_label_create(cont_sys);
+    lv_label_set_text(label_sys_unit, "mmHg");
+    lv_obj_add_style(label_sys_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_sys_unit, lv_color_hex(0x4A90E2), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_sys_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
     // Slash separator between values
-    lv_obj_t *label_slash = lv_label_create(scr_bpt);
+    lv_obj_t *label_slash = lv_label_create(cont_bp_values);
     lv_label_set_text(label_slash, "/");
-    lv_obj_set_pos(label_slash, 180, 125);
-    lv_obj_set_width(label_slash, 30);
     lv_obj_add_style(label_slash, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_slash, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_slash, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
-    label_bpt_dia = lv_label_create(scr_bpt);
+
+    // DIA Column (right side)
+    lv_obj_t *cont_dia = lv_obj_create(cont_bp_values);
+    lv_obj_set_size(cont_dia, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(cont_dia, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cont_dia, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_dia, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(cont_dia, 15, LV_PART_MAIN);  // Spacing between SYS and DIA
+    lv_obj_set_flex_flow(cont_dia, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont_dia, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // DIA Label
+    lv_obj_t *label_dia = lv_label_create(cont_dia);
+    lv_label_set_text(label_dia, "DIA");
+    lv_obj_add_style(label_dia, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_dia, lv_color_hex(0x7B68EE), LV_PART_MAIN);  // Purple accent
+    lv_obj_set_style_text_align(label_dia, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    label_bpt_dia = lv_label_create(cont_dia);
     if (bpt_dia == 0) {
         lv_label_set_text(label_bpt_dia, "--");
     } else {
         lv_label_set_text_fmt(label_bpt_dia, "%d", bpt_dia);
     }
-    lv_obj_set_pos(label_bpt_dia, 220, 115);
-    lv_obj_set_width(label_bpt_dia, 100);
     lv_obj_add_style(label_bpt_dia, &style_numeric_large, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_bpt_dia, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpt_dia, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_bpt_dia, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // LOWER: mmHg unit labels at y=185
-    lv_obj_t *label_sys_unit = lv_label_create(scr_bpt);
-    lv_label_set_text(label_sys_unit, "mmHg");
-    lv_obj_set_pos(label_sys_unit, 70, 185);
-    lv_obj_set_width(label_sys_unit, 100);
-    lv_obj_add_style(label_sys_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_sys_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_sys_unit, lv_color_hex(COLOR_BP_SYS), LV_PART_MAIN);
-
-    lv_obj_t *label_dia_unit = lv_label_create(scr_bpt);
+    // DIA Unit
+    lv_obj_t *label_dia_unit = lv_label_create(cont_dia);
     lv_label_set_text(label_dia_unit, "mmHg");
-    lv_obj_set_pos(label_dia_unit, 220, 185);
-    lv_obj_set_width(label_dia_unit, 100);
     lv_obj_add_style(label_dia_unit, &style_caption, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_dia_unit, lv_color_hex(0x7B68EE), LV_PART_MAIN);
     lv_obj_set_style_text_align(label_dia_unit, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_dia_unit, lv_color_hex(COLOR_BP_DIA), LV_PART_MAIN);
 
     // STATUS: Last measurement time at y=215
     label_bpt_last_update_time = lv_label_create(scr_bpt);
@@ -161,16 +166,18 @@ void draw_scr_bpt(enum scroll_dir m_scroll_dir)
         hpi_helper_get_relative_time_str(bpt_time, last_meas_str, sizeof(last_meas_str));
         lv_label_set_text(label_bpt_last_update_time, last_meas_str);
     }
-    lv_obj_set_pos(label_bpt_last_update_time, 0, 215);
+    // lv_obj_set_pos(label_bpt_last_update_time, 0, 215);
+    lv_obj_set_pos(label_bpt_last_update_time, 0, 230);
     lv_obj_set_width(label_bpt_last_update_time, 390);
     lv_obj_add_style(label_bpt_last_update_time, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_bpt_last_update_time, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_bpt_last_update_time, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
-    // BOTTOM: Measure button at y=260
+
+    // BOTTOM: Measure button at y=272
     const int btn_width = 200;
     const int btn_height = 60;
-    const int btn_y = 260;
+    const int btn_y = 272;
 
     lv_obj_t *btn_bpt_measure = hpi_btn_create_primary(scr_bpt);
     lv_obj_set_size(btn_bpt_measure, btn_width, btn_height);
