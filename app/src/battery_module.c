@@ -236,6 +236,11 @@ int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
 
     delta = (float)k_uptime_delta(&ref_time) / 1000.f;
 
+    /* Zephyr sensor API convention for Gauge current is negative=discharging,
+     * while nrf_fuel_gauge lib expects the opposite negative=charging
+     */
+    current = -current;
+
     /* Process fuel gauge data with nRF Connect SDK 3.0.2 API */
     soc = nrf_fuel_gauge_process(voltage, current, temp, delta, NULL);
     tte = nrf_fuel_gauge_tte_get();
