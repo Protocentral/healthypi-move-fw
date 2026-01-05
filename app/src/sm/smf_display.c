@@ -186,6 +186,8 @@ extern struct k_sem sem_hrv_eval_complete;
 extern struct k_sem sem_ecg_lead_timeout;  // Signaled when lead placement times out
 static int m_disp_hrv_timer = 0;
 
+extern struct k_sem sem_fi_bpt_cal_cancel;
+
 // @brief Recording status variables (updated by ZBus listener, read by display thread)
 static struct hpi_recording_status_t m_disp_recording_status = {0};
 static bool m_disp_recording_status_updated = false;
@@ -1146,6 +1148,12 @@ static void hpi_disp_update_screens(void)
         
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
+         if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
+         {
+            hpi_bpt_abort();
+            hpi_load_screen(SCR_BPT, SCROLL_NONE);
+            return;
+         }
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
@@ -1725,7 +1733,6 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
     m_disp_bpt_status = hpi_bpt->status;
     m_disp_bpt_progress = hpi_bpt->progress;
 
-    LOG_DBG("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 

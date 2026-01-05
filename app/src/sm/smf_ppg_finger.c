@@ -425,6 +425,7 @@ void hpi_bpt_abort(void)
 
     /* Ensure state machine goes to IDLE */
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+
 }
 
 static void st_ppg_fing_idle_entry(void *o)
@@ -440,6 +441,8 @@ static void st_ppg_fing_idle_entry(void *o)
     k_sem_reset(&sem_fi_spo2_est_cancel);
     k_sem_reset(&sem_fi_bpt_est_cancel);
     k_sem_reset(&sem_fi_bpt_cal_cancel);
+
+ 
 }
 
 // Add a new function to check if calibration data exists
@@ -525,6 +528,8 @@ K_TIMER_DEFINE(tmr_bpt_cal_timeout, bpt_cal_timeout_handler, NULL);
 
 static void st_ppg_fi_cal_wait_entry(void *o)
 {
+    k_sem_reset(&sem_bpt_exit_mode_cal);
+    k_sem_reset(&sem_fi_bpt_cal_cancel);
     LOG_DBG("PPG Finger SM BPT Calibration Wait Entry");
     hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT, 0, 0, 0);
 
@@ -534,24 +539,13 @@ static void st_ppg_fi_cal_wait_entry(void *o)
 
 static void st_ppg_fi_cal_wait_run(void *o)
 {
-    // LOG_DBG("PPG Finger SM BPT Calibration Wait Running");
 
-    // Check for user cancel first (from gesture swipe down on cal progress screen)
-    if (k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_INF("BPT Calibration cancelled by user in CAL_WAIT state");
-        k_timer_stop(&tmr_bpt_cal_timeout);
-        hpi_hw_fi_sensor_off();  // Power off sensor since we're in wait state with sensor powered
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-        return;  // Don't process other semaphores after cancel
-    }
-
-    // LOG_DBG("PPG Finger SM BPT Calibration Running");
+    LOG_DBG("PPG Finger SM BPT Calibration Running");
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
         LOG_INF("sem_bpt_cal_start received in CAL_WAIT state - starting calibration");
         // Turn off timeout
-        k_timer_stop(&tmr_bpt_cal_timeout);
+       // k_timer_stop(&tmr_bpt_cal_timeout);
 
         sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_CAL;
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL]);
@@ -561,8 +555,9 @@ static void st_ppg_fi_cal_wait_run(void *o)
     {
         LOG_INF("sem_bpt_exit_mode_cal received - exiting BPT calibration mode");
         hpi_hw_fi_sensor_off();  // Power off sensor when exiting calibration mode
-        hpi_load_screen(SCR_BPT, SCROLL_UP);
+        // hpi_load_screen(SCR_BPT, SCROLL_UP);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
     }
 }
 
@@ -586,13 +581,8 @@ static void st_ppg_fing_bpt_cal_run(void *o)
         k_sleep(K_MSEC(1000)); // Wait for the sampling to stop
         hpi_bpt_fetch_cal_vector(bpt_cal_vector_buf, m_cal_index);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
+        return;
     }
-    if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_DBG("BPT Calibration Cancelled by user");
-        hpi_bpt_abort();
-    }
-  
 }
 
 static void st_ppg_fing_bpt_cal_done_entry(void *o)
@@ -742,27 +732,9 @@ static void st_ppg_fi_check_sensor_run(void *o)
     struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
 
     // Check for cancellation FIRST, before doing sensor work
-    if (k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
+    if ((k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0) || (k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0) || (k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0))
     {
-        LOG_DBG("SpO2 Estimation Cancelled in CHECK_SENSOR");
-        k_timer_stop(&tmr_sensor_check_timeout);
-        hpi_hw_fi_sensor_off();  // FIX: Power off sensor on cancel
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-        return;
-    }
-
-    if (k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_DBG("BPT Estimation Cancelled in CHECK_SENSOR");
-        k_timer_stop(&tmr_sensor_check_timeout);
-        hpi_hw_fi_sensor_off();  // FIX: Power off sensor on cancel
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
-        return;
-    }
-
-    if (k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
-    {
-        LOG_DBG("BPT Calibration Cancelled in CHECK_SENSOR");
+       // LOG_DBG("SpO2 Estimation Cancelled in CHECK_SENSOR");
         k_timer_stop(&tmr_sensor_check_timeout);
         hpi_hw_fi_sensor_off();  // FIX: Power off sensor on cancel
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
