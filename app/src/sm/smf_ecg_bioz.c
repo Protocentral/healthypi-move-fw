@@ -1004,7 +1004,7 @@ static void st_gsr_stream_run(void *o)
     if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0) {
         LOG_DBG("GSR cancelled");
         hpi_data_reset_gsr_record_buffer();
-
+        hpi_data_set_gsr_record_active(false);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
     }
 
