@@ -722,14 +722,15 @@ void data_thread(void)
             if (hpi_recording_is_signal_enabled(REC_SIGNAL_GSR))
             {
                 hpi_rec_add_gsr_samples(bsample.bioz_samples, bsample.bioz_num_samples);
-                 if(!is_gsr_record_active)
+            //    LOG_WRN("Added %d GSR samples to background recording",bsample.bioz_num_samples);
+                if(!is_gsr_record_active)
                 {
                     hpi_data_set_gsr_measurement_active(false);
-                    hpi_data_reset_gsr_record_buffer();
                 }
             }
         k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
 
+        LOG_DBG("is_gsr_record_active=%d, is_measurement_active=%d, gsr_record_counter=%d",is_gsr_record_active, hpi_data_is_gsr_measurement_active(), gsr_record_counter);
         if (is_gsr_record_active == true)
         {
             int samples_to_copy = bsample.bioz_num_samples;
@@ -758,7 +759,8 @@ void data_thread(void)
                 {
                     LOG_WRN("GSR buffer full - collected %d samples(30.0 seconds @ 32Hz)", gsr_record_counter);
                     LOG_INF("Signaling GSR state machine to stop recording");
-
+                    
+                    is_gsr_record_active = false;   // 🔴 CRITICAL
                     extern struct k_sem sem_gsr_complete;
                     k_sem_give(&sem_gsr_complete);
                 }
