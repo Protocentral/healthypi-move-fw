@@ -1,4 +1,44 @@
-# HealthyPi Move Firmware v2.0.0 Release Notes
+# HealthyPi Move Firmware Release Notes
+
+---
+
+## v2.0.1
+
+**Release Date:** January 2026
+
+This is a patch release with critical bug fixes for battery monitoring, ECG/HRV lead handling, recording module, and BPT calibration.
+
+### Bug Fixes
+
+#### Battery Monitoring
+- **Fixed**: Battery percentage going backwards (increasing while discharging)
+  - Root cause: Current sign convention mismatch between Zephyr sensor API and nrf_fuel_gauge library
+  - Zephyr uses negative current for discharging; nrf_fuel_gauge expects negative for charging
+  - Added current sign inversion in `battery_fuel_gauge_update()` to match the existing fix in `battery_fuel_gauge_init()`
+
+#### ECG/HRV Lead Detection
+- **Fixed**: ECG stabilization not completing when leads connected on screen entry
+  - Added `set_hrv_eval_active()` call when leads connect during HRV evaluation
+- **Fixed**: Timer resets during stabilization phase causing measurement restarts
+  - Added guards to prevent timer resets during stabilization
+- **Fixed**: Lead-off detection not handled correctly during stabilization exit state
+- **Fixed**: Lead placement timeout not clearing when leads reconnected
+- **Improved**: Timer display logic with cleaner stabilization vs recording state handling
+
+#### Recording Module
+- **Fixed**: GSR recording buffer not cleared properly, causing data corruption
+- **Fixed**: GSR recording state not reset after recording completion
+- **Fixed**: GSR recording not stopping correctly when cancelled during active recording
+  - Added 30-second buffer clear and state reset on cancellation
+- **Added**: Proper GSR recording start trigger in recording module
+
+#### Blood Pressure (BPT)
+- **Fixed**: Calibration progress screen cancel semaphore handling
+- **Improved**: BPT screen structure and layout
+
+---
+
+## v2.0.0 Release Notes
 
 **Release Date:** December 2025
 
@@ -105,7 +145,3 @@ This is a major release introducing Heart Rate Variability (HRV) measurement, en
 
 - HRV accuracy depends on stable lead contact for the full 60-second measurement period
 - GSR stress level display temporarily hidden pending further validation
-
----
-
-**Full Changelog**: https://github.com/protocentral/healthypi-move-fw/compare/v1.9.0...v2.0.0
