@@ -291,8 +291,8 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     float local_ymin = y_min_ppg;
     float local_ymax = y_max_ppg;
     float local_base = wr_baseline_ema;
-    int local_spo2_source = spo2_source;
 
+    /* First pass: calculate all plot values, track min/max, and update baseline */
     for (int i = 0; i < num; i++)
     {
         /* Driver now provides normalized samples; use value directly. */
@@ -305,8 +305,21 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
         }
 
         float residual = (float)scaled - local_base;
-        /* Increased amplification from 2x to 8x for better visibility of small signals */
-        residual *= 8.0f;
+
+        /* Adaptive amplification based on signal strength for better autoscaling.
+         * Use higher amplification (16x) for small residuals to make signal visible,
+         * and lower amplification (4x) for large residuals to prevent clipping. */
+        float abs_residual = (residual >= 0) ? residual : -residual;
+        float amp_factor;
+        if (abs_residual < 50.0f) {
+            amp_factor = 16.0f;  /* Boost weak signals */
+        } else if (abs_residual < 200.0f) {
+            amp_factor = 8.0f;   /* Medium signals */
+        } else {
+            amp_factor = 4.0f;   /* Strong signals - reduce to prevent clipping */
+        }
+        residual *= amp_factor;
+
         local_base = local_base * (1.0f - alpha) + ((float)scaled * alpha);
 
         /* Center residual to positive range for plotting */
@@ -314,30 +327,24 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 
         float fplot = (float)plot_val;
 
-        /* Update local extrema then write sample to chart so autoscale sees newest values */
+        /* Update local extrema for this batch */
         if (fplot < local_ymin) local_ymin = fplot;
         if (fplot > local_ymax) local_ymax = fplot;
 
         lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
 
-        /* Commit extrema to globals used by the shared autoscale helper */
-        y_min_ppg = local_ymin;
-        y_max_ppg = local_ymax;
-
-        /* Advance sample counter used by autoscaler and call helper */
+        /* Advance sample counter */
         hpi_ppg_disp_add_samples(1);
-
-        if (local_spo2_source == SPO2_SOURCE_PPG_WR) {
-            hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
-        } else {
-            hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_FI);
-        }
     }
 
-    /* write back cached locals */
+    /* Commit extrema to globals used by the shared autoscale helper */
     y_min_ppg = local_ymin;
     y_max_ppg = local_ymax;
     wr_baseline_ema = local_base;
+
+    /* Call autoscale ONCE per batch (not per sample) for more stable scaling.
+     * This ensures min/max tracking covers more data before triggering rescale. */
+    hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
 }
 
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)

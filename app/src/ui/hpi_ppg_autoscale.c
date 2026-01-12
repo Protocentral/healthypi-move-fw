@@ -18,8 +18,9 @@ void hpi_ppg_autoscale_reset(void)
 
 void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *y_max_ppg, float *gx, int disp_window_size)
 {
-    // Trigger rescaling every 32 samples to reduce jitter
-    if (*gx >= (disp_window_size / 4))
+    /* Trigger rescaling every disp_window_size/8 samples for more responsive autoscaling.
+     * For PPG_RAW_WINDOW_SIZE=128, this triggers every 16 samples (~160ms at 100Hz). */
+    if (*gx >= (disp_window_size / 8))
     {
         float fymin = *y_min_ppg;
         float fymax = *y_max_ppg;
@@ -46,9 +47,11 @@ void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *
             min_v = center - half_span;
             max_v = center + half_span;
         }
-        else if ((max_v - min_v) < 64)
+        else if ((max_v - min_v) < 128)
         {
-            /* Increased minimum range from 8 to 64 for better visibility of small signals */
+            /* Increased minimum range to 128 for better visibility of small wrist PPG signals.
+             * Small signals after DC removal are often in the range of tens of units,
+             * so a minimum display range of 128 ensures they remain visible. */
             int32_t center = (min_v + max_v) / 2;
             int32_t half = 64;
             min_v = center - half;
@@ -56,10 +59,10 @@ void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *
         }
         else
         {
-            /* Add 10% padding for better visibility */
+            /* Add 15% padding for better visibility (increased from 10%) */
             int32_t range = max_v - min_v;
-            int32_t padding = range / 10;
-            if (padding < 8) padding = 8;
+            int32_t padding = range * 15 / 100;
+            if (padding < 16) padding = 16;
             min_v -= padding;
             max_v += padding;
         }
@@ -111,7 +114,7 @@ void hpi_ppg_disp_do_set_scale_shared(lv_obj_t *chart, float *y_min_ppg, float *
             if (!should_update)
             {
                 stable_scale_count++;
-                if (stable_scale_count >= 8)  // Force rescale every 8 windows (~2-3 seconds)
+                if (stable_scale_count >= 4)  // Force rescale every 4 windows (~0.5-1 second)
                 {
                     should_update = true;
                     stable_scale_count = 0;
