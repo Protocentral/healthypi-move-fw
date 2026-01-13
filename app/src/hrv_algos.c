@@ -290,6 +290,7 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
     // Average the PSD and normalize
      LOG_INF("Number of segments: %d", num_segments);
      float32_t scale = 1.0f / (num_segments * window_power * fs );
+  
      LOG_DBG("Scaling factor: %.6f (window_power=%.3f, fs=%.1f, N=%d)", scale, window_power, fs, num_segments);
      arm_scale_f32(psd, scale, psd, fft_size);
 
@@ -302,7 +303,7 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
     float32_t df = fs / fft_size;
     uint32_t idx_low = (uint32_t)roundf(f_low / df);
     uint32_t idx_high = (uint32_t)roundf(f_high / df);
-    
+
     // Clamp indices
     if (idx_high >= fft_size / 2) idx_high = fft_size / 2 - 1;
     if (idx_low > idx_high) return 0.0f;
@@ -331,19 +332,19 @@ static float32_t integrate_band_power(float32_t *psd, uint32_t fft_size,float32_
 void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_intervals)
  {
 
-      tm_metrics.mean = hrv_calculate_mean(rr_intervals, num_intervals);
-      tm_metrics.sdnn = hrv_calculate_sdnn(rr_intervals, num_intervals);
-      tm_metrics.rmssd = hrv_calculate_rmssd(rr_intervals, num_intervals);
-      tm_metrics.pnn50 = hrv_calculate_pnn50(rr_intervals, num_intervals);    
-      tm_metrics.hrv_min = (float)hrv_calculate_min(rr_intervals, num_intervals);
-      tm_metrics.hrv_max = (float)hrv_calculate_max(rr_intervals, num_intervals);
-
+        tm_metrics.mean = hrv_calculate_mean(rr_intervals, num_intervals);
+        tm_metrics.sdnn = hrv_calculate_sdnn(rr_intervals, num_intervals);
+        tm_metrics.rmssd = hrv_calculate_rmssd(rr_intervals, num_intervals);
+        tm_metrics.pnn50 = hrv_calculate_pnn50(rr_intervals, num_intervals);    
+        tm_metrics.hrv_min = (float)hrv_calculate_min(rr_intervals, num_intervals);
+        tm_metrics.hrv_max = (float)hrv_calculate_max(rr_intervals, num_intervals);
 
     // Interpolate RR intervals
 
     uint32_t num_interp_samples = interpolate_rr_intervals(rr_intervals, num_intervals,INTERP_FS,rr_time,rr_values,
         interp_signal,FFT_SIZE * 4);
 
+       
 
      // Remove mean
      remove_mean(interp_signal, num_interp_samples);
