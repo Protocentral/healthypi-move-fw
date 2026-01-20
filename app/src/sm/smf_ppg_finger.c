@@ -47,6 +47,7 @@ LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
 #define PPG_FI_SAMPLING_INTERVAL_MS 20
 #define MAX30101_SENSOR_ID 0x15
 #define BPT_CAL_TIMEOUT_MS 15000
+#define FINGER_SENSOR_CONTACT_TIMEOUT_MS 30000
 
 K_SEM_DEFINE(sem_bpt_est_start, 0, 1);
 K_SEM_DEFINE(sem_bpt_cal_start, 0, 1);
@@ -67,6 +68,10 @@ K_SEM_DEFINE(sem_spo2_est_complete, 0, 1);
 
 K_SEM_DEFINE(sem_bpt_enter_mode_cal, 0, 1);
 K_SEM_DEFINE(sem_bpt_exit_mode_cal, 0, 1);
+
+K_SEM_DEFINE(sem_finger_contact_off, 0, 1);
+K_SEM_DEFINE(sem_finger_contact_on, 0, 1);
+K_SEM_DEFINE(sem_finger_contact_timeout, 0, 1);
 
 ZBUS_CHAN_DECLARE(bpt_chan);
 
@@ -102,6 +107,8 @@ enum ppg_fi_sm_state
 
     PPG_FI_STATE_SPO2_EST,
     PPG_FI_STATE_SPO2_EST_DONE,
+
+    PPG_FI_STATE_WAIT_FOR_CONTACT,
 };
 
 struct s_ppg_fi_object
@@ -143,6 +150,12 @@ extern struct k_sem sem_ppg_finger_sm_start;
 
 static int64_t smf_ppg_fi_spo2_last_measured_time;
 
+static int64_t wait_start_ts;
+static bool finger_contact_ok = false;  
+static bool prev_finger_contact_ok = false;
+static int64_t contact_lost_start_ts = 0;
+static uint8_t contact_debounce_ts = 0;
+
 void hpi_bpt_set_cal_vals(uint8_t cal_index, uint8_t cal_sys, uint8_t cal_dia)
 {
     k_mutex_lock(&mutex_bpt_cal_set, K_FOREVER);
@@ -152,10 +165,55 @@ void hpi_bpt_set_cal_vals(uint8_t cal_index, uint8_t cal_sys, uint8_t cal_dia)
     k_mutex_unlock(&mutex_bpt_cal_set);
 }
 
+
 static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_ppg_op_mode)
 {
     const struct max32664d_encoded_data *edata = (const struct max32664d_encoded_data *)buf;
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
+
+    uint8_t finger_status = edata->bpt_status ;
+
+    /* Check finger contact status
+       finger_status = 1 -> Good signal
+       finger_status = 2 -> Success
+       finger_status = 4 -> Motion detected
+    */
+   
+    bool current_contact = (finger_status == 4 || finger_status == 1 || finger_status == 2);
+
+   if (current_contact) {
+    contact_debounce_ts= 0;
+    
+    // Only set to true if it was false before
+    if (!finger_contact_ok) {
+        finger_contact_ok = true;
+        LOG_INF("Finger Contact status: %d", finger_status);
+        
+        // Signal that contact was just detected
+        if (!prev_finger_contact_ok) {
+            k_sem_give(&sem_finger_contact_on);
+            wait_start_ts = 0;  // Reset wait timer
+        }
+     }
+    } else {
+        if(contact_debounce_ts == 0)
+            contact_debounce_ts = k_uptime_get();
+        else if (k_uptime_get() - contact_debounce_ts >= 500) {  // Require 500ms of bad readings
+            // Only set to false if it was true before
+            if (finger_contact_ok) {
+                finger_contact_ok = false;
+                LOG_INF("Finger contact lost (confirmed after %d ms)", k_uptime_get() - contact_debounce_ts);
+                
+                // Signal that contact was just lost
+                if (prev_finger_contact_ok) {
+                    k_sem_give(&sem_finger_contact_off);
+                }
+            }
+        }
+    }
+
+    // Update previous state
+    prev_finger_contact_ok = finger_contact_ok;
 
     uint16_t _n_samples = edata->num_samples;
     // Cap to the FI PPG points per sample (driver may return up to 32)
@@ -173,7 +231,6 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
             ppg_sensor_sample.raw_red[i] = edata->red_samples[i];
             ppg_sensor_sample.raw_ir[i] = edata->ir_samples[i];
         }
-
         ppg_sensor_sample.hr = edata->hr;
         ppg_sensor_sample.spo2 = edata->spo2;
 
@@ -441,8 +498,9 @@ static void st_ppg_fing_idle_entry(void *o)
     k_sem_reset(&sem_fi_spo2_est_cancel);
     k_sem_reset(&sem_fi_bpt_est_cancel);
     k_sem_reset(&sem_fi_bpt_cal_cancel);
-
- 
+    finger_contact_ok = false; 
+    contact_lost_start_ts = 0;
+    contact_debounce_ts = 0;
 }
 
 // Add a new function to check if calibration data exists
@@ -583,6 +641,7 @@ static void st_ppg_fing_bpt_cal_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
         return;
     }
+    
 }
 
 static void st_ppg_fing_bpt_cal_done_entry(void *o)
@@ -602,15 +661,16 @@ static void st_ppg_fing_bpt_est_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_BPT_EST;
-    hpi_load_scr_spl(SCR_SPL_BPT_MEASURE, SCROLL_NONE, SCR_SPL_FI_SENS_CHECK, 0, 0, 0);
-    hpi_hw_fi_sensor_on();
-    hw_bpt_start_est();
-    LOG_INF("Signaling to start sampling for BPT estimation from entry");
-    k_sem_give(&sem_start_fi_sampling);
+    // hpi_load_scr_spl(SCR_SPL_BPT_MEASURE, SCROLL_NONE, SCR_SPL_FI_SENS_CHECK, 0, 0, 0);
+    // hpi_hw_fi_sensor_on();
+    // hw_bpt_start_est();
+    // LOG_INF("Signaling to start sampling for BPT estimation from entry");
+    // k_sem_give(&sem_start_fi_sampling);
 }
 
 static void st_ppg_fing_bpt_est_run(void *o)
 {
+  
     if (k_sem_take(&sem_bpt_est_complete, K_NO_WAIT) == 0)
     {
         k_sem_give(&sem_stop_fi_sampling);
@@ -618,6 +678,27 @@ static void st_ppg_fing_bpt_est_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST_DONE]);
     }
 
+
+    if (finger_contact_ok == false) 
+    {
+        if (contact_lost_start_ts == 0)
+        {
+            // First time contact is lost
+            contact_lost_start_ts = k_uptime_get();
+            LOG_DBG("Contact lost, starting %ds timeout", FINGER_SENSOR_CONTACT_TIMEOUT_MS/1000);
+        } else if ((k_uptime_get() - contact_lost_start_ts) >= FINGER_SENSOR_CONTACT_TIMEOUT_MS) {
+            LOG_INF("Contact lost for %ds during measurement - aborting", FINGER_SENSOR_CONTACT_TIMEOUT_MS/1000);
+            hpi_bpt_abort();
+            k_sem_give(&sem_finger_contact_timeout);
+            contact_lost_start_ts = 0;
+            return;
+        }
+    } 
+    else
+    {
+            // Contact restored, reset the timer
+            contact_lost_start_ts = 0;
+    }
     if(k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0)
     {
         LOG_DBG("BPT Estimation Cancelled by user");
@@ -783,19 +864,20 @@ static void st_ppg_fi_check_sensor_run(void *o)
     // Route to appropriate state based on operation mode
     if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
     {
-        LOG_DBG("Transitioning to BPT_EST state");
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
+        // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
+        hpi_load_scr_spl(SCR_SPL_BPT_MEASURE, SCROLL_NONE, SCR_SPL_FI_SENS_CHECK, 0, 0, 0);
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_WAIT_FOR_CONTACT]);
     }
     else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
     {
-        // FIX: Route calibration to CAL_WAIT first (to show "waiting for app" screen)
-        LOG_DBG("Transitioning to BPT_CAL_WAIT state");
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
+       LOG_DBG("Transitioning to BPT_CAL_WAIT state");
+       hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT, 0, 0, 0);
+       smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
     }
     else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
     {
-        LOG_DBG("Transitioning to SPO2_EST state");
-        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST]);
+       hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
+       smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_WAIT_FOR_CONTACT]);
     }
     else
     {
@@ -819,20 +901,40 @@ static void st_ppg_fi_sensor_fail_run(void *o)
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
-static void st_ppg_fi_spo2_est_entry(void *o)
+static void st_ppg_fi_spo2_est_entry(void *o) 
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_SPO2_EST;
     spo2_process_done = false;  // Reset completion flag for new measurement
-    hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
-    hpi_hw_fi_sensor_on();
-    hw_bpt_start_est();                 // Start the BPT estimation for SpO2
-    k_sem_give(&sem_start_fi_sampling); // Give the semaphore to start sampling
+   // hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
+  //  hpi_hw_fi_sensor_on();
+  //  hw_bpt_start_est();                 // Start the BPT estimation for SpO2
+   // k_sem_give(&sem_start_fi_sampling); // Give the semaphore to start sampling
 }
 
 static void st_ppg_fi_spo2_est_run(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Running");
+    if (finger_contact_ok == false) 
+    {
+        if (contact_lost_start_ts == 0)
+        {
+            // First time contact is lost
+            contact_lost_start_ts = k_uptime_get();
+            LOG_DBG("Contact lost, starting %ds timeout", FINGER_SENSOR_CONTACT_TIMEOUT_MS/1000);
+        } else if ((k_uptime_get() - contact_lost_start_ts) >= FINGER_SENSOR_CONTACT_TIMEOUT_MS) {
+            LOG_INF("Contact lost for %ds during measurement - aborting", FINGER_SENSOR_CONTACT_TIMEOUT_MS/1000);
+            hpi_bpt_abort();
+            k_sem_give(&sem_finger_contact_timeout);
+            contact_lost_start_ts = 0;
+            return;
+        }
+    } 
+    else
+    {
+            // Contact restored, reset the timer
+            contact_lost_start_ts = 0;
+    }
     /* Check for completion */
     if (k_sem_take(&sem_spo2_est_complete, K_NO_WAIT) == 0)
     {
@@ -866,6 +968,57 @@ static void st_ppg_fi_spo2_est_done_run(void *o)
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
+static void st_ppg_fi_wait_for_contact_entry(void *o)
+{
+    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
+    LOG_DBG("PPG Finger SM Wait for Contact Entry");
+    wait_start_ts = k_uptime_get();
+    finger_contact_ok = false;
+    contact_debounce_ts = 0;
+    hpi_hw_fi_sensor_on();
+    sens_decode_ppg_fi_op_mode = s->ppg_fi_op_mode;
+    hw_bpt_start_est(); // Start the BPT estimation to enable finger contact detection
+    k_sem_give(&sem_start_fi_sampling);
+     
+}
+static void st_ppg_fi_wait_for_contact_run(void *o)
+{
+    if(k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0 || k_sem_take(&sem_fi_bpt_est_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Finger measurement cancelled while waiting for contact");
+        hpi_bpt_abort();
+        hpi_hw_fi_sensor_off();
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
+
+    struct s_ppg_fi_object *s = (struct s_ppg_fi_object *)o;
+
+    if (k_sem_take(&sem_finger_contact_on, K_NO_WAIT) == 0) 
+    {
+        LOG_INF("*** FINGER CONFIRMED → MEASUREMENT START ***");
+        if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST) {
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
+        } else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST) {
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_SPO2_EST]);
+        }
+        return;
+    }
+ 
+   if ((wait_start_ts != 0 && (k_uptime_get() - wait_start_ts) >= FINGER_SENSOR_CONTACT_TIMEOUT_MS)) {
+            LOG_INF("FINGER CONTACT TIMEOUT");
+            hpi_bpt_abort();
+            k_sem_give(&sem_finger_contact_timeout);
+            wait_start_ts = 0;
+            smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+            return;
+        }
+
+}
+static void st_ppg_fi_wait_for_contact_exit(void *o)
+{
+    LOG_DBG("PPG Finger SM Wait for Contact Exit");
+}
 static const struct smf_state ppg_fi_states[] = {
     [PPG_FI_STATE_IDLE] = SMF_CREATE_STATE(st_ppg_fing_idle_entry, st_ppg_fing_idle_run, NULL, NULL, NULL),
     [PPG_FI_STATE_CHECK_SENSOR] = SMF_CREATE_STATE(st_ppg_fi_check_sensor_entry, st_ppg_fi_check_sensor_run, NULL, NULL, NULL),
@@ -882,6 +1035,8 @@ static const struct smf_state ppg_fi_states[] = {
 
     [PPG_FI_STATE_SPO2_EST] = SMF_CREATE_STATE(st_ppg_fi_spo2_est_entry, st_ppg_fi_spo2_est_run, NULL, NULL, NULL),
     [PPG_FI_STATE_SPO2_EST_DONE] = SMF_CREATE_STATE(st_ppg_fi_spo2_est_done_entry, st_ppg_fi_spo2_est_done_run, NULL, NULL, NULL),
+
+    [PPG_FI_STATE_WAIT_FOR_CONTACT] = SMF_CREATE_STATE(st_ppg_fi_wait_for_contact_entry, st_ppg_fi_wait_for_contact_run,st_ppg_fi_wait_for_contact_exit, NULL, NULL),
 };
 
 static void smf_ppg_finger_thread(void)
@@ -902,7 +1057,8 @@ static void smf_ppg_finger_thread(void)
             LOG_ERR("Error in PPG Finger State Machine");
             break;
         }
-        k_msleep(1000);
+        // k_msleep(1000);
+         k_msleep(100);
     }
 }
 

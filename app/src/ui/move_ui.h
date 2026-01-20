@@ -421,6 +421,7 @@ void draw_scr_fi_sens_wear(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 void draw_scr_bpt_measure(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 
+
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 static void hrv_update_display(void);
