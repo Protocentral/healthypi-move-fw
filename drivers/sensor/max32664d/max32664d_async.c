@@ -124,35 +124,37 @@ static int max32664_async_sample_fetch(const struct device *dev,
 
         /* bytes 7..12 are ignored in current layout */
 
-        // *bpt_status = buf[(sample_len * i) + 12 + MAX32664D_SENSOR_DATA_OFFSET];
-        // *bpt_progress = buf[(sample_len * i) + 13 + MAX32664D_SENSOR_DATA_OFFSET];
+        *bpt_status = buf[(sample_len * i) + 12 + MAX32664D_SENSOR_DATA_OFFSET];
+        *bpt_progress = buf[(sample_len * i) + 13 + MAX32664D_SENSOR_DATA_OFFSET];
 
-        // uint16_t bpt_hr = (uint16_t)buf[(sample_len * i) + 14 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-        // bpt_hr |= (uint16_t)buf[(sample_len * i) + 15 + MAX32664D_SENSOR_DATA_OFFSET];
+        uint16_t bpt_hr = (uint16_t)buf[(sample_len * i) + 14 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+        bpt_hr |= (uint16_t)buf[(sample_len * i) + 15 + MAX32664D_SENSOR_DATA_OFFSET];
 
-        // *hr = (bpt_hr / 10);
+        *hr = (bpt_hr / 10);
 
-        // *bpt_sys = buf[(sample_len * i) + 16 + MAX32664D_SENSOR_DATA_OFFSET];
-        // *bpt_dia = buf[(sample_len * i) + 17 + MAX32664D_SENSOR_DATA_OFFSET];
+        *bpt_sys = buf[(sample_len * i) + 16 + MAX32664D_SENSOR_DATA_OFFSET];
+        *bpt_dia = buf[(sample_len * i) + 17 + MAX32664D_SENSOR_DATA_OFFSET];
 
-        // uint16_t bpt_spo2 = (uint16_t)buf[(sample_len * i) + 18 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-        // bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 19 + MAX32664D_SENSOR_DATA_OFFSET];
+        uint16_t bpt_spo2 = (uint16_t)buf[(sample_len * i) + 18 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
+        bpt_spo2 |= (uint16_t)buf[(sample_len * i) + 19 + MAX32664D_SENSOR_DATA_OFFSET];
 
-        // *spo2 = (bpt_spo2 / 10);
-        // *spo2_conf = buf[(sample_len * i) + 25 + MAX32664D_SENSOR_DATA_OFFSET];
-        // CORRECT: Official byte offsets (sample_len=29, offset=1)
-        int base_idx = (sample_len * i) + MAX32664D_SENSOR_DATA_OFFSET;
-        *bpt_status = buf[base_idx + 12];      // Byte 12: bpt_status ✓
-        *bpt_progress = buf[base_idx + 13];    // Byte 13: progress ✓
-        *hr = ((buf[base_idx + 14] << 8) | buf[base_idx + 15]) / 10;
-        *bpt_sys = buf[base_idx + 16];         // Byte 16: systolic
-        *bpt_dia = buf[base_idx + 17];         // Byte 17: diastolic
-        *spo2 = ((buf[base_idx + 18] << 8) | buf[base_idx + 19]) / 10;
-        *spo2_conf = buf[base_idx + 25];       // Keep existing
+        *spo2 = (bpt_spo2 / 10);
+        *spo2_conf = buf[(sample_len * i) + 25 + MAX32664D_SENSOR_DATA_OFFSET];
+        //CORRECT: Official byte offsets (sample_len=29, offset=1)
+
+
+        // int base_idx = (sample_len * i) + MAX32664D_SENSOR_DATA_OFFSET;
+        // *bpt_status = buf[base_idx + 12];      // Byte 12: bpt_status 
+        // *bpt_progress = buf[base_idx + 13];    // Byte 13: progress 
+        // *hr = ((buf[base_idx + 14] << 8) | buf[base_idx + 15]) / 10;
+        // *bpt_sys = buf[base_idx + 16];         // Byte 16: systolic
+        // *bpt_dia = buf[base_idx + 17];         // Byte 17: diastolic
+        // *spo2 = ((buf[base_idx + 18] << 8) | buf[base_idx + 19]) / 10;
+        // *spo2_conf = buf[base_idx + 25];      // Byte 25: spo2 confidence
 
         uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 20 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
-        spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 + MAX32664D_SENSOR_DATA_OFFSET];
-    }
+         spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 + MAX32664D_SENSOR_DATA_OFFSET];
+     }
 
     return 0;
 }
