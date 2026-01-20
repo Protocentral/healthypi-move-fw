@@ -1163,12 +1163,6 @@ static void hpi_disp_update_screens(void)
             hpi_load_screen(SCR_BPT, SCROLL_NONE);
             return;
          }
-         if(k_sem_take(&sem_finger_contact_timeout, K_NO_WAIT) == 0)
-         {
-            LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to BPT home screen");
-            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
-            hpi_disp_show_toast("Calibration cancelled\nNo finger detected", 3000);
-         }
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_SPO2_MEASURE:
@@ -1178,14 +1172,7 @@ static void hpi_disp_update_screens(void)
             LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to SpO2 home screen");
             hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
             hpi_disp_show_toast("Measurement cancelled\nNo finger detected", 3000);
-         }
-        //  if(k_sem_take(&sem_fi_spo2_est_cancel, K_NO_WAIT) == 0)
-        //  {
-        //     hpi_bpt_abort();
-        //     hpi_load_screen(SCR_SPO2, SCROLL_NONE);
-        //     hpi_disp_show_toast("Measurement cancelled\n", 3000);
-        
-        //  }         
+         }        
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
