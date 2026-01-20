@@ -40,7 +40,6 @@ static time_domain tm_metrics = {
     .sdnn = 0
 };
 
-
 /* Calculate mean RR interval with caching */
 
 float hrv_calculate_mean(uint16_t *rr_buffer, int count)
@@ -123,6 +122,8 @@ uint32_t hrv_calculate_max(uint16_t * rr_buffer, int count)
     return max_val;
 }
 
+
+/*Linear interpolation helper function */
 static float32_t linear_interp(float32_t x, float32_t x0, float32_t x1, float32_t y0, float32_t y1)
 {
     if (x1 == x0) return y0;
@@ -254,8 +255,7 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
     }
     
     // Process overlapping segments
-   // for (uint32_t start = 0; start + fft_size <= signal_len; start += step) 
-   for (uint32_t start = 0; start <= signal_len - fft_size; start += step) 
+    for (uint32_t start = 0; start <= signal_len - fft_size; start += step) 
     {
         // Copy segment and apply window
 
@@ -289,9 +289,9 @@ static void calculate_psd_welch(float32_t *signal, uint32_t signal_len,float32_t
       }
     // Average the PSD and normalize
      LOG_INF("Number of segments: %d", num_segments);
-     float32_t scale = 1.0f / (num_segments * window_power * fs );
-  
-     LOG_DBG("Scaling factor: %.6f (window_power=%.3f, fs=%.1f, N=%d)", scale, window_power, fs, num_segments);
+    float32_t scale = 1.0f / (num_segments * window_power * fs );
+
+   //  LOG_DBG("Scaling factor: %.6f (window_power=%.3f, fs=%.1f, N=%d)", scale, window_power, fs, num_segments);
      arm_scale_f32(psd, scale, psd, fft_size);
 
 }
@@ -340,12 +340,9 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
         tm_metrics.hrv_max = (float)hrv_calculate_max(rr_intervals, num_intervals);
 
     // Interpolate RR intervals
-
     uint32_t num_interp_samples = interpolate_rr_intervals(rr_intervals, num_intervals,INTERP_FS,rr_time,rr_values,
         interp_signal,FFT_SIZE * 4);
-
-       
-
+  
      // Remove mean
      remove_mean(interp_signal, num_interp_samples);
 
