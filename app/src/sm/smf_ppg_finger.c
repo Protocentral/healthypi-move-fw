@@ -172,6 +172,13 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     struct hpi_ppg_fi_data_t ppg_sensor_sample;
 
     uint8_t finger_status = edata->bpt_status ;
+
+    /* Check finger contact status
+       finger_status = 1 -> Good signal
+       finger_status = 2 -> Success
+       finger_status = 4 -> Motion detected
+    */
+   
     bool current_contact = (finger_status == 4 || finger_status == 1 || finger_status == 2);
 
    if (current_contact) {
