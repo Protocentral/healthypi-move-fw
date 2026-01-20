@@ -857,22 +857,18 @@ static void st_ppg_fi_check_sensor_run(void *o)
     // Route to appropriate state based on operation mode
     if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_EST)
     {
-        // LOG_DBG("Transitioning to BPT_EST state");
         // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_EST]);
         hpi_load_scr_spl(SCR_SPL_BPT_MEASURE, SCROLL_NONE, SCR_SPL_FI_SENS_CHECK, 0, 0, 0);
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_WAIT_FOR_CONTACT]);
     }
     else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_BPT_CAL)
     {
-        // FIX: Route calibration to CAL_WAIT first (to show "waiting for app" screen)
        LOG_DBG("Transitioning to BPT_CAL_WAIT state");
        hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT, 0, 0, 0);
        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
-      // smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_WAIT_FOR_CONTACT]);
     }
     else if (s->ppg_fi_op_mode == PPG_FI_OP_MODE_SPO2_EST)
     {
-       // LOG_DBG("Transitioning to SPO2_EST state");
        hpi_load_scr_spl(SCR_SPL_SPO2_MEASURE, SCROLL_NONE, SCR_SPO2, SPO2_SOURCE_PPG_FI, 0, 0);
        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_WAIT_FOR_CONTACT]);
     }
@@ -898,7 +894,7 @@ static void st_ppg_fi_sensor_fail_run(void *o)
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
 }
 
-static void st_ppg_fi_spo2_est_entry(void *o)
+static void st_ppg_fi_spo2_est_entry(void *o) 
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Entry");
     sens_decode_ppg_fi_op_mode = PPG_FI_OP_MODE_SPO2_EST;
@@ -912,11 +908,6 @@ static void st_ppg_fi_spo2_est_entry(void *o)
 static void st_ppg_fi_spo2_est_run(void *o)
 {
     LOG_DBG("PPG Finger SM SpO2 Estimation Running");
-
-    // if(finger_contact_ok == false) {
-    //     LOG_INF("Finger contact lost, waiting for contact");
-    //     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_WAIT_FOR_CONTACT]);
-    // }
     if (finger_contact_ok == false) 
     {
         if (contact_lost_start_ts == 0)
