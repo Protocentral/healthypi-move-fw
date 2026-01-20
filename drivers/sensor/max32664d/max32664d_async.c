@@ -140,18 +140,6 @@ static int max32664_async_sample_fetch(const struct device *dev,
 
         *spo2 = (bpt_spo2 / 10);
         *spo2_conf = buf[(sample_len * i) + 25 + MAX32664D_SENSOR_DATA_OFFSET];
-        //CORRECT: Official byte offsets (sample_len=29, offset=1)
-
-
-        // int base_idx = (sample_len * i) + MAX32664D_SENSOR_DATA_OFFSET;
-        // *bpt_status = buf[base_idx + 12];      // Byte 12: bpt_status 
-        // *bpt_progress = buf[base_idx + 13];    // Byte 13: progress 
-        // *hr = ((buf[base_idx + 14] << 8) | buf[base_idx + 15]) / 10;
-        // *bpt_sys = buf[base_idx + 16];         // Byte 16: systolic
-        // *bpt_dia = buf[base_idx + 17];         // Byte 17: diastolic
-        // *spo2 = ((buf[base_idx + 18] << 8) | buf[base_idx + 19]) / 10;
-        // *spo2_conf = buf[base_idx + 25];      // Byte 25: spo2 confidence
-
         uint16_t spo2_r_val = (uint16_t)buf[(sample_len * i) + 20 + MAX32664D_SENSOR_DATA_OFFSET] << 8;
          spo2_r_val |= (uint16_t)buf[(sample_len * i) + 21 + MAX32664D_SENSOR_DATA_OFFSET];
      }
