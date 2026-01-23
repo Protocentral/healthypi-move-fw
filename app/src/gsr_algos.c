@@ -9,7 +9,7 @@
 
 LOG_MODULE_REGISTER(gsr_algos, LOG_LEVEL_DBG);
 
-#define SCR_THRESHOLD    0.03f   // Threshold in µS (typical 0.03 µS)
+// #define SCR_THRESHOLD    0.03f   // Threshold in µS (typical 0.03 µS)
 #define SCR_MIN_INTERVAL 32      // Minimum interval between SCRs (1 s at 32 Hz)
 #define GSR_MAX_SAMPLES  1024    // Maximum expected GSR samples
 
@@ -22,33 +22,70 @@ static float baseline_temp[GSR_MAX_SAMPLES];
 // bioz-gain = 1 → 20 V/V
 // bioz_cgmag = 2 → 16 µA
 #define BIOZ_V_REF      1.0f        // MAX30001 internal reference voltage (V)
-#define BIOZ_GAIN       20.0f       // bioz-gain=1 → 20 V/V
-#define BIOZ_I_MAG      16e-6f      // bioz_cgmag=2 → 16 µA excitation current
-#define BIOZ_FS_24BIT   8388608.0f  // 2^23 full scale for 24-bit signed ADC
-#define BIOZ_MIN_Z_OHMS 0.1f        // Minimum valid impedance to avoid divide-by-zero
+#define BIOZ_GAIN       10.0f       // bioz-gain=0 → 10 V/V
+#define BIOZ_I_MAG      8e-6f      // bioz_cgmag=1 → 8 µA excitation current
+#define BIOZ_FS_20BIT 524288.0f   // 2^19
 
-// Convert raw 24-bit MAX30001 BIOZ counts to µS (microsiemens)
+static inline int32_t bioz_extract_20bit(int32_t raw32)
+{
+    int32_t raw20 = (raw32 >> 4) & 0x000FFFFF;   // get 20 bits
+
+    // sign extend 20-bit to 32-bit
+    if (raw20 & (1 << 19))
+        raw20 |= ~0x000FFFFF;
+
+    return raw20;
+}
+
+// Convert raw 20-bit MAX30001 BIOZ counts to µS (microsiemens)
 // Formula: Conductance (µS) = 1 / Impedance (Ω) × 1,000,000
-// Where: Impedance = V_electrode / I_excitation
-//        V_electrode = (raw / 2^23) × (Vref / Gain)
+// Where: Impedance = Z = ADC * VREF / (2^19 * BIOZ_GAIN * BIOZ_CGMAG)
 void convert_raw_to_uS(const int32_t *raw_data, float *gsr_data, int length)
 {
     for (int i = 0; i < length; i++)
     {
-        // Step 1: Calculate electrode voltage from ADC counts
-        float v_electrode = ((float)raw_data[i] / BIOZ_FS_24BIT) * (BIOZ_V_REF / BIOZ_GAIN);
+       // printf("Raw Data[%d]: %ld   Raw24 Data[%d]: %ld\n", i, raw_data[i], i, bioz_extract_20bit(raw_data[i]));
 
-        // Step 2: Calculate impedance (Z = V / I), use absolute value
-        float impedance = fabsf(v_electrode / BIOZ_I_MAG);
+        int32_t adc = bioz_extract_20bit(raw_data[i]);
 
-        // Step 3: Convert to conductance in microsiemens (µS)
-        // Guard against divide-by-zero for short circuits or noise
-        if (impedance < BIOZ_MIN_Z_OHMS) {
+        // Datasheet formula:
+        // Z = ADC * VREF / (2^19 * BIOZ_GAIN * BIOZ_CGMAG)
+        float impedance = fabsf((adc * BIOZ_V_REF) / (BIOZ_FS_20BIT * BIOZ_GAIN * BIOZ_I_MAG) );
+
+        if (impedance < 0.1f)
             gsr_data[i] = 0.0f;
-        } else {
-            gsr_data[i] = (1.0f / impedance) * 1e6f;
-        }
+        else
+           gsr_data[i] = (1.0f / impedance) * 1e6f;
+
+      //  printf("raw=%ld, ADC=%d, Z=%.2f Ohm, G=%.3f uS\n", raw_data[i], adc, impedance, gsr_data[i]);
+      //  LOG_DBG("raw=%ld, V=%.6f V, Z=%.2f Ohm, G=%.3f µS",raw_data[i], v_electrode, impedance, gsr_data[i]);
     }
+    
+}
+static float calculate_adaptive_threshold(float *data, int length)
+{
+    float mean = 0.0f;
+    float var = 0.0f;
+
+    for (int i = 0; i < length; i++) {
+        mean += data[i];
+    }
+    mean /= length;
+
+    for (int i = 0; i < length; i++) {
+        float d = data[i] - mean;
+        var += d * d;
+    }
+    var /= length;
+
+    float std = sqrtf(var);
+
+    // For short recordings (30 sec): mean + 2*std
+    //return mean + 2.0f * std;
+    float thr = mean + 2.0f * std;
+
+    if (thr < 0.02f) thr = 0.02f;  // minimum threshold
+    return thr;
 }
 
 // Simple moving average for smoothing
@@ -109,7 +146,7 @@ int calculate_scr_count(int32_t *raw_gsr_data, int length)
 
     // 3. Remove baseline
     remove_baseline(gsr_uS, length, 128); // 128 samples → 4 sec at 32 Hz
-
+    float scr_threshold = calculate_adaptive_threshold(gsr_uS, length);
     // 4. Detect SCR peaks
     for (int i = 1; i < length - 1; i++) {
         // Find local minimum (trough)
@@ -123,7 +160,7 @@ int calculate_scr_count(int32_t *raw_gsr_data, int length)
                     peak_index = j;
                     float amplitude = gsr_uS[peak_index] - gsr_uS[trough];
 
-                    if (amplitude >= SCR_THRESHOLD && (peak_index - last_peak_index) >= SCR_MIN_INTERVAL) {
+                    if (amplitude >= scr_threshold && (peak_index - last_peak_index) >= SCR_MIN_INTERVAL) {
                         scr_count++;
                         LOG_DBG("SCR %d detected: trough=%d, peak=%d, amplitude=%.4f",
                                 scr_count, trough, peak_index, (double)amplitude);
@@ -176,6 +213,8 @@ void calculate_gsr_stress_index(const int32_t *raw_gsr_data, int sample_count,
     }
     float tonic_level = tonic_sum / sample_count;
 
+    LOG_DBG("GSR baseline (tonic SCL) = %.3f uS", (double)tonic_level);
+    
     // Store tonic level (x100 for integer storage)
     result->tonic_level_x100 = (uint16_t)(tonic_level * 100.0f);
 
@@ -184,8 +223,10 @@ void calculate_gsr_stress_index(const int32_t *raw_gsr_data, int sample_count,
 
     // Step 4: Remove baseline to get phasic component
     remove_baseline(gsr_uS, sample_count, 128);
+    float scr_threshold = calculate_adaptive_threshold(gsr_uS, sample_count);
 
-    // Step 5: Detect SCR peaks and calculate metrics
+    LOG_DBG("GSR Threshold = %.3f uS", (double)scr_threshold);
+   // Step 5: Detect SCR peaks and calculate metrics
     int scr_count = 0;
     int last_peak_index = -SCR_MIN_INTERVAL;
     float peak_amplitude_sum = 0.0f;
@@ -200,8 +241,7 @@ void calculate_gsr_stress_index(const int32_t *raw_gsr_data, int sample_count,
             for (int j = i + 1; j < sample_count - 1; j++) {
                 if (gsr_uS[j] > gsr_uS[j - 1] && gsr_uS[j] > gsr_uS[j + 1]) {
                     float amplitude = gsr_uS[j] - gsr_uS[trough];
-
-                    if (amplitude >= SCR_THRESHOLD && (j - last_peak_index) >= SCR_MIN_INTERVAL) {
+                    if (amplitude >= scr_threshold && (j - last_peak_index) >= SCR_MIN_INTERVAL) {
                         scr_count++;
                         peak_amplitude_sum += amplitude;
                         if (amplitude > max_peak_amplitude) {
@@ -209,6 +249,8 @@ void calculate_gsr_stress_index(const int32_t *raw_gsr_data, int sample_count,
                         }
                         last_peak_index = j;
                         LOG_DBG("SCR peak %d: amp=%.4f uS", scr_count, (double)amplitude);
+                        // LOG_DBG("SCR %d detected: trough=%d, peak=%d, amplitude=%.4f",
+                        //         scr_count, trough, j, (double)amplitude);
                     }
                     i = j;
                     break;
