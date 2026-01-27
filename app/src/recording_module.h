@@ -111,6 +111,15 @@ struct hpi_recording_index_t {
 
 #define REC_INDEX_SIZE 15
 
+struct hpi_storage_info_t {
+    uint64_t total_bytes;      /* Total storage capacity */
+    uint64_t used_bytes;       /* Bytes currently used */
+    uint64_t free_bytes;       /* Bytes available */
+    uint64_t available_bytes;  /* Bytes available to application */
+    uint32_t percent_used;     /* Usage percentage 0-100 */
+    bool     is_low_space;     /* Flag when space is low */
+};
+
 /* Sample rate definitions */
 #define REC_SAMPLE_RATE_PPG_WRIST   25
 #define REC_SAMPLE_RATE_PPG_FINGER  25
