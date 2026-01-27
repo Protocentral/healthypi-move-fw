@@ -193,7 +193,8 @@ static int _max30001_read_bioz_fifo(const struct device *dev, int num_bytes)
 
         if ((ecg_etag == 0x00) || (ecg_etag == 0x02)) // Valid sample
         {
-            ubioztemp = (unsigned long)(((unsigned long)buf[i] << 16 | (unsigned long)buf[i + 1] << 8) | (unsigned long)(buf[i + 2] & 0xC0));
+            //ubioztemp = (unsigned long)(((unsigned long)buf[i] << 16 | (unsigned long)buf[i + 1] << 8) | (unsigned long)(buf[i + 2] & 0xC0));
+            ubioztemp = (unsigned long)(((unsigned long)buf[i] << 16 | (unsigned long)buf[i + 1] << 8) | (unsigned long)(buf[i + 2] & 0xF0));
             ubioztemp = (unsigned long)(ubioztemp << 8);
 
             stemp = (signed long)ubioztemp;
