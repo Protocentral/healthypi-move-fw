@@ -123,29 +123,39 @@ static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_s
     struct fs_file_t file;
     char fname[HPI_LOG_FNAME_MAX];
     char base_path[HPI_LOG_PATH_MAX];
+    struct fs_dirent ent;
 
-    // Validate timestamp before writing
     if (!is_timestamp_valid(timestamp)) {
-        LOG_ERR("Invalid timestamp: %" PRId64 " - refusing to write log file", timestamp);
+        LOG_ERR("Invalid timestamp: %" PRId64, timestamp);
         return -EINVAL;
     }
 
     fs_file_t_init(&file);
-
-    // Get base path using existing function
+    
     if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
         LOG_ERR("Failed to get path for log type %d", log_type);
         return -EINVAL;
     }
 
     snprintf(fname, sizeof(fname), "%s%" PRId64, base_path, timestamp);
+    LOG_DBG("Write to %s | Size: %zu", fname, data_size);
 
-    LOG_DBG("Write to file... %s | Size: %zu", fname, data_size);
+    // Check if file exists first
+    int ret = fs_stat(fname, &ent);
+    int flags = FS_O_RDWR | FS_O_APPEND;
+    
+    if (ret < 0) {  // File doesn't exist
+        flags |= FS_O_CREATE;
+        LOG_DBG("Creating new file: %s", fname);
+    } else {
+        LOG_DBG("Appending to existing file: %s (%d bytes)", fname, ent.size);
+    }
 
-    CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_TRUNC), "open", fname);
+    CHECK_FS_OP(fs_open(&file, fname, flags), "open", fname);
     CHECK_FS_OP(fs_write(&file, data, data_size), "write", fname);
     CHECK_FS_OP(fs_sync(&file), "sync", fname);
     CHECK_FS_OP(fs_close(&file), "close", fname);
+    
     return 0;
 }
 
@@ -326,6 +336,39 @@ void log_delete(uint16_t file_id)
     snprintf(log_file_name, sizeof(log_file_name), "/lfs/log/%d", file_id);
     LOG_DBG("Deleting %s", log_file_name);
     fs_unlink(log_file_name);
+}
+void log_delete_by_type(uint8_t log_type, uint16_t timestamp)
+{
+    char base_path[HPI_LOG_PATH_MAX];
+    char file_path[HPI_LOG_FNAME_MAX];
+
+    // Get type-specific path (/lfs/hrv/, /lfs/ecg/, etc.)
+    if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
+        LOG_ERR("Invalid path for log type %d", log_type);
+        return -EINVAL;
+    }
+
+    // Construct exact filename: /lfs/hrv/1767788523
+    snprintf(file_path, sizeof(file_path), "%s%" PRId64, base_path, timestamp);
+
+    LOG_INF("Deleting trend file: %s", file_path);
+
+    // Check if file exists first
+    struct fs_dirent ent;
+    if (fs_stat(file_path, &ent) < 0) {
+        LOG_WRN("File not found: %s", file_path);
+        return -ENOENT;
+    }
+
+    // Delete the specific file
+    int ret = fs_unlink(file_path);
+    if (ret == 0) {
+        LOG_INF("SUCCESS: Deleted %s (was %d bytes)", file_path, (int)ent.size);
+        return 0;
+    } else {
+        LOG_ERR("Failed to delete %s: %d", file_path, ret);
+        return ret;
+    }
 }
 
 void log_wipe_folder(const char *folder_path)
