@@ -337,40 +337,6 @@ void log_delete(uint16_t file_id)
     LOG_DBG("Deleting %s", log_file_name);
     fs_unlink(log_file_name);
 }
-void log_delete_by_type(uint8_t log_type, uint16_t timestamp)
-{
-    char base_path[HPI_LOG_PATH_MAX];
-    char file_path[HPI_LOG_FNAME_MAX];
-
-    // Get type-specific path (/lfs/hrv/, /lfs/ecg/, etc.)
-    if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
-        LOG_ERR("Invalid path for log type %d", log_type);
-        return -EINVAL;
-    }
-
-    // Construct exact filename: /lfs/hrv/1767788523
-    snprintf(file_path, sizeof(file_path), "%s%" PRId64, base_path, timestamp);
-
-    LOG_INF("Deleting trend file: %s", file_path);
-
-    // Check if file exists first
-    struct fs_dirent ent;
-    if (fs_stat(file_path, &ent) < 0) {
-        LOG_WRN("File not found: %s", file_path);
-        return -ENOENT;
-    }
-
-    // Delete the specific file
-    int ret = fs_unlink(file_path);
-    if (ret == 0) {
-        LOG_INF("SUCCESS: Deleted %s (was %d bytes)", file_path, (int)ent.size);
-        return 0;
-    } else {
-        LOG_ERR("Failed to delete %s: %d", file_path, ret);
-        return ret;
-    }
-}
-
 void log_wipe_folder(const char *folder_path)
 {
     int err = 0;
