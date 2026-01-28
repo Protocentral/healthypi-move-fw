@@ -102,8 +102,6 @@ static int create_session_directory(int64_t timestamp, char *path_out, size_t pa
 static int flush_buffer(enum hpi_rec_signal_type signal_type, uint8_t buffer_idx);
 static int write_file_headers(int64_t timestamp);
 static int update_file_headers(void);
-int hpi_recording_get_storage_info(struct hpi_storage_info_t *info);
-int hpi_recording_check_space(uint64_t required_bytes);
 
 /* Thread definitions */
 #define REC_CTRL_THREAD_STACKSIZE   2048  /* Needs stack for fs_mkdir, fs_open, fs_write */
@@ -844,9 +842,6 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
         k_sem_take(&sem_rec_start, K_FOREVER);
 
         LOG_INF("Starting recording...");
-
-        struct hpi_storage_info_t storage_info;
-        
         /* Reset stop semaphore to clear any stale signals from previous recordings */
         k_sem_reset(&sem_rec_stop);
 
@@ -927,9 +922,8 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
 
         /* Update file headers with final sample counts */
         update_file_headers();
-
-        /* Close all files */
-      //  close_signal_files();
+        
+        print_littlefs_usage();
 
         /* Update session state */
         k_mutex_lock(&mutex_rec_state, K_FOREVER);
