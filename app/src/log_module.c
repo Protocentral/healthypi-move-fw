@@ -337,6 +337,23 @@ void log_delete(uint16_t file_id)
     LOG_DBG("Deleting %s", log_file_name);
     fs_unlink(log_file_name);
 }
+
+void log_delete_by_timestamp(uint8_t log_type, int64_t timestamp)
+{
+    LOG_INF("Deleting Log type %d, Timestamp %" PRId64, log_type, timestamp);
+    char base_path[HPI_LOG_PATH_MAX];
+    char file_path[HPI_LOG_FNAME_MAX];
+
+    if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
+        LOG_ERR("Failed to get path for log type %d", log_type);
+        return;
+    }
+
+    snprintf(file_path, sizeof(file_path), "%s%" PRId64, base_path, timestamp);
+    LOG_DBG("Deleting %s", file_path);
+    fs_unlink(file_path);
+}
+
 void log_wipe_folder(const char *folder_path)
 {
     int err = 0;
