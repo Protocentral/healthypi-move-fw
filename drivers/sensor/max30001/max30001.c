@@ -160,12 +160,12 @@ static int _max30001_read_ecg_fifo(const struct device *dev, int num_bytes)
 
 static int _max30001_read_bioz_fifo(const struct device *dev, int num_bytes)
 {
-    unsigned char ecg_etag;
+    uint8_t btag;
 
     uint8_t buf[num_bytes + 1];
 
-    uint32_t ubioztemp;
-    int32_t stemp;
+    uint32_t u_bioz_temp;
+    int32_t s_bioz_temp;
 
     int s_counter = 0;
 
@@ -182,30 +182,47 @@ static int _max30001_read_bioz_fifo(const struct device *dev, int num_bytes)
 
     spi_transceive_dt(&config->spi, &tx, &rx);
 
-    // regRxBuffer 0 contains NULL (for sent command), so read from 1 onwards
-    // printk("%x %x %x %x\n", regRxBuffer[0], regRxBuffer[1], regRxBuffer[2], regRxBuffer[3]);
+    /*
+     * BioZ FIFO format (24 bits per sample):
+     *   Bits 23-4: 20-bit signed ADC data
+     *   Bits 3-0:  BTAG (tag bits)
+     *
+     * Extract 20-bit ADC and convert to conductance (µS) using datasheet formula:
+     *   Z (Ω) = ADC × VREF / (2^19 × CGMAG × GAIN)
+     *   Conductance (µS) = 1/Z × 10^6
+     */
 
     for (int i = 0; i < num_bytes; i += 3)
     {
-        // Get etag
-        ecg_etag = ((((unsigned char)buf[i + 2]) & 0x38) >> 3);
-        // printk("B%x ", ecg_etag);
+        /* Extract BTAG from bits 3-0 of third byte */
+        btag = buf[i + 2] & 0x07;
 
-        if ((ecg_etag == 0x00) || (ecg_etag == 0x02)) // Valid sample
+        if ((btag == 0x00) || (btag == 0x02)) /* Valid sample */
         {
-            ubioztemp = (unsigned long)(((unsigned long)buf[i] << 16 | (unsigned long)buf[i + 1] << 8) | (unsigned long)(buf[i + 2] & 0xC0));
-            ubioztemp = (unsigned long)(ubioztemp << 8);
+            /* Extract 20-bit ADC data (bits 23-4):
+             * - Byte 0: bits 23-16 (MSB)
+             * - Byte 1: bits 15-8
+             * - Byte 2 & 0xF0: bits 7-4 (mask out BTAG in bits 3-0) */
+            u_bioz_temp = (uint32_t)(((uint32_t)buf[i] << 16) |
+                                      ((uint32_t)buf[i + 1] << 8) |
+                                      ((uint32_t)(buf[i + 2] & 0xF0)));
 
-            stemp = (signed long)ubioztemp;
-            stemp = (signed long)stemp >> 8;
+            /* Shift left then right to sign-extend the 20-bit value to 32-bit */
+            u_bioz_temp = u_bioz_temp << 8;
+            s_bioz_temp = (int32_t)u_bioz_temp;
+            s_bioz_temp = s_bioz_temp >> 12;  /* 8 + 4 = 12 to get 20-bit signed value */
 
-            drv_data->s32BIOZData[s_counter++] = stemp;
+            /* Convert raw ADC to conductance in µS and store as fixed-point (×100) */
+            float conductance_uS = max30001_bioz_raw_to_uS(s_bioz_temp,
+                                                           config->bioz_gain,
+                                                           config->bioz_cgmag);
+            drv_data->s32BIOZData[s_counter++] = (int32_t)(conductance_uS * 100.0f);
         }
-        else if (ecg_etag == 0x06)
+        else if (btag == 0x06) /* FIFO empty */
         {
             return 0;
         }
-        else if (ecg_etag == 0x07) // FIFO Overflow
+        else if (btag == 0x07) /* FIFO Overflow */
         {
             max30001_fifo_reset(dev);
             max30001_synch(dev);

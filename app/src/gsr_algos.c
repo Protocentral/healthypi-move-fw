@@ -18,36 +18,24 @@ static float gsr_uS[GSR_MAX_SAMPLES];
 static float smooth_temp[GSR_MAX_SAMPLES];
 static float baseline_temp[GSR_MAX_SAMPLES];
 
-// Hardware configuration from DTS (boards/protocentral/healthypi_move/nrf5340_cpuapp_common.dtsi):
-// bioz-gain = 1 → 20 V/V
-// bioz_cgmag = 2 → 16 µA
-#define BIOZ_V_REF      1.0f        // MAX30001 internal reference voltage (V)
-#define BIOZ_GAIN       20.0f       // bioz-gain=1 → 20 V/V
-#define BIOZ_I_MAG      16e-6f      // bioz_cgmag=2 → 16 µA excitation current
-#define BIOZ_FS_24BIT   8388608.0f  // 2^23 full scale for 24-bit signed ADC
-#define BIOZ_MIN_Z_OHMS 0.1f        // Minimum valid impedance to avoid divide-by-zero
-
-// Convert raw 24-bit MAX30001 BIOZ counts to µS (microsiemens)
-// Formula: Conductance (µS) = 1 / Impedance (Ω) × 1,000,000
-// Where: Impedance = V_electrode / I_excitation
-//        V_electrode = (raw / 2^23) × (Vref / Gain)
+/*
+ * Convert driver-provided BioZ data to µS (microsiemens)
+ *
+ * The MAX30001 driver now performs the ADC-to-conductance conversion internally
+ * using the datasheet formula and outputs values as fixed-point (µS × 100).
+ * This function simply converts from fixed-point to float.
+ *
+ * Driver conversion formula (in max30001.h):
+ *   Z (Ω) = ADC × VREF / (2^19 × CGMAG × GAIN)
+ *   Conductance (µS) = 1/Z × 10^6
+ */
 void convert_raw_to_uS(const int32_t *raw_data, float *gsr_data, int length)
 {
     for (int i = 0; i < length; i++)
     {
-        // Step 1: Calculate electrode voltage from ADC counts
-        float v_electrode = ((float)raw_data[i] / BIOZ_FS_24BIT) * (BIOZ_V_REF / BIOZ_GAIN);
-
-        // Step 2: Calculate impedance (Z = V / I), use absolute value
-        float impedance = fabsf(v_electrode / BIOZ_I_MAG);
-
-        // Step 3: Convert to conductance in microsiemens (µS)
-        // Guard against divide-by-zero for short circuits or noise
-        if (impedance < BIOZ_MIN_Z_OHMS) {
-            gsr_data[i] = 0.0f;
-        } else {
-            gsr_data[i] = (1.0f / impedance) * 1e6f;
-        }
+        /* Driver outputs conductance as fixed-point: µS × 100
+         * Divide by 100 to get actual µS value */
+        gsr_data[i] = (float)raw_data[i] / 100.0f;
     }
 }
 
@@ -89,20 +77,20 @@ void remove_baseline(float *data, int length, int window)
         data[i] -= baseline_temp[i];
 }
 
-// Calculate SCR count from raw data
-int calculate_scr_count(int32_t *raw_gsr_data, int length)
+// Calculate SCR count from conductance data
+int calculate_scr_count(int32_t *gsr_data, int length)
 {
     int scr_count = 0;
     int last_peak_index = -SCR_MIN_INTERVAL;
 
     // Bounds check to prevent buffer overflow
-    if (raw_gsr_data == NULL || length <= 0 || length > GSR_MAX_SAMPLES) {
-        LOG_ERR("Invalid GSR data: ptr=%p, length=%d, max=%d", raw_gsr_data, length, GSR_MAX_SAMPLES);
+    if (gsr_data == NULL || length <= 0 || length > GSR_MAX_SAMPLES) {
+        LOG_ERR("Invalid GSR data: ptr=%p, length=%d, max=%d", gsr_data, length, GSR_MAX_SAMPLES);
         return 0;
     }
 
-    // 1. Convert raw counts to µS
-    convert_raw_to_uS(raw_gsr_data, gsr_uS, length);
+    // 1. Convert fixed-point conductance to float µS
+    convert_raw_to_uS(gsr_data, gsr_uS, length);
 
     // 2. Smooth the signal
     smooth_gsr(gsr_uS, length, 5);        // 5-sample moving average
@@ -141,15 +129,15 @@ int calculate_scr_count(int32_t *raw_gsr_data, int length)
 }
 
 /**
- * @brief Calculate GSR stress index from raw sample buffer
+ * @brief Calculate GSR stress index from sample buffer
  *
  * Algorithm:
- * 1. Convert raw BioZ samples to conductance (µS)
+ * 1. Convert fixed-point conductance to float µS
  * 2. Calculate tonic level (SCL) as mean of smoothed signal
  * 3. Extract phasic component and detect SCR peaks
  * 4. Calculate stress level based on tonic level, SCR rate, and peak amplitude
  */
-void calculate_gsr_stress_index(const int32_t *raw_gsr_data, int sample_count,
+void calculate_gsr_stress_index(const int32_t *gsr_data, int sample_count,
                                  int duration_sec, struct hpi_gsr_stress_index_t *result)
 {
     if (result == NULL) {
@@ -160,16 +148,16 @@ void calculate_gsr_stress_index(const int32_t *raw_gsr_data, int sample_count,
     memset(result, 0, sizeof(struct hpi_gsr_stress_index_t));
 
     // Validate inputs
-    if (raw_gsr_data == NULL || sample_count <= 0 || sample_count > GSR_MAX_SAMPLES || duration_sec <= 0) {
+    if (gsr_data == NULL || sample_count <= 0 || sample_count > GSR_MAX_SAMPLES || duration_sec <= 0) {
         LOG_ERR("Invalid stress index input: ptr=%p, count=%d, duration=%d",
-                raw_gsr_data, sample_count, duration_sec);
+                gsr_data, sample_count, duration_sec);
         return;
     }
 
-    // Step 1: Convert raw counts to µS
-    convert_raw_to_uS(raw_gsr_data, gsr_uS, sample_count);
+    // Step 1: Convert fixed-point conductance to float µS
+    convert_raw_to_uS(gsr_data, gsr_uS, sample_count);
 
-    // Step 2: Calculate tonic level (SCL) - mean of raw conductance before baseline removal
+    // Step 2: Calculate tonic level (SCL) - mean conductance before baseline removal
     float tonic_sum = 0.0f;
     for (int i = 0; i < sample_count; i++) {
         tonic_sum += gsr_uS[i];

@@ -73,6 +73,89 @@
 #define CLK_PIN 6
 #define RTOR_INTR_MASK 0x04
 
+/* ============================================================================
+ * BioZ ADC to Impedance/Conductance Conversion
+ *
+ * Per MAX30001 datasheet, the BioZ ADC output relates to impedance as:
+ *   Z (Ω) = ADC × VREF / (2^19 × CGMAG × GAIN)
+ *
+ * Where:
+ *   - ADC is the 20-bit signed ADC code
+ *   - VREF = 1.0V (internal reference)
+ *   - CGMAG is the excitation current magnitude (in Amperes)
+ *   - GAIN is the BioZ channel voltage gain (V/V)
+ *
+ * We output conductance in microsiemens (µS) = 1/Z × 10^6
+ * ============================================================================ */
+
+#define BIOZ_VREF           1.0f        /* MAX30001 internal reference voltage (V) */
+#define BIOZ_ADC_FULLSCALE  524288.0f   /* 2^19 for 20-bit signed ADC */
+#define BIOZ_MIN_IMPEDANCE  0.1f        /* Minimum valid impedance (Ω) to avoid div-by-zero */
+
+/* BioZ Gain lookup table: register value -> actual gain (V/V) */
+static const float bioz_gain_table[] = {
+    10.0f,   /* 0: 10 V/V */
+    20.0f,   /* 1: 20 V/V */
+    40.0f,   /* 2: 40 V/V */
+    80.0f    /* 3: 80 V/V */
+};
+
+/* BioZ Current Magnitude lookup table: register value -> actual current (A) */
+static const float bioz_cgmag_table[] = {
+    0.0f,       /* 0: Off */
+    8.0e-6f,    /* 1: 8 µA */
+    16.0e-6f,   /* 2: 16 µA */
+    32.0e-6f,   /* 3: 32 µA */
+    48.0e-6f,   /* 4: 48 µA */
+    64.0e-6f,   /* 5: 64 µA */
+    80.0e-6f,   /* 6: 80 µA */
+    96.0e-6f    /* 7: 96 µA */
+};
+
+/**
+ * @brief Convert raw 20-bit BioZ ADC value to conductance in microsiemens (µS)
+ *
+ * @param raw_adc Raw 20-bit signed ADC value from BioZ FIFO
+ * @param gain_reg BioZ gain register value (0-3)
+ * @param cgmag_reg BioZ current magnitude register value (0-7)
+ * @return Conductance in microsiemens (µS), or 0.0f if invalid
+ */
+static inline float max30001_bioz_raw_to_uS(int32_t raw_adc, int gain_reg, int cgmag_reg)
+{
+    /* Validate register values */
+    if (gain_reg < 0 || gain_reg > 3 || cgmag_reg < 0 || cgmag_reg > 7) {
+        return 0.0f;
+    }
+
+    float gain = bioz_gain_table[gain_reg];
+    float cgmag = bioz_cgmag_table[cgmag_reg];
+
+    /* Avoid division by zero if current is off */
+    if (cgmag == 0.0f) {
+        return 0.0f;
+    }
+
+    /* Calculate electrode voltage from ADC counts:
+     * V_electrode = (raw_adc / 2^19) × (VREF / GAIN) */
+    float v_electrode = ((float)raw_adc / BIOZ_ADC_FULLSCALE) * (BIOZ_VREF / gain);
+
+    /* Calculate impedance using Ohm's law: Z = V / I */
+    float impedance = v_electrode / cgmag;
+
+    /* Take absolute value (impedance is magnitude) */
+    if (impedance < 0.0f) {
+        impedance = -impedance;
+    }
+
+    /* Guard against divide-by-zero for very low impedance */
+    if (impedance < BIOZ_MIN_IMPEDANCE) {
+        return 0.0f;
+    }
+
+    /* Convert to conductance in microsiemens: G (µS) = 1/Z × 10^6 */
+    return (1.0f / impedance) * 1e6f;
+}
+
 enum max30001_channel
 {
 
