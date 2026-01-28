@@ -271,7 +271,6 @@ int hpi_trend_load_trend(struct hpi_hourly_trend_point_t *hourly_trend_points, s
     // Clear static buffers before use
     memset(trend_day_points, 0, sizeof(trend_day_points));
     memset(trend_point_all, 0, sizeof(trend_point_all));
-
     if (m_trend_type == TREND_HR)
     {
         sprintf(fname, "/lfs/trhr/%" PRId64, day_ts);

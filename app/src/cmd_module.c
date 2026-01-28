@@ -154,7 +154,12 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
     case HPI_CMD_RECORDING_DELETE:
         LOG_DBG("RX CMD Recording Delete");
         recording_type = in_pkt_buf[1];
-        log_delete(recording_type);
+        int64_t timestamp = 0;
+        for (int i = 0; i < 8; i++)
+        {
+            timestamp |= ((int64_t)in_pkt_buf[2 + i] << (8 * i));
+        }
+        log_delete_by_timestamp(recording_type, timestamp);
         break;
     case HPI_CMD_RECORDING_WIPE_ALL:
         LOG_DBG("RX CMD Recording Wipe Records");
