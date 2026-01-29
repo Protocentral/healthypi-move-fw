@@ -22,6 +22,15 @@
 #define MAX32664C_LATEST_APP_VER1 13
 #define MAX32664C_LATEST_APP_VER2 31
 
+/*
+ * Firmware version prefix for device identification.
+ * The hub_ver[1] byte indicates the device type:
+ * - 32 = MAX32664C (with external MAX86141 AFE)
+ * - 33 = MAXM86146 (integrated optical module)
+ * Example: version 32.13.31 = MAX32664C with firmware 13.31
+ */
+#define MAX32664C_FW_VERSION_PREFIX 32
+
 #define MAX32664C_AFE_ID 0x25
 #define MAX32664C_ACC_ID 0x1B
 
@@ -85,6 +94,7 @@ enum max32664c_attribute
 	MAX32664C_ATTR_IS_APP_PRESENT = 0x10,
 	MAX32664C_ATTR_APP_VER=0x11,
 	MAX32664C_ATTR_SENSOR_IDS=0x12,
+	MAX32664C_ATTR_FW_PREFIX=0x13,  /* Returns hub_ver[1] - device type prefix (32=MAX32664C, 33=MAXM86146) */
 };
 
 enum max32664c_scd_states

@@ -1,0 +1,15 @@
+# Configuration options for MAXM86146 driver
+
+config SENSOR_MAXM86146
+	bool "MAXM86146 Integrated Optical Biosensing Module Driver"
+	default y
+	select I2C
+	help
+		Enable the driver for the Maxim MAXM86146 integrated optical
+		biosensing module. This module contains an integrated AFE and
+		uses the MAX32664 sensor hub protocol.
+
+module = MAXM86146
+module-str = maxm86146
+
+source "subsys/logging/Kconfig.template.log_config"

@@ -938,6 +938,10 @@ static int max32664c_attr_get(const struct device *dev,
         val->val1 = data->max86141_id;
         val->val2 = data->accel_id;
         break;
+    case MAX32664C_ATTR_FW_PREFIX:
+        val->val1 = data->hub_ver[1];  /* Device type prefix: 32=MAX32664C, 33=MAXM86146 */
+        val->val2 = 0;
+        break;
     default:
         LOG_ERR("Unsupported sensor attribute");
         return -ENOTSUP;

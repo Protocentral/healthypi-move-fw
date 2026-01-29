@@ -52,6 +52,11 @@ bool hw_is_max32664c_present(void);
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode);
 int hw_max32664c_stop_algo(void);
 
+bool hw_is_maxm86146_present(void);
+
+/* PPG Hub abstraction - include ppg_hub.h for full API */
+#include "ppg_hub.h"
+
 bool get_on_skin(void);
 void set_on_skin(bool on_skin);
 

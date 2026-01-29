@@ -37,6 +37,7 @@ LOG_MODULE_REGISTER(smf_ppg_wrist, LOG_LEVEL_DBG);
 
 #include "hw_module.h"
 #include "max32664c.h"
+#include "maxm86146.h"
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
 #include "ui/move_ui.h"
@@ -90,6 +91,12 @@ K_MSGQ_DEFINE(q_ppg_wrist_sample, sizeof(struct hpi_ppg_wr_data_t), 64, 1);
 // RTIO context with memory pool for async sensor reads
 RTIO_DEFINE_WITH_MEMPOOL(max32664c_read_rtio_async_ctx, 4, 4, 4, 512, 4);
 SENSOR_DT_READ_IODEV(max32664c_iodev, DT_ALIAS(max32664c), SENSOR_CHAN_VOLTAGE);
+
+// MAXM86146 RTIO iodev (uses same RTIO context, different device)
+SENSOR_DT_READ_IODEV(maxm86146_iodev, DT_ALIAS(maxm86146), SENSOR_CHAN_VOLTAGE);
+
+// Pointer to active PPG iodev (set at runtime based on detected device)
+static struct rtio_iodev *ppg_wrist_iodev = NULL;
 
 ZBUS_CHAN_DECLARE(spo2_chan);
 
@@ -305,6 +312,17 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 }
             }
 
+            /* Debug logging for one-shot SpO2 measurement */
+            if (spo2_measurement_in_progress)
+            {
+                LOG_DBG("SpO2 measurement: progress=%d%%, spo2=%d, scd=%d, state=%d, hr=%d",
+                        ppg_sensor_sample.spo2_valid_percent_complete,
+                        ppg_sensor_sample.spo2,
+                        ppg_sensor_sample.scd_state,
+                        ppg_sensor_sample.spo2_state,
+                        ppg_sensor_sample.hr);
+            }
+
             if ((ppg_sensor_sample.spo2_valid_percent_complete == 100) && spo2_measurement_in_progress)
             {
                 k_sem_give(&sem_stop_one_shot_spo2);
@@ -332,7 +350,11 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             }
 
             m_curr_scd_state = ppg_sensor_sample.scd_state;
-            if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
+
+            /* During one-shot SpO2 measurement, always send data to display for progress updates
+             * regardless of SCD state. For normal operation, only send when on-skin. */
+            if (spo2_measurement_in_progress ||
+                ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
             {
                 k_msgq_put(&q_ppg_wrist_sample, &ppg_sensor_sample, K_MSEC(1));
             }
@@ -388,8 +410,8 @@ static void sensor_read_work_handler(struct k_work *work)
     // Process any pending completions first
     k_work_submit(&sensor_rtio_completion_work);
 
-    // Start async sensor read with mempool
-    ret = sensor_read_async_mempool(&max32664c_iodev, &max32664c_read_rtio_async_ctx, &max32664c_iodev);
+    // Start async sensor read with mempool (uses runtime-selected iodev)
+    ret = sensor_read_async_mempool(ppg_wrist_iodev, &max32664c_read_rtio_async_ctx, ppg_wrist_iodev);
     if (ret < 0)
     {
         LOG_ERR("Failed to start async sensor read: %d", ret);
@@ -650,9 +672,25 @@ static void smf_ppg_wrist_thread(void)
 
     k_sem_take(&sem_ppg_wrist_sm_start, K_FOREVER);
 
-    if (hw_is_max32664c_present() == false)
+    /* Check which PPG hub is present and configure accordingly */
+    if (!ppg_hub_is_present())
     {
-        LOG_ERR("MAX32664C device not present. Not starting PPG SMF");
+        LOG_ERR("No PPG hub device present. Not starting PPG SMF");
+        return;
+    }
+
+    /* Select the appropriate RTIO iodev based on detected PPG hub */
+    switch (ppg_hub_get_type()) {
+    case PPG_HUB_MAX32664C:
+        ppg_wrist_iodev = &max32664c_iodev;
+        LOG_INF("PPG wrist using MAX32664C");
+        break;
+    case PPG_HUB_MAXM86146:
+        ppg_wrist_iodev = &maxm86146_iodev;
+        LOG_INF("PPG wrist using MAXM86146");
+        break;
+    default:
+        LOG_ERR("Unknown PPG hub type");
         return;
     }
 

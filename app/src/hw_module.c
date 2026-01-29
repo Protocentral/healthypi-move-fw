@@ -70,8 +70,10 @@
 #include "max32664d.h"
 #include "bmi323_hpi.h"
 #include "max32664c.h"
+#include "maxm86146.h"
 #include "nrf_fuel_gauge.h"
 #include "display_sh8601.h"
+#include "ppg_hub.h"
 
 #include "hw_module.h"
 #include "battery_module.h"
@@ -109,6 +111,7 @@ static const struct device *max30208a52_dev = DEVICE_DT_GET(DT_NODELABEL(max3020
 
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
+const struct device *maxm86146_dev = DEVICE_DT_GET_ANY(maxim_maxm86146);
 const struct device *imu_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
 const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
@@ -133,6 +136,10 @@ static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sens
 volatile bool max30001_device_present = false;
 volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
+volatile bool maxm86146_device_present = false;
+
+/* PPG Hub abstraction - tracks which wrist PPG sensor is active */
+static enum ppg_hub_type detected_ppg_hub = PPG_HUB_NONE;
 
 static volatile bool vbus_connected;
 
@@ -500,21 +507,138 @@ bool hw_is_max32664c_present(void)
     return max32664c_device_present;
 }
 
+/**
+ * @brief Set PPG hub operating mode (works with MAX32664C or MAXM86146)
+ *
+ * This function provides backward compatibility with code that uses
+ * hw_max32664c_set_op_mode. It will work with whichever PPG hub is detected.
+ * The op_mode values are the same between MAX32664C and MAXM86146 drivers.
+ */
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
 {
-    LOG_DBG("Setting op mode: %d, algo mode: %d", op_mode, algo_mode);
+    LOG_DBG("Setting op mode: %d, algo mode: %d (PPG hub: %s)",
+            op_mode, algo_mode, ppg_hub_get_type_string());
+
     struct sensor_value mode_set;
     mode_set.val1 = op_mode;
     mode_set.val2 = algo_mode;
-    return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+
+    /* Use the appropriate device based on detected PPG hub */
+    switch (detected_ppg_hub) {
+    case PPG_HUB_MAX32664C:
+        return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+    case PPG_HUB_MAXM86146:
+        return sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+    default:
+        LOG_ERR("No PPG hub detected");
+        return -ENODEV;
+    }
 }
 
+/**
+ * @brief Stop PPG hub algorithm (works with MAX32664C or MAXM86146)
+ */
 int hw_max32664c_stop_algo(void)
 {
     struct sensor_value mode_set;
-    mode_set.val1 = MAX32664C_OP_MODE_STOP_ALGO;
     mode_set.val2 = 0;
-    return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+
+    switch (detected_ppg_hub) {
+    case PPG_HUB_MAX32664C:
+        mode_set.val1 = MAX32664C_OP_MODE_STOP_ALGO;
+        return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+    case PPG_HUB_MAXM86146:
+        mode_set.val1 = MAXM86146_OP_MODE_STOP_ALGO;
+        return sensor_attr_set(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+    default:
+        LOG_ERR("No PPG hub detected");
+        return -ENODEV;
+    }
+}
+
+/* PPG Hub Abstraction Layer Implementation */
+
+enum ppg_hub_type ppg_hub_get_type(void)
+{
+    return detected_ppg_hub;
+}
+
+const struct device *ppg_hub_get_device(void)
+{
+    switch (detected_ppg_hub) {
+    case PPG_HUB_MAX32664C:
+        return max32664c_dev;
+    case PPG_HUB_MAXM86146:
+        return maxm86146_dev;
+    default:
+        return NULL;
+    }
+}
+
+bool ppg_hub_is_present(void)
+{
+    return detected_ppg_hub != PPG_HUB_NONE;
+}
+
+int ppg_hub_set_op_mode(enum ppg_hub_op_mode op_mode, enum ppg_hub_algo_mode algo_mode)
+{
+    struct sensor_value mode_set;
+    mode_set.val1 = op_mode;
+    mode_set.val2 = algo_mode;
+
+    const struct device *dev = ppg_hub_get_device();
+    if (dev == NULL) {
+        return -ENODEV;
+    }
+
+    /* Both drivers use same attribute ID values for op mode */
+    switch (detected_ppg_hub) {
+    case PPG_HUB_MAX32664C:
+        return sensor_attr_set(dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+    case PPG_HUB_MAXM86146:
+        return sensor_attr_set(dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+    default:
+        return -ENODEV;
+    }
+}
+
+int ppg_hub_stop_algo(void)
+{
+    struct sensor_value mode_set;
+    mode_set.val2 = 0;
+
+    const struct device *dev = ppg_hub_get_device();
+    if (dev == NULL) {
+        return -ENODEV;
+    }
+
+    switch (detected_ppg_hub) {
+    case PPG_HUB_MAX32664C:
+        mode_set.val1 = MAX32664C_OP_MODE_STOP_ALGO;
+        return sensor_attr_set(dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_OP_MODE, &mode_set);
+    case PPG_HUB_MAXM86146:
+        mode_set.val1 = MAXM86146_OP_MODE_STOP_ALGO;
+        return sensor_attr_set(dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_OP_MODE, &mode_set);
+    default:
+        return -ENODEV;
+    }
+}
+
+const char *ppg_hub_get_type_string(void)
+{
+    switch (detected_ppg_hub) {
+    case PPG_HUB_MAX32664C:
+        return "MAX32664C";
+    case PPG_HUB_MAXM86146:
+        return "MAXM86146";
+    default:
+        return "None";
+    }
+}
+
+bool hw_is_maxm86146_present(void)
+{
+    return maxm86146_device_present;
 }
 
 static void pmic_event_callback(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
@@ -874,77 +998,196 @@ void hw_module_init(void)
     }
     else
     {
-        hw_add_boot_msg("MAX32664C", true, true, false, 0);
-        LOG_INF("MAX32664C device present!");
-        max32664c_device_present = true;
+        /* Device responded - now identify which chip by reading firmware prefix */
+        struct sensor_value fw_prefix;
+        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_FW_PREFIX, &fw_prefix);
+        LOG_INF("PPG Hub FW prefix: %d", fw_prefix.val1);
 
-        struct sensor_value ver_get;
-        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_APP_VER, &ver_get);
-        LOG_INF("MAX32664C App Version: %d.%d", ver_get.val1, ver_get.val2);
-        char ver_msg[10] = {0};
-        snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
-        hw_add_boot_msg(ver_msg, true, false, false, 0);
-
-        struct sensor_value sensor_ids_get;
-        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_SENSOR_IDS, &sensor_ids_get);
-
-        if (sensor_ids_get.val1 != MAX32664C_AFE_ID)
+        if (fw_prefix.val1 == MAXM86146_FW_VERSION_PREFIX)
         {
-            LOG_ERR("MAX32664C AFE Not Present");
-            hw_add_boot_msg("\t AFE", false, true, false, 0);
-        }
-        else
-        {
-            LOG_INF("MAX32664C AFE OK: %x", sensor_ids_get.val1);
-            hw_add_boot_msg("\t AFE", true, true, false, 0);
-        }
+            /* This is actually MAXM86146 - switch to using that driver */
+            LOG_INF("Detected MAXM86146 (FW prefix %d) - switching to MAXM86146 driver", fw_prefix.val1);
 
-        if (sensor_ids_get.val2 != MAX32664C_ACC_ID)
-        {
-            LOG_ERR("MAX32664C Accel Not Present");
-            hw_add_boot_msg("\t Acc", false, true, false, 0);
-        }
-        else
-        {
-            LOG_INF("MAX32664C Accel OK: %x", sensor_ids_get.val2);
-            hw_add_boot_msg("\t Acc", true, true, false, 0);
-        }
+            device_init(maxm86146_dev);
+            k_sleep(K_MSEC(100));
 
-        bool update_required_c = false;
-
-#ifdef FORCE_MAX32664C_UPDATE_FOR_TESTING
-        // Force update for testing purposes (compile-time)
-        update_required_c = true;
-        LOG_INF("MAX32664C Force update enabled for testing (compile-time)");
-        hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
-#else
-        // Normal version check
-        if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
-        {
-            update_required_c = true;
-            LOG_INF("MAX32664C App update required");
-            hw_add_boot_msg("\tUpdate required", false, false, false, 0);
-        }
-#endif
-
-        if (update_required_c)
-        {
-            // Check if MSBL file exists before starting update
-            if (!hw_check_msbl_file_exists(MAX32664C_FW_PATH))
+            if (device_is_ready(maxm86146_dev))
             {
-                LOG_ERR("MAX32664C MSBL file not available - skipping update");
-                hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
-                hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
+                hw_add_boot_msg("MAXM86146", true, true, false, 0);
+                LOG_INF("MAXM86146 device present!");
+                maxm86146_device_present = true;
+                detected_ppg_hub = PPG_HUB_MAXM86146;
+
+                struct sensor_value ver_get;
+                sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_APP_VER, &ver_get);
+                LOG_INF("MAXM86146 App Version: %d.%d", ver_get.val1, ver_get.val2);
+                char ver_msg[10] = {0};
+                snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
+                hw_add_boot_msg(ver_msg, true, false, false, 0);
+
+                struct sensor_value sensor_ids_get;
+                sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_SENSOR_IDS, &sensor_ids_get);
+
+                /* MAXM86146 has integrated AFE - accept various IDs */
+                LOG_INF("MAXM86146 AFE ID: 0x%02x, Accel ID: 0x%02x", sensor_ids_get.val1, sensor_ids_get.val2);
+                hw_add_boot_msg("\t AFE", true, true, false, 0);
+
+                if (sensor_ids_get.val2 == MAXM86146_ACC_ID)
+                {
+                    LOG_INF("MAXM86146 Accel OK");
+                    hw_add_boot_msg("\t Acc", true, true, false, 0);
+                }
+                else
+                {
+                    LOG_WRN("MAXM86146 Accel ID unexpected: 0x%02x", sensor_ids_get.val2);
+                    hw_add_boot_msg("\t Acc", true, true, false, 0);
+                }
+
+                k_sem_give(&sem_ppg_wrist_sm_start);
             }
             else
             {
-                k_sem_give(&sem_boot_update_req);
-                max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+                LOG_ERR("MAXM86146 driver init failed after FW prefix detection");
+                hw_add_boot_msg("MAXM86146", false, true, false, 0);
             }
         }
+        else
+        {
+            /* This is MAX32664C (prefix 32 or other) */
+            hw_add_boot_msg("MAX32664C", true, true, false, 0);
+            LOG_INF("MAX32664C device present (FW prefix %d)!", fw_prefix.val1);
+            max32664c_device_present = true;
+            detected_ppg_hub = PPG_HUB_MAX32664C;
 
-        k_sem_give(&sem_ppg_wrist_sm_start);
+            struct sensor_value ver_get;
+            sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_APP_VER, &ver_get);
+            LOG_INF("MAX32664C App Version: %d.%d", ver_get.val1, ver_get.val2);
+            char ver_msg[10] = {0};
+            snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
+            hw_add_boot_msg(ver_msg, true, false, false, 0);
+
+            struct sensor_value sensor_ids_get;
+            sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_SENSOR_IDS, &sensor_ids_get);
+
+            if (sensor_ids_get.val1 != MAX32664C_AFE_ID)
+            {
+                LOG_ERR("MAX32664C AFE Not Present");
+                hw_add_boot_msg("\t AFE", false, true, false, 0);
+            }
+            else
+            {
+                LOG_INF("MAX32664C AFE OK: %x", sensor_ids_get.val1);
+                hw_add_boot_msg("\t AFE", true, true, false, 0);
+            }
+
+            if (sensor_ids_get.val2 != MAX32664C_ACC_ID)
+            {
+                LOG_ERR("MAX32664C Accel Not Present");
+                hw_add_boot_msg("\t Acc", false, true, false, 0);
+            }
+            else
+            {
+                LOG_INF("MAX32664C Accel OK: %x", sensor_ids_get.val2);
+                hw_add_boot_msg("\t Acc", true, true, false, 0);
+            }
+
+            bool update_required_c = false;
+
+#ifdef FORCE_MAX32664C_UPDATE_FOR_TESTING
+            // Force update for testing purposes (compile-time)
+            update_required_c = true;
+            LOG_INF("MAX32664C Force update enabled for testing (compile-time)");
+            hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
+#else
+            // Normal version check
+            if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
+            {
+                update_required_c = true;
+                LOG_INF("MAX32664C App update required");
+                hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+            }
+#endif
+
+            if (update_required_c)
+            {
+                // Check if MSBL file exists before starting update
+                if (!hw_check_msbl_file_exists(MAX32664C_FW_PATH))
+                {
+                    LOG_ERR("MAX32664C MSBL file not available - skipping update");
+                    hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
+                    hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
+                }
+                else
+                {
+                    k_sem_give(&sem_boot_update_req);
+                    max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+                }
+            }
+
+            k_sem_give(&sem_ppg_wrist_sm_start);
+        }
     }
+
+    /* If no PPG hub was detected via FW prefix, and MAX32664C probe failed, try MAXM86146 fallback */
+    if (!max32664c_device_present && !maxm86146_device_present)
+    {
+        LOG_INF("Trying MAXM86146 as alternative wrist PPG sensor...");
+
+        device_init(maxm86146_dev);
+        k_sleep(K_MSEC(100));
+
+        if (device_is_ready(maxm86146_dev))
+        {
+            hw_add_boot_msg("MAXM86146", true, true, false, 0);
+            LOG_INF("MAXM86146 device present!");
+            maxm86146_device_present = true;
+            detected_ppg_hub = PPG_HUB_MAXM86146;
+
+            struct sensor_value ver_get;
+            sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_APP_VER, &ver_get);
+            LOG_INF("MAXM86146 App Version: %d.%d", ver_get.val1, ver_get.val2);
+            char ver_msg[10] = {0};
+            snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
+            hw_add_boot_msg(ver_msg, true, false, false, 0);
+
+            struct sensor_value sensor_ids_get;
+            sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_SENSOR_IDS, &sensor_ids_get);
+
+            /* MAXM86146 has integrated AFE - may report different ID */
+            if (sensor_ids_get.val1 == MAXM86146_INTEGRATED_AFE_ID ||
+                sensor_ids_get.val1 == MAXM86146_AFE_ID_ALT)
+            {
+                LOG_INF("MAXM86146 AFE OK: 0x%02x", sensor_ids_get.val1);
+                hw_add_boot_msg("\t AFE", true, true, false, 0);
+            }
+            else
+            {
+                LOG_WRN("MAXM86146 AFE ID unexpected: 0x%02x", sensor_ids_get.val1);
+                hw_add_boot_msg("\t AFE", true, true, false, 0);
+            }
+
+            /* MAXM86146 may not have accelerometer */
+            if (sensor_ids_get.val2 == MAXM86146_ACC_ID)
+            {
+                LOG_INF("MAXM86146 Accel OK: 0x%02x", sensor_ids_get.val2);
+                hw_add_boot_msg("\t Acc", true, true, false, 0);
+            }
+            else
+            {
+                LOG_INF("MAXM86146 Accel not present (integrated module)");
+                hw_add_boot_msg("\t Acc", false, false, false, 0);
+            }
+
+            k_sem_give(&sem_ppg_wrist_sm_start);
+        }
+        else
+        {
+            LOG_WRN("MAXM86146 also not detected - no wrist PPG sensor available");
+            hw_add_boot_msg("MAXM86146", false, true, false, 0);
+        }
+    }
+
+    LOG_INF("PPG Hub detected: %s", ppg_hub_get_type_string());
 
     device_init(max32664d_dev);
     k_sleep(K_MSEC(100));

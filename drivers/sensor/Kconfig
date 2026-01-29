@@ -3,5 +3,6 @@
 rsource "max30001/Kconfig"
 rsource "max32664c/Kconfig"
 rsource "max32664d/Kconfig"
+rsource "maxm86146/Kconfig"
 rsource "max30208/Kconfig"
 rsource "bmi323hpi/Kconfig"

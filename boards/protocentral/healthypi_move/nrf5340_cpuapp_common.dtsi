@@ -90,7 +90,7 @@
 	aliases {
 		max30001 = &max30001;
 		max32664d = &max32664d;
-		//maxm86146 = &maxm86146;
+		maxm86146 = &maxm86146;
 		max32664c = &max32664c;
 		rtc = &rtc_rv;
 	};
@@ -250,6 +250,20 @@
 
 	max32664c: max32664c@55 {
 		compatible = "maxim,max32664c";
+		reg = <0x55>;
+		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
+		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+		zephyr,deferred-init;
+	};
+
+	/* MAXM86146 - Integrated optical biosensing module
+	 * Uses same I2C address (0x55) and GPIOs as MAX32664C
+	 * Only one of MAX32664C or MAXM86146 can be present at a time
+	 * Runtime detection in hw_module.c determines which chip is present
+	 */
+	maxm86146: maxm86146@55 {
+		compatible = "maxim,maxm86146";
 		reg = <0x55>;
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
