@@ -22,7 +22,7 @@ static float baseline_temp[GSR_MAX_SAMPLES];
 // bioz-gain = 1 → 20 V/V
 // bioz_cgmag = 2 → 16 µA
 #define BIOZ_V_REF      1.0f        // MAX30001 internal reference voltage (V)
-#define BIOZ_GAIN       10.0f       // bioz-gain=0 → 10 V/V
+#define BIOZ_GAIN       40.0f       // bioz-gain=3 → 80 V/V
 #define BIOZ_I_MAG      8e-6f      // bioz_cgmag=1 → 8 µA excitation current
 #define BIOZ_FS_20BIT 524288.0f   // 2^19
 
@@ -57,7 +57,7 @@ void convert_raw_to_uS(const int32_t *raw_data, float *gsr_data, int length)
         else
            gsr_data[i] = (1.0f / impedance) * 1e6f;
 
-      //  printf("raw=%ld, ADC=%d, Z=%.2f Ohm, G=%.3f uS\n", raw_data[i], adc, impedance, gsr_data[i]);
+     //  printf("raw=%ld, %d, ADC=%d, Z=%.2f Ohm, G=%.3f uS\n", raw_data[i], i, adc, impedance, gsr_data[i]);
       //  LOG_DBG("raw=%ld, V=%.6f V, Z=%.2f Ohm, G=%.3f µS",raw_data[i], v_electrode, impedance, gsr_data[i]);
     }
     
@@ -125,7 +125,7 @@ void remove_baseline(float *data, int length, int window)
     for (int i = 0; i < length; i++)
         data[i] -= baseline_temp[i];
 }
-
+/*
 // Calculate SCR count from raw data
 int calculate_scr_count(int32_t *raw_gsr_data, int length)
 {
@@ -176,7 +176,7 @@ int calculate_scr_count(int32_t *raw_gsr_data, int length)
 
     return scr_count;
 }
-
+*/
 /**
  * @brief Calculate GSR stress index from raw sample buffer
  *
