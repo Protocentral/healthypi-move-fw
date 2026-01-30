@@ -188,7 +188,8 @@ static int _max30001_read_bioz_fifo(const struct device *dev, int num_bytes)
     for (int i = 0; i < num_bytes; i += 3)
     {
         // Get etag
-        ecg_etag = ((((unsigned char)buf[i + 2]) & 0x38) >> 3);
+       // ecg_etag = ((((unsigned char)buf[i + 2]) & 0x38) >> 3);
+        ecg_etag = ((((unsigned char)buf[i + 2]) & 0x07));
         // printk("B%x ", ecg_etag);
 
         if ((ecg_etag == 0x00) || (ecg_etag == 0x02)) // Valid sample
@@ -592,17 +593,29 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_emux.bit.calp_sel = 0;
     data->chip_cfg.reg_cnfg_emux.bit.caln_sel = 0;
 
-    // BIOZ Configuration
-    data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;                 // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
-    data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b010;             // 500 Hz
-    data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 40 Hz
-    data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b010;             // 0.5 Hz
-    data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain; // FROM DTS
-    data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b0100;
-    data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 0;
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag; // FROM DTS
-    data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0011;
+    // // BIOZ Configuration
+    // data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;                 // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
+    // data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b010;             // 800 Hz
+    // data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 4 Hz
+    // data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b010;             // 0.5 Hz
+    // data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain; // FROM DTS
+    // data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b0100;           //8000 Hz
+    // data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;
+    // data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 0;
+    // data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag; // FROM DTS
+    // data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0011;
+
+        // GSR CONFIGURATION 
+    data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;              // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
+    data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b000;             // 125Hz HPF ✓ LOW
+    data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b00;              // 0.05Hz HPF ✓ LOWEST
+    data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 4Hz LPF ✓ LOW
+    data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain;           // 40V/V MAX ✓
+    data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b1010;          // 125 Hz EXCITATION FREQUENCY ✓ CRITICAL
+    data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;   
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 0;       // 125Hz EXCITATION ✓ CRITICAL
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;          // 8μA LOW CURRENT ✓
+    data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0000;           // 0° phase ✓
 
     // BIOZ MUX Configuration
     data->chip_cfg.reg_cnfg_bmux.bit.openp = 0;
@@ -613,6 +626,7 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_bmux.bit.en_bist = 0;
     data->chip_cfg.reg_cnfg_bmux.bit.rnom = 0;
     data->chip_cfg.reg_cnfg_bmux.bit.rmod = 0b100;
+    //data->chip_cfg.reg_cnfg_bmux.bit.rmod = 0b000;
     data->chip_cfg.reg_cnfg_bmux.bit.fbist = 0;
 
     _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
@@ -634,7 +648,7 @@ static int max30001_chip_init(const struct device *dev)
     _max30001RegWrite(dev, CNFG_BMUX, data->chip_cfg.reg_cnfg_bmux.all);
     k_sleep(K_MSEC(100));
 
-    // Enable DC Leads-Off and BioZ compliance monitor
+   // Enable DC Leads-Off and BioZ compliance monitor
     data->chip_cfg.reg_cnfg_gen.bit.en_bloff = 1;
     _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
     k_sleep(K_MSEC(10));
@@ -643,7 +657,6 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;
     _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
     k_sleep(K_MSEC(10));
-
 
     max30001_enable_rtor(dev);
 
