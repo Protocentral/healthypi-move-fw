@@ -289,7 +289,11 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             m_curr_scd_state = ppg_sensor_sample.scd_state;
 
             // Process SCD state changes for power optimization in ACTIVE state
-            if (m_curr_state == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC)
+            // Skip off-skin detection during one-shot SpO2 measurement to prevent
+            // premature LED turn-off
+            if (m_curr_state == PPG_SAMP_STATE_ACTIVE &&
+                edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC &&
+                !spo2_measurement_in_progress)
             {
                 if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
                 {

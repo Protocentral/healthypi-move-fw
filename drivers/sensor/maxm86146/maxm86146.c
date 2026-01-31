@@ -722,8 +722,8 @@ static int maxm86146_set_mode_algo(const struct device *dev, enum maxm86146_mode
     /* 2. Set output format to sensor + algorithm data (0x10 0x00 0x03) */
     m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAXM86146_DEFAULT_CMD_DELAY);
 
-    /* 3. Set sensor hub DataRdyInt threshold (0x10 0x01 0x01) */
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, 0x01, MAXM86146_DEFAULT_CMD_DELAY);
+    /* 3. Set sensor hub DataRdyInt threshold (0x10 0x01) - same as MAX32664C */
+    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAXM86146_INT_THRESHOLD, 200);
 
     /* 4. Set samples report period to 40ms (0x10 0x02 0x01) */
     m_i2c_write_cmd_3(dev, 0x10, 0x02, MAXM86146_REPORT_PERIOD, MAXM86146_DEFAULT_CMD_DELAY);

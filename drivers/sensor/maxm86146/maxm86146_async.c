@@ -330,6 +330,35 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
                 /* Algorithm output data starts at MAXM86146_ALGO_DATA_OFFSET (byte 42) */
                 int algo_base = (sample_len * i) + MAXM86146_ALGO_DATA_OFFSET + MAXM86146_SENSOR_DATA_OFFSET;
 
+                /* Debug: dump raw algorithm bytes for first sample to verify format */
+                if (i == 0)
+                {
+                    LOG_DBG("MAXM86146 FIFO: sample_len=%d, algo_base=%d, fifo_count=%d",
+                            sample_len, algo_base, fifo_count);
+                    LOG_DBG("MAXM86146 algo raw[0-9]: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+                            maxm86146_fifo_buf[algo_base + 0],
+                            maxm86146_fifo_buf[algo_base + 1],
+                            maxm86146_fifo_buf[algo_base + 2],
+                            maxm86146_fifo_buf[algo_base + 3],
+                            maxm86146_fifo_buf[algo_base + 4],
+                            maxm86146_fifo_buf[algo_base + 5],
+                            maxm86146_fifo_buf[algo_base + 6],
+                            maxm86146_fifo_buf[algo_base + 7],
+                            maxm86146_fifo_buf[algo_base + 8],
+                            maxm86146_fifo_buf[algo_base + 9]);
+                    LOG_DBG("MAXM86146 algo raw[10-19]: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+                            maxm86146_fifo_buf[algo_base + 10],
+                            maxm86146_fifo_buf[algo_base + 11],
+                            maxm86146_fifo_buf[algo_base + 12],
+                            maxm86146_fifo_buf[algo_base + 13],
+                            maxm86146_fifo_buf[algo_base + 14],
+                            maxm86146_fifo_buf[algo_base + 15],
+                            maxm86146_fifo_buf[algo_base + 16],
+                            maxm86146_fifo_buf[algo_base + 17],
+                            maxm86146_fifo_buf[algo_base + 18],
+                            maxm86146_fifo_buf[algo_base + 19]);
+                }
+
                 uint16_t hr_val = (uint16_t)maxm86146_fifo_buf[algo_base + 1] << 8;
                 hr_val |= (uint16_t)maxm86146_fifo_buf[algo_base + 2];
 
@@ -362,7 +391,7 @@ static int maxm86146_async_sample_fetch(const struct device *dev, uint32_t green
                 /* Debug: log parsed values for first sample */
                 if (i == 0)
                 {
-                    LOG_DBG("MAXM86146 algo: hr=%d, spo2=%d, spo2_prog=%d%%, scd=%d, state=%d",
+                    LOG_DBG("MAXM86146 parsed: hr=%d, spo2=%d, spo2_prog=%d%%, scd=%d, state=%d",
                             *hr, *spo2, *spo2_valid_percent_complete, *scd_state, *spo2_state);
                 }
             }
