@@ -609,16 +609,28 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_emux.bit.caln_sel = 0;
 
     // BIOZ Configuration
-    data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;                 // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
-    data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b010;             // 500 Hz
-    data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 40 Hz
-    data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b010;             // 0.5 Hz
-    data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain; // FROM DTS
-    data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b0100;
-    data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 0;
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag; // FROM DTS
-    data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0011;
+    // data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;                 // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
+    // data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b010;             // 500 Hz
+    // data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 40 Hz
+    // data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b010;             // 0.5 Hz
+    // data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain; // FROM DTS
+    // data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b0100;
+    // data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;
+    // data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 0;
+    // data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag; // FROM DTS
+    // data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0011;
+
+    // // GSR CONFIGURATION 
+    data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;              // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
+    data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b000;             // 125Hz HPF
+    data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b00;              // bypass HPF 
+    data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 4Hz LPF 
+    data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain;           // 40V/V 
+    data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b0111;          // 1000 Hz EXCITATION FREQUENCY 
+    data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;   
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 0;       
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;          // 8μA LOW CURRENT ✓
+    data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0000;           // 0° phase ✓
 
     // BIOZ MUX Configuration
     data->chip_cfg.reg_cnfg_bmux.bit.openp = 0;
@@ -628,7 +640,8 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_bmux.bit.cg_mode = 0;
     data->chip_cfg.reg_cnfg_bmux.bit.en_bist = 0;
     data->chip_cfg.reg_cnfg_bmux.bit.rnom = 0;
-    data->chip_cfg.reg_cnfg_bmux.bit.rmod = 0b100;
+   // data->chip_cfg.reg_cnfg_bmux.bit.rmod = 0b100;
+    data->chip_cfg.reg_cnfg_bmux.bit.rmod = 0b000;  // GSR impedance range
     data->chip_cfg.reg_cnfg_bmux.bit.fbist = 0;
 
     _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
