@@ -67,7 +67,7 @@ K_SEM_DEFINE(sem_gsr_start, 0, 1);
 K_SEM_DEFINE(sem_gsr_cancel, 0, 1);
 
 // GSR Measurement Timing (60 seconds for reliable stress index)
-#define GSR_MEASUREMENT_DURATION_S 30
+#define GSR_MEASUREMENT_DURATION_S 60
 static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
 static uint32_t gsr_last_status_pub_s = 0; // Last published elapsed seconds

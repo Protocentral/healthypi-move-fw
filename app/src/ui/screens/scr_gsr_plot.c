@@ -179,11 +179,11 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     arc_gsr_progress = lv_arc_create(scr_gsr_plot);
     lv_obj_set_size(arc_gsr_progress, 370, 370);  // 185px radius
     lv_obj_center(arc_gsr_progress);
-    lv_arc_set_range(arc_gsr_progress, 0, 30);  // Timer range: 0-30 seconds
+    lv_arc_set_range(arc_gsr_progress, 0, 60);  // Timer range: 0-60 seconds
     
     // Background arc: Full 270° track (gray)
     lv_arc_set_bg_angles(arc_gsr_progress, 135, 45);  // Full background arc
-    lv_arc_set_value(arc_gsr_progress, 30);  // Start at full (30 seconds), will countdown to 0
+    lv_arc_set_value(arc_gsr_progress, 60);  // Start at full (60 seconds), will countdown to 0
     
     // Style the progress arc - blue theme for GSR measurement
     lv_obj_set_style_arc_color(arc_gsr_progress, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
@@ -220,7 +220,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Timer value
     label_timer = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer, "30");
+    lv_label_set_text(label_timer, "60");
     lv_obj_add_style(label_timer, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_pad_left(label_timer, 8, LV_PART_MAIN);
