@@ -187,6 +187,9 @@ extern struct k_sem sem_ecg_lead_timeout;  // Signaled when lead placement times
 static int m_disp_hrv_timer = 0;
 
 extern struct k_sem sem_fi_bpt_cal_cancel;
+extern struct k_sem sem_finger_contact_timeout;
+extern struct k_sem sem_fi_spo2_est_cancel;
+
 
 // @brief Recording status variables (updated by ZBus listener, read by display thread)
 static struct hpi_recording_status_t m_disp_recording_status = {0};
@@ -267,6 +270,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
+    
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -1144,8 +1148,13 @@ static void hpi_disp_update_screens(void)
             last_spo2_trend_refresh = k_uptime_get_32();
         }
         break;
-    case SCR_BPT:
-        
+    case  SCR_SPL_BPT_MEASURE:
+        if(k_sem_take(&sem_finger_contact_timeout, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to BPT home screen");
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+            hpi_disp_show_toast("Measurement cancelled\nNo finger detected", 3000);
+        }
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
          if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
@@ -1154,6 +1163,16 @@ static void hpi_disp_update_screens(void)
             hpi_load_screen(SCR_BPT, SCROLL_NONE);
             return;
          }
+        lv_disp_trig_activity(NULL);
+        break;
+    case SCR_SPL_SPO2_MEASURE:
+
+         if(k_sem_take(&sem_finger_contact_timeout, K_NO_WAIT) == 0)
+         {
+            LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to SpO2 home screen");
+            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+            hpi_disp_show_toast("Measurement cancelled\nNo finger detected", 3000);
+         }        
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
