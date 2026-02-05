@@ -730,7 +730,7 @@ void data_thread(void)
             }
         k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
 
-        LOG_DBG("is_gsr_record_active=%d, is_measurement_active=%d, gsr_record_counter=%d",is_gsr_record_active, hpi_data_is_gsr_measurement_active(), gsr_record_counter);
+       // LOG_DBG("is_gsr_record_active=%d, is_measurement_active=%d, gsr_record_counter=%d",is_gsr_record_active, hpi_data_is_gsr_measurement_active(), gsr_record_counter);
         if (is_gsr_record_active == true)
         {
             int samples_to_copy = bsample.bioz_num_samples;
