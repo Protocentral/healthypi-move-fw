@@ -654,7 +654,6 @@ extern struct k_sem sem_crown_key_pressed;
 
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
-extern struct k_sem sem_ecg_lead_on_stabilize;
 
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
