@@ -226,6 +226,7 @@ static void ecg_smooth_reset(void)
 static uint32_t ecg_last_timer_val = 0;
 static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
+bool ecg_cancellation = false;
 
 
 // uint32_t gsr_countdown_val = 0;
@@ -876,10 +877,12 @@ static void st_ecg_idle_entry(void *o)
     }
 
     // Reset all ECG/HRV state flags
+    
     set_hrv_active(false);
     hpi_data_set_hrv_eval_active(false);
     hpi_data_set_ecg_record_active(false);
     hpi_ecg_timer_reset();
+    ecg_cancellation = false;
 }
 
 static void st_ecg_idle_run(void *o)
@@ -1125,6 +1128,7 @@ static void st_ecg_wait_for_lead_run(void *o)
             LOG_INF("ECG SMF: Lead placement timeout");
             lead_placement_wait_start = 0;
             k_sem_give(&sem_ecg_lead_timeout);
+            ecg_cancellation = true; // To protect sample writing when timing out from WAIT_FOR_LEAD
             smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
             return;
         }
@@ -1164,11 +1168,13 @@ static void st_ecg_wait_for_lead_run(void *o)
     // Handle cancellation
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Cancelled in WAIT_FOR_LEAD");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
     if (k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: HRV cancelled in WAIT_FOR_LEAD");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
@@ -1347,11 +1353,13 @@ check_cancel:
     // Handle cancellation
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Cancelled during RECORDING");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
     if (k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: HRV cancelled during RECORDING");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
@@ -1364,7 +1372,9 @@ static void st_ecg_recording_exit(void *o)
 
     // Stop recording and write file if recording phase was active
     if (recording_phase_started) {
-        hpi_data_set_ecg_record_active(false);
+        if(!ecg_cancellation)
+          hpi_data_set_ecg_record_active(false);
+          //ecg_cancellation = false;  // reset cancellation flag for next session
     }
 
     hpi_ecg_timer_reset();
@@ -1387,12 +1397,15 @@ static void st_ecg_recording_exit(void *o)
         hpi_data_set_hrv_eval_active(false);
         k_sem_give(&sem_hrv_eval_complete);
         set_hrv_active(false);
-    } else if (recording_phase_started) {
+        ecg_cancellation = true;  // prevent ecg sample writing after hrv record phase.
+    } else if (recording_phase_started && !ecg_cancellation) {
         // ECG recording complete — signal display to show completion screen
         k_sem_give(&sem_ecg_complete_reset);
+
     }
 
     recording_phase_started = false;
+    //smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
 }
 
 /*
