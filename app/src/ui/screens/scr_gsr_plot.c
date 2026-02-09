@@ -37,7 +37,8 @@ static bool plot_ready = false;
 static int32_t y_max_gsr = INT32_MIN;   // 🔧 FIX
 static int32_t y_min_gsr = INT32_MAX;   // 🔧 FIX
 static int32_t gsr_plot_min = 0;
-static int32_t gsr_plot_max = 0;
+static int32_t gsr_plot_max = 1000;
+static bool gsr_first_autoscale = true;
 
 static uint32_t gsr_sample_counter = 0;
 static const uint32_t GSR_RANGE_UPDATE_INTERVAL = 128;
@@ -172,14 +173,20 @@ void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead
     //     y_max_gsr = -10000;
     // }
     /* ================= AUTO SCALING ================= */
-        if (gsr_sample_counter >= GSR_RANGE_UPDATE_INTERVAL) {
+        if (gsr_sample_counter >= GSR_RANGE_UPDATE_INTERVAL || gsr_first_autoscale) {
 
             int32_t new_min, new_max;
 
             const int32_t MIN_VISIBLE_SPAN = 100;   // ensure signal is always visible
             const int32_t MIN_PADDING = 10;         // minimum padding around min/max
 
-            if (y_max_gsr > y_min_gsr) {
+            // 🆕 ADDED: Check for uninitialized sentinels first
+            if (y_min_gsr == INT32_MAX && y_max_gsr == INT32_MIN) {
+                // No data yet - use initial defaults
+                new_min = 0;
+                new_max = 1000;
+            }
+            else if (y_max_gsr > y_min_gsr) {
                 int32_t range = y_max_gsr - y_min_gsr;
 
                 // If signal range is very small, expand it to MIN_VISIBLE_SPAN
@@ -225,6 +232,7 @@ void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead
             gsr_sample_counter = 0;
             y_min_gsr = INT32_MAX;
             y_max_gsr = INT32_MIN;
+            gsr_first_autoscale = false; 
         }
 
     // // Refresh depending on auto-refresh flag (keep behavior similar to ECG)
@@ -341,6 +349,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Note: Real-time uS display disabled - final tonic level shown on results screen
     // Set label_gsr_value to NULL since we're not creating it
+    lv_chart_set_range(chart_gsr_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 1000);
     label_gsr_value = NULL;
 
     // Stop button - positioned at bottom center
@@ -405,9 +414,16 @@ static void gsr_chart_reset_performance_counters(void)
 {
     gsr_sample_counter = 0;
     gsr_batch_count = 0;
-     // 🔧 FIX: correct sentinel reset
+     // FIX: correct sentinel reset
     y_min_gsr = INT32_MAX;
     y_max_gsr = INT32_MIN;
+
+    // ADDED: Reset plot range to initial defaults
+    gsr_plot_min = 0;
+    gsr_plot_max = 1000;
+    
+    // 🆕 ADDED: Reset first autoscale flag
+    gsr_first_autoscale = true;
 
 }
 
