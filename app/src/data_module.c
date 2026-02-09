@@ -129,6 +129,7 @@ static uint32_t last_hr_update_time = 0;
 K_MUTEX_DEFINE(mutex_hr_change);
 
 // Externs
+extern bool ecg_cancellation;
 
 ZBUS_CHAN_DECLARE(hr_chan);
 
@@ -295,10 +296,11 @@ void hpi_data_set_ecg_record_active(bool active)
     {
         // Starting new recording - reset buffer and counter
         ecg_record_counter = 0;
+        ecg_cancellation = false;  // reset cancellation flag for new recording session
         memset(ecg_record_buffer, 0, sizeof(ecg_record_buffer));
         LOG_INF("ECG recording started - buffer reset");
     }
-    else
+    else if(!ecg_cancellation)  // Only write file if not cancelled - cancellation can occur if user cancels during recording or lead off detected
     {
         // Stopping recording - write file SYNCHRONOUSLY with mutex held
         // This prevents race condition where new recording could start before write completes
