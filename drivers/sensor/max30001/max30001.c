@@ -622,7 +622,8 @@ static int max30001_chip_init(const struct device *dev)
 
     // // GSR CONFIGURATION 
     data->chip_cfg.reg_cnfg_bioz.bit.rate = 1;              // 32 sps with FMSTR=0 (lowest rate without changing FMSTR)
-    data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b000;             // 125Hz HPF
+   // data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b000;             // 125Hz HPF
+    data->chip_cfg.reg_cnfg_bioz.bit.ahpf = 0b110;  // Bypass AHPF (11x pattern) // BYPASS analog HPF to preserve DC/low-freq GSR signal
     data->chip_cfg.reg_cnfg_bioz.bit.dhpf = 0b00;              // bypass HPF 
     data->chip_cfg.reg_cnfg_bioz.bit.dlpf = 0b01;              // 4Hz LPF 
     data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain;           // 40V/V 
