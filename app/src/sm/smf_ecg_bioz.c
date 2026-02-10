@@ -619,6 +619,7 @@ static void work_ecg_sample_handler(struct k_work *work)
     int ret;
     
     ret = sensor_read(&max30001_iodev, &max30001_read_rtio_poll_ctx, ecg_bioz_buf, sizeof(ecg_bioz_buf));
+    //LOG_INF("Sensor read returned %d bytes", ret);
     if (ret < 0) {
         LOG_ERR("Error reading sensor data: %d", ret);
         return;
@@ -1391,7 +1392,7 @@ static void st_ecg_recording_exit(void *o)
     }
 
     // Handle HRV post-processing if HRV evaluation was active
-    if (get_hrv_active()) {
+    if (get_hrv_active() && !ecg_cancellation) {
         LOG_INF("HRV evaluation complete - processing results");
         hpi_data_hrv_record_to_file(true);
         hpi_data_set_hrv_eval_active(false);
