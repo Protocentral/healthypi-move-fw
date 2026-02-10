@@ -1502,6 +1502,10 @@ static void st_display_active_run(void *o)
         {
             gesture_down_scr_spl_hrv_eval_progress();
         }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
+        {
+            gesture_down_scr_gsr_plot();
+        }
         else
         {
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
