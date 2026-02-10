@@ -418,6 +418,9 @@ static int max30001_channel_get(const struct device *dev,
     case SENSOR_CHAN_LDOFF:
         val->val1 = data->ecg_lead_off;
         break;
+    case SENSOR_CHAN_BIOZ_LDOFF:
+        val->val1 = data->bioz_lead_off;
+        break;
     default:
         return -EINVAL;
     }
@@ -629,7 +632,7 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_bioz.bit.gain = config->bioz_gain;           // 40V/V 
     data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b0111;          // 1000 Hz EXCITATION FREQUENCY 
     data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;   
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 0;       
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 1;       
     data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;          // 8μA LOW CURRENT ✓
     data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0000;           // 0° phase ✓
 
@@ -669,10 +672,10 @@ static int max30001_chip_init(const struct device *dev)
     _max30001RegWrite(dev, CNFG_GEN, data->chip_cfg.reg_cnfg_gen.all);
     k_sleep(K_MSEC(10));
 
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 1;
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;
-    _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
-    k_sleep(K_MSEC(10));
+    // data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 1;
+    // data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;
+    // _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
+    // k_sleep(K_MSEC(10));
 
 
     max30001_enable_rtor(dev);
