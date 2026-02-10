@@ -198,11 +198,11 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
     } else {
         if(contact_debounce_ts == 0)
             contact_debounce_ts = k_uptime_get();
-        else if (k_uptime_get() - contact_debounce_ts >= 500) {  // Require 500ms of bad readings
+        else if (k_uptime_get() - contact_debounce_ts >= 1000) {  // Require 1000ms(1 sec) of bad readings
             // Only set to false if it was true before
             if (finger_contact_ok) {
                 finger_contact_ok = false;
-                LOG_INF("Finger contact lost (confirmed after %d ms)", k_uptime_get() - contact_debounce_ts);
+                //LOG_INF("Finger contact lost (confirmed after %d ms)", k_uptime_get() - contact_debounce_ts);
                 
                 // Signal that contact was just lost
                 if (prev_finger_contact_ok) {
@@ -622,8 +622,15 @@ static void st_ppg_fi_cal_wait_run(void *o)
 static void st_ppg_fing_bpt_cal_entry(void *o)
 {
     LOG_INF("PPG Finger SM BPT Calibration Entry");
+      // RESET progress to 0%
+    //   struct hpi_bpt_t bpt_data = {
+    //     .progress = 0,
+    //  };
+    // zbus_chan_pub(&bpt_chan, &bpt_data, K_NO_WAIT);
+
     LOG_INF("Step 1: Enabling finger sensor power");
     hpi_hw_fi_sensor_on();
+   // k_msleep(500); // Wait for sensor to power on and stabilize - this is important to prevent I2C errors when starting calibration immediately after powering on
     LOG_INF("Step 2: Starting BPT calibration with index=%d sys=%d dia=%d", m_cal_index, m_cal_sys, m_cal_dia);
     hw_bpt_start_cal(m_cal_index, m_cal_sys, m_cal_dia);
     LOG_INF("Step 3: Signaling to start sampling");
