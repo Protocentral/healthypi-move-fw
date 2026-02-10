@@ -60,12 +60,15 @@ uint32_t max30001_read_status(const struct device *dev)
 
     const struct spi_buf tx_buf[1] = {{.buf = &spiTxCommand, .len = 1}};
     const struct spi_buf_set tx = {.buffers = tx_buf, .count = 1};
-    struct spi_buf rx_buf[2] = {{.buf = NULL, .len = 1}, {.buf = buf, .len = 3}}; // 24 bit register + 1 dummy byte
+    struct spi_buf rx_buf[2] = {{.buf = NULL, .len = 1}, {.buf = buf, .len = 3}};
 
     const struct spi_buf_set rx = {.buffers = rx_buf, .count = 2};
 
-    spi_transceive_dt(&config->spi, &tx, &rx); // regRxBuffer 0 contains NULL (for sent command), so read from 1 onwards
-    // printk("Stat: %x %x %x\n", (uint8_t)buf[0], (uint8_t)buf[1], (uint8_t)buf[2]);
+    int ret = spi_transceive_dt(&config->spi, &tx, &rx);
+    if (ret != 0) {
+        LOG_ERR("SPI read status failed: %d", ret);
+        return 0;
+    }
 
     return (uint32_t)(buf[0] << 16) | (buf[1] << 8) | buf[2];
 }
@@ -79,10 +82,14 @@ uint32_t max30001_read_reg(const struct device *dev, uint8_t reg)
 
     const struct spi_buf tx_buf[1] = {{.buf = &spiTxCommand, .len = 1}};
     const struct spi_buf_set tx = {.buffers = tx_buf, .count = 1};
-    struct spi_buf rx_buf[2] = {{.buf = NULL, .len = 1}, {.buf = buf, .len = 3}}; // 24 bit register + 1 dummy byte
+    struct spi_buf rx_buf[2] = {{.buf = NULL, .len = 1}, {.buf = buf, .len = 3}};
     const struct spi_buf_set rx = {.buffers = rx_buf, .count = 2};
 
-    spi_transceive_dt(&config->spi, &tx, &rx); // regRxBuffer 0 contains NULL (for sent command), so read from 1 onwards
+    int ret = spi_transceive_dt(&config->spi, &tx, &rx);
+    if (ret != 0) {
+        LOG_ERR("SPI read reg 0x%02X failed: %d", reg, ret);
+        return 0;
+    }
 
     return (uint32_t)(buf[0] << 16) | (buf[1] << 8) | buf[2];
 }
@@ -367,7 +374,9 @@ static int max30001_sample_fetch(const struct device *dev,
 
     if (((max30001_status & MAX30001_STATUS_MASK_BOVF) == MAX30001_STATUS_MASK_BOVF) || ((max30001_status & MAX30001_STATUS_MASK_EOVF) == MAX30001_STATUS_MASK_EOVF))
     {
+        LOG_WRN("FIFO overflow detected (BOVF/EOVF), resetting");
         max30001_fifo_reset(dev);
+        max30001_synch(dev);
     }
 
     return 0;
@@ -466,22 +475,39 @@ static int max30001_attr_set(const struct device *dev,
     case MAX30001_ATTR_ECG_ENABLED:
         if (val->val1 == 1)
         {
-            max30001_enable_ecg(dev, true);
+            int ret = max30001_enable_ecg(dev, true);
+            if (ret != 0) {
+                return ret;
+            }
+            max30001_fifo_reset(dev);
             max30001_synch(dev);
         }
         else if (val->val1 == 0)
         {
-            max30001_enable_ecg(dev, false);
+            max30001_fifo_reset(dev);
+            int ret = max30001_enable_ecg(dev, false);
+            if (ret != 0) {
+                return ret;
+            }
         }
         break;
     case MAX30001_ATTR_BIOZ_ENABLED:
         if (val->val1 == 1)
         {
-            max30001_enable_bioz(dev, true);
+            int ret = max30001_enable_bioz(dev, true);
+            if (ret != 0) {
+                return ret;
+            }
+            max30001_fifo_reset(dev);
+            max30001_synch(dev);
         }
         else if (val->val1 == 0)
         {
-            max30001_enable_bioz(dev, false);
+            max30001_fifo_reset(dev);
+            int ret = max30001_enable_bioz(dev, false);
+            if (ret != 0) {
+                return ret;
+            }
         }
         break;
     case MAX30001_ATTR_RTOR_ENABLED:
