@@ -1498,6 +1498,10 @@ static void st_display_active_run(void *o)
             /* User cancelled measurement via crown: signal explicit cancel semaphore */
             k_sem_give(&sem_spo2_cancel);
         }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
+        {
+            gesture_down_scr_spl_hrv_eval_progress();
+        }
         else
         {
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
