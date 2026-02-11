@@ -1000,6 +1000,7 @@ static void st_gsr_stream_run(void *o)
 
     if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0) {
         LOG_DBG("GSR cancelled");
+        ecg_cancellation = true; // To protect sample writing when cancelling from GSR stream
         hpi_data_reset_gsr_record_buffer();
         hpi_data_set_gsr_record_active(false);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
@@ -1029,9 +1030,9 @@ static void st_gsr_complete_run(void *o)
    // hpi_data_set_gsr_measurement_active(false);
     hpi_data_set_gsr_record_active(false);
    
-
+    
     k_sem_give(&sem_gsr_complete_reset);
-
+    ecg_cancellation = true; // To protect ecg sample writing 
     smf_set_state(SMF_CTX(&s_ecg_obj),
                   &ecg_states[HPI_ECG_STATE_IDLE]);
     // Note: HRV eval start is now handled in st_ecg_idle_run() to ensure it's processed
