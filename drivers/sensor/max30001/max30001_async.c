@@ -144,9 +144,9 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
             else if (etag == 0x07) // FIFO Overflow
             {
-                // printk("EOVF ");
+                LOG_WRN("ECG FIFO overflow");
                 max30001_fifo_reset(dev);
-                // max30001_synch(dev);
+                max30001_synch(dev);
                 break;
             }
         }
@@ -175,9 +175,9 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
             else if (btag == 0x07) // FIFO Overflow
             {
-                // printk("BOVF ");
+                LOG_WRN("BioZ FIFO overflow (ECG+BioZ path)");
                 max30001_fifo_reset(dev);
-                // max30001_synch(dev);
+                max30001_synch(dev);
                 break;
             }
         }
@@ -248,9 +248,9 @@ static int max30001_async_sample_fetch(const struct device *dev,
             }
             else if (btag == 0x07) // FIFO Overflow
             {
-                LOG_WRN("BioZ FIFO overflow at sample %d", i);
-                // Don't reset FIFO immediately - try to recover the valid samples first
-                 max30001_fifo_reset(dev);
+                LOG_WRN("BioZ FIFO overflow at sample %d (BioZ-only path)", i);
+                max30001_fifo_reset(dev);
+                max30001_synch(dev);
                 break;
             }
             else

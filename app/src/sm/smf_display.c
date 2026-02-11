@@ -654,7 +654,6 @@ extern struct k_sem sem_crown_key_pressed;
 
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
-extern struct k_sem sem_ecg_lead_on_stabilize;
 
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
@@ -1498,6 +1497,14 @@ static void st_display_active_run(void *o)
         {
             /* User cancelled measurement via crown: signal explicit cancel semaphore */
             k_sem_give(&sem_spo2_cancel);
+        }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
+        {
+            gesture_down_scr_spl_hrv_eval_progress();
+        }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
+        {
+            gesture_down_scr_gsr_plot();
         }
         else
         {
