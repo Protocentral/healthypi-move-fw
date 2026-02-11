@@ -229,11 +229,20 @@ static int max30001_enable_ecg(const struct device *dev, bool ecg_en)
     {
         LOG_DBG("Enabling MAX30001 ECG...");
         data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 1;
+
+        /* DEBUG: Disable DCLOFF so ECG FIFO keeps filling regardless of lead contact.
+         * When DCLOFF is enabled and leads are off, the MAX30001 stops generating
+         * EINT interrupts, which starves the entire data pipeline. */
+        LOG_INF("DEBUG: Disabling DCLOFF for ECG recording");
+        data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 0;
     }
     else
     {
         LOG_DBG("Disabling MAX30001 ECG...");
         data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 0;
+
+        /* DEBUG: Re-enable DCLOFF when ECG is disabled (restore normal lead-off detection) */
+        data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 1;
     }
     //_max30001RegWrite(dev, CNFG_EMUX, 0x0B0000); // Pins internally connection to ECG Channels
     // k_sleep(K_MSEC(100));
