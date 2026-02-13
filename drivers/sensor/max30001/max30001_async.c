@@ -178,8 +178,8 @@ static int max30001_async_sample_fetch(const struct device *dev,
                 /* Convert raw ADC to conductance in µS and store as fixed-point (×100) */
                 float conductance_uS = max30001_bioz_raw_to_uS(s_bioz_temp,
                                                                config->bioz_gain,
-                                                               config->bioz_cgmag);
-                bioz_samples[i] = (int32_t)(conductance_uS * 100.0f);
+                                                               1);
+                bioz_samples[i] = (int32_t)(conductance_uS * 1000000.0f);
             }
             else if (btag == 0x06) /* FIFO empty */
             {
@@ -240,7 +240,7 @@ static int max30001_async_sample_fetch(const struct device *dev,
          *   Bits 3-0:  BTAG (tag bits)
          *
          * Extract 20-bit ADC and convert to conductance (µS) using datasheet formula.
-         * Store as fixed-point (×100) for integer transmission.
+         * Store as fixed-point (×1000000) for integer transmission.
          */
         for (int i = 0; i < b_fifo_num_samples; i++)
         {
@@ -260,11 +260,15 @@ static int max30001_async_sample_fetch(const struct device *dev,
                 int32_t s_bioz_temp = (int32_t)u_bioz_temp;
                 s_bioz_temp = s_bioz_temp >> 12;  /* 8 + 4 = 12 to get 20-bit signed value */
 
-                /* Convert raw ADC to conductance in µS and store as fixed-point (×100) */
+                /* Convert raw ADC to conductance in µS and store as fixed-point (×1000000) */
+                // float conductance_uS = max30001_bioz_raw_to_uS(s_bioz_temp,
+                //                                                config->bioz_gain,
+                //                                                config->bioz_cgmag);
                 float conductance_uS = max30001_bioz_raw_to_uS(s_bioz_temp,
                                                                config->bioz_gain,
-                                                               config->bioz_cgmag);
-                bioz_samples[i] = (int32_t)(conductance_uS * 100.0f);
+                                                            1);       //passing index 1 for the cgmag value of 110nA (low current mode) since that's the mode we're using in the driver                                      
+              //  LOG_INF("BioZ sample %d: raw ADC=%d, conductance=%.4f uS", i, s_bioz_temp, (double)conductance_uS);
+                bioz_samples[i] = (int32_t)(conductance_uS * 1000000.0f);
             }
             else if (btag == 0x06) /* FIFO empty */
             {
