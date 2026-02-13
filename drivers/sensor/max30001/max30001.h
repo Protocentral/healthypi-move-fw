@@ -112,6 +112,18 @@ static const float bioz_cgmag_table[] = {
     96.0e-6f    /* 7: 96 µA */
 };
 
+static const float bioz_cgmag_lc2x_table[] = {
+    0.0f,          /* 0: 0 nA */
+    110.0e-9f,     /* 1: 110 nA */
+    220.0e-9f,     /* 2: 220 nA */
+    440.0e-9f,     /* 3: 440 nA */
+    660.0e-9f,     /* 4: 660 nA */
+    880.0e-9f,     /* 5: 880 nA */
+    1100.0e-9f     /* 6: 1100 nA */
+    /* 0111 is invalid/reserved */
+};
+
+
 /**
  * @brief Convert raw 20-bit BioZ ADC value to conductance in microsiemens (µS)
  *
@@ -128,8 +140,9 @@ static inline float max30001_bioz_raw_to_uS(int32_t raw_adc, int gain_reg, int c
     }
 
     float gain = bioz_gain_table[gain_reg];
-    float cgmag = bioz_cgmag_table[cgmag_reg];
+    //float cgmag = bioz_cgmag_table[cgmag_reg];
 
+	float cgmag = bioz_cgmag_lc2x_table[cgmag_reg];
     /* Avoid division by zero if current is off */
     if (cgmag == 0.0f) {
         return 0.0f;
