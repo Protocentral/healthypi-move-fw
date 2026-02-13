@@ -31,9 +31,9 @@ void convert_raw_to_uS(const int32_t *raw_data, float *gsr_data, int length)
 {
     for (int i = 0; i < length; i++)
     {
-        /* Driver outputs conductance as fixed-point: µS × 100
-         * Divide by 100 to get actual µS value */
-        gsr_data[i] = (float)raw_data[i] / 100.0f;
+        /* Driver outputs conductance as fixed-point: µS × 1000000 (to preserve precision)
+         * Divide by 1000000 to get actual µS value */
+        gsr_data[i] = (float)raw_data[i] / 1000000.0f;
     }
 }
 
@@ -265,8 +265,8 @@ void calculate_gsr_stress_index(const int32_t *gsr_data, int sample_count,
 
                     last_peak_index = peak_index;
 
-                    LOG_DBG("SCR#%d: trough=%d -> peak=%d amp=%.3f",
-                            scr_count, trough, peak_index, amplitude);
+                    // LOG_DBG("SCR#%d: trough=%d -> peak=%d amp=%.3f",
+                    //         scr_count, trough, peak_index, amplitude);
                 }
 
                 i = peak_index;   // skip ahead
