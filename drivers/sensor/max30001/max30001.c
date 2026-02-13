@@ -215,8 +215,8 @@ static int _max30001_read_bioz_fifo(const struct device *dev, int num_bytes)
             /* Convert raw ADC to conductance in µS and store as fixed-point (×100) */
             float conductance_uS = max30001_bioz_raw_to_uS(s_bioz_temp,
                                                            config->bioz_gain,
-                                                           config->bioz_cgmag);
-            drv_data->s32BIOZData[s_counter++] = (int32_t)(conductance_uS * 100.0f);
+                                                           1);
+            drv_data->s32BIOZData[s_counter++] = (int32_t)(conductance_uS * 1000000.0f);
         }
         else if (btag == 0x06) /* FIFO empty */
         {
@@ -633,7 +633,8 @@ static int max30001_chip_init(const struct device *dev)
     data->chip_cfg.reg_cnfg_bioz.bit.fcgen = 0b0111;          // 1000 Hz EXCITATION FREQUENCY 
     data->chip_cfg.reg_cnfg_bioz.bit.ext_rbias = 0;   
     data->chip_cfg.reg_cnfg_bioz.bit.cgmon = 1;       
-    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;          // 8μA LOW CURRENT ✓
+   // data->chip_cfg.reg_cnfg_bioz.bit.cgmag = config->bioz_cgmag;          // 8μA LOW CURRENT ✓
+    data->chip_cfg.reg_cnfg_bioz.bit.cgmag = 0b001; // Select LOW current range
     data->chip_cfg.reg_cnfg_bioz.bit.phoff = 0b0000;           // 0° phase ✓
 
     // BIOZ MUX Configuration
@@ -657,8 +658,33 @@ static int max30001_chip_init(const struct device *dev)
     _max30001RegWrite(dev, CNFG_EMUX, data->chip_cfg.reg_cnfg_emux.all);
     k_sleep(K_MSEC(100));
 
-    // Set MAX30001G specific BioZ LC
-    _max30001RegWrite(dev, CNFG_BIOZ_LC, 0x800000); // Turn OFF low current mode
+//     // Set MAX30001G specific BioZ LC
+//   //  _max30001RegWrite(dev, CNFG_BIOZ_LC, 0x800000); // Turn OFF low current mode
+
+    /* CNFG_BIOZ_LC (0x1A) = 0x080081
+    *
+    * Bit 23  BIOZ_HI_LOB = 0  -> Low band selected (good for slow GSR)
+    * Bits22:20 Reserved  = 0
+    *
+    * Bit 19  BIOZ_LC2X   = 1  -> 2x Low-Current excitation enabled
+    * Bits18:15 Reserved  = 0
+    *
+    * Bit 14  EN_BISTR    = 0  -> Built-in self-test disabled
+    * Bits13:12 BISTR[1:0]= 00 -> No BIST mode
+    *
+    * Bits11:8 Reserved   = 0
+    *
+    * Bits7:4  = 1000     -> LC current selection setting
+    * Bits3:0  = 0001     -> LC current code (≈110 nA excitation)
+    *
+    * Result:
+    * - Low band mode
+    * - 2x low-current excitation active
+    * - LC current ≈ 110 nA (with LC2X doubling effect)
+    * - BIST disabled
+    */
+        //  Set LC for low-current GSR 
+    _max30001RegWrite(dev, CNFG_BIOZ_LC, 0x080081);
     k_sleep(K_MSEC(100));
 
     _max30001RegWrite(dev, CNFG_BIOZ, data->chip_cfg.reg_cnfg_bioz.all);
