@@ -229,20 +229,11 @@ static int max30001_enable_ecg(const struct device *dev, bool ecg_en)
     {
         LOG_DBG("Enabling MAX30001 ECG...");
         data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 1;
-
-        /* DEBUG: Disable DCLOFF so ECG FIFO keeps filling regardless of lead contact.
-         * When DCLOFF is enabled and leads are off, the MAX30001 stops generating
-         * EINT interrupts, which starves the entire data pipeline. */
-        LOG_INF("DEBUG: Disabling DCLOFF for ECG recording");
-        data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 0;
     }
     else
     {
         LOG_DBG("Disabling MAX30001 ECG...");
         data->chip_cfg.reg_cnfg_gen.bit.en_ecg = 0;
-
-        /* DEBUG: Re-enable DCLOFF when ECG is disabled (restore normal lead-off detection) */
-        data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 1;
     }
     //_max30001RegWrite(dev, CNFG_EMUX, 0x0B0000); // Pins internally connection to ECG Channels
     // k_sleep(K_MSEC(100));
@@ -532,10 +523,10 @@ static int max30001_attr_set(const struct device *dev,
         break;
     case MAX30001_ATTR_LEAD_CONFIG:
         // Configure ECG lead polarity based on hand worn setting
-        // val->val1: 0 = Left hand, 1 = Right hand
+        //val->val1: 1 = Left hand, 0 = Right hand
         data->chip_cfg.reg_cnfg_emux.bit.pol = val->val1;
         _max30001RegWrite(dev, CNFG_EMUX, data->chip_cfg.reg_cnfg_emux.all);
-        LOG_INF("ECG lead configuration set for %s hand", val->val1 ? "right" : "left");
+        LOG_INF("ECG lead configuration set for %s hand", val->val1 ? "left" : "right");
         break;
     default:
         return -ENOTSUP;
@@ -606,7 +597,13 @@ static int max30001_chip_init(const struct device *dev)
     if (config->ecg_dcloff_enabled)
     {
         data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 1;
-        data->chip_cfg.reg_cnfg_gen.bit.imag = config->ecg_dcloff_current;
+        /* Set the current and threshold values for the LOFF configuration
+           IMAG (current magnitude) = 1 => 5nA
+           VTH (voltage threshold) = 3 => 500mV
+           Impedance(Z) = VTH/IMAG = 500mv/5nA = 100 MOhm, which is a reasonable threshold for dry/off leads.
+           */
+        data->chip_cfg.reg_cnfg_gen.bit.imag = config->ecg_dcloff_current; // From DTS
+        data->chip_cfg.reg_cnfg_gen.bit.vth = 3; // 5000mv threshold
     }
     else
     {
