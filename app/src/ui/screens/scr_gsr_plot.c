@@ -180,7 +180,7 @@ void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead
             const int32_t MIN_VISIBLE_SPAN = 100;   // ensure signal is always visible
             const int32_t MIN_PADDING = 10;         // minimum padding around min/max
 
-            // 🆕 ADDED: Check for uninitialized sentinels first
+            //  ADDED: Check for uninitialized sentinels first
             if (y_min_gsr == INT32_MAX && y_max_gsr == INT32_MIN) {
                 // No data yet - use initial defaults
                 new_min = 0;
@@ -422,7 +422,7 @@ static void gsr_chart_reset_performance_counters(void)
     gsr_plot_min = 0;
     gsr_plot_max = 1000;
     
-    // 🆕 ADDED: Reset first autoscale flag
+    //  ADDED: Reset first autoscale flag
     gsr_first_autoscale = true;
 
 }
