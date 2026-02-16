@@ -129,6 +129,7 @@ static uint32_t last_hr_update_time = 0;
 K_MUTEX_DEFINE(mutex_hr_change);
 
 // Externs
+extern bool ecg_cancellation;
 
 ZBUS_CHAN_DECLARE(hr_chan);
 
@@ -295,10 +296,11 @@ void hpi_data_set_ecg_record_active(bool active)
     {
         // Starting new recording - reset buffer and counter
         ecg_record_counter = 0;
+        ecg_cancellation = false;  // reset cancellation flag for new recording session
         memset(ecg_record_buffer, 0, sizeof(ecg_record_buffer));
         LOG_INF("ECG recording started - buffer reset");
     }
-    else
+    else if(!ecg_cancellation)  // Only write file if not cancelled - cancellation can occur if user cancels during recording or lead off detected
     {
         // Stopping recording - write file SYNCHRONOUSLY with mutex held
         // This prevents race condition where new recording could start before write completes
@@ -596,7 +598,8 @@ void data_thread(void)
             // This prevents buffer from filling with garbage data when leads are removed
 
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
-            if (is_ecg_record_active == true && !is_hrv_eval_active && !ecg_sensor_sample.ecg_lead_off)
+            /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to record regardless of lead state */
+            if (is_ecg_record_active == true && !is_hrv_eval_active)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
@@ -667,7 +670,8 @@ void data_thread(void)
             // HRV interval capture - only when leads are connected
             // Skip when lead-off to prevent garbage values from corrupting HRV data
            // LOG_INF("HRV Eval Active : %s", is_hrv_eval_active ? "True" : "False");
-            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0 && !ecg_sensor_sample.ecg_lead_off)
+            /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to capture HRV regardless of lead state */
+            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
             {
                 // Capture R-to-R intervals for HRV analysis
                 // RtoR value is in milliseconds from the MAX30001 sensor
@@ -708,7 +712,7 @@ void data_thread(void)
             }
         k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
 
-    //    LOG_DBG("is_gsr_record_active=%d, is_measurement_active=%d, gsr_record_counter=%d",is_gsr_record_active, hpi_data_is_gsr_measurement_active(), gsr_record_counter);
+       // LOG_DBG("is_gsr_record_active=%d, is_measurement_active=%d, gsr_record_counter=%d",is_gsr_record_active, hpi_data_is_gsr_measurement_active(), gsr_record_counter);
         if (is_gsr_record_active == true)
         {
             int samples_to_copy = bsample.bioz_num_samples;

@@ -382,8 +382,16 @@ void hpi_ecg_disp_update_timer(uint16_t remaining_s)
         }
 
         if (label_ecg_lead_off != NULL) {
-            lv_label_set_text(label_ecg_lead_off, "Signal stabilizing...\nPlease hold still");
-            lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+            if(!lead_on_detected)
+            {
+                lv_label_set_text(label_ecg_lead_off, "Place the fingers on the leads to start\nECG evaluation");
+                lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+            }
+            else
+            {
+                lv_label_set_text(label_ecg_lead_off, "Signal stabilizing...\nPlease hold still");
+                lv_obj_clear_flag(label_ecg_lead_off, LV_OBJ_FLAG_HIDDEN);
+            }
         }
 
         lv_arc_set_range(arc_ecg_zone,0, 4);

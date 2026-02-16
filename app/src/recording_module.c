@@ -99,8 +99,6 @@ static void rec_ctrl_thread_fn(void *, void *, void *);
 static void rec_writer_thread_fn(void *, void *, void *);
 static void rec_timer_thread_fn(void *, void *, void *);
 static int create_session_directory(int64_t timestamp, char *path_out, size_t path_len);
-static int open_signal_files(int64_t timestamp, uint8_t signal_mask);
-static int close_signal_files(void);
 static int flush_buffer(enum hpi_rec_signal_type signal_type, uint8_t buffer_idx);
 static int write_file_headers(int64_t timestamp);
 static int update_file_headers(void);
@@ -642,157 +640,188 @@ static int create_session_directory(int64_t timestamp, char *path_out, size_t pa
 
     return 0;
 }
-
-static int open_signal_files(int64_t timestamp, uint8_t signal_mask)
-{
-    char session_path[48];
-    char file_path[80];
-
-    snprintf(session_path, sizeof(session_path), "%s%" PRId64 "/",
-             REC_BASE_PATH, timestamp);
-
-    for (int i = 0; i < REC_TYPE_COUNT; i++) {
-        if (signal_mask & signal_to_mask[i]) {
-            snprintf(file_path, sizeof(file_path), "%s%s",
-                     session_path, signal_filenames[i]);
-
-            fs_file_t_init(&rec_buffers[i].file);
-            int ret = fs_open(&rec_buffers[i].file, file_path,
-                              FS_O_CREATE | FS_O_WRITE | FS_O_TRUNC);
-            if (ret < 0) {
-                LOG_ERR("Failed to open %s: %d", file_path, ret);
-                return ret;
-            }
-
-            rec_buffers[i].file_open = true;
-            rec_buffers[i].write_idx = 0;
-            rec_buffers[i].active_buffer = 0;
-            rec_buffers[i].total_samples = 0;
-            atomic_set(&rec_buffers[i].flush_pending, -1);
-
-            LOG_DBG("Opened: %s", file_path);
-        }
-    }
-
-    return 0;
-}
-
 static int write_file_headers(int64_t timestamp)
 {
     uint8_t signal_mask = current_session.signal_mask;
-
+    char session_path[48];
+    char file_path[80];
+    struct fs_file_t tmp_file;
+    
+    snprintf(session_path, sizeof(session_path), "%s%" PRId64 "/",
+             REC_BASE_PATH, timestamp);
+    
     for (int i = 0; i < REC_TYPE_COUNT; i++) {
-        if ((signal_mask & signal_to_mask[i]) && rec_buffers[i].file_open) {
+        if (signal_mask & signal_to_mask[i]) {
+            /* Build file path */
+            snprintf(file_path, sizeof(file_path), "%s%s",
+                     session_path, signal_filenames[i]);
+            
+            /* TEMP FILE: Open → Write header → Close */
+            fs_file_t_init(&tmp_file);
+            int ret = fs_open(&tmp_file, file_path, FS_O_CREATE | FS_O_WRITE | FS_O_TRUNC);
+            if (ret < 0) {
+                LOG_ERR("Header open %s failed: %d", signal_filenames[i], ret);
+                continue;
+            }
+            
             struct hpi_recording_file_header_t header = {
                 .magic = REC_FILE_MAGIC,
                 .version = REC_FILE_VERSION,
                 .signal_type = i,
                 .sample_rate_hz = signal_sample_rates[i],
                 .start_timestamp = timestamp,
-                .num_samples = 0,  /* Will be updated at finalize */
+                .num_samples = 0,  /* Updated later */
                 .reserved = {0, 0},
             };
-
-            int ret = fs_write(&rec_buffers[i].file, &header, sizeof(header));
+            
+            ret = fs_write(&tmp_file, &header, sizeof(header));
+            fs_close(&tmp_file);
+            
             if (ret < 0) {
-                LOG_ERR("Failed to write header for signal %d: %d", i, ret);
-                return ret;
+                LOG_ERR("Header write %s failed: %d", signal_filenames[i], ret);
+            } else {
+                LOG_INF("Header written: %s", signal_filenames[i]);
             }
         }
     }
-
+    
     return 0;
 }
-
 static int update_file_headers(void)
 {
     uint8_t signal_mask = current_session.signal_mask;
-
+    char session_path[48];
+    char file_path[80];
+    struct fs_file_t tmp_file;
+    
+    snprintf(session_path, sizeof(session_path), "%s%" PRId64 "/",
+             REC_BASE_PATH, current_session.start_timestamp);
+    
     for (int i = 0; i < REC_TYPE_COUNT; i++) {
-        if ((signal_mask & signal_to_mask[i]) && rec_buffers[i].file_open) {
-            /* Seek to num_samples field in header */
-            int ret = fs_seek(&rec_buffers[i].file,
-                              offsetof(struct hpi_recording_file_header_t, num_samples),
-                              FS_SEEK_SET);
+        if (signal_mask & signal_to_mask[i]) {
+            /* Build file path */
+            snprintf(file_path, sizeof(file_path), "%s%s",
+                     session_path, signal_filenames[i]);
+            
+            /* TEMP FILE: Open → Seek → Update → Close */
+            fs_file_t_init(&tmp_file);
+            int ret = fs_open(&tmp_file, file_path, FS_O_WRITE);
             if (ret < 0) {
-                LOG_ERR("Failed to seek in file for signal %d: %d", i, ret);
+                LOG_ERR("Update open %s failed: %d", signal_filenames[i], ret);
                 continue;
             }
-
-            /* Write updated sample count */
-            uint32_t num_samples = rec_buffers[i].total_samples;
-            ret = fs_write(&rec_buffers[i].file, &num_samples, sizeof(num_samples));
+            
+            /* Seek to num_samples field (offset 24 bytes from start) */
+            ret = fs_seek(&tmp_file, offsetof(struct hpi_recording_file_header_t, num_samples), FS_SEEK_SET);
             if (ret < 0) {
-                LOG_ERR("Failed to update header for signal %d: %d", i, ret);
+                LOG_ERR("Update seek %s failed: %d", signal_filenames[i], ret);
+                fs_close(&tmp_file);
+                continue;
             }
-
-            LOG_INF("Signal %d: %u samples written", i, num_samples);
+            
+            /* Write final sample count */
+            uint32_t num_samples = rec_buffers[i].total_samples;
+            ret = fs_write(&tmp_file, &num_samples, sizeof(num_samples));
+            fs_close(&tmp_file);
+            
+            if (ret >= 0) {
+                LOG_INF("%s: %u samples finalized", signal_filenames[i], num_samples);
+            } else {
+                LOG_ERR("Update write %s failed: %d", signal_filenames[i], ret);
+            }
         }
     }
-
-    return 0;
-}
-
-static int close_signal_files(void)
-{
-    for (int i = 0; i < REC_TYPE_COUNT; i++) {
-        if (rec_buffers[i].file_open) {
-            fs_sync(&rec_buffers[i].file);
-            fs_close(&rec_buffers[i].file);
-            rec_buffers[i].file_open = false;
-            LOG_DBG("Closed signal %d file", i);
-        }
-    }
-
+    
     return 0;
 }
 
 static int flush_buffer(enum hpi_rec_signal_type signal_type, uint8_t buffer_idx)
 {
     struct rec_signal_buffer *buf = &rec_buffers[signal_type];
-
-    if (!buf->file_open) {
-        return -ENOENT;
-    }
-
+    char session_path[48];
+    char file_path[80];
+    struct fs_file_t tmp_file;  
+    
+    /* Get buffer data */
     uint8_t *data = (buffer_idx == 0) ? buf->buffer_a : buf->buffer_b;
-    uint16_t size = REC_BUFFER_SIZE;  /* Flush full buffer */
+    uint16_t size = REC_BUFFER_SIZE;
 
-    /* For partial buffer at end, this would need adjustment */
-    int ret = fs_write(&buf->file, data, size);
+    /* Build signal file path */
+    snprintf(session_path, sizeof(session_path), "%s%" PRId64 "/",
+             REC_BASE_PATH, current_session.start_timestamp);
+    snprintf(file_path, sizeof(file_path), "%s%s",
+             session_path, signal_filenames[signal_type]);  
+
+    /* Open signal file -> write data -> close */
+    fs_file_t_init(&tmp_file);
+    int ret = fs_open(&tmp_file, file_path, FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
     if (ret < 0) {
-        LOG_ERR("Failed to write buffer for signal %d: %d", signal_type, ret);
+        LOG_ERR("Flush open %s failed: %d", signal_filenames[signal_type], ret);
         return ret;
     }
+    
 
-    /* Update sample count */
-    buf->total_samples += size / buf->sample_size;
-
-    return 0;
+    ret = fs_write(&tmp_file, data, size);
+    fs_close(&tmp_file); 
+    
+    if (ret > 0) {
+        buf->total_samples += size / buf->sample_size;
+        LOG_DBG("%s: flushed %d bytes (buffer %d)", 
+                signal_filenames[signal_type], ret, buffer_idx);
+        return 0;
+    }
+    
+    LOG_ERR("Flush write %s failed: %d", signal_filenames[signal_type], ret);
+    return ret;
 }
 
 static int flush_remaining_buffers(void)
 {
     uint8_t signal_mask = current_session.signal_mask;
-
+    char session_path[48];
+    char file_path[80];
+    struct fs_file_t tmp_file;
+    
+    snprintf(session_path, sizeof(session_path), "%s%" PRId64 "/",
+             REC_BASE_PATH, current_session.start_timestamp);
+    
+    int total_written = 0;
+    
     for (int i = 0; i < REC_TYPE_COUNT; i++) {
-        if ((signal_mask & signal_to_mask[i]) && rec_buffers[i].file_open) {
+        if ((signal_mask & signal_to_mask[i])) {
             struct rec_signal_buffer *buf = &rec_buffers[i];
-
+            
             /* Flush any remaining data in active buffer */
             if (buf->write_idx > 0) {
                 uint8_t *data = (buf->active_buffer == 0) ? buf->buffer_a : buf->buffer_b;
 
-                int ret = fs_write(&buf->file, data, buf->write_idx);
-                if (ret < 0) {
-                    LOG_ERR("Failed to flush remaining for signal %d: %d", i, ret);
-                } else {
-                    buf->total_samples += buf->write_idx / buf->sample_size;
+                /* Build signal file path */
+                snprintf(file_path, sizeof(file_path), "%s%s",
+                         session_path, signal_filenames[i]);
+
+               /* Open signal file -> write data -> close */
+                fs_file_t_init(&tmp_file);
+                int ret = fs_open(&tmp_file, file_path, FS_O_CREATE | FS_O_WRITE | FS_O_APPEND);
+                if (ret >= 0) {
+                    ret = fs_write(&tmp_file, data, buf->write_idx);
+                    fs_close(&tmp_file);
+                    
+                    if (ret > 0) {
+                        buf->total_samples += buf->write_idx / buf->sample_size;
+                        total_written += ret;
+                        LOG_DBG("Final %s: flushed %d bytes", signal_filenames[i], ret);
+                    } else {
+                        LOG_ERR("Final flush %s failed: %d", signal_filenames[i], ret);
+                    }
                 }
+                
+                /* Reset buffer */
+                buf->write_idx = 0;
             }
         }
     }
-
+    
+    LOG_INF("Final flush complete: %d bytes written", total_written);
     return 0;
 }
 
@@ -813,7 +842,6 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
         k_sem_take(&sem_rec_start, K_FOREVER);
 
         LOG_INF("Starting recording...");
-
         /* Reset stop semaphore to clear any stale signals from previous recordings */
         k_sem_reset(&sem_rec_stop);
 
@@ -831,20 +859,11 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
             continue;
         }
 
-        /* Open signal files */
-        ret = open_signal_files(start_ts, current_session.signal_mask);
-        if (ret < 0) {
-            LOG_ERR("Failed to open signal files");
-            current_session.state = REC_STATE_ERROR;
-            current_session.error_code = REC_ERR_FILE_CREATE;
-            continue;
-        }
-
         /* Write file headers */
         ret = write_file_headers(start_ts);
         if (ret < 0) {
             LOG_ERR("Failed to write file headers");
-            close_signal_files();
+        //    close_signal_files();
             current_session.state = REC_STATE_ERROR;
             current_session.error_code = REC_ERR_FILE_WRITE;
             continue;
@@ -903,9 +922,8 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
 
         /* Update file headers with final sample counts */
         update_file_headers();
-
-        /* Close all files */
-        close_signal_files();
+        
+        print_littlefs_usage();
 
         /* Update session state */
         k_mutex_lock(&mutex_rec_state, K_FOREVER);
@@ -950,7 +968,6 @@ static void rec_writer_thread_fn(void *p1, void *p2, void *p3)
         }
     }
 }
-
 static void rec_timer_thread_fn(void *p1, void *p2, void *p3)
 {
     ARG_UNUSED(p1);
@@ -973,14 +990,15 @@ static void rec_timer_thread_fn(void *p1, void *p2, void *p3)
         /* Check for duration timeout */
         if (current_session.elapsed_s >= current_session.duration_s) {
             k_mutex_unlock(&mutex_rec_state);
+            /* Signal control thread to stop */
             k_sem_give(&sem_rec_stop);
             continue;
         }
         k_mutex_unlock(&mutex_rec_state);
-
         /* Publish status update via ZBus */
         struct hpi_recording_status_t status;
         hpi_recording_get_status(&status);
         zbus_chan_pub(&recording_status_chan, &status, K_MSEC(100));
     }
 }
+

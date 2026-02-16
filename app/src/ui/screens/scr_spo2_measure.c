@@ -426,6 +426,7 @@ void gesture_down_scr_spo2_measure(void)
     // Signal cancellation to the appropriate state machine based on source
     if (spo2_source == SPO2_SOURCE_PPG_FI) {
         k_sem_give(&sem_fi_spo2_est_cancel);
+        LOG_INF("Spo2 measurement cancelled via gesture (finger PPG)");
     } else if (spo2_source == SPO2_SOURCE_PPG_WR) {
         k_sem_give(&sem_spo2_cancel);
     }

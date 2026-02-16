@@ -230,7 +230,7 @@ static int ecg_last_timer_val = 0;
 static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
 static bool ecg_stabilization_complete = false;
-
+bool ecg_cancellation = false;  // Flag to indicate if current ECG session was cancelled
 
 // uint32_t gsr_countdown_val = 0;
 // uint32_t gsr_last_timer_val = 0;
@@ -290,18 +290,18 @@ static int hw_max30001_configure_leads(void)
 {
     struct sensor_value lead_config;
     uint8_t hand_worn = hpi_user_settings_get_hand_worn();
-    
-    // Set lead configuration: 0 = Left hand, 1 = Right hand
-    lead_config.val1 = hand_worn;
+
+    /* Set lead configuration: 0 = Left hand, 1 = Right hand
+    But to get inverted output for default handworn setting(left hand), we need to invert the values
+    so that Left => Inverted ECG output(1), Right => Non-inverted ECG output(0)*/
+    lead_config.val1 = !hand_worn; 
     lead_config.val2 = 0;
-    
+
     int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_LEAD_CONFIG, &lead_config);
-    if (ret != 0) {
-        LOG_ERR("Failed to configure ECG leads for %s hand: %d", 
-                hand_worn ? "right" : "left", ret);
+    if (ret < 0) {
+        LOG_ERR("Failed to set ECG lead configuration for %s hand (err %d)", hand_worn ? "right" : "left", ret);
         return ret;
     }
-    
     LOG_INF("ECG leads configured for %s hand", hand_worn ? "right" : "left");
     return 0;
 }
@@ -887,6 +887,8 @@ static void st_ecg_idle_entry(void *o)
     hpi_data_set_hrv_eval_active(false);
     hpi_data_set_ecg_record_active(false);
     hpi_ecg_timer_reset();
+    ecg_cancellation = false;
+
 }
 
 static void st_ecg_idle_run(void *o)
@@ -998,11 +1000,13 @@ static void st_gsr_stream_run(void *o)
     // Handle semaphores
     if (k_sem_take(&sem_gsr_complete, K_NO_WAIT) == 0) {
         LOG_INF("GSR SMF: Buffer full signal received - switching to COMPLETE state");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_COMPLETE]);
     }
 
     if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0) {
         LOG_DBG("GSR cancelled");
+        ecg_cancellation = true;
         hpi_data_reset_gsr_record_buffer();
         hpi_data_set_gsr_record_active(false);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
@@ -1168,11 +1172,13 @@ static void st_ecg_wait_for_lead_run(void *o)
     // Handle cancellation
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Cancelled in WAIT_FOR_LEAD");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
     if (k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: HRV cancelled in WAIT_FOR_LEAD");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
@@ -1271,11 +1277,13 @@ static void st_ecg_stabilizing_run(void *o)
     // Handle cancellation
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Cancelled during STABILIZING");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
     if (k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: HRV cancelled during STABILIZING");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
@@ -1374,6 +1382,7 @@ static void st_ecg_recording_run(void *o)
     // Check for buffer full
     if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Buffer full - completing");
+        ecg_cancellation = false; // Not a cancellation, just normal completion
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
         return;
     }
@@ -1381,11 +1390,13 @@ static void st_ecg_recording_run(void *o)
     // Handle cancellation
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Cancelled during RECORDING");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
     if (k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: HRV cancelled during RECORDING");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return;
     }
@@ -1417,7 +1428,7 @@ static void st_ecg_complete_entry(void *o)
     }
 
     // Handle HRV post-processing if HRV evaluation was active
-    if (get_hrv_active()) {
+    if (get_hrv_active() && !ecg_cancellation) {
         LOG_INF("HRV evaluation complete - processing results");
         // Call HRV post-processing function (FFT, frequency analysis, stress index)
         // This will update hrv_eval_result and write to file
@@ -1425,11 +1436,13 @@ static void st_ecg_complete_entry(void *o)
         hpi_data_set_hrv_eval_active(false);
         // Signal HRV complete
         k_sem_give(&sem_hrv_eval_complete);
+        ecg_cancellation = true;
         // Reset HRV active flag
         set_hrv_active(false);
     } else {
         // ECG recording complete - signal ECG completion
-        k_sem_give(&sem_ecg_complete_reset);
+        if(!ecg_cancellation)
+             k_sem_give(&sem_ecg_complete_reset);
     }
 }
 
