@@ -523,10 +523,10 @@ static int max30001_attr_set(const struct device *dev,
         break;
     case MAX30001_ATTR_LEAD_CONFIG:
         // Configure ECG lead polarity based on hand worn setting
-        // val->val1: 0 = Left hand, 1 = Right hand
+        //val->val1: 1 = Left hand, 0 = Right hand
         data->chip_cfg.reg_cnfg_emux.bit.pol = val->val1;
         _max30001RegWrite(dev, CNFG_EMUX, data->chip_cfg.reg_cnfg_emux.all);
-        LOG_INF("ECG lead configuration set for %s hand", val->val1 ? "right" : "left");
+        LOG_INF("ECG lead configuration set for %s hand", val->val1 ? "left" : "right");
         break;
     default:
         return -ENOTSUP;
@@ -597,7 +597,13 @@ static int max30001_chip_init(const struct device *dev)
     if (config->ecg_dcloff_enabled)
     {
         data->chip_cfg.reg_cnfg_gen.bit.en_dcloff = 1;
-        data->chip_cfg.reg_cnfg_gen.bit.imag = config->ecg_dcloff_current;
+        /* Set the current and threshold values for the LOFF configuration
+           IMAG (current magnitude) = 1 => 5nA
+           VTH (voltage threshold) = 3 => 500mV
+           Impedance(Z) = VTH/IMAG = 500mv/5nA = 100 MOhm, which is a reasonable threshold for dry/off leads.
+           */
+        data->chip_cfg.reg_cnfg_gen.bit.imag = config->ecg_dcloff_current; // From DTS
+        data->chip_cfg.reg_cnfg_gen.bit.vth = 3; // 5000mv threshold
     }
     else
     {

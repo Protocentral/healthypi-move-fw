@@ -598,7 +598,8 @@ void data_thread(void)
             // This prevents buffer from filling with garbage data when leads are removed
 
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
-            if (is_ecg_record_active == true && !is_hrv_eval_active && !ecg_sensor_sample.ecg_lead_off)
+            /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to record regardless of lead state */
+            if (is_ecg_record_active == true && !is_hrv_eval_active)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
@@ -669,7 +670,8 @@ void data_thread(void)
             // HRV interval capture - only when leads are connected
             // Skip when lead-off to prevent garbage values from corrupting HRV data
            // LOG_INF("HRV Eval Active : %s", is_hrv_eval_active ? "True" : "False");
-            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0 && !ecg_sensor_sample.ecg_lead_off)
+            /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to capture HRV regardless of lead state */
+            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
             {
                 // Capture R-to-R intervals for HRV analysis
                 // RtoR value is in milliseconds from the MAX30001 sensor

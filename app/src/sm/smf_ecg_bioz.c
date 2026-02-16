@@ -107,6 +107,9 @@ K_SEM_DEFINE(sem_gsr_lead_off, 0, 1);
 
 ZBUS_CHAN_DECLARE(gsr_status_chan);
 
+// Semaphore for lead reconnection during recording (triggers re-stabilization)
+K_SEM_DEFINE(sem_ecg_lead_on_stabilize, 0, 1);
+
 // Lead off debounce (500ms) to avoid false triggers
 #define ECG_LEAD_OFF_DEBOUNCE_MS 500
 static int64_t lead_off_debounce_start = 0;
@@ -223,11 +226,11 @@ static void ecg_smooth_reset(void)
 }
 #endif
 
-static uint32_t ecg_last_timer_val = 0;
+static int ecg_last_timer_val = 0;
 static int ecg_countdown_val = 0;
 static int ecg_stabilization_countdown = 0;
-bool ecg_cancellation = false;
-
+static bool ecg_stabilization_complete = false;
+bool ecg_cancellation = false;  // Flag to indicate if current ECG session was cancelled
 
 // uint32_t gsr_countdown_val = 0;
 // uint32_t gsr_last_timer_val = 0;
@@ -244,8 +247,10 @@ struct s_ecg_object
 enum ecg_state
 {
     HPI_ECG_STATE_IDLE,
-    HPI_ECG_STATE_WAIT_FOR_LEAD,    // Waiting for user to place fingers on electrodes
-    HPI_ECG_STATE_RECORDING,        // Stabilization phase + active recording
+    HPI_ECG_STATE_WAIT_FOR_LEAD,   // Waiting for user to place fingers on electrodes
+    HPI_ECG_STATE_STABILIZING,      // 5 second stabilization after lead contact
+    HPI_ECG_STATE_RECORDING,        // Active recording (30 seconds countdown)
+    HPI_ECG_STATE_COMPLETE,
 
     HPI_ECG_STATE_GSR_MEASURE_ENTRY,
     HPI_ECG_STATE_GSR_MEASURE_STREAM,
@@ -285,18 +290,18 @@ static int hw_max30001_configure_leads(void)
 {
     struct sensor_value lead_config;
     uint8_t hand_worn = hpi_user_settings_get_hand_worn();
-    
-    // Set lead configuration: 0 = Left hand, 1 = Right hand
-    lead_config.val1 = hand_worn;
+
+    /* Set lead configuration: 0 = Left hand, 1 = Right hand
+    But to get inverted output for default handworn setting(left hand), we need to invert the values
+    so that Left => Inverted ECG output(1), Right => Non-inverted ECG output(0)*/
+    lead_config.val1 = !hand_worn; 
     lead_config.val2 = 0;
-    
+
     int ret = sensor_attr_set(max30001_dev, SENSOR_CHAN_ALL, MAX30001_ATTR_LEAD_CONFIG, &lead_config);
-    if (ret != 0) {
-        LOG_ERR("Failed to configure ECG leads for %s hand: %d", 
-                hand_worn ? "right" : "left", ret);
+    if (ret < 0) {
+        LOG_ERR("Failed to set ECG lead configuration for %s hand (err %d)", hand_worn ? "right" : "left", ret);
         return ret;
     }
-    
     LOG_INF("ECG leads configured for %s hand", hand_worn ? "right" : "left");
     return 0;
 }
@@ -467,19 +472,20 @@ void hpi_hrv_reset_countdown_timer(void)
     hpi_ecg_reset_countdown_timer();
 }
 
-static void set_ecg_stabilization_countdown(int countdown)
+static void set_ecg_stabilization_values(int stabilization_countdown, bool complete)
 {
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
-    ecg_stabilization_countdown = countdown;
+    ecg_stabilization_countdown = stabilization_countdown;
+    ecg_stabilization_complete = complete;
     k_mutex_unlock(&ecg_timer_mutex);
 }
 
-static int get_ecg_stabilization_countdown(void)
+static void get_ecg_stabilization_values(int *stabilization_countdown, bool *complete)
 {
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
-    int val = ecg_stabilization_countdown;
+    if (stabilization_countdown) *stabilization_countdown = ecg_stabilization_countdown;
+    if (complete) *complete = ecg_stabilization_complete;
     k_mutex_unlock(&ecg_timer_mutex);
-    return val;
 }
 
 static void work_ecg_lon_handler(struct k_work *work)
@@ -619,7 +625,6 @@ static void work_ecg_sample_handler(struct k_work *work)
     int ret;
     
     ret = sensor_read(&max30001_iodev, &max30001_read_rtio_poll_ctx, ecg_bioz_buf, sizeof(ecg_bioz_buf));
-    //LOG_INF("Sensor read returned %d bytes", ret);
     if (ret < 0) {
         LOG_ERR("Error reading sensor data: %d", ret);
         return;
@@ -878,12 +883,12 @@ static void st_ecg_idle_entry(void *o)
     }
 
     // Reset all ECG/HRV state flags
-    
     set_hrv_active(false);
     hpi_data_set_hrv_eval_active(false);
     hpi_data_set_ecg_record_active(false);
     hpi_ecg_timer_reset();
     ecg_cancellation = false;
+
 }
 
 static void st_ecg_idle_run(void *o)
@@ -995,12 +1000,13 @@ static void st_gsr_stream_run(void *o)
     // Handle semaphores
     if (k_sem_take(&sem_gsr_complete, K_NO_WAIT) == 0) {
         LOG_INF("GSR SMF: Buffer full signal received - switching to COMPLETE state");
+        ecg_cancellation = true;
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_COMPLETE]);
     }
 
     if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0) {
         LOG_DBG("GSR cancelled");
-        ecg_cancellation = true; // To protect sample writing when cancelling from GSR stream
+        ecg_cancellation = true;
         hpi_data_reset_gsr_record_buffer();
         hpi_data_set_gsr_record_active(false);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
@@ -1030,9 +1036,9 @@ static void st_gsr_complete_run(void *o)
    // hpi_data_set_gsr_measurement_active(false);
     hpi_data_set_gsr_record_active(false);
    
-    
+
     k_sem_give(&sem_gsr_complete_reset);
-    ecg_cancellation = true; // To protect ecg sample writing 
+
     smf_set_state(SMF_CTX(&s_ecg_obj),
                   &ecg_states[HPI_ECG_STATE_IDLE]);
     // Note: HRV eval start is now handled in st_ecg_idle_run() to ensure it's processed
@@ -1044,24 +1050,21 @@ struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void)
 
 /*
  * =============================================================================
- * ECG/HRV STATE MACHINE
+ * ECG/HRV STATE MACHINE - REDESIGNED
  * =============================================================================
  *
  * ARCHITECTURE:
  * - SMF polls sensor state directly via get_ecg_lead_on_off()
  * - SMF is the ONLY entity that signals display thread (sem_ecg_lead_on/off)
  * - Sensor layer only updates state variable, does NOT signal semaphores
+ * - This eliminates race conditions between display thread and SMF
  *
- * FLOW (3 states):
- *   IDLE -> WAIT_FOR_LEAD -> RECORDING -> IDLE
- *
- * RECORDING has two internal phases:
- *   1. Stabilization (5s) — signal settles, NOT buffered
- *   2. Buffer recording (30s ECG / 60s HRV)
- *
- * Lead-off during RECORDING pauses the countdown/timer without changing
- * state.  Lead-on resumes.  This avoids the old bounce between states
- * that caused the "stuck at stabilising" bug.
+ * FLOW:
+ *   IDLE -> WAIT_FOR_LEAD -> STABILIZING -> RECORDING -> COMPLETE -> IDLE
+ *              ^                  |            |
+ *              |                  v            v
+ *              +------------------+------------+
+ *                    (on lead off)
  *
  * LEAD DETECTION:
  * - get_ecg_lead_on_off() returns: true = leads OFF, false = leads ON
@@ -1130,7 +1133,6 @@ static void st_ecg_wait_for_lead_run(void *o)
             LOG_INF("ECG SMF: Lead placement timeout");
             lead_placement_wait_start = 0;
             k_sem_give(&sem_ecg_lead_timeout);
-            ecg_cancellation = true; // To protect sample writing when timing out from WAIT_FOR_LEAD
             smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
             return;
         }
@@ -1151,10 +1153,10 @@ static void st_ecg_wait_for_lead_run(void *o)
             // Check if debounce period elapsed
             int64_t elapsed = k_uptime_get() - smf_lead_on_debounce_start;
             if (elapsed >= ECG_LEAD_ON_DEBOUNCE_MS) {
-                LOG_INF("ECG SMF: Lead ON confirmed after %lld ms - transitioning to RECORDING", elapsed);
+                LOG_INF("ECG SMF: Lead ON confirmed after %lld ms - transitioning to STABILIZING", elapsed);
                 lead_placement_wait_start = 0;
                 smf_lead_on_debouncing = false;
-                smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_RECORDING]);
+                smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_STABILIZING]);
                 return;
             }
         }
@@ -1191,46 +1193,20 @@ static void st_ecg_wait_for_lead_exit(void *o)
 }
 
 /*
- * =============================================================================
- * RECORDING STATE (merged: stabilization + recording + completion)
- * =============================================================================
- *
- * Two internal phases, tracked by ecg_stabilization_countdown:
- *   1. Stabilization phase (countdown > 0): signal settles, samples displayed
- *      but NOT buffered. Lead-off pauses the countdown (no state change).
- *   2. Recording phase (countdown <= 0): samples buffered for 30s ECG / 60s HRV.
- *      Lead-off pauses recording timer (no buffer discard, no state change).
- *
- * This eliminates the old bounce between STABILIZING ↔ WAIT_FOR_LEAD that
- * caused the "stuck at stabilising" bug when electrode contact was marginal.
+ * STABILIZING STATE
+ * - 5 second countdown while leads remain connected
+ * - If leads go off, return to WAIT_FOR_LEAD
  */
-static bool recording_phase_started = false;  // true once stabilization is done
-
-static void st_ecg_recording_entry(void *o)
+static void st_ecg_stabilizing_entry(void *o)
 {
-    int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+    LOG_INF("ECG SMF: Entering STABILIZING state - %d seconds", ECG_STABILIZATION_DURATION_S);
 
-    LOG_INF("ECG SMF: Entering RECORDING state (stabilize %ds then record %ds)",
-            ECG_STABILIZATION_DURATION_S, duration);
-
-    // Reset smoothing filter for fresh signal
+    // Reset smoothing filter
     ecg_smooth_reset();
 
-    // Initialize stabilization countdown — recording starts when this reaches 0
-    set_ecg_stabilization_countdown(ECG_STABILIZATION_DURATION_S);
-    recording_phase_started = false;
-
-    // Initialize the per-second tick timer reference
-    set_ecg_timer_values(k_uptime_get_32(), duration);
-
-    // Drain any stale buffer-full semaphore from a previous aborted session
-    k_sem_reset(&sem_ecg_complete);
-
-    // Lead tracking — leads are ON when entering from WAIT_FOR_LEAD
-    smf_last_lead_off = false;
-
-    // Signal display: leads are ON
-    k_sem_give(&sem_ecg_lead_on);
+    // Initialize stabilization countdown
+    set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
+    set_ecg_timer_values(k_uptime_get_32(), 0);
 
     // Clear HRV buffers
     if (get_hrv_active()) {
@@ -1239,7 +1215,14 @@ static void st_ecg_recording_entry(void *o)
         hrv_last_status_pub_s = 0;
     }
 
-    // Publish initial status (stabilization + recording total)
+    // Lead tracking - leads are ON when entering stabilizing
+    smf_last_lead_off = false;
+
+    // Signal display: leads are ON
+    k_sem_give(&sem_ecg_lead_on);
+
+    // Publish status
+    int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
     struct hpi_ecg_status_t ecg_stat = {
         .ts_complete = 0,
         .status = HPI_ECG_STATUS_STREAMING,
@@ -1248,82 +1231,135 @@ static void st_ecg_recording_entry(void *o)
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 }
 
-static void st_ecg_recording_run(void *o)
+static void st_ecg_stabilizing_run(void *o)
 {
+    // Poll sensor for lead status
     bool current_lead_off = get_ecg_lead_on_off();
 
-    /* ----------------------------------------------------------
-     * Lead-off / lead-on handling — NO state change, just pause
-     * ---------------------------------------------------------- */
+    // Detect lead OFF transition
     if (!smf_last_lead_off && current_lead_off) {
-        // Lead just went OFF
-        LOG_INF("ECG SMF: Lead OFF during RECORDING - pausing");
-        hpi_ecg_timer_pause();
-        k_sem_give(&sem_ecg_lead_off);
-    }
-    if (smf_last_lead_off && !current_lead_off) {
-        // Lead just came back ON
-        LOG_INF("ECG SMF: Lead ON during RECORDING - resuming");
-        // If we haven't started the recording phase yet, reset stabilization
-        // so the full settling time runs with good contact
-        if (!recording_phase_started) {
-            set_ecg_stabilization_countdown(ECG_STABILIZATION_DURATION_S);
-            LOG_INF("ECG SMF: Stabilization countdown reset to %d", ECG_STABILIZATION_DURATION_S);
-        }
-        k_sem_give(&sem_ecg_lead_on);
+        LOG_INF("ECG SMF: Lead OFF during STABILIZING - returning to WAIT_FOR_LEAD");
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_WAIT_FOR_LEAD]);
+        return;
     }
     smf_last_lead_off = current_lead_off;
 
-    // While leads are off, timers are frozen — skip countdown logic
-    if (current_lead_off) {
-        goto check_cancel;
-    }
-
-    /* ----------------------------------------------------------
-     * Per-second tick
-     * ---------------------------------------------------------- */
+    // Count down stabilization timer
     uint32_t last_timer;
-    int countdown;
-    get_ecg_timer_values(&last_timer, &countdown);
+    int stabilization_countdown;
+    get_ecg_timer_values(&last_timer, NULL);
+    get_ecg_stabilization_values(&stabilization_countdown, NULL);
 
     uint32_t now = k_uptime_get_32();
-    if ((now - last_timer) < 1000) {
-        goto check_buffer;
-    }
-    set_ecg_timer_values(now, countdown);  // update tick reference
+    if ((now - last_timer) >= 1000) {
+        stabilization_countdown--;
+        LOG_INF("ECG SMF: Stabilization: %d", stabilization_countdown);
 
-    int stab = get_ecg_stabilization_countdown();
+        set_ecg_timer_values(now, 0);
+        set_ecg_stabilization_values(stabilization_countdown, false);
 
-    if (stab > 0) {
-        /* ---------- Stabilization phase ---------- */
-        stab--;
-        set_ecg_stabilization_countdown(stab);
-        LOG_INF("ECG SMF: Stabilizing: %d", stab);
-
+        // Publish progress
         int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
         struct hpi_ecg_status_t ecg_stat = {
             .ts_complete = 0,
             .status = HPI_ECG_STATUS_STREAMING,
             .hr = get_ecg_hr(),
-            .progress_timer = duration + stab};
+            .progress_timer = duration + stabilization_countdown};
         zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 
-        if (stab <= 0) {
-            // Stabilization done — begin actual recording
-            LOG_INF("ECG SMF: Stabilization complete - starting buffer recording");
-            recording_phase_started = true;
-            hpi_data_set_ecg_record_active(true);
-            hpi_ecg_timer_start();
-
-            // Re-init HRV collection at recording start
-            if (get_hrv_active()) {
-                hrv_interval_count = 0;
-                memset(hrv_intervals, 0, sizeof(hrv_intervals));
-                hrv_last_status_pub_s = 0;
-            }
+        if (stabilization_countdown <= 0) {
+            LOG_INF("ECG SMF: Stabilization complete - transitioning to RECORDING");
+            smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_RECORDING]);
+            return;
         }
-    } else {
-        /* ---------- Recording phase ---------- */
+    }
+
+    // Handle cancellation
+    if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0) {
+        LOG_INF("ECG SMF: Cancelled during STABILIZING");
+        ecg_cancellation = true;
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+        return;
+    }
+    if (k_sem_take(&sem_hrv_eval_cancel, K_NO_WAIT) == 0) {
+        LOG_INF("ECG SMF: HRV cancelled during STABILIZING");
+        ecg_cancellation = true;
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+        return;
+    }
+}
+
+static void st_ecg_stabilizing_exit(void *o)
+{
+    LOG_DBG("ECG SMF: Exiting STABILIZING state");
+    set_ecg_stabilization_values(0, true);
+}
+
+/*
+ * RECORDING STATE
+ * - Active recording with countdown (30s ECG, 60s HRV)
+ * - If leads go off, reset buffer and return to WAIT_FOR_LEAD
+ */
+static void st_ecg_recording_entry(void *o)
+{
+    int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+
+    LOG_INF("ECG SMF: Entering RECORDING state - %d seconds", duration);
+
+    // Start recording
+    hpi_data_set_ecg_record_active(true);
+
+    // Initialize countdown timer
+    set_ecg_timer_values(k_uptime_get_32(), duration);
+
+    // Start UI timer
+    hpi_ecg_timer_start();
+
+    // Lead tracking - leads are ON when entering recording
+    smf_last_lead_off = false;
+
+    // Publish initial status
+    struct hpi_ecg_status_t ecg_stat = {
+        .ts_complete = 0,
+        .status = HPI_ECG_STATUS_STREAMING,
+        .hr = get_ecg_hr(),
+        .progress_timer = duration};
+    zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
+
+    // Initialize HRV collection
+    if (get_hrv_active()) {
+        LOG_INF("ECG SMF: HRV recording started");
+        hrv_interval_count = 0;
+        memset(hrv_intervals, 0, sizeof(hrv_intervals));
+        hrv_last_status_pub_s = 0;
+    }
+}
+
+static void st_ecg_recording_run(void *o)
+{
+    // Poll sensor for lead status
+    bool current_lead_off = get_ecg_lead_on_off();
+
+    // Detect lead OFF transition
+    if (!smf_last_lead_off && current_lead_off) {
+        LOG_INF("ECG SMF: Lead OFF during RECORDING - returning to WAIT_FOR_LEAD");
+
+        // Pause timer and reset buffer
+        hpi_ecg_timer_pause();
+        hpi_data_reset_ecg_record_buffer();
+
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_WAIT_FOR_LEAD]);
+        return;
+    }
+    smf_last_lead_off = current_lead_off;
+
+    // Count down recording timer
+    uint32_t last_timer;
+    int countdown;
+    get_ecg_timer_values(&last_timer, &countdown);
+
+    uint32_t now = k_uptime_get_32();
+    if ((now - last_timer) >= 1000) {
         countdown--;
         set_ecg_timer_values(now, countdown);
 
@@ -1337,21 +1373,20 @@ static void st_ecg_recording_run(void *o)
         zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
 
         if (countdown <= 0) {
-            LOG_INF("ECG SMF: Recording complete (timer)");
-            smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+            LOG_INF("ECG SMF: Recording complete");
+            smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
             return;
         }
     }
 
-check_buffer:
-    // Check for buffer full (only meaningful during recording phase)
-    if (recording_phase_started && k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0) {
+    // Check for buffer full
+    if (k_sem_take(&sem_ecg_complete, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Buffer full - completing");
-        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+        ecg_cancellation = false; // Not a cancellation, just normal completion
+        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_COMPLETE]);
         return;
     }
 
-check_cancel:
     // Handle cancellation
     if (k_sem_take(&sem_ecg_cancel, K_NO_WAIT) == 0) {
         LOG_INF("ECG SMF: Cancelled during RECORDING");
@@ -1370,18 +1405,18 @@ check_cancel:
 static void st_ecg_recording_exit(void *o)
 {
     LOG_INF("ECG SMF: Exiting RECORDING state");
+    hpi_ecg_timer_reset();
+}
+
+static void st_ecg_complete_entry(void *o)
+{
+    LOG_INF("ECG SMF: Entering COMPLETE state");
     int ret;
 
-    // Stop recording and write file if recording phase was active
-    if (recording_phase_started) {
-        if(!ecg_cancellation)
-          hpi_data_set_ecg_record_active(false);
-          //ecg_cancellation = false;  // reset cancellation flag for next session
-    }
+    // Stop recording - this is the successful completion path
+    hpi_data_set_ecg_record_active(false);
 
-    hpi_ecg_timer_reset();
-
-    // Only stop timers if GSR is also not active
+    // Only stop timer if GSR is also not active
     if (!get_gsr_active()) {
         k_timer_stop(&tmr_ecg_sampling);
         k_timer_stop(&tmr_bioz_sampling);
@@ -1389,25 +1424,52 @@ static void st_ecg_recording_exit(void *o)
 
     ret = hw_max30001_ecg_disable();
     if (ret != 0) {
-        LOG_ERR("Failed to disable ECG in recording exit: %d", ret);
+        LOG_ERR("Failed to disable ECG in complete entry: %d", ret);
     }
 
     // Handle HRV post-processing if HRV evaluation was active
     if (get_hrv_active() && !ecg_cancellation) {
         LOG_INF("HRV evaluation complete - processing results");
+        // Call HRV post-processing function (FFT, frequency analysis, stress index)
+        // This will update hrv_eval_result and write to file
         hpi_data_hrv_record_to_file(true);
         hpi_data_set_hrv_eval_active(false);
+        // Signal HRV complete
         k_sem_give(&sem_hrv_eval_complete);
+        ecg_cancellation = true;
+        // Reset HRV active flag
         set_hrv_active(false);
-        ecg_cancellation = true;  // prevent ecg sample writing after hrv record phase.
-    } else if (recording_phase_started && !ecg_cancellation) {
-        // ECG recording complete — signal display to show completion screen
-        k_sem_give(&sem_ecg_complete_reset);
-
+    } else {
+        // ECG recording complete - signal ECG completion
+        if(!ecg_cancellation)
+             k_sem_give(&sem_ecg_complete_reset);
     }
+}
 
-    recording_phase_started = false;
-    //smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+static void st_ecg_complete_run(void *o)
+{
+    // Handle GSR start/stop during ECG complete phase
+    if (k_sem_take(&sem_gsr_start, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Starting GSR during ECG complete phase");
+        hw_max30001_gsr_enable();
+        hpi_data_set_gsr_measurement_active(true);
+    }
+    
+    if (k_sem_take(&sem_gsr_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_INF("Stopping GSR during ECG complete phase");
+        hw_max30001_gsr_disable();
+        hpi_data_set_gsr_measurement_active(false);
+    }
+    
+    // ECG complete - return to idle unless new operation requested
+    smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
+}
+
+static void st_ecg_complete_exit(void *o)
+{
+    LOG_DBG("ECG/BioZ SM Complete Exit");
 }
 
 /*
@@ -1415,16 +1477,18 @@ static void st_ecg_recording_exit(void *o)
  * STATE TABLE - Defines all ECG/HRV state machine states
  * =============================================================================
  * Flow:
- *   IDLE -> WAIT_FOR_LEAD -> RECORDING -> IDLE
- *
- * RECORDING has two internal phases:
- *   1. Stabilization (5s) — signal settles, lead-off pauses countdown
- *   2. Buffer recording (30s ECG / 60s HRV) — lead-off pauses timer
+ *   IDLE -> WAIT_FOR_LEAD -> STABILIZING -> RECORDING -> COMPLETE -> IDLE
+ *              ^                  |            |
+ *              |                  v            v
+ *              +------------------+------------+
+ *                    (on lead off)
  */
 static const struct smf_state ecg_states[] = {
     [HPI_ECG_STATE_IDLE] = SMF_CREATE_STATE(st_ecg_idle_entry, st_ecg_idle_run, NULL, NULL, NULL),
     [HPI_ECG_STATE_WAIT_FOR_LEAD] = SMF_CREATE_STATE(st_ecg_wait_for_lead_entry, st_ecg_wait_for_lead_run, st_ecg_wait_for_lead_exit, NULL, NULL),
+    [HPI_ECG_STATE_STABILIZING] = SMF_CREATE_STATE(st_ecg_stabilizing_entry, st_ecg_stabilizing_run, st_ecg_stabilizing_exit, NULL, NULL),
     [HPI_ECG_STATE_RECORDING] = SMF_CREATE_STATE(st_ecg_recording_entry, st_ecg_recording_run, st_ecg_recording_exit, NULL, NULL),
+    [HPI_ECG_STATE_COMPLETE] = SMF_CREATE_STATE(st_ecg_complete_entry, st_ecg_complete_run, st_ecg_complete_exit, NULL, NULL),
 
     [HPI_ECG_STATE_GSR_MEASURE_ENTRY]  = SMF_CREATE_STATE(NULL, st_gsr_entry_run, NULL, NULL, NULL),
     [HPI_ECG_STATE_GSR_MEASURE_STREAM] = SMF_CREATE_STATE(NULL, st_gsr_stream_run, st_gsr_stream_exit, NULL, NULL),
