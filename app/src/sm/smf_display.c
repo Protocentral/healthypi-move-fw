@@ -178,7 +178,7 @@ static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
 
 // @brief GSR Screen variables
-static uint16_t m_disp_gsr_remaining = 30; // countdown timer (seconds remaining)
+static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
 static float m_disp_gsr_us = 0.0f;
 
 // @brief HRV Screen variables
@@ -960,91 +960,22 @@ static inline int32_t bioz_extract_24bit(int32_t raw)
     return raw;
 }
 
+/**
+ * @brief Convert driver-provided BioZ sample to conductance in µS
+ *
+ * The MAX30001 driver now performs the ADC-to-conductance conversion internally
+ * using the datasheet formula and outputs values as fixed-point (µS × 100).
+ * This function simply converts from fixed-point to float.
+ *
+ * Driver conversion (in max30001.h):
+ *   Z (Ω) = ADC × VREF / (2^19 × CGMAG × GAIN)
+ *   Conductance (µS) = 1/Z × 10^6
+ */
 static float convert_raw_sample_to_uS(int32_t raw)
 {
-    // int32_t sample24 = bioz_extract_24bit(raw);
-    // // /* Same math you already validated */
-    // //  // Use absolute value for display magnitude
-    // // float abs_sample = (float)abs(sample24);
-
-    // // return ((float)abs_sample * 2400.0f) / 8388607.0f / 1000.0f;
-    //  /* Step 1: ADC → voltage (±1.2V) */
-    // float v_bioz = (float)sample24 * 1.2f / 8388607.0f;
-
-    // /* Step 2: voltage → impedance */
-    // const float I_bioz = 48e-6f;   // <-- CHANGE to your configured current
-    // float impedance = v_bioz / I_bioz;
-
-    // /* Protect against divide-by-zero */
-    // if (impedance <= 0.0f)
-    //     return 0.0f;
-
-    // /* Step 3: impedance → conductance */
-    // float gsr_uS = (1.0f / impedance) * 1e6f;
-
-    // return gsr_uS;
-
-    //  // Arithmetic shift to isolate 18-bit signed ADC counts from 32-bit raw word
-    // int32_t adc_counts = raw >> 14; 
-
-    // const float V_REF = 1.0f;
-    // const float GAIN = 40.0f;
-    // const float I_MAG = 48e-6f;
-    // const float ADC_FS = 131072.0f; // 2^17
-
-    // float v_electrode = ((float)adc_counts * V_REF) / (ADC_FS * GAIN);
-    
-    // // Use absolute value for impedance magnitude
-    // float impedance = fabsf(v_electrode / I_MAG);
-
-    // // Filter out zero/short-circuit values to avoid infinity
-    // if (impedance < 0.1f) return 0.0f; 
-    
-    // return (1.0f / impedance) ;
-
-    // Constants from hardware configuration (nrf5340_cpuapp_common.dtsi)
-    const float V_REF = 1.0f;          // MAX30001 Internal Vref
-    const float GAIN = 20.0f;          // bioz-gain=1 → 20 V/V
-    const float I_MAG = 16e-6f;        // bioz_cgmag=2 → 16 µA
-    
-    // Your driver produces a 24-bit signed value (due to the <<8 >>8 shift)
-    // Full scale for 24-bit signed is 2^23
-    const float FS_24BIT = 8388608.0f; 
-
-    /* Step 1: Calculate Voltage at electrodes */
-    // Voltage = (raw / 2^23) * (Vref / Gain)
-    float v_electrode = ((float)raw / FS_24BIT) * (V_REF / GAIN);
-
-    /* Step 2: Calculate Impedance (Ohms) */
-    // Z = V / I
-    float impedance = fabsf(v_electrode / I_MAG);
-
-    /* Step 3: Convert to Conductance (S) */
-    // If impedance is near zero, it's a short or noise
-    if (impedance < 0.1f) return 0.0f; 
-    
-    // G (uS) = (1 / Z) * 1,000,000
-    return (1.0f / impedance) * 1e6f ;
-
-    //   /* Step 1: Use magnitude only */
-    // int32_t mag = abs(raw);
-
-    // /* Protect against noise / zero */
-    // if (mag < 1000)
-    //     return 0.0f;
-
-    // /*
-    //  * BIOZ magnitude → impedance scaling
-    //  * This is a calibrated factor (NOT theoretical)
-    //  * Tune once using known resistor if needed
-    //  */
-    // const float BIOZ_OHMS_PER_COUNT = 0.05f;
-
-    // /* Step 2: Convert to impedance (Ohms) */
-    // float impedance = mag * BIOZ_OHMS_PER_COUNT;
-
-    // /* Step 3: Convert impedance → conductance (µS) */
-    // return (1.0f / impedance) * 1e6f;
+    /* Driver outputs conductance as fixed-point: µS × 100
+     * Divide by 100 to get actual µS value */
+    return (float)raw / 100.0f;
 }
 
 static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sample)

@@ -34,8 +34,12 @@ extern lv_style_t style_scr_black;
 // Local state
 static bool plot_ready = false;
 // Performance optimization variables (mirror ECG plotting implementation)
-static float y_max_gsr = -10000;
-static float y_min_gsr = 10000;
+static int32_t y_max_gsr = INT32_MIN;   // 🔧 FIX
+static int32_t y_min_gsr = INT32_MAX;   // 🔧 FIX
+static int32_t gsr_plot_min = 0;
+static int32_t gsr_plot_max = 1000;
+static bool gsr_first_autoscale = true;
+
 static uint32_t gsr_sample_counter = 0;
 static const uint32_t GSR_RANGE_UPDATE_INTERVAL = 128;
 static int32_t gsr_batch_data[32] __attribute__((aligned(4)));
@@ -61,7 +65,7 @@ void hpi_gsr_disp_update_timer(uint16_t remaining_s)
         if (arc_gsr_progress != NULL) {
             // Arc shows progress from full (60s) to empty (0s)
             // Value range: 0-60, display remaining time
-            lv_arc_set_value(arc_gsr_progress, remaining_s);
+            lv_arc_set_value(arc_gsr_progress, 60 - remaining_s);
         }
     }
 }
@@ -118,52 +122,123 @@ void hpi_gsr_disp_draw_plotGSR(int32_t *data_gsr, int num_samples, bool gsr_lead
         return;
     }
 
-
     // Batch processing for efficiency
     for (int i = 0; i < num_samples; i++) {
         gsr_batch_data[gsr_batch_count++] = data_gsr[i];
 
         if (gsr_batch_count >= 32 || i == num_samples - 1) {
             for (uint32_t j = 0; j < gsr_batch_count; j++) {
-                lv_chart_set_next_value(chart_gsr_trend, ser_gsr_trend, gsr_batch_data[j]);
+                //lv_chart_set_next_value(chart_gsr_trend, ser_gsr_trend, gsr_batch_data[j]);
+                int32_t plot_val = gsr_batch_data[j];
+
+                if (plot_val < gsr_plot_min)
+                    plot_val = gsr_plot_min;
+                else if (plot_val > gsr_plot_max)
+                    plot_val = gsr_plot_max;
+
+                lv_chart_set_next_value(chart_gsr_trend, ser_gsr_trend, plot_val);
 
                 if (gsr_batch_data[j] < y_min_gsr) y_min_gsr = gsr_batch_data[j];
                 if (gsr_batch_data[j] > y_max_gsr) y_max_gsr = gsr_batch_data[j];
             }
 
             gsr_sample_counter += gsr_batch_count;
+          //  LOG_DBG("GSR sample=%d  curr_min=%d  curr_max=%d  count=%d",gsr_batch_data[i], y_min_gsr, y_max_gsr, gsr_sample_counter);
+
             gsr_batch_count = 0;
         }
     }
 
-    // Auto-scaling logic (follow ECG pattern)
-    if (gsr_sample_counter % GSR_RANGE_UPDATE_INTERVAL == 0) {
-        if (y_max_gsr > y_min_gsr) {
-            float range = y_max_gsr - y_min_gsr;
-            float margin = range * 0.1f; // 10% margin
+    // // Auto-scaling logic (follow ECG pattern)
+    // if (gsr_sample_counter % GSR_RANGE_UPDATE_INTERVAL == 0) {
+    //     if (y_max_gsr > y_min_gsr) {
+    //         float range = y_max_gsr - y_min_gsr;
+    //         float margin = range * 0.1f; // 10% margin
 
-            int32_t new_min = (int32_t)(y_min_gsr - margin);
-            int32_t new_max = (int32_t)(y_max_gsr + margin);
+    //         int32_t new_min = (int32_t)(y_min_gsr - margin);
+    //         int32_t new_max = (int32_t)(y_max_gsr + margin);
 
-            // Ensure reasonable minimum range
-            if ((new_max - new_min) < 200) {
-                int32_t center = (new_min + new_max) / 2;
-                new_min = center - 100;
-                new_max = center + 100;
+    //         // Ensure reasonable minimum range
+    //         if ((new_max - new_min) < 200) {
+    //             int32_t center = (new_min + new_max) / 2;
+    //             new_min = center - 100;
+    //             new_max = center + 100;
+    //         }
+
+    //         lv_chart_set_range(chart_gsr_trend, LV_CHART_AXIS_PRIMARY_Y, new_min, new_max);
+    //     }
+
+    //     // Reset extrema for next interval
+    //     y_min_gsr = 10000;
+    //     y_max_gsr = -10000;
+    // }
+    /* ================= AUTO SCALING ================= */
+        if (gsr_sample_counter >= GSR_RANGE_UPDATE_INTERVAL || gsr_first_autoscale) {
+
+            int32_t new_min, new_max;
+
+            const int32_t MIN_VISIBLE_SPAN = 100;   // ensure signal is always visible
+            const int32_t MIN_PADDING = 10;         // minimum padding around min/max
+
+            //  ADDED: Check for uninitialized sentinels first
+            if (y_min_gsr == INT32_MAX && y_max_gsr == INT32_MIN) {
+                // No data yet - use initial defaults
+                new_min = 0;
+                new_max = 1000;
+            }
+            else if (y_max_gsr > y_min_gsr) {
+                int32_t range = y_max_gsr - y_min_gsr;
+
+                // If signal range is very small, expand it to MIN_VISIBLE_SPAN
+                if (range < MIN_VISIBLE_SPAN) {
+                    int32_t center = (y_max_gsr + y_min_gsr) / 2;
+                    new_min = center - (MIN_VISIBLE_SPAN / 2);
+                    new_max = center + (MIN_VISIBLE_SPAN / 2);
+                } else {
+                    // Normal scaling with 1/6th padding on top and bottom
+                    int32_t padding = range / 6;
+                    if (padding < MIN_PADDING) padding = MIN_PADDING;
+                    new_min = y_min_gsr - padding;
+                    new_max = y_max_gsr + padding;
+                }
+            } else {
+                // Flat signal (all samples equal)
+                int32_t center = y_min_gsr;
+                new_min = center - (MIN_VISIBLE_SPAN / 2);
+                new_max = center + (MIN_VISIBLE_SPAN / 2);
             }
 
+            // Ensure non-negative min
+            if (new_min < 0) new_min = 0;
+
+            // Ensure max is always higher than min
+            if (new_max <= new_min) new_max = new_min + MIN_VISIBLE_SPAN;
+
+            // Log autoscaling
+            // LOG_DBG("GSR AUTO-SCALE: data_min=%d data_max=%d -> Y=[%d..%d]",
+            //         y_min_gsr, y_max_gsr, new_min, new_max);
+
+            // Apply new Y-axis range
             lv_chart_set_range(chart_gsr_trend, LV_CHART_AXIS_PRIMARY_Y, new_min, new_max);
+
+            // Update plot limits
+            gsr_plot_min = new_min;
+            gsr_plot_max = new_max;
+
+            // Refresh chart
+            lv_chart_refresh(chart_gsr_trend);
+
+            // Reset counters for next batch
+            gsr_sample_counter = 0;
+            y_min_gsr = INT32_MAX;
+            y_max_gsr = INT32_MIN;
+            gsr_first_autoscale = false; 
         }
 
-        // Reset extrema for next interval
-        y_min_gsr = 10000;
-        y_max_gsr = -10000;
-    }
-
-    // Refresh depending on auto-refresh flag (keep behavior similar to ECG)
-    if (gsr_chart_auto_refresh_enabled) {
-        lv_chart_refresh(chart_gsr_trend);
-    }
+    // // Refresh depending on auto-refresh flag (keep behavior similar to ECG)
+    // if (gsr_chart_auto_refresh_enabled) {
+    //     lv_chart_refresh(chart_gsr_trend);
+    // }
 }
 
 void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
@@ -179,11 +254,11 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     arc_gsr_progress = lv_arc_create(scr_gsr_plot);
     lv_obj_set_size(arc_gsr_progress, 370, 370);  // 185px radius
     lv_obj_center(arc_gsr_progress);
-    lv_arc_set_range(arc_gsr_progress, 0, 30);  // Timer range: 0-30 seconds
+    lv_arc_set_range(arc_gsr_progress, 0, 60);  // Timer range: 0-60 seconds
     
     // Background arc: Full 270° track (gray)
     lv_arc_set_bg_angles(arc_gsr_progress, 135, 45);  // Full background arc
-    lv_arc_set_value(arc_gsr_progress, 30);  // Start at full (30 seconds), will countdown to 0
+    lv_arc_set_value(arc_gsr_progress, 60);  // Start at full (60 seconds), will countdown to 0
     
     // Style the progress arc - blue theme for GSR measurement
     lv_obj_set_style_arc_color(arc_gsr_progress, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
@@ -220,7 +295,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Timer value
     label_timer = lv_label_create(cont_timer);
-    lv_label_set_text(label_timer, "30");
+    lv_label_set_text(label_timer, "60");
     lv_obj_add_style(label_timer, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_timer, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_pad_left(label_timer, 8, LV_PART_MAIN);
@@ -274,6 +349,7 @@ void draw_scr_gsr_plot(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
 
     // Note: Real-time uS display disabled - final tonic level shown on results screen
     // Set label_gsr_value to NULL since we're not creating it
+    lv_chart_set_range(chart_gsr_trend, LV_CHART_AXIS_PRIMARY_Y, 0, 1000);
     label_gsr_value = NULL;
 
     // Stop button - positioned at bottom center
@@ -338,9 +414,17 @@ static void gsr_chart_reset_performance_counters(void)
 {
     gsr_sample_counter = 0;
     gsr_batch_count = 0;
-    // Initialize for proper range detection
-    y_max_gsr = -10000;
-    y_min_gsr = 10000;
+     // FIX: correct sentinel reset
+    y_min_gsr = INT32_MAX;
+    y_max_gsr = INT32_MIN;
+
+    // ADDED: Reset plot range to initial defaults
+    gsr_plot_min = 0;
+    gsr_plot_max = 1000;
+    
+    //  ADDED: Reset first autoscale flag
+    gsr_first_autoscale = true;
+
 }
 
 void scr_gsr_lead_on_off_handler(bool lead_off)

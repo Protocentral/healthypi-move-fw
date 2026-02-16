@@ -681,28 +681,6 @@ void data_thread(void)
         }
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
-            /* ---------------------------------------
-            * 1. Convert RAW BioZ → GSR (µS)
-            * --------------------------------------- */
-            // float gsr_float[BIOZ_MAX_SAMPLES] = {0};
-            // convert_raw_to_uS(bsample.bioz_samples, gsr_float, bsample.bioz_num_samples);
-            // /* Create a new struct for safe message passing */
-            // struct hpi_bioz_sample_t gsr_sample = bsample;
-
-            // /* Copy converted float to int32_t buffer for BLE / plot / record */
-            // for (uint8_t i = 0; i < bsample.bioz_num_samples; i++)
-            // {
-            //     /* Multiply by 100 if you want to store as int with 2 decimal precision */
-            //     gsr_sample.bioz_samples[i] = (int32_t)(gsr_float[i] * 100.0f);
-            // }
-
-            // /* ---------------------------------------
-            // * 2. BLE notification
-            // * --------------------------------------- */
-            // if (settings_send_ble_enabled)
-            // {
-            //     ble_gsr_notify(gsr_sample.bioz_samples, gsr_sample.bioz_num_samples);
-            // }
             processed_data = true;
             if (settings_send_ble_enabled)
             {
@@ -761,7 +739,7 @@ void data_thread(void)
                 // Completed exactly full buffer
                 if (gsr_record_counter >= GSR_RECORD_BUFFER_SAMPLES)
                 {
-                    LOG_WRN("GSR buffer full - collected %d samples(30.0 seconds @ 32Hz)", gsr_record_counter);
+                    LOG_WRN("GSR buffer full - collected %d samples(60.0 seconds @ 32Hz)", gsr_record_counter);
                     LOG_INF("Signaling GSR state machine to stop recording");
                     
                     is_gsr_record_active = false;   // 🔴 CRITICAL

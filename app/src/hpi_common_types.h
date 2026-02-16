@@ -42,7 +42,7 @@ HealthyPi specific common data types
 #define BPT_PPG_POINTS_PER_SAMPLE 32
 
 #define ECG_RECORD_BUFFER_SAMPLES 3840 // Full 30 seconds at 128 Hz (128*30) - 15.36KB total
-#define GSR_RECORD_BUFFER_SAMPLES 960 // Full 30 seconds at 32 Hz (32*30) - 
+#define GSR_RECORD_BUFFER_SAMPLES 1920 // Full 60 seconds at 32 Hz (32*60) - 7.68KB total
 #define BIOZ_MAX_SAMPLES 64    // safe for 32 Hz, 1–2 s batch
 
 enum hpi_ppg_status 
@@ -72,7 +72,7 @@ struct hpi_ecg_bioz_sensor_data_t
 
 struct hpi_gsr_sensor_data_t
 {
-    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];  // Raw BioZ samples from MAX30001
+    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];  // Conductance in µS × 100 (fixed-point from driver)
     uint8_t bioz_num_samples;                      // Number of valid samples in this batch
     uint8_t bioz_lead_off;                         // Lead-off detection status
 };
@@ -80,10 +80,13 @@ struct hpi_gsr_sensor_data_t
 /*
  * Lightweight BioZ-only sample used for internal producer/consumer queues
  * when ECG decoding is not required. Keeps the copy footprint small.
+ *
+ * Note: bioz_samples contains conductance values in µS × 100 (fixed-point).
+ * The MAX30001 driver performs ADC-to-conductance conversion internally.
  */
 struct hpi_bioz_sample_t
 {
-    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];
+    int32_t bioz_samples[BIOZ_POINTS_PER_SAMPLE];  // Conductance in µS × 100 (fixed-point from driver)
     uint8_t bioz_num_samples;
     uint8_t bioz_lead_off;
     int64_t timestamp;
