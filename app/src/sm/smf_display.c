@@ -1420,14 +1420,21 @@ static void st_display_active_run(void *o)
         {
             // hpi_display_sleep_on();
         }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
+        {
+            gesture_down_scr_spl_raw_ppg();
+        }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
         {
             gesture_down_scr_ecg_2();
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
-            /* User cancelled measurement via crown: signal explicit cancel semaphore */
-            k_sem_give(&sem_spo2_cancel);
+            gesture_down_scr_spo2_measure();
+        }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_BPT_MEASURE)
+        {
+            gesture_down_scr_bpt_measure();
         }
         else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
         {
