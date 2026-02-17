@@ -289,6 +289,7 @@ void draw_scr_boot(void);
 void scr_boot_add_status(const char *dev_label, bool status, bool show_status);
 void scr_boot_add_final(bool status);
 
+void hpi_disp_restore_brightness(void);
 // Progress Screen functions
 void draw_scr_progress(const char *title, const char *message);
 void hpi_disp_scr_update_progress(int progress, const char *status);
