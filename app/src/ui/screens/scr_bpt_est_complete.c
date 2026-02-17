@@ -77,9 +77,9 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     // Screen title - optimized position
     lv_obj_t *label_title = lv_label_create(scr_bpt_est_complete);
     if(mode == 0)
-      lv_label_set_text(label_title, "BPT Estimation");
+      lv_label_set_text(label_title, "Estimation Complete");
     else if(mode == 1)
-      lv_label_set_text(label_title, "BPT Calibration");
+      lv_label_set_text(label_title, "Calibration Complete");
     lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 55);  // Slightly higher for more space below
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
