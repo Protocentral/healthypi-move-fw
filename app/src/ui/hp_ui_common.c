@@ -40,6 +40,7 @@
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/zbus/zbus.h>
+#include <zephyr/settings/settings.h>
 
 #include "hw_module.h"
 #include "hpi_common_types.h"
@@ -106,7 +107,8 @@ lv_style_t style_bg_red;
 lv_style_t style_bg_green;
 lv_style_t style_bg_purple;
 
-static volatile uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
+static uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
+#define KEY_BRIGHTNESS "display/brightness"
 
 lv_obj_t *cui_battery_percent;
 int tmp_scr_parent = 0;
@@ -115,6 +117,26 @@ int tmp_scr_parent = 0;
 extern const struct device *display_dev;
 
 extern struct k_sem sem_stop_one_shot_spo2;
+
+static int brightness_settings_set(const char *name, size_t len,
+                                   settings_read_cb read_cb, void *cb_arg)
+{
+    if (strcmp(name, "brightness") == 0) {
+        if (len == sizeof(hpi_disp_curr_brightness)) {
+            read_cb(cb_arg, &hpi_disp_curr_brightness,
+                    sizeof(hpi_disp_curr_brightness));
+        }
+        return 0;
+    }
+    return -ENOENT;
+}
+
+SETTINGS_STATIC_HANDLER_DEFINE(display,
+                               "display",
+                               NULL,
+                               brightness_settings_set,
+                               NULL,
+                               NULL);
 
 void display_init_styles(void)
 {
@@ -359,6 +381,13 @@ void display_init_styles(void)
     //lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
+void hpi_disp_restore_brightness(void)
+{
+    settings_load();
+    hpi_disp_set_brightness(hpi_disp_curr_brightness);
+}
+
+
 void draw_scr_common(lv_obj_t *parent)
 {
     lv_obj_add_style(parent, &style_scr_black, 0);
@@ -370,8 +399,16 @@ void hpi_disp_set_brightness(uint8_t brightness_percent)
 {
     uint8_t brightness = (uint8_t)((brightness_percent * 255) / 100);
     display_set_brightness(display_dev, brightness);
-    hpi_disp_curr_brightness = brightness_percent;
+
+    if (hpi_disp_curr_brightness != brightness_percent) {
+        hpi_disp_curr_brightness = brightness_percent;
+
+        settings_save_one(KEY_BRIGHTNESS,
+                          &hpi_disp_curr_brightness,
+                          sizeof(hpi_disp_curr_brightness));
+    }
 }
+
 
 /* Helper to create a pre-styled black button */
 lv_obj_t *hpi_btn_create(lv_obj_t *parent)
