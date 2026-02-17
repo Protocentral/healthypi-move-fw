@@ -394,7 +394,7 @@ static void hw_bpt_start_est(void)
 
     char m_file_name[32];
 
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 3; i++)
     {
         snprintf(m_file_name, sizeof(m_file_name), "/lfs/sys/bpt_cal_%d", i);
         // Load calibration vector 0
@@ -511,7 +511,7 @@ static bool hpi_bpt_cal_data_available(void)
     char m_file_name[32];
     
     // Check if at least one calibration file exists
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 3; i++)
     {
         snprintf(m_file_name, sizeof(m_file_name), "/lfs/sys/bpt_cal_%d", i);
         if (fs_check_file_exists(m_file_name) == 0) // Assuming fs_check_file_exists returns 0 if file exists
