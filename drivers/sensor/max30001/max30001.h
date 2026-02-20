@@ -140,9 +140,9 @@ static inline float max30001_bioz_raw_to_uS(int32_t raw_adc, int gain_reg, int c
     }
 
     float gain = bioz_gain_table[gain_reg];
-    //float cgmag = bioz_cgmag_table[cgmag_reg];
+    float cgmag = bioz_cgmag_table[cgmag_reg];
 
-	float cgmag = bioz_cgmag_lc2x_table[cgmag_reg];
+	//float cgmag = bioz_cgmag_lc2x_table[cgmag_reg];
     /* Avoid division by zero if current is off */
     if (cgmag == 0.0f) {
         return 0.0f;

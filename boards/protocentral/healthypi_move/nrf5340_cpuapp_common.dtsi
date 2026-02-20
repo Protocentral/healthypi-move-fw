@@ -340,8 +340,8 @@
 		//ecg-enabled;
 		bioz-enabled;
 		ecg-gain = <1>; // 40 V/V gain
-		bioz-gain = <0>; // 10 V/V gain for GSR measurement
-		bioz_cgmag = <1>; // 8 uA excitation current for good GSR sensitivity
+		bioz-gain = <1>; // 20 V/V gain for GSR measurement
+		bioz_cgmag = <2>; // 16 uA excitation current for good GSR sensitivity
 		bioz_dlpf = <1>; // Digital low pass filter
 		bioz_dhpf = <1>; // Digital high pass filter 
 		bioz_ahpf = <2>; // Analog high pass filter
