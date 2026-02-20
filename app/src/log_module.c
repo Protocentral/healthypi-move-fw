@@ -433,23 +433,17 @@ void log_wipe_trends(void)
     };
     
     wipe_log_types(trend_types, sizeof(trend_types), "all trend logs");
-
+    hpi_recording_wipe_all(); // To delete research recording files
     /* Legacy file removed - measurement data now stored via Zephyr settings subsystem */
     hpi_disp_reset_all_last_updated();
-
-    LOG_DBG("All trend logs wiped");
+    LOG_DBG("All trend logs and recording module logs wiped");
 }
 
-void log_wipe_records(void)
+void log_wipe_records(uint8_t recording_type)
 {
-    static const uint8_t record_types[] = {
-        HPI_LOG_TYPE_ECG_RECORD,
-        HPI_LOG_TYPE_BIOZ_RECORD,
-        HPI_LOG_TYPE_PPG_WRIST_RECORD,
-        HPI_LOG_TYPE_PPG_FINGER_RECORD,
-        HPI_LOG_TYPE_GSR_RECORD, 
-        HPI_LOG_TYPE_HRV_RECORD
-    };
-    
-    wipe_log_types(record_types, sizeof(record_types), "all records");
+    char log_file_name[HPI_LOG_PATH_MAX];
+    if (hpi_log_get_path(log_file_name, sizeof(log_file_name), recording_type) == 0) 
+    {
+        log_wipe_folder(log_file_name);
+    }
 }
