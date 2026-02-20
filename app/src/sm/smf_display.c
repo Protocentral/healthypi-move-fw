@@ -178,7 +178,7 @@ static uint16_t m_disp_ecg_hr = 0;
 static bool m_lead_on_off = false;
 
 // @brief GSR Screen variables
-static uint16_t m_disp_gsr_remaining = 60; // countdown timer (seconds remaining)
+static uint16_t m_disp_gsr_remaining = 30; // countdown timer (seconds remaining)
 static float m_disp_gsr_us = 0.0f;
 
 // @brief HRV Screen variables
@@ -1726,7 +1726,7 @@ static void disp_gsr_stress_listener(const struct zbus_channel *chan)
         // Update the GSR complete screen if it's currently displayed
         hpi_gsr_complete_update_results(stress_data);
         
-        LOG_DBG("GSR Stress Index: level=%d, tonic=%d.%02d μS, peaks/min=%d", 
+        LOG_DBG("GSR Stress Index: level=%d, tonic=%d.%02d μS, peaks/30s=%d", 
                 stress_data->stress_level,
                 stress_data->tonic_level_x100 / 100,
                 stress_data->tonic_level_x100 % 100,
