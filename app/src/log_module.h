@@ -54,7 +54,7 @@ void log_session_add_point(uint16_t time, int16_t current, uint16_t impedance);
 //void log_write_to_file(struct tes_session_log_t *m_session_log);
 void log_complete(void);
 void log_wipe_trends(void);
-void log_wipe_records(void);
+void log_wipe_records(uint8_t recording_type);
 
 void log_delete(uint16_t session_id);
 void log_get(uint8_t log_type, int64_t file_id);

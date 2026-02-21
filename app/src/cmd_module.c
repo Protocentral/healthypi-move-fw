@@ -163,7 +163,8 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         break;
     case HPI_CMD_RECORDING_WIPE_ALL:
         LOG_DBG("RX CMD Recording Wipe Records");
-        log_wipe_records();
+        recording_type = in_pkt_buf[1];
+        log_wipe_records(recording_type);
         break;
 
     // Background Recording Commands

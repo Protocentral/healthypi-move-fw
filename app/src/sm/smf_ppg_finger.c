@@ -135,6 +135,7 @@ static bool spo2_process_done = false;
 static uint8_t m_cal_index;
 static uint8_t m_cal_sys;
 static uint8_t m_cal_dia;
+static uint8_t m_cal_hr;
 
 static uint8_t m_est_sys;
 static uint8_t m_est_dia;
@@ -283,6 +284,7 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
                     // BPT Calibration done
                     LOG_INF("BPT Calibration Done");
                     k_sem_give(&sem_bpt_cal_complete);
+                    m_cal_hr = edata->hr;
                 }
                 else if (m_ppg_op_mode == PPG_FI_OP_MODE_BPT_EST)
                 {
@@ -392,7 +394,7 @@ static void hw_bpt_start_est(void)
 
     char m_file_name[32];
 
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 3; i++)
     {
         snprintf(m_file_name, sizeof(m_file_name), "/lfs/sys/bpt_cal_%d", i);
         // Load calibration vector 0
@@ -509,7 +511,7 @@ static bool hpi_bpt_cal_data_available(void)
     char m_file_name[32];
     
     // Check if at least one calibration file exists
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 3; i++)
     {
         snprintf(m_file_name, sizeof(m_file_name), "/lfs/sys/bpt_cal_%d", i);
         if (fs_check_file_exists(m_file_name) == 0) // Assuming fs_check_file_exists returns 0 if file exists
@@ -598,7 +600,7 @@ static void st_ppg_fi_cal_wait_entry(void *o)
 static void st_ppg_fi_cal_wait_run(void *o)
 {
 
-    LOG_DBG("PPG Finger SM BPT Calibration Running");
+   // LOG_DBG("PPG Finger SM BPT Calibration Running");
     if (k_sem_take(&sem_bpt_cal_start, K_NO_WAIT) == 0)
     {
         LOG_INF("sem_bpt_cal_start received in CAL_WAIT state - starting calibration");
@@ -613,7 +615,9 @@ static void st_ppg_fi_cal_wait_run(void *o)
     {
         LOG_INF("sem_bpt_exit_mode_cal received - exiting BPT calibration mode");
         hpi_hw_fi_sensor_off();  // Power off sensor when exiting calibration mode
-        // hpi_load_screen(SCR_BPT, SCROLL_UP);
+        hpi_bpt_stop(); // Ensure sensor algorithms are stopped
+        hpi_sys_set_last_bp_update(m_cal_sys, m_cal_dia, hw_get_sys_time_ts());
+        hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_cal_sys, m_cal_dia, m_cal_hr,1); // Show last calibration results when exiting cal mode
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
         return;
     }
@@ -623,16 +627,18 @@ static void st_ppg_fing_bpt_cal_entry(void *o)
 {
     LOG_INF("PPG Finger SM BPT Calibration Entry");
       // RESET progress to 0%
-    //   struct hpi_bpt_t bpt_data = {
-    //     .progress = 0,
-    //  };
-    // zbus_chan_pub(&bpt_chan, &bpt_data, K_NO_WAIT);
+      struct hpi_bpt_t bpt_data = {
+        .progress = 0,
+        .status = 0,
+     };
+    zbus_chan_pub(&bpt_chan, &bpt_data, K_NO_WAIT);
 
     LOG_INF("Step 1: Enabling finger sensor power");
-    hpi_hw_fi_sensor_on();
-   // k_msleep(500); // Wait for sensor to power on and stabilize - this is important to prevent I2C errors when starting calibration immediately after powering on
+    hpi_hw_fi_sensor_on();    // Power ON
+    k_msleep(1000);           // Stabilize
     LOG_INF("Step 2: Starting BPT calibration with index=%d sys=%d dia=%d", m_cal_index, m_cal_sys, m_cal_dia);
     hw_bpt_start_cal(m_cal_index, m_cal_sys, m_cal_dia);
+    k_msleep(100); // Short delay to ensure sensor is processing the start command before we begin sampling
     LOG_INF("Step 3: Signaling to start sampling");
     k_sem_give(&sem_start_fi_sampling);
     LOG_INF("BPT Calibration Entry complete");
@@ -648,6 +654,20 @@ static void st_ppg_fing_bpt_cal_run(void *o)
         smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_DONE]);
         return;
     }
+    if(k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
+    {
+        LOG_INF("sem_bpt_exit_mode_cal received - exiting BPT calibration mode");
+        hpi_load_scr_spl(SCR_BPT, SCROLL_NONE, SCR_BPT, 0, 0, 0); // Show default BPT screen when exiting cal mode through cancel button
+        hpi_bpt_abort(); // Ensure sensor algorithms are stopped and sensor is powered off
+        return;
+    }
+
+     if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
+    {
+        LOG_DBG("BPT Calibration Cancelled by user");
+        hpi_bpt_abort();
+        return;
+    }
     
 }
 
@@ -661,6 +681,16 @@ static void st_ppg_fing_bpt_cal_done_entry(void *o)
 static void st_ppg_fing_bpt_cal_done_run(void *o)
 {
     k_msleep(2000);
+    if (k_sem_take(&sem_bpt_exit_mode_cal, K_NO_WAIT) == 0)
+    {
+        LOG_INF("sem_bpt_exit_mode_cal received - exiting BPT calibration mode");
+        hpi_hw_fi_sensor_off();  // Power off sensor when exiting calibration mode
+        hpi_bpt_stop(); // Ensure sensor algorithms are stopped
+        hpi_sys_set_last_bp_update(m_cal_sys, m_cal_dia, hw_get_sys_time_ts());
+        hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_cal_sys, m_cal_dia, m_cal_hr,1); // Show last calibration results when exiting cal mode
+        smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_IDLE]);
+        return;
+    }
     smf_set_state(SMF_CTX(&sf_obj), &ppg_fi_states[PPG_FI_STATE_BPT_CAL_WAIT]);
 }
 
@@ -716,7 +746,7 @@ static void st_ppg_fing_bpt_est_run(void *o)
 static void st_ppg_fing_bpt_est_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Estimation Done Entry");
-    hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr, m_est_spo2);
+    hpi_load_scr_spl(SCR_SPL_BPT_EST_COMPLETE, SCROLL_NONE, m_est_sys, m_est_dia, m_est_hr,0);
     // FIX: Power off sensor when estimation is complete
     hpi_hw_fi_sensor_off();
 }

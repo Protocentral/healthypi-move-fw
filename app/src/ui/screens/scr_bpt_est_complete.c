@@ -49,6 +49,8 @@ extern lv_style_t style_white_medium;
 extern lv_style_t style_scr_black;
 extern lv_style_t style_tiny;
 
+int mode = 0;
+
 static void scr_btn_close_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -62,6 +64,7 @@ static void scr_btn_close_handler(lv_event_t *e)
 
 void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    mode = arg4;
     scr_bpt_est_complete = lv_obj_create(NULL);
     // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_bpt_est_complete, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -73,7 +76,10 @@ void draw_scr_bpt_est_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
     // Screen title - optimized position
     lv_obj_t *label_title = lv_label_create(scr_bpt_est_complete);
-    lv_label_set_text(label_title, "Blood Pressure");
+    if(mode == 0)
+      lv_label_set_text(label_title, "Estimation Complete");
+    else if(mode == 1)
+      lv_label_set_text(label_title, "Calibration Complete");
     lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 55);  // Slightly higher for more space below
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
