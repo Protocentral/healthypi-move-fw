@@ -565,6 +565,8 @@ void hpi_sys_thread(void)
         LOG_ERR("Error initializing measurement settings: %d", ret);
     }
 
+    hpi_disp_restore_brightness();
+
     // Load steps from settings and initialize if from today
     uint16_t saved_steps = 0;
     int64_t saved_steps_ts = 0;

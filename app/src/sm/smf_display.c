@@ -689,7 +689,9 @@ static void st_display_init_entry(void *o)
     display_init_styles();
 
     display_blanking_off(display_dev);
-    hpi_disp_set_brightness(50);
+
+    uint8_t brightness = hpi_disp_get_brightness();
+    hpi_disp_set_brightness(brightness);
 
     smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SPLASH]);
 }
