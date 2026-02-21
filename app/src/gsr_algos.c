@@ -16,6 +16,11 @@ LOG_MODULE_REGISTER(gsr_algos, LOG_LEVEL_DBG);
 static float gsr_uS[GSR_MAX_SAMPLES];
 static float temp_buf[GSR_MAX_SAMPLES];
 
+#define BIOZ_VREF           1.0f        /* MAX30001 internal reference voltage (V) */
+#define BIOZ_ADC_FULLSCALE  524288.0f   /* 2^19 for 20-bit signed ADC */
+#define BIOZ_MIN_IMPEDANCE  0.1f        /* Minimum valid impedance (Ω) to avoid div-by-zero */
+#define BIOZ_GAIN       20.0f       // bioz-gain=1 → 20 V/V
+#define BIOZ_I_MAG      16e-6f      // bioz_cgmag=2 → 16 µA excitation current
 /*
  * Convert driver-provided BioZ data to µS (microsiemens)
  *
@@ -31,9 +36,28 @@ void convert_raw_to_uS(const int32_t *raw_data, float *gsr_data, int length)
 {
     for (int i = 0; i < length; i++)
     {
-        /* Driver outputs conductance as fixed-point: µS × 1000000 (to preserve precision)
-         * Divide by 1000000 to get actual µS value */
-        gsr_data[i] = (float)raw_data[i] / 1000000.0f;
+        // /* Driver outputs conductance as fixed-point: µS × 1000000 (to preserve precision)
+        //  * Divide by 1000000 to get actual µS value */
+        // gsr_data[i] = (float)raw_data[i] / 100.0f;
+         // Step 1: Calculate electrode voltage from ADC counts
+        float v_electrode = ((float)raw_data[i] / BIOZ_ADC_FULLSCALE) * (BIOZ_VREF / BIOZ_GAIN);
+
+        // Step 2: Calculate impedance (Z = V / I), use absolute value
+        float impedance = fabsf(v_electrode / BIOZ_I_MAG);
+
+            /* Take absolute value (impedance is magnitude) */
+        if (impedance < 0.0f) {
+            impedance = -impedance;
+        }
+
+        /* Guard against divide-by-zero for very low impedance */
+        if (impedance < BIOZ_MIN_IMPEDANCE) {
+            gsr_data[i] = 0.0f;
+        }
+        else {
+        /* Convert to conductance in microsiemens: G (µS) = 1/Z × 10^6 */
+          gsr_data[i] = (1.0f / impedance) * 1e6f;
+        }
     }
 }
 
@@ -276,7 +300,7 @@ void calculate_gsr_stress_index(const int32_t *gsr_data, int sample_count,
     }
 
     // Calculate peaks per minute
-    result->peaks_per_minute = (uint8_t)((scr_count * 60) / duration_sec);
+    result->peaks_per_minute = (uint8_t)scr_count;//per 30s 
 
     // Calculate mean peak amplitude (x100 for integer storage)
     if (scr_count > 0) {
@@ -334,7 +358,7 @@ void calculate_gsr_stress_index(const int32_t *gsr_data, int sample_count,
     result->stress_data_ready = true;
     result->last_peak_timestamp = k_uptime_get();
 
-    LOG_INF("GSR Stress Index: level=%u, tonic=%.2f uS, SCR=%u/min, mean_amp=%.3f uS",
+    LOG_INF("GSR Stress Index: level=%u, tonic=%.2f uS, SCR=%u/30s, mean_amp=%.3f uS",
             result->stress_level, (double)tonic_level, result->peaks_per_minute,
             scr_count > 0 ? (double)(peak_amplitude_sum / scr_count) : 0.0);
 }

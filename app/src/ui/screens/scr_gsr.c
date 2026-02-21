@@ -34,7 +34,7 @@ static lv_obj_t *btn_gsr_measure;
 static lv_obj_t *label_gsr_last_update;
 
 // Multi-metric display labels
-static lv_obj_t *label_scl_value;        // Primary: Tonic level (SCL in uS)
+//static lv_obj_t *label_scl_value;        // Primary: Tonic level (SCL in uS)
 static lv_obj_t *label_scr_rate_value;   // Secondary: SCR rate (/min)
 
 // GSR Data Management
@@ -161,7 +161,7 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
-
+/*
     // PRIMARY METRIC: SCL (Tonic Level) - centered with inline unit
     lv_obj_t *label_scl_title = lv_label_create(scr_gsr);
     lv_label_set_text(label_scl_title, "Tonic Level");
@@ -198,12 +198,13 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_label_set_text(label_scl_unit, " uS");
     lv_obj_add_style(label_scl_unit, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_scl_unit, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(label_scl_unit, 8, LV_PART_MAIN);  // Baseline align with large number
+    lv_obj_set_style_pad_bottom(label_scl_unit, 8, LV_PART_MAIN);  // Baseline align with large number           
+                                                                                                         */
 
     // SECONDARY METRIC: SCR Rate - centered with inline unit
     lv_obj_t *label_scr_title = lv_label_create(scr_gsr);
-    lv_label_set_text(label_scr_title, "SCR Rate");
-    lv_obj_set_pos(label_scr_title, 0, 185);
+    lv_label_set_text(label_scr_title, "SCR ");
+    lv_obj_set_pos(label_scr_title, 0, 100);
     lv_obj_set_width(label_scr_title, 390);
     lv_obj_add_style(label_scr_title, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_align(label_scr_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -213,7 +214,7 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
     lv_obj_t *cont_scr = lv_obj_create(scr_gsr);
     lv_obj_remove_style_all(cont_scr);
     lv_obj_set_size(cont_scr, 390, 70);
-    lv_obj_set_pos(cont_scr, 0, 205);
+    lv_obj_set_pos(cont_scr, 0, 150);
     lv_obj_set_style_bg_opa(cont_scr, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_flex_flow(cont_scr, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(cont_scr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
@@ -230,7 +231,7 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
 
     // Inline /min unit
     lv_obj_t *label_scr_unit = lv_label_create(cont_scr);
-    lv_label_set_text(label_scr_unit, " /min");
+    lv_label_set_text(label_scr_unit, " /30s");
     lv_obj_add_style(label_scr_unit, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_scr_unit, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);
     lv_obj_set_style_pad_bottom(label_scr_unit, 8, LV_PART_MAIN);  // Baseline align with large number
@@ -244,7 +245,7 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
         hpi_helper_get_relative_time_str(gsr_last_update_stored, last_meas_str, sizeof(last_meas_str));
         lv_label_set_text(label_gsr_last_update, last_meas_str);
     }
-    lv_obj_set_pos(label_gsr_last_update, 0, 285);
+    lv_obj_set_pos(label_gsr_last_update, 0, 230);
     lv_obj_set_width(label_gsr_last_update, 390);
     lv_obj_set_style_text_color(label_gsr_last_update, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
     lv_obj_add_style(label_gsr_last_update, &style_caption, LV_PART_MAIN);
@@ -252,8 +253,8 @@ void draw_scr_gsr(enum scroll_dir m_scroll_dir)
 
     // BOTTOM: Start GSR button at y=315
     const int btn_width = 200;
-    const int btn_height = 55;
-    const int btn_y = 315;
+    const int btn_height = 60;
+    const int btn_y = 280;
 
     btn_gsr_measure = hpi_btn_create_primary(scr_gsr);
     lv_obj_set_size(btn_gsr_measure, btn_width, btn_height);
@@ -285,14 +286,14 @@ void hpi_gsr_update_stress_display(const struct hpi_gsr_stress_index_t *stress_i
     if (!stress_index || !stress_index->stress_data_ready) {
         return;
     }
-
+ /*
     // Update SCL (tonic level) - convert from x100 format, rounded to 1 decimal place
     if (label_scl_value != NULL) {
         // Round to 1 decimal place: add 5 to x100 value, then use x10 for display
         uint16_t scl_x10_rounded = (stress_index->tonic_level_x100 + 5) / 10;
         lv_label_set_text_fmt(label_scl_value, "%u.%u", scl_x10_rounded / 10, scl_x10_rounded % 10);
     }
-
+*/
     // Update SCR rate (peaks per minute), number only (unit is separate label)
     if (label_scr_rate_value != NULL) {
         lv_label_set_text_fmt(label_scr_rate_value, "%u", stress_index->peaks_per_minute);

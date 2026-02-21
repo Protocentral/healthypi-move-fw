@@ -382,7 +382,7 @@ void hpi_data_set_gsr_record_active(bool active)
                 if (stress_data.stress_data_ready) {
                     // Publish stress data via ZBus
                     zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
-                    LOG_INF("GSR stress published: level=%u, tonic=%u.%02u uS, SCR=%u/min",
+                    LOG_INF("GSR stress published: level=%u, tonic=%u.%02u uS, SCR=%u/30s",
                             stress_data.stress_level,
                             stress_data.tonic_level_x100 / 100,
                             stress_data.tonic_level_x100 % 100,
@@ -739,7 +739,7 @@ void data_thread(void)
                 // Completed exactly full buffer
                 if (gsr_record_counter >= GSR_RECORD_BUFFER_SAMPLES)
                 {
-                    LOG_WRN("GSR buffer full - collected %d samples(60.0 seconds @ 32Hz)", gsr_record_counter);
+                    LOG_WRN("GSR buffer full - collected %d samples(30.0 seconds @ 32Hz)", gsr_record_counter);
                     LOG_INF("Signaling GSR state machine to stop recording");
                     
                     is_gsr_record_active = false;   // 🔴 CRITICAL
