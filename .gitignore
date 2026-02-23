@@ -65,3 +65,5 @@ app/src/ui/fonts/lv_font_conv/
 app/.DS_Store
 /temp_docs
 CLAUDE.md
+.DS_Store
+app/.DS_Store
