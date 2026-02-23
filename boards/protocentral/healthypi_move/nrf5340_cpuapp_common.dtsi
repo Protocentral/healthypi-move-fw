@@ -162,7 +162,7 @@
 			npm_pmic_buck1: BUCK1 {
 				regulator-min-microvolt = <3000000>;
 				regulator-max-microvolt = <3000000>;
-				regulator-initial-mode = <NPM13XX_BUCK_MODE_AUTO>;
+				regulator-initial-mode = <NPM13XX_BUCK_MODE_PWM>;
 			};
 
 			// BUCK2 is 1.8V, used to power all sensors - except Finger Sensor
@@ -228,6 +228,10 @@
 		zephyr,deferred-init;
 	};
 
+	/* MAX32664D - Finger PPG sensor hub on I2C1
+	 * Address 0x55 — same as MAXM86146/MAX32664C on I2C2 (different bus, no conflict)
+	 * GPIOs: P1.06 (reset), P1.07 (mfio) — finger PPG slot
+	 */
 	max32664d: max32664d@55 {
 		compatible = "maxim,max32664";
 		reg = <0x55>;
@@ -248,8 +252,14 @@
 	zephyr,concat-buf-size = <8250>;
 	zephyr,flash-buf-max-size = <8250>;
 
-	max32664c: max32664c@55 {
-		compatible = "maxim,max32664c";
+	/* MAXM86146 - Integrated optical biosensing module on I2C2
+	 * Replaces MAX32664C on the same bus with the same pins
+	 * Address 0x55 — same as MAX32664D on I2C1 (different bus, no conflict)
+	 * GPIOs: P1.08 (reset), P0.28 (mfio) — wrist PPG slot
+	 * Runtime detection in hw_module.c determines which chip is present
+	 */
+	maxm86146: maxm86146@55 {
+		compatible = "maxim,maxm86146";
 		reg = <0x55>;
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
@@ -257,13 +267,11 @@
 		zephyr,deferred-init;
 	};
 
-	/* MAXM86146 - Integrated optical biosensing module
-	 * Uses same I2C address (0x55) and GPIOs as MAX32664C
-	 * Only one of MAX32664C or MAXM86146 can be present at a time
-	 * Runtime detection in hw_module.c determines which chip is present
+	/* MAX32664C - Wrist PPG sensor hub (alternative to MAXM86146)
+	 * Same address and pins — runtime detection picks whichever is populated
 	 */
-	maxm86146: maxm86146@55 {
-		compatible = "maxim,maxm86146";
+	max32664c: max32664c@55 {
+		compatible = "maxim,max32664c";
 		reg = <0x55>;
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
@@ -282,6 +290,16 @@
 		compatible = "maxim,max30208";
 		status = "okay";
 		reg = <0x52>;
+		zephyr,deferred-init;
+	};
+
+	/* AS6221 - Alternative temperature sensor (when MAX30208 is not populated)
+	 * Runtime detection in hw_module.c tries MAX30208 first, then AS6221
+	 */
+	as6221: as6221@48 {
+		compatible = "ams,as6221";
+		status = "okay";
+		reg = <0x48>;
 		zephyr,deferred-init;
 	};
 };

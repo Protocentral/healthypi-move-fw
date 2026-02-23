@@ -756,6 +756,10 @@ static void st_display_boot_run(void *o)
         {
             msg = "MAX32664C \n FW Update Required";
         }
+        else if (device_type == MAX32664_UPDATER_DEV_TYPE_MAXM86146)
+        {
+            msg = "MAXM86146 \n FW Update Required";
+        }
         else
         {
             msg = "MAX32664D \n FW Update Required";

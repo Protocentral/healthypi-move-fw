@@ -1,0 +1,8 @@
+# Copyright (c) 2025 ProtoCentral Electronics
+# SPDX-License-Identifier: Apache-2.0
+
+description: AMS AS6221 digital temperature sensor
+
+compatible: "ams,as6221"
+
+include: [sensor-device.yaml, i2c-device.yaml]

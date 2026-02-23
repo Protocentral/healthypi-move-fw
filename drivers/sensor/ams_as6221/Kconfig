@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config AMS_AS6221
+	bool "AMS AS6221 digital temperature sensor"
+	default y
+	depends on DT_HAS_AMS_AS6221_ENABLED
+	depends on I2C
+	help
+	  Enable driver for the AMS AS6221 digital temperature sensor.
+	  16-bit resolution (0.0078125 C/LSB), I2C interface.

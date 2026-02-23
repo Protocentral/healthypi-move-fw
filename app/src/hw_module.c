@@ -102,12 +102,17 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 // MSBL firmware file paths - must match max32664_updater.c
 #define MAX32664C_FW_PATH "/lfs/sys/max32664c_30_13_31.msbl"
 #define MAX32664D_FW_PATH "/lfs/sys/max32664d_40_6_0.msbl"
+#define MAXM86146_FW_PATH "/lfs/sys/maxm86146.msbl"
 
 char curr_string[40];
 
 // Peripheral Device Pointers
 static const struct device *max30208a50_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a50));
 static const struct device *max30208a52_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a52));
+static const struct device *as6221_dev = DEVICE_DT_GET(DT_NODELABEL(as6221));
+
+/* Generic temperature sensor pointer — set at init to whichever sensor is present */
+static const struct device *temp_dev = NULL;
 
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
@@ -128,6 +133,7 @@ static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
 const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); // DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
 const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
+const struct device *i2c1_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 const struct device *i2c2_dev = DEVICE_DT_GET(DT_NODELABEL(i2c2));
 
 // LED Power DC/DC Enable
@@ -137,6 +143,7 @@ volatile bool max30001_device_present = false;
 volatile bool max32664c_device_present = false;
 volatile bool max32664d_device_present = false;
 volatile bool maxm86146_device_present = false;
+static bool ppg_hub_fw_update_in_progress = false;
 
 /* PPG Hub abstraction - tracks which wrist PPG sensor is active */
 static enum ppg_hub_type detected_ppg_hub = PPG_HUB_NONE;
@@ -144,65 +151,91 @@ static enum ppg_hub_type detected_ppg_hub = PPG_HUB_NONE;
 static volatile bool vbus_connected;
 
 /**
- * @brief Scan I2C2 bus for available devices
+ * @brief Scan a single I2C bus for available devices
  *
- * This function scans the I2C2 bus from address 0x08 to 0x77 to detect
- * which devices are present. Used for debugging purposes during initialization.
- *
- * @note This function should only be called during initialization/debugging
- * as it can temporarily block the I2C bus while scanning.
+ * Scans addresses 0x08–0x77, logging each device found along with
+ * a human-readable label for known addresses.
  */
-static void i2c2_bus_scan_debug(void)
+static void i2c_bus_scan(const struct device *i2c_dev, const char *bus_name)
 {
-    LOG_INF("=== I2C2 Bus Scan Debug ===");
+    LOG_INF("=== %s Bus Scan ===", bus_name);
 
-    if (!device_is_ready(i2c2_dev))
+    if (!device_is_ready(i2c_dev))
     {
-        LOG_ERR("I2C2 device not ready for scanning");
+        LOG_ERR("%s device not ready for scanning", bus_name);
         return;
     }
 
     int devices_found = 0;
     uint8_t dummy_data = 0;
 
-    // Scan addresses from 0x08 to 0x77 (avoid reserved addresses)
     for (uint8_t addr = 0x08; addr <= 0x77; addr++)
     {
-        // Try to read 1 byte from the device
-        int ret = i2c_read(i2c2_dev, &dummy_data, 1, addr);
+        int ret = i2c_read(i2c_dev, &dummy_data, 1, addr);
 
         if (ret == 0)
         {
-            LOG_INF("I2C device found at address 0x%02X", addr);
-            devices_found++;
+            const char *label;
 
-            // Add specific device identification for known addresses
             switch (addr)
             {
-            case 0x50:
-                LOG_INF("  -> Expected: MAX30208 temperature sensor");
+            /* I2C1 devices */
+            case 0x2E:
+                label = "CHSC5816 touch controller";
                 break;
             case 0x55:
-                LOG_INF("  -> Expected: MAX32664C bio-sensor hub");
+                label = "MAX32664C/D or MAXM86146 bio-sensor hub";
+                break;
+            case 0x68:
+                label = "BMI323 IMU";
+                break;
+            case 0x6B:
+                label = "NPM1300 PMIC";
+                break;
+            case 0x51:
+                label = "RV8263 RTC";
+                break;
+            /* I2C2 devices */
+            case 0x48:
+                label = "AS6221 temp sensor";
+                break;
+            case 0x50:
+                label = "MAX30208 temp sensor (addr A)";
+                break;
+            case 0x52:
+                label = "MAX30208 temp sensor (addr B)";
                 break;
             default:
-                LOG_INF("  -> Unknown device");
+                label = "Unknown";
                 break;
             }
+
+            LOG_INF("  0x%02X  -> %s", addr, label);
+            devices_found++;
         }
 
-        // Small delay between scans to be gentle on the bus
         k_usleep(100);
     }
 
-    LOG_INF("I2C2 scan complete. Found %d device(s)", devices_found);
-
     if (devices_found == 0)
     {
-        LOG_WRN("No I2C devices found on bus 2. Check connections and power.");
+        LOG_WRN("%s: no devices found — check connections/power", bus_name);
+    }
+    else
+    {
+        LOG_INF("%s: %d device(s) found", bus_name, devices_found);
     }
 
-    LOG_INF("=== End I2C2 Bus Scan ===");
+    LOG_INF("=== End %s Bus Scan ===", bus_name);
+}
+
+/**
+ * @brief Scan both I2C1 and I2C2 buses at startup for debugging
+ */
+static void i2c_bus_scan_all(void)
+{
+    i2c_bus_scan(i2c1_dev, "I2C1");
+    i2c_bus_scan(i2c2_dev, "I2C2");
 }
 
 // USB CDC UART
@@ -457,14 +490,20 @@ static int usb_init()
 
 double read_temp_f(void)
 {
+    if (temp_dev == NULL)
+    {
+        return 0.0;
+    }
+
     struct sensor_value temp_sample;
 
-    sensor_sample_fetch(max30208a50_dev);
-    sensor_channel_get(max30208a50_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
-    // last_read_temp_value = temp_sample.val1;
-    double temp_c = (double)temp_sample.val1 * 0.005;
+    sensor_sample_fetch(temp_dev);
+    sensor_channel_get(temp_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
+
+    /* Both MAX30208 and AS6221 now return standard Zephyr sensor_value format */
+    double temp_c = (double)temp_sample.val1 + (double)temp_sample.val2 / 1000000.0;
     double temp_f = (temp_c * 1.8) + 32.0;
-    // printk("Temp: %.2f F\n", temp_f);
+
     return temp_f;
 }
 
@@ -773,11 +812,11 @@ void hw_module_init(void)
     float boot_batt_voltage = 0.0f;
 
     // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
-    NRF_TWIM2->FREQUENCY = 0x06200000;
-    NRF_TWIM1->FREQUENCY = 0x06200000;
+    NRF_TWIM1->FREQUENCY = 0x06200000;  // ~390kHz
+    NRF_TWIM2->FREQUENCY = 0x06200000;  // ~390kHz
 
-    // Debug: Scan I2C2 bus for available devices before initialization
-    // i2c2_bus_scan_debug();
+    // Debug: Scan both I2C buses for available devices before initialization
+    i2c_bus_scan_all();
 
     if (!device_is_ready(pmic))
     {
@@ -928,216 +967,23 @@ void hw_module_init(void)
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(100));
 
-    /* Path of the one-shot reboot-attempt marker stored in LFS */
-    const char *max32664c_reboot_marker = "/lfs/sys/max32664c_reboot_attempt";
-
-    device_init(max32664c_dev);
+    /* ===================================================================
+     * MAXM86146 detection on I2C2 (wrist PPG — integrated optical module)
+     * MAXM86146 is on a separate I2C bus from MAX32664C/D (which is on I2C1).
+     * =================================================================== */
+    device_init(maxm86146_dev);
     k_sleep(K_MSEC(100));
 
-    if (!device_is_ready(max32664c_dev))
+    if (device_is_ready(maxm86146_dev))
     {
-        LOG_ERR("MAX32664C device not present!");
-
-        /* Check if we've already attempted a reboot previously by checking the marker file */
-        int rc = fs_check_file_exists(max32664c_reboot_marker);
-        if (rc == 0)
-        {
-            /* Marker exists -> this is the second boot after an attempted reboot.
-             * Clear the marker and proceed without rebooting again. */
-            LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
-            /* Try to remove the marker file using fs_unlink; retry a few times if it fails. */
-            int unlink_rc = -1;
-            const int max_unlink_retries = 3;
-            for (int i = 0; i < max_unlink_retries; i++)
-            {
-                unlink_rc = fs_unlink(max32664c_reboot_marker);
-                if (unlink_rc == 0)
-                {
-                    LOG_DBG("Reboot marker removed on attempt %d: %s", i + 1, max32664c_reboot_marker);
-                    break;
-                }
-                else
-                {
-                    LOG_DBG("Attempt %d: unlink returned %d, retrying...", i + 1, unlink_rc);
-                    k_sleep(K_MSEC(50));
-                }
-            }
-
-            /* Final verification: check whether the file still exists. */
-            int exists_after_unlink = fs_check_file_exists(max32664c_reboot_marker);
-            if (exists_after_unlink == 0)
-            {
-                LOG_WRN("Reboot marker still present after unlink attempts: %s", max32664c_reboot_marker);
-            }
-            else
-            {
-                LOG_DBG("Reboot marker cleared: %s", max32664c_reboot_marker);
-            }
-
-            max32664c_device_present = false;
-            hw_add_boot_msg("MAX32664C", false, true, false, 0);
-        }
-        else
-        {
-            LOG_INF("MAX32664C probe failed; creating reboot marker and rebooting to recover I2C bus");
-            uint8_t marker_data[1] = {1};
-            fs_write_buffer_to_file((char *)max32664c_reboot_marker, marker_data, sizeof(marker_data));
-            int exists = fs_check_file_exists(max32664c_reboot_marker);
-            if (exists != 0)
-            {
-                LOG_ERR("Failed to create reboot marker '%s' (rc=%d) - will not reboot to avoid loop", max32664c_reboot_marker, exists);
-                max32664c_device_present = false;
-                hw_add_boot_msg("MAX32664C", false, true, false, 0);
-            }
-            else
-            {
-                k_sleep(K_MSEC(100));
-                sys_reboot(SYS_REBOOT_COLD);
-            }
-        }
-    }
-    else
-    {
-        /* Device responded - now identify which chip by reading firmware prefix */
+        /* Device responded on I2C2 — check FW prefix to see if it has valid firmware */
         struct sensor_value fw_prefix;
-        sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_FW_PREFIX, &fw_prefix);
-        LOG_INF("PPG Hub FW prefix: %d", fw_prefix.val1);
+        sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_FW_PREFIX, &fw_prefix);
+        LOG_INF("MAXM86146 FW prefix: %d", fw_prefix.val1);
 
         if (fw_prefix.val1 == MAXM86146_FW_VERSION_PREFIX)
         {
-            /* This is actually MAXM86146 - switch to using that driver */
-            LOG_INF("Detected MAXM86146 (FW prefix %d) - switching to MAXM86146 driver", fw_prefix.val1);
-
-            device_init(maxm86146_dev);
-            k_sleep(K_MSEC(100));
-
-            if (device_is_ready(maxm86146_dev))
-            {
-                hw_add_boot_msg("MAXM86146", true, true, false, 0);
-                LOG_INF("MAXM86146 device present!");
-                maxm86146_device_present = true;
-                detected_ppg_hub = PPG_HUB_MAXM86146;
-
-                struct sensor_value ver_get;
-                sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_APP_VER, &ver_get);
-                LOG_INF("MAXM86146 App Version: %d.%d", ver_get.val1, ver_get.val2);
-                char ver_msg[10] = {0};
-                snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
-                hw_add_boot_msg(ver_msg, true, false, false, 0);
-
-                struct sensor_value sensor_ids_get;
-                sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_SENSOR_IDS, &sensor_ids_get);
-
-                /* MAXM86146 has integrated AFE - accept various IDs */
-                LOG_INF("MAXM86146 AFE ID: 0x%02x, Accel ID: 0x%02x", sensor_ids_get.val1, sensor_ids_get.val2);
-                hw_add_boot_msg("\t AFE", true, true, false, 0);
-
-                if (sensor_ids_get.val2 == MAXM86146_ACC_ID)
-                {
-                    LOG_INF("MAXM86146 Accel OK");
-                    hw_add_boot_msg("\t Acc", true, true, false, 0);
-                }
-                else
-                {
-                    LOG_WRN("MAXM86146 Accel ID unexpected: 0x%02x", sensor_ids_get.val2);
-                    hw_add_boot_msg("\t Acc", true, true, false, 0);
-                }
-
-                k_sem_give(&sem_ppg_wrist_sm_start);
-            }
-            else
-            {
-                LOG_ERR("MAXM86146 driver init failed after FW prefix detection");
-                hw_add_boot_msg("MAXM86146", false, true, false, 0);
-            }
-        }
-        else
-        {
-            /* This is MAX32664C (prefix 32 or other) */
-            hw_add_boot_msg("MAX32664C", true, true, false, 0);
-            LOG_INF("MAX32664C device present (FW prefix %d)!", fw_prefix.val1);
-            max32664c_device_present = true;
-            detected_ppg_hub = PPG_HUB_MAX32664C;
-
-            struct sensor_value ver_get;
-            sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_APP_VER, &ver_get);
-            LOG_INF("MAX32664C App Version: %d.%d", ver_get.val1, ver_get.val2);
-            char ver_msg[10] = {0};
-            snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
-            hw_add_boot_msg(ver_msg, true, false, false, 0);
-
-            struct sensor_value sensor_ids_get;
-            sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_SENSOR_IDS, &sensor_ids_get);
-
-            if (sensor_ids_get.val1 != MAX32664C_AFE_ID)
-            {
-                LOG_ERR("MAX32664C AFE Not Present");
-                hw_add_boot_msg("\t AFE", false, true, false, 0);
-            }
-            else
-            {
-                LOG_INF("MAX32664C AFE OK: %x", sensor_ids_get.val1);
-                hw_add_boot_msg("\t AFE", true, true, false, 0);
-            }
-
-            if (sensor_ids_get.val2 != MAX32664C_ACC_ID)
-            {
-                LOG_ERR("MAX32664C Accel Not Present");
-                hw_add_boot_msg("\t Acc", false, true, false, 0);
-            }
-            else
-            {
-                LOG_INF("MAX32664C Accel OK: %x", sensor_ids_get.val2);
-                hw_add_boot_msg("\t Acc", true, true, false, 0);
-            }
-
-            bool update_required_c = false;
-
-#ifdef FORCE_MAX32664C_UPDATE_FOR_TESTING
-            // Force update for testing purposes (compile-time)
-            update_required_c = true;
-            LOG_INF("MAX32664C Force update enabled for testing (compile-time)");
-            hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
-#else
-            // Normal version check
-            if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
-            {
-                update_required_c = true;
-                LOG_INF("MAX32664C App update required");
-                hw_add_boot_msg("\tUpdate required", false, false, false, 0);
-            }
-#endif
-
-            if (update_required_c)
-            {
-                // Check if MSBL file exists before starting update
-                if (!hw_check_msbl_file_exists(MAX32664C_FW_PATH))
-                {
-                    LOG_ERR("MAX32664C MSBL file not available - skipping update");
-                    hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
-                    hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
-                }
-                else
-                {
-                    k_sem_give(&sem_boot_update_req);
-                    max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
-                }
-            }
-
-            k_sem_give(&sem_ppg_wrist_sm_start);
-        }
-    }
-
-    /* If no PPG hub was detected via FW prefix, and MAX32664C probe failed, try MAXM86146 fallback */
-    if (!max32664c_device_present && !maxm86146_device_present)
-    {
-        LOG_INF("Trying MAXM86146 as alternative wrist PPG sensor...");
-
-        device_init(maxm86146_dev);
-        k_sleep(K_MSEC(100));
-
-        if (device_is_ready(maxm86146_dev))
-        {
+            /* Valid MAXM86146 firmware detected */
             hw_add_boot_msg("MAXM86146", true, true, false, 0);
             LOG_INF("MAXM86146 device present!");
             maxm86146_device_present = true;
@@ -1153,23 +999,12 @@ void hw_module_init(void)
             struct sensor_value sensor_ids_get;
             sensor_attr_get(maxm86146_dev, SENSOR_CHAN_ALL, MAXM86146_ATTR_SENSOR_IDS, &sensor_ids_get);
 
-            /* MAXM86146 has integrated AFE - may report different ID */
-            if (sensor_ids_get.val1 == MAXM86146_INTEGRATED_AFE_ID ||
-                sensor_ids_get.val1 == MAXM86146_AFE_ID_ALT)
-            {
-                LOG_INF("MAXM86146 AFE OK: 0x%02x", sensor_ids_get.val1);
-                hw_add_boot_msg("\t AFE", true, true, false, 0);
-            }
-            else
-            {
-                LOG_WRN("MAXM86146 AFE ID unexpected: 0x%02x", sensor_ids_get.val1);
-                hw_add_boot_msg("\t AFE", true, true, false, 0);
-            }
+            LOG_INF("MAXM86146 AFE ID: 0x%02x, Accel ID: 0x%02x", sensor_ids_get.val1, sensor_ids_get.val2);
+            hw_add_boot_msg("\t AFE", true, true, false, 0);
 
-            /* MAXM86146 may not have accelerometer */
             if (sensor_ids_get.val2 == MAXM86146_ACC_ID)
             {
-                LOG_INF("MAXM86146 Accel OK: 0x%02x", sensor_ids_get.val2);
+                LOG_INF("MAXM86146 Accel OK");
                 hw_add_boot_msg("\t Acc", true, true, false, 0);
             }
             else
@@ -1182,13 +1017,192 @@ void hw_module_init(void)
         }
         else
         {
-            LOG_WRN("MAXM86146 also not detected - no wrist PPG sensor available");
-            hw_add_boot_msg("MAXM86146", false, true, false, 0);
+            /* Chip responds on I2C2 but FW prefix is wrong (0xFF=unprogrammed, 8=bootloader, etc.)
+             * Trigger MAXM86146 MSBL firmware update using the maxm86146_dev (I2C2 GPIOs).
+             */
+            LOG_WRN("MAXM86146 has unknown FW prefix %d — needs firmware!", fw_prefix.val1);
+            hw_add_boot_msg("MAXM86146 BL", true, true, false, 0);
+            hw_add_boot_msg("\tFW update req", false, false, false, 0);
+
+            if (!hw_check_msbl_file_exists(MAXM86146_FW_PATH))
+            {
+                LOG_ERR("MAXM86146 MSBL file not available at %s - skipping update", MAXM86146_FW_PATH);
+                hw_add_boot_msg("\tMSBL missing", false, true, false, 0);
+            }
+            else
+            {
+                ppg_hub_fw_update_in_progress = true;
+                k_sem_give(&sem_boot_update_req);
+                max32664_updater_start(maxm86146_dev, MAX32664_UPDATER_DEV_TYPE_MAXM86146);
+            }
+        }
+    }
+    else
+    {
+        LOG_INF("MAXM86146 not present on I2C2");
+    }
+
+    /* ===================================================================
+     * MAX32664C detection on I2C1 (wrist PPG — external AFE variant)
+     * Only present on boards that don't have MAXM86146 on I2C2.
+     * =================================================================== */
+    if (!maxm86146_device_present && !ppg_hub_fw_update_in_progress)
+    {
+        /* Path of the one-shot reboot-attempt marker stored in LFS */
+        const char *max32664c_reboot_marker = "/lfs/sys/max32664c_reboot_attempt";
+
+        device_init(max32664c_dev);
+        k_sleep(K_MSEC(100));
+
+        if (!device_is_ready(max32664c_dev))
+        {
+            LOG_ERR("MAX32664C device not present on I2C1!");
+
+            int rc = fs_check_file_exists(max32664c_reboot_marker);
+            if (rc == 0)
+            {
+                LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
+                int unlink_rc = -1;
+                const int max_unlink_retries = 3;
+                for (int i = 0; i < max_unlink_retries; i++)
+                {
+                    unlink_rc = fs_unlink(max32664c_reboot_marker);
+                    if (unlink_rc == 0)
+                    {
+                        LOG_DBG("Reboot marker removed on attempt %d: %s", i + 1, max32664c_reboot_marker);
+                        break;
+                    }
+                    else
+                    {
+                        LOG_DBG("Attempt %d: unlink returned %d, retrying...", i + 1, unlink_rc);
+                        k_sleep(K_MSEC(50));
+                    }
+                }
+
+                int exists_after_unlink = fs_check_file_exists(max32664c_reboot_marker);
+                if (exists_after_unlink == 0)
+                {
+                    LOG_WRN("Reboot marker still present after unlink attempts: %s", max32664c_reboot_marker);
+                }
+                else
+                {
+                    LOG_DBG("Reboot marker cleared: %s", max32664c_reboot_marker);
+                }
+
+                max32664c_device_present = false;
+                hw_add_boot_msg("MAX32664C", false, true, false, 0);
+            }
+            else
+            {
+                LOG_INF("MAX32664C probe failed; creating reboot marker and rebooting to recover I2C bus");
+                uint8_t marker_data[1] = {1};
+                fs_write_buffer_to_file((char *)max32664c_reboot_marker, marker_data, sizeof(marker_data));
+                int exists = fs_check_file_exists(max32664c_reboot_marker);
+                if (exists != 0)
+                {
+                    LOG_ERR("Failed to create reboot marker '%s' (rc=%d) - will not reboot to avoid loop", max32664c_reboot_marker, exists);
+                    max32664c_device_present = false;
+                    hw_add_boot_msg("MAX32664C", false, true, false, 0);
+                }
+                else
+                {
+                    k_sleep(K_MSEC(100));
+                    sys_reboot(SYS_REBOOT_COLD);
+                }
+            }
+        }
+        else
+        {
+            struct sensor_value fw_prefix;
+            sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_FW_PREFIX, &fw_prefix);
+            LOG_INF("I2C1 PPG Hub FW prefix: %d", fw_prefix.val1);
+
+            if (fw_prefix.val1 == MAX32664C_FW_VERSION_PREFIX)
+            {
+                hw_add_boot_msg("MAX32664C", true, true, false, 0);
+                LOG_INF("MAX32664C device present (FW prefix %d)!", fw_prefix.val1);
+                max32664c_device_present = true;
+                detected_ppg_hub = PPG_HUB_MAX32664C;
+
+                struct sensor_value ver_get;
+                sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_APP_VER, &ver_get);
+                LOG_INF("MAX32664C App Version: %d.%d", ver_get.val1, ver_get.val2);
+                char ver_msg[10] = {0};
+                snprintf(ver_msg, sizeof(ver_msg), "\t v%d.%d", ver_get.val1, ver_get.val2);
+                hw_add_boot_msg(ver_msg, true, false, false, 0);
+
+                struct sensor_value sensor_ids_get;
+                sensor_attr_get(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_SENSOR_IDS, &sensor_ids_get);
+
+                if (sensor_ids_get.val1 != MAX32664C_AFE_ID)
+                {
+                    LOG_ERR("MAX32664C AFE Not Present");
+                    hw_add_boot_msg("\t AFE", false, true, false, 0);
+                }
+                else
+                {
+                    LOG_INF("MAX32664C AFE OK: %x", sensor_ids_get.val1);
+                    hw_add_boot_msg("\t AFE", true, true, false, 0);
+                }
+
+                if (sensor_ids_get.val2 != MAX32664C_ACC_ID)
+                {
+                    LOG_ERR("MAX32664C Accel Not Present");
+                    hw_add_boot_msg("\t Acc", false, true, false, 0);
+                }
+                else
+                {
+                    LOG_INF("MAX32664C Accel OK: %x", sensor_ids_get.val2);
+                    hw_add_boot_msg("\t Acc", true, true, false, 0);
+                }
+
+                bool update_required_c = false;
+
+#ifdef FORCE_MAX32664C_UPDATE_FOR_TESTING
+                update_required_c = true;
+                LOG_INF("MAX32664C Force update enabled for testing (compile-time)");
+                hw_add_boot_msg("\tForce update (test)", false, false, false, 0);
+#else
+                if ((ver_get.val1 < hpi_max32664c_req_ver.major) || (ver_get.val2 < hpi_max32664c_req_ver.minor))
+                {
+                    update_required_c = true;
+                    LOG_INF("MAX32664C App update required");
+                    hw_add_boot_msg("\tUpdate required", false, false, false, 0);
+                }
+#endif
+
+                if (update_required_c)
+                {
+                    if (!hw_check_msbl_file_exists(MAX32664C_FW_PATH))
+                    {
+                        LOG_ERR("MAX32664C MSBL file not available - skipping update");
+                        hw_add_boot_msg("\tMSBL file missing", false, true, false, 0);
+                        hw_add_boot_msg("\tUpdate skipped", false, false, false, 0);
+                    }
+                    else
+                    {
+                        k_sem_give(&sem_boot_update_req);
+                        max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+                    }
+                }
+
+                k_sem_give(&sem_ppg_wrist_sm_start);
+            }
+            else
+            {
+                /* I2C1 device at 0x55 has non-MAX32664C prefix — could be MAX32664D.
+                 * Don't treat as error; MAX32664D detection runs next.
+                 */
+                LOG_INF("I2C1 0x55 device FW prefix %d is not MAX32664C — will try MAX32664D", fw_prefix.val1);
+            }
         }
     }
 
     LOG_INF("PPG Hub detected: %s", ppg_hub_get_type_string());
 
+    /* MAX32664D (finger PPG) — disabled to isolate MAXM86146 debugging.
+     * Re-enable by setting status = "okay" in the max32664d DT node. */
+#if 0
     device_init(max32664d_dev);
     k_sleep(K_MSEC(100));
 
@@ -1251,6 +1265,11 @@ void hw_module_init(void)
         /* Power down FI sensor after successful boot-time detection/self-test */
         hpi_hw_fi_sensor_off();
     }
+#else
+    LOG_INF("MAX32664D disabled — skipping init");
+    max32664d_device_present = false;
+    hpi_hw_fi_sensor_off();
+#endif
 
     // Confirm MCUBoot image if not already confirmed by app
     if (boot_is_img_confirmed())
@@ -1272,33 +1291,50 @@ void hw_module_init(void)
 
     // setup_pmic_callbacks();
 
+    /* Temperature sensor detection: try MAX30208 @50, then @52, then AS6221 @48 */
     device_init(max30208a50_dev);
     k_sleep(K_MSEC(100));
 
-    if (!device_is_ready(max30208a50_dev))
+    if (device_is_ready(max30208a50_dev))
     {
-        LOG_ERR("MAX30208A50 device not found!");
+        temp_dev = max30208a50_dev;
+        LOG_INF("MAX30208 @50 device found!");
+        hw_add_boot_msg("MAX30208 @50", true, true, false, 0);
+    }
+    else
+    {
+        LOG_WRN("MAX30208 @50 not found, trying @52...");
         hw_add_boot_msg("MAX30208 @50", false, true, false, 0);
 
         device_init(max30208a52_dev);
         k_sleep(K_MSEC(100));
 
-        if (!device_is_ready(max30208a52_dev))
+        if (device_is_ready(max30208a52_dev))
         {
-            LOG_ERR("MAX30208A52 device not found!");
-            hw_add_boot_msg("MAX30208 @52", false, true, false, 0);
+            temp_dev = max30208a52_dev;
+            LOG_INF("MAX30208 @52 device found!");
+            hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
         }
         else
         {
-            max30208a50_dev = max30208a52_dev; // Use the device with address 0x52
-            LOG_INF("MAX30208A52 device found!");
-            hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
+            LOG_WRN("MAX30208 @52 not found, trying AS6221 @48...");
+            hw_add_boot_msg("MAX30208 @52", false, true, false, 0);
+
+            device_init(as6221_dev);
+            k_sleep(K_MSEC(100));
+
+            if (device_is_ready(as6221_dev))
+            {
+                temp_dev = as6221_dev;
+                LOG_INF("AS6221 @48 device found!");
+                hw_add_boot_msg("AS6221 @48", true, true, false, 0);
+            }
+            else
+            {
+                LOG_ERR("No temperature sensor found!");
+                hw_add_boot_msg("Temp sensor", false, true, false, 0);
+            }
         }
-    }
-    else
-    {
-        LOG_INF("MAX30208A50 device found!");
-        hw_add_boot_msg("MAX30208A50 @50", true, true, false, 0);
     }
 
     hw_add_boot_msg("Boot complete !!", true, false, false, 0);
