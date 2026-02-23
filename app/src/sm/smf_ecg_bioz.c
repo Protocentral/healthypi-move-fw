@@ -1442,7 +1442,10 @@ static void st_ecg_complete_entry(void *o)
     } else {
         // ECG recording complete - signal ECG completion
         if(!ecg_cancellation)
+        {
              k_sem_give(&sem_ecg_complete_reset);
+             ecg_cancellation = true; // To avoid duplicate file write in idle state
+        }
     }
 }
 
