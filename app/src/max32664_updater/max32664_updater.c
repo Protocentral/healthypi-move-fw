@@ -307,18 +307,23 @@ static int m_fw_write_page(const struct device *dev, struct fs_file_t *file, uin
 
 	// Combined cmd+data in single I2C write (required — separate writes return 0x01)
 	gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_USEC(300));
+	k_sleep(K_MSEC(5)); // Extended pre-delay (was 300μs) — give MAXM86146 more setup time
 
 	int ret = i2c_write_dt(&config->i2c, page_buffer, 2 + MAX32664C_FW_UPDATE_WRITE_SIZE);
 	if (ret < 0) {
-		LOG_ERR("Page write failed: %d", ret);
+		LOG_ERR("Page I2C write failed: %d", ret);
 		gpio_pin_set_dt(&config->mfio_gpio, 1);
 		k_free(page_buffer);
 		return ret;
 	}
 
+	/* Post-write settling delay — let the level translator (TXS0102) one-shot
+	 * circuits recover after the sustained 8KB transfer before the device
+	 * starts flash programming. */
+	k_sleep(K_MSEC(50));
+
 	// Wait for flash programming (MFIO stays LOW)
-	k_sleep(K_MSEC(1500));
+	k_sleep(K_MSEC(2500)); // Extended wait (was 1500ms)
 
 	ret = i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	if (ret < 0) {
@@ -561,6 +566,7 @@ static int verify_firmware_files_exist(void)
 
 static int max32664_load_fw(const struct device *dev, const char *fw_file_path, bool is_sim)
 {
+	const struct max32664_config *config = dev->config;
 	uint8_t msbl_num_pages = 0;
 	struct fs_file_t file;
 	struct fs_dirent entry;
@@ -744,13 +750,29 @@ static int max32664_load_fw(const struct device *dev, const char *fw_file_path, 
 
 			uint32_t msbl_page_offset = (MAX32664C_FW_UPDATE_START_ADDR + (i * MAX32664C_FW_UPDATE_WRITE_SIZE));
 
-			ret = m_fw_write_page(dev, &file, msbl_page_offset);
-			if (ret < 0)
+			/* Per-page retry with bus recovery — the level translator can
+			 * corrupt individual page transfers. Bus recovery (SCL toggling)
+			 * clears any stuck state before retrying. */
+			int page_ret = -1;
+			for (int page_retry = 0; page_retry < 3; page_retry++) {
+				if (page_retry > 0) {
+					LOG_WRN("Page %d retry %d/3 — recovering I2C bus", i, page_retry + 1);
+					i2c_recover_bus(config->i2c.bus);
+					k_sleep(K_MSEC(500));
+				}
+				page_ret = m_fw_write_page(dev, &file, msbl_page_offset);
+				if (page_ret == 0) {
+					break;
+				}
+				LOG_WRN("Page %d write failed (attempt %d): %d", i, page_retry + 1, page_ret);
+			}
+
+			if (page_ret < 0)
 			{
-				LOG_ERR("Failed to write firmware page %d, error: %d", i, ret);
+				LOG_ERR("Failed to write firmware page %d after 3 attempts, error: %d", i, page_ret);
 				fs_close(&file);
 				update_progress(_progress_counter, MAX32664_UPDATER_STATUS_FAILED);
-				return ret;
+				return page_ret;
 			}
 
 			// Page written successfully - minimal logging
