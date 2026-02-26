@@ -454,7 +454,7 @@ static void trend_sys_time_listener(const struct zbus_channel *chan)
     const struct tm *sys_time = zbus_chan_const_msg(chan);
     m_trend_sys_time_tm = *sys_time;
     m_trend_time_ts = timeutil_timegm64(sys_time); 
-    m_trend_time_ts -= timezone_offset_sec; // Remove timezone offset because we are getting UTC epoch from sys_time_chan.
+    m_trend_time_ts -= timezone_offset_sec; // Remove timezone offset because we are getting UTC epoch from timeutil_timegm64()
     // LOG_DBG("Sys TS: %" PRIx64, m_trend_time_ts);
 }
 ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
