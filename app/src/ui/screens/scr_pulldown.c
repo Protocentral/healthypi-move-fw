@@ -247,8 +247,8 @@ void hpi_disp_settings_update_batt_level(int batt_level, bool charging)
     
     // Format with charging indicator if applicable
     if (charging) {
-        lv_label_set_text_fmt(label_pulldown_batt_val, "%s %s %d %%", 
-                              LV_SYMBOL_CHARGE, battery_symbol, batt_level);
+        lv_label_set_text_fmt(label_pulldown_batt_val, "%s %d %%", 
+                              battery_symbol, batt_level);
     } else {
         lv_label_set_text_fmt(label_pulldown_batt_val, "%s %d %%", 
                               battery_symbol, batt_level);
