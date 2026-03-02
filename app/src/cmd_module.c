@@ -56,7 +56,7 @@ uint8_t log_type=0;
 
 // Externs
 extern int global_dev_status;
-
+extern int16_t timezone_offset_sec;
 extern struct k_sem sem_bpt_enter_mode_cal;
 extern struct k_sem sem_bpt_cal_start;
 extern struct k_sem sem_bpt_exit_mode_cal;
@@ -75,6 +75,9 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         break;
     case HPI_CMD_SET_DEVICE_TIME:
         LOG_DBG("RX CMD Set Time");
+        /* Update global timezone offset variable with timezone difference between local time and UTC time, sent by phone app in minutes.
+         This will be used to convert between local time and UTC time for RTC and timestamp purposes */
+        timezone_offset_sec = (int16_t)((in_pkt_buf[7]) | (in_pkt_buf[8] << 8)) * 60; // Convert from minutes to seconds
         hw_rtc_set_time(in_pkt_buf[1], in_pkt_buf[2], in_pkt_buf[3], in_pkt_buf[4], in_pkt_buf[5], in_pkt_buf[6]);
         break;
     case HPI_CMD_DEVICE_RESET:

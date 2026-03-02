@@ -109,6 +109,7 @@ lv_style_t style_bg_purple;
 
 static uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 #define KEY_BRIGHTNESS "display/brightness"
+#define MIN_BRIGHTNESS_PERCENT 5 
 
 lv_obj_t *cui_battery_percent;
 int tmp_scr_parent = 0;
@@ -397,6 +398,11 @@ void draw_scr_common(lv_obj_t *parent)
 
 void hpi_disp_set_brightness(uint8_t brightness_percent)
 {
+    // Prevent screen from becoming completely black
+    if (brightness_percent < MIN_BRIGHTNESS_PERCENT) {
+        brightness_percent = MIN_BRIGHTNESS_PERCENT;
+    }
+
     uint8_t brightness = (uint8_t)((brightness_percent * 255) / 100);
     display_set_brightness(display_dev, brightness);
 

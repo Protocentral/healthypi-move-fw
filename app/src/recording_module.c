@@ -846,8 +846,7 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
         k_sem_reset(&sem_rec_stop);
 
         /* Get current timestamp */
-        struct tm sys_time = hpi_sys_get_sys_time();
-        int64_t start_ts = timeutil_timegm64(&sys_time);
+        int64_t start_ts = hw_get_synced_system_time();
 
         /* Create session directory */
         char session_path[48];
@@ -927,8 +926,7 @@ static void rec_ctrl_thread_fn(void *p1, void *p2, void *p3)
 
         /* Update session state */
         k_mutex_lock(&mutex_rec_state, K_FOREVER);
-        sys_time = hpi_sys_get_sys_time();
-        current_session.end_timestamp = timeutil_timegm64(&sys_time);
+        current_session.end_timestamp = hw_get_synced_system_time();
         current_session.state = REC_STATE_IDLE;
         config_valid = false;  /* Require reconfiguration for next recording */
         k_mutex_unlock(&mutex_rec_state);
