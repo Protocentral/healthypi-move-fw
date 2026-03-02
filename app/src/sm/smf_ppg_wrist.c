@@ -321,7 +321,24 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                     hpi_sys_set_last_spo2_update(ppg_sensor_sample.spo2, smf_ppg_spo2_last_measured_time);
                     set_measured_spo2(ppg_sensor_sample.spo2, SPO2_MEAS_SUCCESS);
                 }
+                else
+                {
+                   LOG_DBG("SpO2 invalid: conf=%d, motion=%d, low_pi=%d, scd=%d",
+                   ppg_sensor_sample.spo2_confidence,
+                   ppg_sensor_sample.spo2_excessive_motion,
+                   ppg_sensor_sample.spo2_low_pi,
+                   ppg_sensor_sample.scd_state);
+                }
                 spo2_measurement_in_progress = false;
+            }
+            else if(spo2_measurement_in_progress)
+            {
+                LOG_INF("Spo2 : %d | Confidence : %d | Progress : %d | SCD : %d | Low PI : %d",
+                   ppg_sensor_sample.spo2,
+                   ppg_sensor_sample.spo2_confidence,
+                   ppg_sensor_sample.spo2_valid_percent_complete,
+                   ppg_sensor_sample.scd_state,
+                   ppg_sensor_sample.spo2_low_pi);
             }
 
             if (ppg_sensor_sample.spo2_state == SPO2_MEAS_TIMEOUT)
@@ -419,6 +436,12 @@ K_TIMER_DEFINE(tmr_ppg_wrist_sampling, ppg_wrist_sampling_handler, NULL);
 // Entry handler
 static void ppg_samp_state_active_entry(void *obj)
 {
+    if(spo2_measurement_in_progress)
+    {
+        LOG_INF("Spo2 ACTIVE -> staying in Spo2 algo");
+        hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
+        return;
+    }
     m_curr_state = PPG_SAMP_STATE_ACTIVE;
 
     // Reset power optimization variables
@@ -465,6 +488,12 @@ static void st_ppg_samp_active_run(void *o)
 // PROBING STATE - Intermittent algorithm operation to check for skin contact
 static void st_ppg_samp_probing_entry(void *o)
 {
+    if(spo2_measurement_in_progress)
+    {
+        LOG_INF("Spo2 ACTIVE -> staying in Spo2 algo");
+        hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
+        return;
+    }
     m_curr_state = PPG_SAMP_STATE_PROBING;
 
     // Cancel any leftover timers from previous states
@@ -480,6 +509,7 @@ static void st_ppg_samp_probing_entry(void *o)
 
     // Enable SCD mode to check for skin contact
     hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    LOG_INF("Entered continuous HRM mode for probing");
 
     // Use normal sampling rate for probing
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
@@ -495,8 +525,9 @@ static void st_ppg_samp_probing_run(void *o)
         // Check for on-skin detection during probing
         if (k_sem_take(&sem_ppg_wrist_on_skin, K_NO_WAIT) == 0)
         {
-            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
-            return; // Exit when transitioning to new state
+                LOG_INF("SCD detected skin contact during probing - transitioning to ACTIVE state");
+                smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+                return; // Exit when transitioning to new state
         }
 
         // Check for probe timeout
@@ -540,6 +571,13 @@ static void st_ppg_samp_probing_run(void *o)
 // OFF_SKIN STATE - Low power mode with motion detection
 static void st_ppg_samp_off_skin_entry(void *o)
 {
+
+    if(spo2_measurement_in_progress)
+    {
+        LOG_INF("Spo2 ACTIVE -> staying in Spo2 algo");
+        hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
+        return;
+    }
     m_curr_state = PPG_SAMP_STATE_OFF_SKIN;
 
     // Cancel any leftover timers from previous states
