@@ -1062,20 +1062,10 @@ void hw_module_init(void)
 
     k_sleep(K_MSEC(400));
 
+    // Read RTC and initialize time synchronization (single RTC read at boot)
     rtc_get_time(rtc_dev, &curr_time);
     LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
-    // Read and publish time during initialization
-    struct rtc_time rtc_sys_time;
-    ret = rtc_get_time(rtc_dev, &rtc_sys_time);
-    if (ret < 0)
-    {
-        LOG_ERR("Failed to get RTC time");
-    }
-    struct tm m_tm_time = *rtc_time_to_tm(&rtc_sys_time);
-    hpi_sys_set_sys_time(&m_tm_time);
-
-    // Initialize time synchronization
-    hpi_sys_force_time_sync(); // Force initial sync
+    hpi_sys_force_time_sync();
 
     // npm_fuel_gauge_update(charger, vbus_connected);
 
@@ -1164,13 +1154,8 @@ void hw_thread(void)
         // Update low battery screen if currently active
         battery_update_low_battery_screen(sys_batt_level, sys_batt_charging, sys_batt_voltage);
 
-        // Sync time with RTC if needed
-        if (hpi_sys_sync_time_if_needed() < 0)
-        {
-            LOG_ERR("Failed to sync time with RTC");
-        }
-
-        // Get current synced time and publish
+        // Get current synced time and publish (no periodic RTC read needed —
+        // offset-based time from boot sync is accurate to <2s/day)
         struct tm m_tm_time = hpi_sys_get_current_time();
         zbus_chan_pub(&sys_time_chan, &m_tm_time, K_SECONDS(1));
 

@@ -57,8 +57,6 @@ void hpi_display_signal_touch_wakeup(void);
 
 int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_str_size);
 int hpi_sys_set_sys_time(struct tm *tm);
-
-struct tm hpi_sys_get_sys_time(void);
 int64_t hw_get_sys_time_ts(void);
 
 // Time validation - checks if device time has been properly set
@@ -68,7 +66,6 @@ bool hpi_sys_is_time_valid(void);
 // Time synchronization functions
 int64_t hw_get_synced_system_time(void);
 void hpi_sys_set_rtc_time(const struct tm *time_to_set);
-int hpi_sys_sync_time_if_needed(void);
 int hpi_sys_force_time_sync(void);
 struct tm hpi_sys_get_current_time(void);
 

@@ -262,8 +262,7 @@ void hpi_data_hrv_record_to_file(bool active)
                 hrv_interval_count = HRV_MAX_INTERVALS;
             }
 
-            struct tm tm_sys_time = hpi_sys_get_sys_time();
-            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+            int64_t log_time = hw_get_synced_system_time();
 
             // Copying intervals to rr_buffer
             for (int i = 0; i < hrv_interval_count; i++) {
@@ -313,9 +312,8 @@ void hpi_data_set_ecg_record_active(bool active)
                 ecg_record_counter = ECG_RECORD_BUFFER_SAMPLES;
             }
             
-            struct tm tm_sys_time = hpi_sys_get_sys_time();
-            int64_t log_time = timeutil_timegm64(&tm_sys_time);
-            
+            int64_t log_time = hw_get_synced_system_time();
+
             LOG_INF("ECG recording stopped - writing %d samples to file (%.1f seconds @ 128Hz)", 
                     ecg_record_counter, (float)ecg_record_counter / 128.0f);
             
@@ -356,8 +354,7 @@ void hpi_data_set_gsr_record_active(bool active)
                 gsr_record_counter = GSR_RECORD_BUFFER_SAMPLES;
             }
 
-            struct tm tm_sys_time = hpi_sys_get_sys_time();
-            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+            int64_t log_time = hw_get_synced_system_time();
 
             LOG_INF("GSR recording stopped - writing %d samples to file (%.1f seconds @ 32Hz)",
                     gsr_record_counter, (float)gsr_record_counter / 32.0f);

@@ -87,7 +87,7 @@ static struct hpi_hr_trend_point_t trend_point_all[1440];
 // Time variables
 static struct tm m_trend_sys_time_tm;
 static int64_t m_trend_time_ts;
-
+extern int16_t timezone_offset_sec; // Extern from hpi_sys_module.c
 K_MSGQ_DEFINE(q_hr_trend, sizeof(struct hpi_hr_trend_point_t), 8, 1);
 K_MSGQ_DEFINE(q_spo2_trend, sizeof(struct hpi_spo2_point_t), 8, 4);
 K_MSGQ_DEFINE(q_temp_trend, sizeof(struct hpi_temp_trend_point_t), 8, 1);
@@ -453,7 +453,8 @@ static void trend_sys_time_listener(const struct zbus_channel *chan)
 {
     const struct tm *sys_time = zbus_chan_const_msg(chan);
     m_trend_sys_time_tm = *sys_time;
-    m_trend_time_ts = timeutil_timegm64(sys_time);
+    m_trend_time_ts = timeutil_timegm64(sys_time); 
+    m_trend_time_ts -= timezone_offset_sec; // Remove timezone offset because we are getting UTC epoch from timeutil_timegm64()
     // LOG_DBG("Sys TS: %" PRIx64, m_trend_time_ts);
 }
 ZBUS_LISTENER_DEFINE(trend_sys_time_lis, trend_sys_time_listener);
