@@ -422,9 +422,14 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 	LOG_INF("Connected to %s\n", addr);
 
-	if (bt_conn_set_security(conn, BT_SECURITY_L2))
-	{
-		LOG_ERR("Failed to set security\n");
+	/* Only request security for peripheral-role connections (phone connecting to us).
+	 * Central-role connections (e.g. dog device) are plain Arduino BLE with no SMP. */
+	struct bt_conn_info info;
+	if (bt_conn_get_info(conn, &info) == 0 && info.role == BT_CONN_ROLE_PERIPHERAL) {
+		if (bt_conn_set_security(conn, BT_SECURITY_L2))
+		{
+			LOG_ERR("Failed to set security\n");
+		}
 	}
 }
 

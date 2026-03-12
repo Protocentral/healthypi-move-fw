@@ -84,6 +84,9 @@ enum hpi_cmds
     HPI_CMD_REC_GET_SESSION_LIST = 0x74, // List all recording sessions
     HPI_CMD_REC_DELETE_SESSION = 0x75,   // Delete session: [timestamp (8 bytes)]
     HPI_CMD_REC_WIPE_ALL = 0x76,         // Delete all recordings
+
+    // Dog Device / Haptic Commands (0x80-0x8F)
+    HPI_CMD_DOG_ALERT = 0x80,            // Trigger dog device alert: calls haptic_send_alert(1)
 };
 
 enum cmdif_pkt_type

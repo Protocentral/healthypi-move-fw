@@ -40,6 +40,7 @@
 #include "fs_module.h"
 #include "log_module.h"
 #include "recording_module.h"
+#include "haptic_module.h"
 
 LOG_MODULE_REGISTER(hpi_cmd_module, LOG_LEVEL_DBG);
 
@@ -261,6 +262,10 @@ void hpi_decode_data_packet(uint8_t *in_pkt_buf, uint8_t pkt_len)
         }
         break;
 
+    case HPI_CMD_DOG_ALERT:
+        LOG_DBG("RX CMD Dog Alert");
+        haptic_send_alert(1);
+        break;
     default:
         LOG_DBG("RX CMD Unknown");
         break;

@@ -79,6 +79,7 @@
 #include "ui/move_ui.h"
 #include "hpi_common_types.h"
 #include "ble_module.h"
+#include "haptic_module.h"
 #include "hpi_sys.h"
 #include "hpi_user_settings_api.h"
 #include "recording_module.h"
@@ -1094,6 +1095,7 @@ void hw_module_init(void)
     INPUT_CALLBACK_DEFINE(gpio_keys_dev, gpio_keys_cb_handler, NULL);
 
     ble_module_init();
+    haptic_module_init();
     k_sem_give(&sem_ble_thread_start);
 
     k_sem_give(&sem_hw_inited);
