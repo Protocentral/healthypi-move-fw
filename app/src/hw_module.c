@@ -319,6 +319,7 @@ static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
         case INPUT_KEY_UP:
             LOG_INF("Crown Key Pressed");
             k_sem_give(&sem_crown_key_pressed);
+            haptic_send_alert(1);
             break;
         case INPUT_KEY_HOME:
             LOG_INF("Extra Key Pressed");
