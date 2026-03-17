@@ -58,7 +58,7 @@ ZBUS_CHAN_DEFINE(hr_chan,         /* Name */
                  struct hpi_hr_t, /* Message type */
                  NULL,            /* Validator */
                  NULL,            /* User Data */
-                 ZBUS_OBSERVERS(disp_hr_lis, trend_hr_lis, sys_hr_lis),
+                 ZBUS_OBSERVERS(disp_hr_lis, trend_hr_lis, sys_hr_lis, haptic_hr_lis),
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
 

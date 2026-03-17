@@ -12,9 +12,17 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/bluetooth/gatt.h>
+#include <zephyr/zbus/zbus.h>
 #include <string.h>
 
 #include "haptic_module.h"
+#include "hpi_common_types.h"
+
+/* HR threshold for motor trigger (BPM) */
+#define HAPTIC_HR_THRESHOLD_BPM  100
+
+/* Minimum time between triggers (ms) */
+#define HAPTIC_COOLDOWN_MS       30000
 
 LOG_MODULE_REGISTER(haptic_module, LOG_LEVEL_DBG);
 
@@ -34,6 +42,8 @@ static bool chr_handle_valid;
 static struct bt_gatt_discover_params discover_params;
 static struct bt_gatt_write_params write_params;
 static uint8_t write_buf;
+
+static int64_t last_trigger_time;
 
 static void start_scan(void);
 
@@ -243,11 +253,48 @@ int haptic_send_alert(uint8_t value)
 	return 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* HR-based trigger                                                    */
+/* ------------------------------------------------------------------ */
+
+static void haptic_hr_alert_work_handler(struct k_work *work)
+{
+	haptic_send_alert(1);
+}
+
+static K_WORK_DEFINE(haptic_hr_alert_work, haptic_hr_alert_work_handler);
+
+static void haptic_hr_listener(const struct zbus_channel *chan)
+{
+	const struct hpi_hr_t *hr = zbus_chan_const_msg(chan);
+
+	if (!hr->hr_ready_flag || hr->hr == 0) {
+		return;
+	}
+
+	if (hr->hr < HAPTIC_HR_THRESHOLD_BPM) {
+		return;
+	}
+
+	int64_t now = k_uptime_get();
+
+	if ((now - last_trigger_time) < HAPTIC_COOLDOWN_MS) {
+		return;
+	}
+
+	last_trigger_time = now;
+	LOG_INF("HR trigger: %u BPM >= %u", hr->hr, HAPTIC_HR_THRESHOLD_BPM);
+	k_work_submit(&haptic_hr_alert_work);
+}
+
+ZBUS_LISTENER_DEFINE(haptic_hr_lis, haptic_hr_listener);
+
 int haptic_module_init(void)
 {
 	dog_conn = NULL;
 	chr_handle_valid = false;
 	dog_chr_handle = 0;
+	last_trigger_time = 0;
 
 	LOG_ERR("haptic: module init");
 	k_work_schedule(&scan_start_work, K_SECONDS(5));
