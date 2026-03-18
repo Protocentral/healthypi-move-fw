@@ -21,6 +21,19 @@
 /* HR threshold for motor trigger (BPM) */
 #define HAPTIC_HR_THRESHOLD_BPM  100
 
+/* GSR threshold for motor trigger (raw ADC units, empirically tuned) */
+#define HAPTIC_GSR_THRESHOLD         2000
+
+/* Max change between consecutive batches before treating as motion artifact */
+#define HAPTIC_GSR_ROC_THRESHOLD     5000
+
+/* EMA alpha = 5/100 = 0.05 — smooths noise, tracks slow stress responses */
+#define HAPTIC_GSR_EMA_ALPHA_NUM     5
+#define HAPTIC_GSR_EMA_ALPHA_DEN     100
+
+/* Consecutive batches of smoothed signal above threshold before triggering (~2s) */
+#define HAPTIC_GSR_DEBOUNCE_BATCHES  16
+
 /* Minimum time between triggers (ms) */
 #define HAPTIC_COOLDOWN_MS       30000
 
@@ -288,6 +301,104 @@ static void haptic_hr_listener(const struct zbus_channel *chan)
 }
 
 ZBUS_LISTENER_DEFINE(haptic_hr_lis, haptic_hr_listener);
+
+/* ------------------------------------------------------------------ */
+/* GSR-based trigger                                                   */
+/* ------------------------------------------------------------------ */
+
+static void haptic_gsr_alert_work_handler(struct k_work *work)
+{
+	haptic_send_alert(1);
+}
+
+static K_WORK_DEFINE(haptic_gsr_alert_work, haptic_gsr_alert_work_handler);
+
+void haptic_process_gsr(const int32_t *samples, uint8_t num_samples, uint8_t lead_off)
+{
+	static int32_t gsr_prev_mean = INT32_MIN;
+	static int32_t gsr_ema       = INT32_MIN;
+	static uint16_t gsr_above_count;
+
+	if (num_samples == 0) {
+		return;
+	}
+
+	/* Skip when electrodes are not in contact */
+	if (lead_off) {
+		gsr_prev_mean = INT32_MIN;
+		gsr_ema       = INT32_MIN;
+		gsr_above_count = 0;
+		return;
+	}
+
+	/* Compute mean of this batch */
+	int64_t sum = 0;
+
+	for (uint8_t i = 0; i < num_samples; i++) {
+		sum += samples[i];
+	}
+	int32_t mean = (int32_t)(sum / num_samples);
+
+	/* Reject negative — capacitive/reactive artifact, not real conductance */
+	if (mean <= 0) {
+		gsr_prev_mean = INT32_MIN;
+		gsr_ema       = INT32_MIN;
+		gsr_above_count = 0;
+		return;
+	}
+
+	/* Reject motion artifacts — genuine stress rises slowly, spikes are instantaneous */
+	if (gsr_prev_mean != INT32_MIN) {
+		int32_t roc = mean - gsr_prev_mean;
+
+		if (roc < 0) {
+			roc = -roc;
+		}
+		if (roc > HAPTIC_GSR_ROC_THRESHOLD) {
+			LOG_DBG("GSR: motion rejected (roc=%d)", roc);
+			gsr_prev_mean = mean;
+			gsr_above_count = 0;
+			return;
+		}
+	}
+	gsr_prev_mean = mean;
+
+	/* Exponential moving average — smooths residual noise */
+	if (gsr_ema == INT32_MIN) {
+		gsr_ema = mean;
+	} else {
+		gsr_ema = (gsr_ema * (HAPTIC_GSR_EMA_ALPHA_DEN - HAPTIC_GSR_EMA_ALPHA_NUM) +
+			   mean * HAPTIC_GSR_EMA_ALPHA_NUM) / HAPTIC_GSR_EMA_ALPHA_DEN;
+	}
+
+	int64_t now = k_uptime_get();
+	static int64_t last_log_time;
+
+	if ((now - last_log_time) >= 5000) {
+		LOG_INF("GSR: raw=%d ema=%d", mean, gsr_ema);
+		last_log_time = now;
+	}
+
+	if (gsr_ema < HAPTIC_GSR_THRESHOLD) {
+		gsr_above_count = 0;
+		return;
+	}
+
+	gsr_above_count++;
+	if (gsr_above_count < HAPTIC_GSR_DEBOUNCE_BATCHES) {
+		return;
+	}
+
+	gsr_above_count = 0;
+
+	if ((now - last_trigger_time) < HAPTIC_COOLDOWN_MS) {
+		return;
+	}
+
+	last_trigger_time = now;
+	LOG_INF("GSR trigger: ema=%d >= %d (sustained)", gsr_ema, HAPTIC_GSR_THRESHOLD);
+	k_work_submit(&haptic_gsr_alert_work);
+}
 
 int haptic_module_init(void)
 {
