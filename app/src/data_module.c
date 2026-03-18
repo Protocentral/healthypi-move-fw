@@ -46,6 +46,7 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ble_module.h"
+#include "haptic_module.h"
 #include "hrv_algos.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
@@ -683,6 +684,7 @@ void data_thread(void)
             {
                 ble_gsr_notify(bsample.bioz_samples, bsample.bioz_num_samples);
             }
+            haptic_process_gsr(bsample.bioz_samples, bsample.bioz_num_samples, bsample.bioz_lead_off);
             if (settings_plot_enabled)
             {
                 int ret = k_msgq_put(&q_plot_gsr, &bsample, K_NO_WAIT);

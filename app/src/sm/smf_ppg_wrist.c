@@ -467,6 +467,7 @@ static void ppg_samp_state_active_entry(void *obj)
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS));
 
     hpi_sys_set_device_on_skin(true);
+    gsr_background_start();
 }
 
 static void st_ppg_samp_active_run(void *o)
