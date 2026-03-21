@@ -817,6 +817,10 @@ void data_thread(void)
             {
             }
 
+            if (ppg_wr_sensor_sample.rtor > 0) {
+                haptic_process_rtor(ppg_wr_sensor_sample.rtor);
+            }
+
             if (ppg_wr_sensor_sample.scd_state == HPI_PPG_SCD_ON_SKIN)
             {
                 if (ppg_wr_sensor_sample.hr_confidence > 75)

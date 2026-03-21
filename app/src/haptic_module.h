@@ -13,3 +13,4 @@
 int haptic_module_init(void);
 int haptic_send_alert(uint8_t value);
 void haptic_process_gsr(const int32_t *samples, uint8_t num_samples, uint8_t lead_off);
+void haptic_process_rtor(uint16_t rtor_ms);

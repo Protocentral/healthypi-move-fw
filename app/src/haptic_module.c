@@ -14,6 +14,7 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/zbus/zbus.h>
 #include <string.h>
+#include <math.h>
 
 #include "haptic_module.h"
 #include "hpi_common_types.h"
@@ -301,6 +302,87 @@ static void haptic_hr_listener(const struct zbus_channel *chan)
 }
 
 ZBUS_LISTENER_DEFINE(haptic_hr_lis, haptic_hr_listener);
+
+/* ------------------------------------------------------------------ */
+/* HRV (RMSSD) based trigger                                           */
+/* ------------------------------------------------------------------ */
+
+/* Rolling window size (number of RR intervals) */
+#define HAPTIC_HRV_WINDOW            20
+
+/* RMSSD threshold — trigger when RMSSD drops below this (ms) */
+#define HAPTIC_HRV_RMSSD_THRESHOLD   70
+
+static uint16_t hrv_rr_buf[HAPTIC_HRV_WINDOW];
+static uint8_t  hrv_rr_count;
+static uint8_t  hrv_rr_head;
+
+static void haptic_hrv_alert_work_handler(struct k_work *work)
+{
+	haptic_send_alert(1);
+}
+
+static K_WORK_DEFINE(haptic_hrv_alert_work, haptic_hrv_alert_work_handler);
+
+void haptic_process_rtor(uint16_t rtor_ms)
+{
+	/* Reject physiologically impossible intervals */
+	if (rtor_ms < 300 || rtor_ms > 1500) {
+		return;
+	}
+
+	/* Add to circular buffer */
+	hrv_rr_buf[hrv_rr_head] = rtor_ms;
+	hrv_rr_head = (hrv_rr_head + 1) % HAPTIC_HRV_WINDOW;
+	if (hrv_rr_count < HAPTIC_HRV_WINDOW) {
+		hrv_rr_count++;
+	}
+
+	/* Need at least 2 intervals to compute RMSSD */
+	if (hrv_rr_count < 2) {
+		return;
+	}
+
+	/* Compute RMSSD over the window */
+	uint64_t sum_sq = 0;
+	uint8_t  pairs  = 0;
+
+	for (uint8_t i = 1; i < hrv_rr_count; i++) {
+		uint8_t idx_curr = (hrv_rr_head - 1 - (hrv_rr_count - 1 - i) +
+				    HAPTIC_HRV_WINDOW) % HAPTIC_HRV_WINDOW;
+		uint8_t idx_prev = (idx_curr - 1 + HAPTIC_HRV_WINDOW) % HAPTIC_HRV_WINDOW;
+		int32_t diff = (int32_t)hrv_rr_buf[idx_curr] - (int32_t)hrv_rr_buf[idx_prev];
+
+		sum_sq += (uint64_t)(diff * diff);
+		pairs++;
+	}
+
+	if (pairs == 0) {
+		return;
+	}
+
+	uint32_t rmssd = (uint32_t)sqrt((double)(sum_sq / pairs));
+
+	static int64_t last_hrv_log;
+	int64_t now = k_uptime_get();
+
+	if ((now - last_hrv_log) >= 5000) {
+		LOG_INF("HRV: rtor=%u ms  rmssd=%u ms  n=%u", rtor_ms, rmssd, hrv_rr_count);
+		last_hrv_log = now;
+	}
+
+	if (rmssd > HAPTIC_HRV_RMSSD_THRESHOLD) {
+		return;
+	}
+
+	if ((now - last_trigger_time) < HAPTIC_COOLDOWN_MS) {
+		return;
+	}
+
+	last_trigger_time = now;
+	LOG_INF("HRV trigger: rmssd=%u ms <= %u", rmssd, HAPTIC_HRV_RMSSD_THRESHOLD);
+	k_work_submit(&haptic_hrv_alert_work);
+}
 
 /* ------------------------------------------------------------------ */
 /* GSR-based trigger                                                   */
