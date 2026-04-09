@@ -289,6 +289,7 @@ void draw_scr_boot(void);
 void scr_boot_add_status(const char *dev_label, bool status, bool show_status);
 void scr_boot_add_final(bool status);
 
+void hpi_disp_restore_brightness(void);
 // Progress Screen functions
 void draw_scr_progress(const char *title, const char *message);
 void hpi_disp_scr_update_progress(int progress, const char *status);
@@ -420,6 +421,7 @@ void draw_scr_fi_sens_check(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, u
 void draw_scr_fi_sens_wear(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_measure(enum scroll_dir dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
+
 
 // HRV screen functions
 void draw_scr_hrv(enum scroll_dir m_scroll_dir,uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);

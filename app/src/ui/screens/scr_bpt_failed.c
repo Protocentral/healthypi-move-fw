@@ -109,7 +109,7 @@ void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32
     lv_obj_center(label_btn);
     // Note: Do not apply style_body_medium - LVGL symbols require default LVGL font
 
-    hpi_disp_set_curr_screen(SCR_SPL_BPT_CAL_COMPLETE);
+    hpi_disp_set_curr_screen(SCR_SPL_BPT_FAILED);
     hpi_show_screen(scr_bpt_cal_failed, m_scroll_dir);
 }
 

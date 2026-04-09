@@ -371,19 +371,19 @@ void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
 {
 	uint8_t out_data[128];
-	int32_t gsr_data_i32 = 0;
-
+	
 	for (int i = 0; i < len; i++)
-	{
-		out_data[i * 4] = (uint8_t)gsr_data_i32;
-		out_data[i * 4 + 1] = (uint8_t)(gsr_data_i32 >> 8);
-		out_data[i * 4 + 2] = (uint8_t)(gsr_data_i32 >> 16);
-		out_data[i * 4 + 3] = (uint8_t)(gsr_data_i32 >> 24);
-	}
+    {
+        out_data[i * 4]     = (uint8_t)gsr_data[i];
+        out_data[i * 4 + 1] = (uint8_t)(gsr_data[i] >> 8);
+        out_data[i * 4 + 2] = (uint8_t)(gsr_data[i] >> 16);
+        out_data[i * 4 + 3] = (uint8_t)(gsr_data[i] >> 24);
+    }
 
 	//LOG_DBG("GSR Not len %d", len);
 
 	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[4], &out_data, len * 4);
+	
 }
 
 void ble_bpt_cal_progress_notify(uint8_t bpt_status, uint8_t bpt_progress)

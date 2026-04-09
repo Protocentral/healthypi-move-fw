@@ -129,6 +129,7 @@ static uint32_t last_hr_update_time = 0;
 K_MUTEX_DEFINE(mutex_hr_change);
 
 // Externs
+extern bool ecg_cancellation;
 
 ZBUS_CHAN_DECLARE(hr_chan);
 
@@ -261,8 +262,7 @@ void hpi_data_hrv_record_to_file(bool active)
                 hrv_interval_count = HRV_MAX_INTERVALS;
             }
 
-            struct tm tm_sys_time = hpi_sys_get_sys_time();
-            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+            int64_t log_time = hw_get_synced_system_time();
 
             // Copying intervals to rr_buffer
             for (int i = 0; i < hrv_interval_count; i++) {
@@ -295,10 +295,11 @@ void hpi_data_set_ecg_record_active(bool active)
     {
         // Starting new recording - reset buffer and counter
         ecg_record_counter = 0;
+        ecg_cancellation = false;  // reset cancellation flag for new recording session
         memset(ecg_record_buffer, 0, sizeof(ecg_record_buffer));
         LOG_INF("ECG recording started - buffer reset");
     }
-    else
+    else if(!ecg_cancellation)  // Only write file if not cancelled - cancellation can occur if user cancels during recording or lead off detected
     {
         // Stopping recording - write file SYNCHRONOUSLY with mutex held
         // This prevents race condition where new recording could start before write completes
@@ -311,9 +312,8 @@ void hpi_data_set_ecg_record_active(bool active)
                 ecg_record_counter = ECG_RECORD_BUFFER_SAMPLES;
             }
             
-            struct tm tm_sys_time = hpi_sys_get_sys_time();
-            int64_t log_time = timeutil_timegm64(&tm_sys_time);
-            
+            int64_t log_time = hw_get_synced_system_time();
+
             LOG_INF("ECG recording stopped - writing %d samples to file (%.1f seconds @ 128Hz)", 
                     ecg_record_counter, (float)ecg_record_counter / 128.0f);
             
@@ -354,8 +354,7 @@ void hpi_data_set_gsr_record_active(bool active)
                 gsr_record_counter = GSR_RECORD_BUFFER_SAMPLES;
             }
 
-            struct tm tm_sys_time = hpi_sys_get_sys_time();
-            int64_t log_time = timeutil_timegm64(&tm_sys_time);
+            int64_t log_time = hw_get_synced_system_time();
 
             LOG_INF("GSR recording stopped - writing %d samples to file (%.1f seconds @ 32Hz)",
                     gsr_record_counter, (float)gsr_record_counter / 32.0f);
@@ -380,7 +379,7 @@ void hpi_data_set_gsr_record_active(bool active)
                 if (stress_data.stress_data_ready) {
                     // Publish stress data via ZBus
                     zbus_chan_pub(&gsr_stress_chan, &stress_data, K_NO_WAIT);
-                    LOG_INF("GSR stress published: level=%u, tonic=%u.%02u uS, SCR=%u/min",
+                    LOG_INF("GSR stress published: level=%u, tonic=%u.%02u uS, SCR=%u/30s",
                             stress_data.stress_level,
                             stress_data.tonic_level_x100 / 100,
                             stress_data.tonic_level_x100 % 100,
@@ -596,7 +595,8 @@ void data_thread(void)
             // This prevents buffer from filling with garbage data when leads are removed
 
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
-            if (is_ecg_record_active == true && !is_hrv_eval_active && !ecg_sensor_sample.ecg_lead_off)
+            /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to record regardless of lead state */
+            if (is_ecg_record_active == true && !is_hrv_eval_active)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
@@ -667,7 +667,8 @@ void data_thread(void)
             // HRV interval capture - only when leads are connected
             // Skip when lead-off to prevent garbage values from corrupting HRV data
            // LOG_INF("HRV Eval Active : %s", is_hrv_eval_active ? "True" : "False");
-            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0 && !ecg_sensor_sample.ecg_lead_off)
+            /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to capture HRV regardless of lead state */
+            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
             {
                 // Capture R-to-R intervals for HRV analysis
                 // RtoR value is in milliseconds from the MAX30001 sensor
@@ -677,28 +678,6 @@ void data_thread(void)
         }
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {
-            /* ---------------------------------------
-            * 1. Convert RAW BioZ → GSR (µS)
-            * --------------------------------------- */
-            // float gsr_float[BIOZ_MAX_SAMPLES] = {0};
-            // convert_raw_to_uS(bsample.bioz_samples, gsr_float, bsample.bioz_num_samples);
-            // /* Create a new struct for safe message passing */
-            // struct hpi_bioz_sample_t gsr_sample = bsample;
-
-            // /* Copy converted float to int32_t buffer for BLE / plot / record */
-            // for (uint8_t i = 0; i < bsample.bioz_num_samples; i++)
-            // {
-            //     /* Multiply by 100 if you want to store as int with 2 decimal precision */
-            //     gsr_sample.bioz_samples[i] = (int32_t)(gsr_float[i] * 100.0f);
-            // }
-
-            // /* ---------------------------------------
-            // * 2. BLE notification
-            // * --------------------------------------- */
-            // if (settings_send_ble_enabled)
-            // {
-            //     ble_gsr_notify(gsr_sample.bioz_samples, gsr_sample.bioz_num_samples);
-            // }
             processed_data = true;
             if (settings_send_ble_enabled)
             {
@@ -730,7 +709,7 @@ void data_thread(void)
             }
         k_mutex_lock(&mutex_is_gsr_record_active, K_FOREVER);
 
-        LOG_DBG("is_gsr_record_active=%d, is_measurement_active=%d, gsr_record_counter=%d",is_gsr_record_active, hpi_data_is_gsr_measurement_active(), gsr_record_counter);
+       // LOG_DBG("is_gsr_record_active=%d, is_measurement_active=%d, gsr_record_counter=%d",is_gsr_record_active, hpi_data_is_gsr_measurement_active(), gsr_record_counter);
         if (is_gsr_record_active == true)
         {
             int samples_to_copy = bsample.bioz_num_samples;
