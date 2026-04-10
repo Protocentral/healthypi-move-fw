@@ -59,9 +59,9 @@ void hpi_gsr_disp_update_timer(uint16_t remaining_s)
         
         // Update the progress arc to show countdown progress
         if (arc_gsr_progress != NULL) {
-            // Arc shows progress from full (60s) to empty (0s)
-            // Value range: 0-60, display remaining time
-            lv_arc_set_value(arc_gsr_progress, remaining_s);
+            // Arc shows progress from full (30s) to empty (0s)
+            // Value range: 0-30, display remaining time
+            lv_arc_set_value(arc_gsr_progress, 30 - remaining_s);
         }
     }
 }
@@ -345,6 +345,7 @@ static void gsr_chart_reset_performance_counters(void)
 
 void scr_gsr_lead_on_off_handler(bool lead_off)
 {
+   // LOG_DBG("GSR screen handler: lead_off=%s", lead_off ? "OFF" : "ON");
    // LOG_DBG("GSR screen handler: lead_off=%s", lead_off ? "OFF" : "ON");
 
     if (label_info_gsr == NULL) {

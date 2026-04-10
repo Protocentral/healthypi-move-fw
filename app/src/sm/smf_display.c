@@ -187,6 +187,9 @@ extern struct k_sem sem_ecg_lead_timeout;  // Signaled when lead placement times
 static int m_disp_hrv_timer = 0;
 
 extern struct k_sem sem_fi_bpt_cal_cancel;
+extern struct k_sem sem_finger_contact_timeout;
+extern struct k_sem sem_fi_spo2_est_cancel;
+
 
 // @brief Recording status variables (updated by ZBus listener, read by display thread)
 static struct hpi_recording_status_t m_disp_recording_status = {0};
@@ -267,6 +270,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
     [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
     [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
+    
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -650,7 +654,6 @@ extern struct k_sem sem_crown_key_pressed;
 
 extern struct k_sem sem_ecg_lead_on;
 extern struct k_sem sem_ecg_lead_off;
-extern struct k_sem sem_ecg_lead_on_stabilize;
 
 extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
@@ -686,7 +689,9 @@ static void st_display_init_entry(void *o)
     display_init_styles();
 
     display_blanking_off(display_dev);
-    hpi_disp_set_brightness(50);
+
+    uint8_t brightness = hpi_disp_get_brightness();
+    hpi_disp_set_brightness(brightness);
 
     smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SPLASH]);
 }
@@ -961,91 +966,22 @@ static inline int32_t bioz_extract_24bit(int32_t raw)
     return raw;
 }
 
+/**
+ * @brief Convert driver-provided BioZ sample to conductance in µS
+ *
+ * The MAX30001 driver now performs the ADC-to-conductance conversion internally
+ * using the datasheet formula and outputs values as fixed-point (µS × 100).
+ * This function simply converts from fixed-point to float.
+ *
+ * Driver conversion (in max30001.h):
+ *   Z (Ω) = ADC × VREF / (2^19 × CGMAG × GAIN)
+ *   Conductance (µS) = 1/Z × 10^6
+ */
 static float convert_raw_sample_to_uS(int32_t raw)
 {
-    // int32_t sample24 = bioz_extract_24bit(raw);
-    // // /* Same math you already validated */
-    // //  // Use absolute value for display magnitude
-    // // float abs_sample = (float)abs(sample24);
-
-    // // return ((float)abs_sample * 2400.0f) / 8388607.0f / 1000.0f;
-    //  /* Step 1: ADC → voltage (±1.2V) */
-    // float v_bioz = (float)sample24 * 1.2f / 8388607.0f;
-
-    // /* Step 2: voltage → impedance */
-    // const float I_bioz = 48e-6f;   // <-- CHANGE to your configured current
-    // float impedance = v_bioz / I_bioz;
-
-    // /* Protect against divide-by-zero */
-    // if (impedance <= 0.0f)
-    //     return 0.0f;
-
-    // /* Step 3: impedance → conductance */
-    // float gsr_uS = (1.0f / impedance) * 1e6f;
-
-    // return gsr_uS;
-
-    //  // Arithmetic shift to isolate 18-bit signed ADC counts from 32-bit raw word
-    // int32_t adc_counts = raw >> 14; 
-
-    // const float V_REF = 1.0f;
-    // const float GAIN = 40.0f;
-    // const float I_MAG = 48e-6f;
-    // const float ADC_FS = 131072.0f; // 2^17
-
-    // float v_electrode = ((float)adc_counts * V_REF) / (ADC_FS * GAIN);
-    
-    // // Use absolute value for impedance magnitude
-    // float impedance = fabsf(v_electrode / I_MAG);
-
-    // // Filter out zero/short-circuit values to avoid infinity
-    // if (impedance < 0.1f) return 0.0f; 
-    
-    // return (1.0f / impedance) ;
-
-    // Constants from hardware configuration (nrf5340_cpuapp_common.dtsi)
-    const float V_REF = 1.0f;          // MAX30001 Internal Vref
-    const float GAIN = 20.0f;          // bioz-gain=1 → 20 V/V
-    const float I_MAG = 16e-6f;        // bioz_cgmag=2 → 16 µA
-    
-    // Your driver produces a 24-bit signed value (due to the <<8 >>8 shift)
-    // Full scale for 24-bit signed is 2^23
-    const float FS_24BIT = 8388608.0f; 
-
-    /* Step 1: Calculate Voltage at electrodes */
-    // Voltage = (raw / 2^23) * (Vref / Gain)
-    float v_electrode = ((float)raw / FS_24BIT) * (V_REF / GAIN);
-
-    /* Step 2: Calculate Impedance (Ohms) */
-    // Z = V / I
-    float impedance = fabsf(v_electrode / I_MAG);
-
-    /* Step 3: Convert to Conductance (S) */
-    // If impedance is near zero, it's a short or noise
-    if (impedance < 0.1f) return 0.0f; 
-    
-    // G (uS) = (1 / Z) * 1,000,000
-    return (1.0f / impedance) * 1e6f ;
-
-    //   /* Step 1: Use magnitude only */
-    // int32_t mag = abs(raw);
-
-    // /* Protect against noise / zero */
-    // if (mag < 1000)
-    //     return 0.0f;
-
-    // /*
-    //  * BIOZ magnitude → impedance scaling
-    //  * This is a calibrated factor (NOT theoretical)
-    //  * Tune once using known resistor if needed
-    //  */
-    // const float BIOZ_OHMS_PER_COUNT = 0.05f;
-
-    // /* Step 2: Convert to impedance (Ohms) */
-    // float impedance = mag * BIOZ_OHMS_PER_COUNT;
-
-    // /* Step 3: Convert impedance → conductance (µS) */
-    // return (1.0f / impedance) * 1e6f;
+    /* Driver outputs conductance as fixed-point: µS × 100
+     * Divide by 100 to get actual µS value */
+    return (float)raw / 100.0f;
 }
 
 static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sample)
@@ -1148,8 +1084,13 @@ static void hpi_disp_update_screens(void)
             last_spo2_trend_refresh = k_uptime_get_32();
         }
         break;
-    case SCR_BPT:
-        
+    case  SCR_SPL_BPT_MEASURE:
+        if(k_sem_take(&sem_finger_contact_timeout, K_NO_WAIT) == 0)
+        {
+            LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to BPT home screen");
+            hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+            hpi_disp_show_toast("Measurement cancelled\nNo finger detected", 3000);
+        }
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
          if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
@@ -1158,6 +1099,16 @@ static void hpi_disp_update_screens(void)
             hpi_load_screen(SCR_BPT, SCROLL_NONE);
             return;
          }
+        lv_disp_trig_activity(NULL);
+        break;
+    case SCR_SPL_SPO2_MEASURE:
+
+         if(k_sem_take(&sem_finger_contact_timeout, K_NO_WAIT) == 0)
+         {
+            LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to SpO2 home screen");
+            hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+            hpi_disp_show_toast("Measurement cancelled\nNo finger detected", 3000);
+         }        
         lv_disp_trig_activity(NULL);
         break;
     case SCR_SPL_HRV_EVAL_PROGRESS:
@@ -1475,14 +1426,29 @@ static void st_display_active_run(void *o)
         {
             // hpi_display_sleep_on();
         }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
+        {
+            gesture_down_scr_spl_raw_ppg();
+        }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
         {
             gesture_down_scr_ecg_2();
         }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
-            /* User cancelled measurement via crown: signal explicit cancel semaphore */
-            k_sem_give(&sem_spo2_cancel);
+            gesture_down_scr_spo2_measure();
+        }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_BPT_MEASURE)
+        {
+            gesture_down_scr_bpt_measure();
+        }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
+        {
+            gesture_down_scr_spl_hrv_eval_progress();
+        }
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
+        {
+            gesture_down_scr_gsr_plot();
         }
         else
         {
@@ -1773,7 +1739,7 @@ static void disp_gsr_stress_listener(const struct zbus_channel *chan)
         // Update the GSR complete screen if it's currently displayed
         hpi_gsr_complete_update_results(stress_data);
         
-        LOG_DBG("GSR Stress Index: level=%d, tonic=%d.%02d μS, peaks/min=%d", 
+        LOG_DBG("GSR Stress Index: level=%d, tonic=%d.%02d μS, peaks/30s=%d", 
                 stress_data->stress_level,
                 stress_data->tonic_level_x100 / 100,
                 stress_data->tonic_level_x100 % 100,

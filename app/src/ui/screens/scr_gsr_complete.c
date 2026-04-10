@@ -27,7 +27,7 @@ LOG_MODULE_REGISTER(hpi_disp_scr_gsr_complete, LOG_LEVEL_DBG);
 lv_obj_t *scr_gsr_complete;
 
 // GUI Objects for results display
-static lv_obj_t *label_tonic_value;
+//static lv_obj_t *label_tonic_value;
 static lv_obj_t *label_scr_count_value;
 static lv_obj_t *label_peak_amp_value;
 
@@ -124,6 +124,7 @@ void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_set_flex_flow(cont_primary, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(cont_primary, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
+    /*
     // Left metric: SCL (Skin Conductance Level)
     lv_obj_t *cont_scl = lv_obj_create(cont_primary);
     lv_obj_remove_style_all(cont_scl);
@@ -146,37 +147,39 @@ void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     }
     lv_obj_align(label_tonic_value, LV_ALIGN_TOP_MID, 0, 22);
     lv_obj_add_style(label_tonic_value, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_tonic_value, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_tonic_value, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);   */
 
     // Right metric: SCR Rate
     lv_obj_t *cont_scr = lv_obj_create(cont_primary);
     lv_obj_remove_style_all(cont_scr);
-    lv_obj_set_size(cont_scr, 160, 70);
+    lv_obj_set_size(cont_scr, 300, 70);
     lv_obj_set_style_bg_opa(cont_scr, LV_OPA_TRANSP, LV_PART_MAIN);
 
     lv_obj_t *label_scr_title = lv_label_create(cont_scr);
-    lv_label_set_text(label_scr_title, "SCR Rate");
+    lv_label_set_text(label_scr_title, "SCR ");
     lv_obj_align(label_scr_title, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_add_style(label_scr_title, &style_caption, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_scr_title, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
 
     label_scr_count_value = lv_label_create(cont_scr);
     if (stored_results.stress_data_ready) {
-        lv_label_set_text_fmt(label_scr_count_value, "%u /min",
+        lv_label_set_text_fmt(label_scr_count_value, "%u /30s",
                                stored_results.peaks_per_minute);
     } else {
-        lv_label_set_text(label_scr_count_value, "-- /min");
+        lv_label_set_text(label_scr_count_value, "-- /30s");
     }
-    lv_obj_align(label_scr_count_value, LV_ALIGN_TOP_MID, 0, 22);
+    lv_obj_align(label_scr_count_value, LV_ALIGN_TOP_MID, 0, 30);
     lv_obj_add_style(label_scr_count_value, &style_body_medium, LV_PART_MAIN);
     lv_obj_set_style_text_color(label_scr_count_value, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);
 
     // CONTEXT: Interpretation text at y=220
     lv_obj_t *label_context = lv_label_create(scr_gsr_complete);
     if (stored_results.stress_data_ready) {
-        lv_label_set_text_fmt(label_context, "%s  |  %s",
-                              get_tonic_context(stored_results.tonic_level_x100),
-                              get_scr_context(stored_results.peaks_per_minute));
+        // lv_label_set_text_fmt(label_context, "%s  |  %s",
+        //                       get_tonic_context(stored_results.tonic_level_x100),
+        //                       get_scr_context(stored_results.peaks_per_minute));
+        lv_label_set_text(label_context,
+                  get_scr_context(stored_results.peaks_per_minute));
     } else {
         lv_label_set_text(label_context, "");
     }
@@ -219,7 +222,7 @@ void hpi_gsr_complete_update_results(const struct hpi_gsr_stress_index_t *result
     // Store results for screen creation - this is thread-safe
     memcpy(&stored_results, results, sizeof(struct hpi_gsr_stress_index_t));
 
-    LOG_DBG("GSR stress results stored: tonic=%u.%02u uS, SCR=%u/min, stress=%u",
+    LOG_DBG("GSR stress results stored: tonic=%u.%02u uS, SCR=%u/30s, stress=%u",
             results->tonic_level_x100 / 100, results->tonic_level_x100 % 100,
             results->peaks_per_minute, results->stress_level);
 }
@@ -234,7 +237,7 @@ void unload_scr_gsr_complete(void)
     if (scr_gsr_complete != NULL) {
         lv_obj_del(scr_gsr_complete);
         scr_gsr_complete = NULL;
-        label_tonic_value = NULL;
+       // label_tonic_value = NULL;
         label_scr_count_value = NULL;
         label_peak_amp_value = NULL;
     }

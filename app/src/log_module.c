@@ -123,29 +123,39 @@ static int write_trend_to_file(uint8_t log_type, const void *data, size_t data_s
     struct fs_file_t file;
     char fname[HPI_LOG_FNAME_MAX];
     char base_path[HPI_LOG_PATH_MAX];
+    struct fs_dirent ent;
 
-    // Validate timestamp before writing
     if (!is_timestamp_valid(timestamp)) {
-        LOG_ERR("Invalid timestamp: %" PRId64 " - refusing to write log file", timestamp);
+        LOG_ERR("Invalid timestamp: %" PRId64, timestamp);
         return -EINVAL;
     }
 
     fs_file_t_init(&file);
-
-    // Get base path using existing function
+    
     if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
         LOG_ERR("Failed to get path for log type %d", log_type);
         return -EINVAL;
     }
 
     snprintf(fname, sizeof(fname), "%s%" PRId64, base_path, timestamp);
+    LOG_DBG("Write to %s | Size: %zu", fname, data_size);
 
-    LOG_DBG("Write to file... %s | Size: %zu", fname, data_size);
+    // Check if file exists first
+    int ret = fs_stat(fname, &ent);
+    int flags = FS_O_RDWR | FS_O_APPEND;
+    
+    if (ret < 0) {  // File doesn't exist
+        flags |= FS_O_CREATE;
+        LOG_DBG("Creating new file: %s", fname);
+    } else {
+        LOG_DBG("Appending to existing file: %s (%d bytes)", fname, ent.size);
+    }
 
-    CHECK_FS_OP(fs_open(&file, fname, FS_O_CREATE | FS_O_RDWR | FS_O_TRUNC), "open", fname);
+    CHECK_FS_OP(fs_open(&file, fname, flags), "open", fname);
     CHECK_FS_OP(fs_write(&file, data, data_size), "write", fname);
     CHECK_FS_OP(fs_sync(&file), "sync", fname);
     CHECK_FS_OP(fs_close(&file), "close", fname);
+    
     return 0;
 }
 
@@ -328,6 +338,22 @@ void log_delete(uint16_t file_id)
     fs_unlink(log_file_name);
 }
 
+void log_delete_by_timestamp(uint8_t log_type, int64_t timestamp)
+{
+    LOG_INF("Deleting Log type %d, Timestamp %" PRId64, log_type, timestamp);
+    char base_path[HPI_LOG_PATH_MAX];
+    char file_path[HPI_LOG_FNAME_MAX];
+
+    if (hpi_log_get_path(base_path, sizeof(base_path), log_type) != 0) {
+        LOG_ERR("Failed to get path for log type %d", log_type);
+        return;
+    }
+
+    snprintf(file_path, sizeof(file_path), "%s%" PRId64, base_path, timestamp);
+    LOG_DBG("Deleting %s", file_path);
+    fs_unlink(file_path);
+}
+
 void log_wipe_folder(const char *folder_path)
 {
     int err = 0;
@@ -407,23 +433,17 @@ void log_wipe_trends(void)
     };
     
     wipe_log_types(trend_types, sizeof(trend_types), "all trend logs");
-
+    hpi_recording_wipe_all(); // To delete research recording files
     /* Legacy file removed - measurement data now stored via Zephyr settings subsystem */
     hpi_disp_reset_all_last_updated();
-
-    LOG_DBG("All trend logs wiped");
+    LOG_DBG("All trend logs and recording module logs wiped");
 }
 
-void log_wipe_records(void)
+void log_wipe_records(uint8_t recording_type)
 {
-    static const uint8_t record_types[] = {
-        HPI_LOG_TYPE_ECG_RECORD,
-        HPI_LOG_TYPE_BIOZ_RECORD,
-        HPI_LOG_TYPE_PPG_WRIST_RECORD,
-        HPI_LOG_TYPE_PPG_FINGER_RECORD,
-        HPI_LOG_TYPE_GSR_RECORD, 
-        HPI_LOG_TYPE_HRV_RECORD
-    };
-    
-    wipe_log_types(record_types, sizeof(record_types), "all records");
+    char log_file_name[HPI_LOG_PATH_MAX];
+    if (hpi_log_get_path(log_file_name, sizeof(log_file_name), recording_type) == 0) 
+    {
+        log_wipe_folder(log_file_name);
+    }
 }
