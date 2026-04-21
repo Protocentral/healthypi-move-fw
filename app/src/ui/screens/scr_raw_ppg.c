@@ -74,6 +74,8 @@ extern lv_style_t style_white_medium;
 
 extern lv_style_t style_scr_black;
 
+extern int scd_state;
+
 #define PPG_SIGNAL_RED 0
 #define PPG_SIGNAL_IR 1
 #define PPG_SIGNAL_GREEN 2
@@ -313,4 +315,29 @@ void hpi_ppg_check_signal_timeout(void)
     // Use the last known SCD state for timeout checks
     // This way we only show timeout, not incorrectly assuming "no skin contact"
     hpi_ppg_update_signal_status(last_scd_state);
+}
+
+void update_scd_label_raw_ppg_cb(void *arg)
+{
+    if (label_status == NULL)
+        return;
+
+    switch (scd_state)
+    {
+        case 0:
+            lv_label_set_text(label_status, "Undetected");
+            break;
+        case 1:
+            lv_label_set_text(label_status, "Off Skin");
+            break;
+        case 2:
+            lv_label_set_text(label_status, "On Object");
+            break;
+        case 3:
+                lv_label_set_text(label_status, "On Skin");
+            break;
+        default:
+            lv_label_set_text(label_status, "SCD: Unknown");
+            break;
+    }
 }
