@@ -54,6 +54,7 @@ static lv_obj_t *label_spo2_progress;
 static lv_obj_t *bar_spo2_progress;
 static lv_obj_t *label_spo2_status;
 static lv_obj_t *cont_progress;
+static lv_obj_t *label_scd_state;
 
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
@@ -85,7 +86,8 @@ extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
 static int spo2_source = 0;
-
+extern int scd_state;
+extern int perfusion_state;
 extern struct k_sem sem_fi_spo2_est_cancel;
 
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
@@ -193,18 +195,14 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
-    // Draw BPM
-    /*lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_48px);
-
-    label_hr = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr, "00");
-    lv_obj_add_style(label_hr, &style_white_medium, 0);
-    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_sub, " bpm");
-    */
+    /* SCD State Label */
+    label_scd_state = lv_label_create(cont_col);
+    lv_label_set_text(label_scd_state, "SCD: --");
+    lv_obj_set_style_text_align(label_scd_state, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align_to(label_scd_state, chart_ppg, LV_ALIGN_OUT_BOTTOM_MID, 0, -45);
 
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_MEASURE);
+
     hpi_show_screen(scr_spo2_scr_measure, m_scroll_dir);
 }
 
@@ -433,4 +431,43 @@ void gesture_down_scr_spo2_measure(void)
 
     // Navigate back to main SpO2 screen (simplified flow with Option B)
     hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+}
+void update_scd_label_cb(void *arg)
+{
+    if (label_scd_state == NULL)
+        return;
+
+    switch (scd_state)
+    {
+        case 0:
+            lv_label_set_text(label_scd_state, "Undetected");
+            break;
+        case 1:
+            lv_label_set_text(label_scd_state, "Off Skin");
+            break;
+        case 2:
+            lv_label_set_text(label_scd_state, "On Object");
+            break;
+        case 3:
+            if(perfusion_state) 
+                lv_label_set_text(label_scd_state, "On Skin,Ws");
+            else
+            lv_label_set_text(label_scd_state, "On Skin,SS");
+            break;
+        default:
+            lv_label_set_text(label_scd_state, "SCD: Unknown");
+            break;
+    }
+}
+void update_perfusion_label_cb(void *arg)
+{
+    if (label_scd_state == NULL)
+        return;
+
+    if(scd_state == 3) {
+        if(perfusion_state) 
+            lv_label_set_text(label_scd_state, "On Skin,Ws");
+        else
+            lv_label_set_text(label_scd_state, "On Skin,SS");
+    }
 }
