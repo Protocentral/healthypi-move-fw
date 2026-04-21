@@ -557,3 +557,7 @@ void draw_scr_timeout(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2
 void gesture_down_scr_timeout(void);
 
 void scr_ppg_finger_contact_handler(bool contact);
+
+void update_scd_label_cb(void *arg);
+void update_perfusion_label_cb(void *arg);
+void update_scd_label_raw_ppg_cb(void *arg);
