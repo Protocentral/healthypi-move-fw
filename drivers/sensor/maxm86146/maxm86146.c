@@ -951,6 +951,7 @@ static int maxm86146_chip_init(const struct device *dev)
     }
 
     gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
+    gpio_pin_set_dt(&config->reset_gpio, 0);   // LEDs off immediately
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
     maxm86146_do_enter_app(dev);
