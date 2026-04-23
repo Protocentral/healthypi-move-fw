@@ -97,7 +97,6 @@ SENSOR_DT_READ_IODEV(maxm86146_iodev, DT_ALIAS(maxm86146), SENSOR_CHAN_VOLTAGE);
 
 // Pointer to active PPG iodev (set at runtime based on detected device)
 static struct rtio_iodev *ppg_wrist_iodev = NULL;
-
 ZBUS_CHAN_DECLARE(spo2_chan);
 
 enum ppg_fi_sm_state
@@ -153,7 +152,8 @@ K_WORK_DELAYABLE_DEFINE(work_probe_enable, work_probe_enable_handler);
 void work_probe_sleep_handler(struct k_work *work)
 {
     probing_algorithm_enabled = true;
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
     k_work_schedule(&work_probe_enable, K_SECONDS(PROBE_ENABLE_WAIT_S));
 }
 K_WORK_DELAYABLE_DEFINE(work_probe_sleep, work_probe_sleep_handler);
@@ -198,7 +198,6 @@ static int get_measured_spo2(uint16_t *spo2_value, enum spo2_meas_state *status)
         return -EBUSY;
     }
 }
-
 static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 {
     const struct max32664c_encoded_data *edata = (const struct max32664c_encoded_data *)buf;
@@ -287,6 +286,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             // Update current SCD state for general tracking
             m_curr_scd_state = ppg_sensor_sample.scd_state;
+            LOG_INF("HR - %d | SCD state - %d", ppg_sensor_sample.hr, ppg_sensor_sample.scd_state);
 
             // Process SCD state changes for power optimization in ACTIVE state
             // Skip off-skin detection during one-shot SpO2 measurement to prevent
@@ -363,7 +363,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                    ppg_sensor_sample.spo2_low_pi);
             }
 
-            if (ppg_sensor_sample.spo2_state == SPO2_MEAS_TIMEOUT)
+            if (ppg_sensor_sample.spo2_state == SPO2_MEAS_TIMEOUT && spo2_measurement_in_progress)
             {
                 k_sem_give(&sem_stop_one_shot_spo2);
                 set_measured_spo2(0, SPO2_MEAS_TIMEOUT);
@@ -487,7 +487,9 @@ static void ppg_samp_state_active_entry(void *obj)
     k_msleep(50); // Allow time for mode change
 
     // Enable normal algorithm operation
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+   // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
 
     // Use faster sampling rate in active mode for responsive detection
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS));
@@ -534,7 +536,8 @@ static void st_ppg_samp_probing_entry(void *o)
     k_msleep(50); // Allow time for mode change
 
     // Enable SCD mode to check for skin contact
-    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    hw_max32664c_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
     LOG_INF("Entered continuous HRM mode for probing");
 
     // Use normal sampling rate for probing
@@ -743,6 +746,7 @@ static void smf_ppg_wrist_thread(void)
     LOG_INF("PPG State Machine Thread starting");
     for (;;)
     {
+
         ret = smf_run_state(SMF_CTX(&sm_ctx_ppg_wr));
 
         if (ret)
@@ -805,7 +809,9 @@ static void ppg_wrist_ctrl_thread(void)
             k_msleep(1000);
 
             LOG_DBG("Switching to Continuous Sampling HR");
-            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+            // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+            hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
+
             k_msleep(600);
             k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
         }
@@ -824,7 +830,8 @@ static void ppg_wrist_ctrl_thread(void)
 
                 /* Return to continuous HR monitoring mode */
                 LOG_DBG("Switching to Continuous Sampling HR after cancel");
-                hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+                // hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+                hw_max32664c_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_CONT_SPO2);
                 k_msleep(600);
                 k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
             }
