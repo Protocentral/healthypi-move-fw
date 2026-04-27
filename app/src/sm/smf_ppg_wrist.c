@@ -218,7 +218,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 off_skin_timer_active = false;
                 k_work_cancel_delayable(&work_off_skin_threshold);
             }
-
+           // LOG_INF("SCD indicates ON_SKIN - giving on-skin semaphore - SCD state: %d", edata->scd_state);
             k_sem_give(&sem_ppg_wrist_on_skin);
         }
         else if (edata->scd_state == SCD_STATE_OFF_SKIN)
@@ -239,9 +239,11 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
         {
             if (edata->num_samples > 0)
             {
+               // LOG_INF("Motion detected in WOM mode with %d samples - giving motion FIFO semaphore, SCD state: %d", edata->num_samples, edata->scd_state);
                 k_sem_give(&sem_ppg_wrist_motion_fifo);
             }
             /* Also notify generic motion detected semaphore for compatibility */
+            // LOG_INF("Motion detected in WOM mode - giving motion detected semaphore, SCD state: %d", edata->scd_state);
             k_sem_give(&sem_ppg_wrist_motion_detected);
         }
         return;
@@ -286,7 +288,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             // Update current SCD state for general tracking
             m_curr_scd_state = ppg_sensor_sample.scd_state;
-            LOG_INF("HR - %d | SCD state - %d", ppg_sensor_sample.hr, ppg_sensor_sample.scd_state);
+            // LOG_INF("HR - %d | SCD state - %d", ppg_sensor_sample.hr, ppg_sensor_sample.scd_state);
 
             // Process SCD state changes for power optimization in ACTIVE state
             // Skip off-skin detection during one-shot SpO2 measurement to prevent
@@ -687,7 +689,8 @@ static void st_ppg_samp_motion_detect_run(void *o)
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
             k_msleep(50);
             // Move to ACTIVE state where algorithms will be re-enabled
-            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+            // smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+             smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
             return;
         }
 
