@@ -5,6 +5,7 @@ add_subdirectory_ifdef(CONFIG_SENSOR_MAX30001 max30001)
 add_subdirectory_ifdef(CONFIG_SENSOR_MAX32664C max32664c)
 add_subdirectory_ifdef(CONFIG_SENSOR_MAX32664D max32664d)
 add_subdirectory_ifdef(CONFIG_SENSOR_MAX30208 max30208)
+add_subdirectory_ifdef(CONFIG_SENSOR_AS6221 as6221)
 add_subdirectory_ifdef(CONFIG_SENSOR_BMI323_HPI bmi323hpi)
 
 

@@ -126,9 +126,14 @@ static int max30208_channel_get(const struct device *dev, enum sensor_channel ch
 	switch (chan)
 	{
 	case SENSOR_CHAN_AMBIENT_TEMP:
-		val->val1 = data->temp_int;
-		val->val2 = 0;
+	{
+		/* MAX30208 LSB = 0.005 °C = 5000 µ°C. Report degrees Celsius so the
+		 * sensor is interchangeable with the AS6221 at the application layer. */
+		int64_t micro_c = (int64_t)data->temp_int * 5000;
+		val->val1 = (int32_t)(micro_c / 1000000);
+		val->val2 = (int32_t)(micro_c % 1000000);
 		break;
+	}
 
 	default:
 		LOG_ERR("Unsupported sensor channel: %d", chan);
