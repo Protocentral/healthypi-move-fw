@@ -74,7 +74,6 @@ extern lv_style_t style_white_medium;
 
 extern lv_style_t style_scr_black;
 
-extern int scd_state;
 
 #define PPG_SIGNAL_RED 0
 #define PPG_SIGNAL_IR 1
@@ -160,11 +159,6 @@ void draw_scr_spl_raw_ppg(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_set_style_text_opa(ui_hr_number, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     //lv_obj_set_style_text_font(ui_hr_number, &lv_font_montserrat_42, LV_PART_MAIN | LV_STATE_DEFAULT);
     */
-    // PPG Sensor Status label
-    label_status = lv_label_create(scr_raw_ppg);
-    lv_label_set_text(label_status, "--");
-    lv_obj_align_to(label_status, chart_ppg, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
-    lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, 0);
 
     // Create "No Signal" overlay label (initially hidden)
     label_ppg_no_signal = lv_label_create(scr_raw_ppg);
@@ -317,27 +311,3 @@ void hpi_ppg_check_signal_timeout(void)
     hpi_ppg_update_signal_status(last_scd_state);
 }
 
-void update_scd_label_raw_ppg_cb(void *arg)
-{
-    if (label_status == NULL)
-        return;
-
-    switch (scd_state)
-    {
-        case 0:
-            lv_label_set_text(label_status, "Undetected");
-            break;
-        case 1:
-            lv_label_set_text(label_status, "Off Skin");
-            break;
-        case 2:
-            lv_label_set_text(label_status, "On Object");
-            break;
-        case 3:
-                lv_label_set_text(label_status, "On Skin");
-            break;
-        default:
-            lv_label_set_text(label_status, "SCD: Unknown");
-            break;
-    }
-}

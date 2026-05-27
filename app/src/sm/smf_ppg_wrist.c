@@ -297,13 +297,7 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 last_perfusion_state = perfusion_state;
                 lv_async_call(update_perfusion_label_cb, NULL);
             }
-            if((scd_state != last_scd_state) && (hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG))
-            {
-                last_scd_state = scd_state;
-                lv_async_call(update_scd_label_raw_ppg_cb, NULL);
-            }
 
-            LOG_INF("Heart rate : %d| SCD state : %d", ppg_sensor_sample.hr, ppg_sensor_sample.scd_state);
             // Process SCD state changes for power optimization in ACTIVE state
             if (m_curr_state == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC)
             {
