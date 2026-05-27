@@ -49,16 +49,19 @@ static lv_obj_t *scr_spo2_scr_measure;
 // GUI components
 static lv_obj_t *chart_ppg;
 static lv_chart_series_t *ser_ppg;
+//static lv_chart_series_t *ser_ir;
+//static lv_chart_series_t *ser_red;
 // static lv_obj_t *label_hr;
 static lv_obj_t *label_spo2_progress;
 static lv_obj_t *bar_spo2_progress;
 static lv_obj_t *label_spo2_status;
 static lv_obj_t *cont_progress;
 static lv_obj_t *label_scd_state;
+static lv_obj_t *cont_scd_status;
 
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
-
+static float wr_baseline_red_ema = 0.0f;
 static float gx = 0;
 
 /* Progress bar high-water mark to prevent regression */
@@ -182,12 +185,16 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     /* Set a sensible default Y range to keep waveform visible until autoscale runs */
     lv_chart_set_range(chart_ppg, LV_CHART_AXIS_PRIMARY_Y, 2048 - 128, 2048 + 128);
 
-    ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
+    ser_ppg = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
+   // ser_ir  = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
+    //ser_red = lv_chart_add_series(chart_ppg, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
     lv_obj_set_style_line_width(chart_ppg, 6, LV_PART_ITEMS);
 
     /* Initialize chart with baseline value to show a flat line instead of junk
      * during the warmup period. The value 2048 matches the DC offset used in plotting. */
     lv_chart_set_all_value(chart_ppg, ser_ppg, 2048);
+    //lv_chart_set_all_value(chart_ppg, ser_ir, 2048);
+   // lv_chart_set_all_value(chart_ppg, ser_red, 2048);
 
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
@@ -196,10 +203,37 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
     /* SCD State Label */
-    label_scd_state = lv_label_create(cont_col);
-    lv_label_set_text(label_scd_state, "SCD: --");
-    lv_obj_set_style_text_align(label_scd_state, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align_to(label_scd_state, chart_ppg, LV_ALIGN_OUT_BOTTOM_MID, 0, -45);
+    // label_scd_state = lv_label_create(cont_col);
+    // lv_label_set_text(label_scd_state, "SCD: --");
+    // lv_obj_set_style_text_align(label_scd_state, LV_TEXT_ALIGN_CENTER, 0);
+    // lv_obj_align_to(label_scd_state, chart_ppg, LV_ALIGN_OUT_BOTTOM_MID, 0, -45);
+    /* SCD status container */
+    cont_scd_status = lv_obj_create(cont_col);
+
+    lv_obj_set_size(cont_scd_status, 160, 42);
+
+    lv_obj_set_style_radius(cont_scd_status, 20, 0);
+
+    lv_obj_set_style_border_width(cont_scd_status, 0, 0);
+
+    lv_obj_set_style_pad_all(cont_scd_status, 6, 0);
+
+    lv_obj_set_style_bg_color(cont_scd_status,
+                            lv_palette_main(LV_PALETTE_GREY),
+                            0);
+
+    lv_obj_clear_flag(cont_scd_status, LV_OBJ_FLAG_SCROLLABLE);
+
+    /* label inside container */
+    label_scd_state = lv_label_create(cont_scd_status);
+
+    lv_label_set_text(label_scd_state, "--");
+
+    lv_obj_center(label_scd_state);
+
+    lv_obj_set_style_text_color(label_scd_state,
+                                lv_color_white(),
+                                0);
 
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_MEASURE);
 
@@ -279,7 +313,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_green;
+    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
     /* Simple DC removal: EMA baseline and plot residual centered to avoid LVGL coord wrap. */
     const float alpha = 0.005f; /* small alpha for slow baseline tracking */
@@ -304,7 +338,7 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 
         float residual = (float)scaled - local_base;
         /* Increased amplification from 2x to 8x for better visibility of small signals */
-        residual *= 8.0f;
+        residual *= 12.0f;
         local_base = local_base * (1.0f - alpha) + ((float)scaled * alpha);
 
         /* Center residual to positive range for plotting */
@@ -337,7 +371,78 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     y_max_ppg = local_ymax;
     wr_baseline_ema = local_base;
 }
+// void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
+// {
+//     uint32_t *ir_data  = ppg_sensor_sample.raw_ir;
+//     uint32_t *red_data = ppg_sensor_sample.raw_red;
 
+//     const float alpha = 0.005f;
+
+//     int num = ppg_sensor_sample.ppg_num_samples;
+
+//     float local_ymin = y_min_ppg;
+//     float local_ymax = y_max_ppg;
+
+//     float local_base_ir  = wr_baseline_ema;
+//     float local_base_red = wr_baseline_red_ema;
+
+//     for (int i = 0; i < num; i++)
+//     {
+//         /* ================= IR ================= */
+//         int32_t ir = ir_data[i];
+
+//         if (!wr_baseline_init)
+//         {
+//             local_base_ir = ir;
+//             local_base_red = red_data[i];
+//             wr_baseline_init = true;
+//         }
+
+//         float ir_res = (float)ir - local_base_ir;
+//         ir_res *= 8.0f;
+//         local_base_ir = local_base_ir * (1.0f - alpha) + ir * alpha;
+
+//         int32_t ir_plot = (int32_t)ir_res + 2048;
+
+//         lv_chart_set_next_value(chart_ppg, ser_ir, ir_plot);
+
+//         /* ================= RED ================= */
+//         int32_t red = red_data[i];
+
+//         float red_res = (float)red - local_base_red;
+//         red_res *= 8.0f;
+//         local_base_red = local_base_red * (1.0f - alpha) + red * alpha;
+
+//         int32_t red_plot = (int32_t)red_res + 2048;
+
+//         lv_chart_set_next_value(chart_ppg, ser_red, red_plot);
+
+//         /* ================= COMMON ================= */
+//         if (ir_plot < local_ymin) local_ymin = ir_plot;
+//         if (red_plot < local_ymin) local_ymin = red_plot;
+
+//         if (ir_plot > local_ymax) local_ymax = ir_plot;
+//         if (red_plot > local_ymax) local_ymax = red_plot;
+
+//         y_min_ppg = local_ymin;
+//         y_max_ppg = local_ymax;
+
+//         hpi_ppg_disp_add_samples(1);
+
+//         if (spo2_source == SPO2_SOURCE_PPG_WR) {
+//             hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
+//         } else {
+//             hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_FI);
+//         }
+//     }
+
+//     /* write back */
+//     y_min_ppg = local_ymin;
+//     y_max_ppg = local_ymax;
+
+//     wr_baseline_ema = local_base_ir;
+//     wr_baseline_red_ema = local_base_red;
+// }
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
     uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
@@ -440,22 +545,32 @@ void update_scd_label_cb(void *arg)
     switch (scd_state)
     {
         case 0:
-            lv_label_set_text(label_scd_state, "Undetected");
+            lv_label_set_text(label_scd_state, "UNDETECTED");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREY),0);
             break;
         case 1:
-            lv_label_set_text(label_scd_state, "Off Skin");
+            lv_label_set_text(label_scd_state, "NO SKIN");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_RED),0);
             break;
         case 2:
-            lv_label_set_text(label_scd_state, "On Object");
+            lv_label_set_text(label_scd_state, "INVALID");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_BLUE),0);
             break;
         case 3:
             if(perfusion_state) 
-                lv_label_set_text(label_scd_state, "On Skin,Ws");
+            {
+                lv_label_set_text(label_scd_state, "HOLD");
+                lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_ORANGE),0);
+            }
             else
-            lv_label_set_text(label_scd_state, "On Skin,SS");
+            {
+                lv_label_set_text(label_scd_state, "STABLE");
+                lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREEN),0);
+            }
             break;
         default:
-            lv_label_set_text(label_scd_state, "SCD: Unknown");
+            lv_label_set_text(label_scd_state, "UNKNOWN");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREY),0);
             break;
     }
 }
@@ -466,8 +581,14 @@ void update_perfusion_label_cb(void *arg)
 
     if(scd_state == 3) {
         if(perfusion_state) 
-            lv_label_set_text(label_scd_state, "On Skin,Ws");
+        {
+            lv_label_set_text(label_scd_state, "HOLD");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_ORANGE),0);
+        }
         else
-            lv_label_set_text(label_scd_state, "On Skin,SS");
+        {
+            lv_label_set_text(label_scd_state, "STABLE");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREEN),0);
+        }
     }
 }
