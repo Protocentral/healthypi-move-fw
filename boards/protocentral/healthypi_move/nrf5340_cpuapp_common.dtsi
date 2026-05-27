@@ -270,6 +270,15 @@
 		reg = <0x52>;
 		zephyr,deferred-init;
 	};
+
+	/* Newer boards populate the AS6221 (0x48) instead of the MAX30208.
+	 * Detected at runtime; only the populated sensor will init. */
+	as6221: as6221@48 {
+		compatible = "ams,as6221";
+		status = "okay";
+		reg = <0x48>;
+		zephyr,deferred-init;
+	};
 };
 
 &uart0 {
