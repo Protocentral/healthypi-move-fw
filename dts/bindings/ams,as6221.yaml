@@ -1,0 +1,9 @@
+# Ashwin Whitchurch
+# ProtoCentral Electronics (info@protocentral.com)
+# SPDX-License-Identifier: Apache-2.0
+
+description: ams AS6221 digital temperature sensor
+
+compatible: "ams,as6221"
+
+include: [sensor-device.yaml, i2c-device.yaml]

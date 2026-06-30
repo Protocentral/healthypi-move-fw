@@ -106,6 +106,12 @@ char curr_string[40];
 // Peripheral Device Pointers
 static const struct device *max30208a50_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a50));
 static const struct device *max30208a52_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a52));
+static const struct device *as6221_dev = DEVICE_DT_GET(DT_NODELABEL(as6221));
+
+/* Active temperature sensor, selected at runtime. Newer boards populate the
+ * AS6221 (0x48), older boards the MAX30208 (0x50, fallback 0x52). Both report
+ * SENSOR_CHAN_AMBIENT_TEMP in degrees Celsius so they are used interchangeably. */
+static const struct device *temp_dev = NULL;
 
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
 const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
@@ -172,7 +178,11 @@ static void i2c2_bus_scan_debug(void)
             // Add specific device identification for known addresses
             switch (addr)
             {
+            case 0x48:
+                LOG_INF("  -> Expected: AS6221 temperature sensor");
+                break;
             case 0x50:
+            case 0x52:
                 LOG_INF("  -> Expected: MAX30208 temperature sensor");
                 break;
             case 0x55:
@@ -452,10 +462,16 @@ double read_temp_f(void)
 {
     struct sensor_value temp_sample;
 
-    sensor_sample_fetch(max30208a50_dev);
-    sensor_channel_get(max30208a50_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
-    // last_read_temp_value = temp_sample.val1;
-    double temp_c = (double)temp_sample.val1 * 0.005;
+    if (temp_dev == NULL)
+    {
+        return 0.0;
+    }
+
+    sensor_sample_fetch(temp_dev);
+    sensor_channel_get(temp_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
+
+    /* Both the MAX30208 and AS6221 drivers report degrees Celsius. */
+    double temp_c = sensor_value_to_double(&temp_sample);
     double temp_f = (temp_c * 1.8) + 32.0;
     // printk("Temp: %.2f F\n", temp_f);
     return temp_f;
@@ -1029,33 +1045,47 @@ void hw_module_init(void)
 
     // setup_pmic_callbacks();
 
+    /* Temperature sensor detection. Newer boards populate the AS6221 (0x48);
+     * older boards the MAX30208 (0x50, fallback 0x52). Probe each in order and
+     * use whichever responds. All report degrees C, so the rest of the app is
+     * agnostic to which one is fitted (see read_temp_f / temp_dev). */
     device_init(max30208a50_dev);
     k_sleep(K_MSEC(100));
-
-    if (!device_is_ready(max30208a50_dev))
+    if (device_is_ready(max30208a50_dev))
     {
-        LOG_ERR("MAX30208A50 device not found!");
-        hw_add_boot_msg("MAX30208 @50", false, true, false, 0);
+        temp_dev = max30208a50_dev;
+        LOG_INF("MAX30208 @0x50 found");
+        hw_add_boot_msg("MAX30208 @50", true, true, false, 0);
+    }
 
+    if (temp_dev == NULL)
+    {
         device_init(max30208a52_dev);
         k_sleep(K_MSEC(100));
-
-        if (!device_is_ready(max30208a52_dev))
+        if (device_is_ready(max30208a52_dev))
         {
-            LOG_ERR("MAX30208A52 device not found!");
-            hw_add_boot_msg("MAX30208 @52", false, true, false, 0);
-        }
-        else
-        {
-            max30208a50_dev = max30208a52_dev; // Use the device with address 0x52
-            LOG_INF("MAX30208A52 device found!");
+            temp_dev = max30208a52_dev;
+            LOG_INF("MAX30208 @0x52 found");
             hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
         }
     }
-    else
+
+    if (temp_dev == NULL)
     {
-        LOG_INF("MAX30208A50 device found!");
-        hw_add_boot_msg("MAX30208A50 @50", true, true, false, 0);
+        device_init(as6221_dev);
+        k_sleep(K_MSEC(100));
+        if (device_is_ready(as6221_dev))
+        {
+            temp_dev = as6221_dev;
+            LOG_INF("AS6221 @0x48 found");
+            hw_add_boot_msg("AS6221 @48", true, true, false, 0);
+        }
+    }
+
+    if (temp_dev == NULL)
+    {
+        LOG_ERR("No temperature sensor found (MAX30208/AS6221)");
+        hw_add_boot_msg("Temp sensor", false, true, false, 0);
     }
 
     hw_add_boot_msg("Boot complete !!", true, false, false, 0);

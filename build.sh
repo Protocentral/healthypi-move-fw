@@ -1,1 +1,0 @@
-west build --build-dir app/build app --board healthypi_move/nrf5340/cpuapp -- -DBOARD_ROOT=.
