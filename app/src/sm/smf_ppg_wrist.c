@@ -73,6 +73,11 @@ static int64_t off_skin_start_time = 0;
 static uint32_t current_probe_attempt = 0;
 static uint32_t current_probe_sleep_duration = PROBE_DISABLE_WAIT_BASE_S;
 static bool probing_algorithm_enabled = false;
+int scd_state = 0;
+int perfusion_state = 0;
+static int last_scd_state = -1;
+static int last_perfusion_state = -1;
+extern int current_spo2_source; // Extern variable to track the current SpO2 source for SCD/perfusion updates
 
 K_SEM_DEFINE(sem_ppg_wrist_on_skin, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_off_skin, 0, 1);
@@ -280,6 +285,17 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             // Update current SCD state for general tracking
             m_curr_scd_state = ppg_sensor_sample.scd_state;
+            scd_state = ppg_sensor_sample.scd_state;
+            perfusion_state = ppg_sensor_sample.spo2_low_pi;
+            if ((scd_state != last_scd_state) && (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE) && (!current_spo2_source)){
+                last_scd_state = scd_state;
+                lv_async_call(update_scd_label_cb, NULL);
+            }
+            if((perfusion_state != last_perfusion_state) && (scd_state == MAX32664C_SCD_STATE_ON_SKIN) && (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE) && (!current_spo2_source))
+            {
+                last_perfusion_state = perfusion_state;
+                lv_async_call(update_perfusion_label_cb, NULL);
+            }
 
             // Process SCD state changes for power optimization in ACTIVE state
             if (m_curr_state == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC)
@@ -657,8 +673,9 @@ static void st_ppg_samp_motion_detect_run(void *o)
             // We have accel samples in the hub FIFO - now disable wake-on-motion and restart algorithms
             hw_max32664c_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
             k_msleep(50);
-            // Move to ACTIVE state where algorithms will be re-enabled
-            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+            
+            // Move to PROBING state to confirm skin contact
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
             return;
         }
 
@@ -719,6 +736,12 @@ static void ppg_wrist_ctrl_thread(void)
     {
         if (k_sem_take(&sem_start_one_shot_spo2, K_NO_WAIT) == 0)
         {
+            // Cancel any leftover work timers from previous states
+            k_work_cancel_delayable(&work_off_skin_threshold);
+            k_work_cancel_delayable(&work_probe_enable);
+            k_work_cancel_delayable(&work_probe_sleep);
+            k_work_cancel_delayable(&work_offskin_timeout);
+
             // smf_set_terminate(SMF_CTX(&sm_ctx_ppg_wr);
             LOG_DBG("Stopping PPG Sampling");
             k_timer_stop(&tmr_ppg_wrist_sampling);
