@@ -1,0 +1,9 @@
+# ProtoCentral Electronics (info@protocentral.com)
+# SPDX-License-Identifier: Apache-2.0
+
+config SENSOR_AS6221
+	bool "AS6221 Temperature Sensor"
+	depends on I2C
+	help
+	  Enable driver for the ams AS6221 digital temperature sensor.
+	  Used on newer HealthyPi Move boards in place of the MAX30208.

@@ -54,11 +54,16 @@ static lv_obj_t *label_spo2_progress;
 static lv_obj_t *bar_spo2_progress;
 static lv_obj_t *label_spo2_status;
 static lv_obj_t *cont_progress;
+static lv_obj_t *label_scd_state;
+static lv_obj_t *cont_scd_status;
 
 static float y_max_ppg = 0;
 static float y_min_ppg = 10000;
-
 static float gx = 0;
+
+/* Wrist PPG baseline tracking - resettable on screen entry */
+static float wr_baseline_ema = 0.0f;
+static bool wr_baseline_init = false;
 
 /* Progress bar high-water mark to prevent regression */
 static int last_progress = 0;
@@ -70,10 +75,6 @@ static int32_t fi_last_valid_plot_val = 2048;
 static int fi_warmup_samples = 0;  // Count samples for warmup period
 #define FI_WARMUP_COUNT 50  // Skip first 50 samples (~0.5 sec at 100Hz) to avoid initial junk
 
-/* Wrist PPG baseline tracking - resettable on screen entry */
-static float wr_baseline_ema = 0.0f;
-static bool wr_baseline_init = false;
-
 // Externs
 extern lv_style_t style_red_medium;
 extern lv_style_t style_white_large_numeric;
@@ -84,15 +85,15 @@ extern lv_style_t style_tiny;
 extern lv_style_t style_bg_blue;
 extern lv_style_t style_bg_red;
 
-static int spo2_source = 0;
-
+int current_spo2_source = 0;
+extern int scd_state;
+extern int perfusion_state;
 extern struct k_sem sem_fi_spo2_est_cancel;
 
 void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     int parent_screen = arg1; // Parent screen passed from the previous screen
-    spo2_source = arg2;       // SpO2 source passed from the previous screen
-
+    current_spo2_source = arg2;       // SpO2 source passed from the previous screen
     /* Reset all plotting state on screen entry */
     hpi_ppg_autoscale_reset();
     y_min_ppg = 10000;
@@ -163,11 +164,11 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
      * - FI source keeps the wider BPT window
      * - Wrist PPG uses the raw PPG window for snappier updates
      */
-    if (spo2_source == SPO2_SOURCE_PPG_FI)
+    if (current_spo2_source == SPO2_SOURCE_PPG_FI)
     {
         lv_chart_set_point_count(chart_ppg, BPT_DISP_WINDOW_SIZE * 2);
     }
-    else if (spo2_source == SPO2_SOURCE_PPG_WR)
+    else if (current_spo2_source == SPO2_SOURCE_PPG_WR)
     {
         /* match raw PPG window size for wrist plotting */
         lv_chart_set_point_count(chart_ppg, PPG_RAW_WINDOW_SIZE);
@@ -186,24 +187,30 @@ void draw_scr_spo2_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
     /* Initialize chart with baseline value to show a flat line instead of junk
      * during the warmup period. The value 2048 matches the DC offset used in plotting. */
     lv_chart_set_all_value(chart_ppg, ser_ppg, 2048);
-
+   
     lv_obj_t *cont_hr = lv_obj_create(cont_col);
     lv_obj_set_size(cont_hr, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
     lv_obj_add_style(cont_hr, &style_scr_black, 0);
     lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
 
-    // Draw BPM
-    /*lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_48px);
+    if(!current_spo2_source)
+    {
+        /* SCD status container */
+        cont_scd_status = lv_obj_create(cont_col);
+        lv_obj_set_size(cont_scd_status, 160, 42);
+        lv_obj_set_style_radius(cont_scd_status, 20, 0);
+        lv_obj_set_style_border_width(cont_scd_status, 0, 0);
+        lv_obj_set_style_pad_all(cont_scd_status, 6, 0);
+        lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREY),0);
+        lv_obj_clear_flag(cont_scd_status, LV_OBJ_FLAG_SCROLLABLE);
 
-    label_hr = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr, "00");
-    lv_obj_add_style(label_hr, &style_white_medium, 0);
-    lv_obj_t *label_hr_sub = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_sub, " bpm");
-    */
-
+        /* label inside container */
+        label_scd_state = lv_label_create(cont_scd_status);
+        lv_label_set_text(label_scd_state, "--");
+        lv_obj_center(label_scd_state);
+        lv_obj_set_style_text_color(label_scd_state,lv_color_white(),0);
+    }
     hpi_disp_set_curr_screen(SCR_SPL_SPO2_MEASURE);
     hpi_show_screen(scr_spo2_scr_measure, m_scroll_dir);
 }
@@ -281,7 +288,7 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
 
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_green;
+    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
 
     /* Simple DC removal: EMA baseline and plot residual centered to avoid LVGL coord wrap. */
     const float alpha = 0.005f; /* small alpha for slow baseline tracking */
@@ -291,7 +298,7 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     float local_ymin = y_min_ppg;
     float local_ymax = y_max_ppg;
     float local_base = wr_baseline_ema;
-    int local_spo2_source = spo2_source;
+    int local_spo2_source = current_spo2_source;
 
     for (int i = 0; i < num; i++)
     {
@@ -339,7 +346,6 @@ void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
     y_max_ppg = local_ymax;
     wr_baseline_ema = local_base;
 }
-
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
     uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
@@ -424,13 +430,68 @@ extern struct k_sem sem_spo2_cancel;
 void gesture_down_scr_spo2_measure(void)
 {
     // Signal cancellation to the appropriate state machine based on source
-    if (spo2_source == SPO2_SOURCE_PPG_FI) {
+    if (current_spo2_source == SPO2_SOURCE_PPG_FI) {
         k_sem_give(&sem_fi_spo2_est_cancel);
         LOG_INF("Spo2 measurement cancelled via gesture (finger PPG)");
-    } else if (spo2_source == SPO2_SOURCE_PPG_WR) {
+    } else if (current_spo2_source == SPO2_SOURCE_PPG_WR) {
         k_sem_give(&sem_spo2_cancel);
     }
 
     // Navigate back to main SpO2 screen (simplified flow with Option B)
     hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
+}
+void update_scd_label_cb(void *arg)
+{
+    if (label_scd_state == NULL)
+        return;
+
+    switch (scd_state)
+    {
+        case 0:
+            lv_label_set_text(label_scd_state, "UNDETECTED");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREY),0);
+            break;
+        case 1:
+            lv_label_set_text(label_scd_state, "NO SKIN");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_RED),0);
+            break;
+        case 2:
+            lv_label_set_text(label_scd_state, "INVALID");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_BLUE),0);
+            break;
+        case 3:
+            if(perfusion_state) 
+            {
+                lv_label_set_text(label_scd_state, "HOLD");
+                lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_ORANGE),0);
+            }
+            else
+            {
+                lv_label_set_text(label_scd_state, "STABLE");
+                lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREEN),0);
+            }
+            break;
+        default:
+            lv_label_set_text(label_scd_state, "UNKNOWN");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREY),0);
+            break;
+    }
+}
+void update_perfusion_label_cb(void *arg)
+{
+    if (label_scd_state == NULL)
+        return;
+
+    if(scd_state == 3) {
+        if(perfusion_state) 
+        {
+            lv_label_set_text(label_scd_state, "HOLD");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_ORANGE),0);
+        }
+        else
+        {
+            lv_label_set_text(label_scd_state, "STABLE");
+            lv_obj_set_style_bg_color(cont_scd_status,lv_palette_main(LV_PALETTE_GREEN),0);
+        }
+    }
 }
