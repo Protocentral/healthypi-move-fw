@@ -330,6 +330,7 @@ void draw_scr_spo2_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
 int hpi_disp_reset_all_last_updated(void);
 
 void hpi_disp_spo2_load_trend(void);
+static void spo2_plot_raw(uint32_t *data, int num, int window);
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample);
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample);
 
