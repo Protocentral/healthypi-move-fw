@@ -285,144 +285,36 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
         lv_label_set_text(label_spo2_status, "Starting...");
     }
 }
+/* Plot raw PPG + shared autoscale (same path as the Raw PPG screen). */
+static void spo2_plot_raw(uint32_t *data, int num, int window)
+{
+    if (chart_ppg == NULL || num <= 0)
+        return;
+
+    uint32_t batch_min = UINT32_MAX, batch_max = 0;
+    for (int i = 0; i < num; i++) {
+        if (data[i] < batch_min) batch_min = data[i];
+        if (data[i] > batch_max) batch_max = data[i];
+    }
+    if (y_min_ppg == 10000) y_min_ppg = batch_min;
+    else if (batch_min < y_min_ppg) y_min_ppg = batch_min;
+    if (y_max_ppg == 0) y_max_ppg = batch_max;
+    else if (batch_max > y_max_ppg) y_max_ppg = batch_max;
+
+    for (int i = 0; i < num; i++) {
+        lv_chart_set_next_value(chart_ppg, ser_ppg, data[i]);
+        gx += 1;
+    }
+    hpi_ppg_disp_do_set_scale(window);
+}
 
 void hpi_disp_spo2_plot_wrist_ppg(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
-
-    /* Simple DC removal: EMA baseline and plot residual centered to avoid LVGL coord wrap. */
-    const float alpha = 0.005f; /* small alpha for slow baseline tracking */
-
-    /* Cache locals to reduce repeated global accesses */
-    int num = ppg_sensor_sample.ppg_num_samples;
-    float local_ymin = y_min_ppg;
-    float local_ymax = y_max_ppg;
-    float local_base = wr_baseline_ema;
-    int local_spo2_source = current_spo2_source;
-
-    for (int i = 0; i < num; i++)
-    {
-        /* Driver now provides normalized samples; use value directly. */
-        int32_t scaled = (int32_t)(data_ppg[i]);
-
-        if (!wr_baseline_init)
-        {
-            local_base = (float)scaled;
-            wr_baseline_init = true;
-        }
-
-        float residual = (float)scaled - local_base;
-        /* Increased amplification from 2x to 8x for better visibility of small signals */
-        residual *= 8.0f;
-        local_base = local_base * (1.0f - alpha) + ((float)scaled * alpha);
-
-        /* Center residual to positive range for plotting */
-        int32_t plot_val = (int32_t)(residual) + 2048; /* center offset */
-
-        float fplot = (float)plot_val;
-
-        /* Update local extrema then write sample to chart so autoscale sees newest values */
-        if (fplot < local_ymin) local_ymin = fplot;
-        if (fplot > local_ymax) local_ymax = fplot;
-
-        lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
-
-        /* Commit extrema to globals used by the shared autoscale helper */
-        y_min_ppg = local_ymin;
-        y_max_ppg = local_ymax;
-
-        /* Advance sample counter used by autoscaler and call helper */
-        hpi_ppg_disp_add_samples(1);
-
-        if (local_spo2_source == SPO2_SOURCE_PPG_WR) {
-            hpi_ppg_disp_do_set_scale(PPG_RAW_WINDOW_SIZE);
-        } else {
-            hpi_ppg_disp_do_set_scale(SPO2_DISP_WINDOW_SIZE_FI);
-        }
-    }
-
-    /* write back cached locals */
-    y_min_ppg = local_ymin;
-    y_max_ppg = local_ymax;
-    wr_baseline_ema = local_base;
+    spo2_plot_raw(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples, PPG_RAW_WINDOW_SIZE);
 }
 void hpi_disp_spo2_plot_fi_ppg(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_ir;
-
-    /* Simple DC removal for FI source similar to wrist plotting to reduce baseline wander */
-    const float alpha_fi = 0.01f; /* slightly faster baseline tracking for finger */
-
-    for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++)
-    {
-        float data_ppg_i = (float)(data_ppg[i]);
-
-        /* Guard against zero/invalid samples from driver - use last valid value instead of skipping
-         * to prevent discontinuities in the waveform display */
-        if (data_ppg_i == 0.0f)
-        {
-            /* During warmup, just count but don't plot */
-            if (fi_warmup_samples < FI_WARMUP_COUNT)
-            {
-                fi_warmup_samples++;
-                continue;
-            }
-            /* Plot last valid value to maintain waveform continuity */
-            lv_chart_set_next_value(chart_ppg, ser_ppg, fi_last_valid_plot_val);
-            hpi_ppg_disp_add_samples(1);
-            hpi_ppg_disp_do_set_scale(BPT_DISP_WINDOW_SIZE * 2);
-            continue;
-        }
-
-        /* Warmup period: collect samples to build baseline but don't plot yet.
-         * This avoids showing initial junk data on screen. */
-        if (fi_warmup_samples < FI_WARMUP_COUNT)
-        {
-            fi_warmup_samples++;
-            /* Build baseline during warmup using faster alpha for quicker convergence */
-            if (!fi_baseline_init)
-            {
-                fi_baseline_ema = data_ppg_i;
-                fi_baseline_init = true;
-            }
-            else
-            {
-                /* Use faster alpha (0.1) during warmup for quick baseline lock */
-                fi_baseline_ema = fi_baseline_ema * 0.9f + (data_ppg_i * 0.1f);
-            }
-            continue;  /* Skip plotting during warmup */
-        }
-
-        if (!fi_baseline_init)
-        {
-            fi_baseline_ema = data_ppg_i;
-            fi_baseline_init = true;
-        }
-
-        float residual = data_ppg_i - fi_baseline_ema;
-        fi_baseline_ema = fi_baseline_ema * (1.0f - alpha_fi) + (data_ppg_i * alpha_fi);
-
-        /* Center residual to positive range for LVGL plotting */
-        int32_t plot_val = (int32_t)(residual) + 2048;
-
-        /* Store as last valid value for continuity on invalid samples */
-        fi_last_valid_plot_val = plot_val;
-
-        if ((float)plot_val < y_min_ppg)
-        {
-            y_min_ppg = (float)plot_val;
-        }
-
-        if ((float)plot_val > y_max_ppg)
-        {
-            y_max_ppg = (float)plot_val;
-        }
-
-        lv_chart_set_next_value(chart_ppg, ser_ppg, plot_val);
-
-        hpi_ppg_disp_add_samples(1);
-        hpi_ppg_disp_do_set_scale(BPT_DISP_WINDOW_SIZE * 2);
-    }
+    spo2_plot_raw(ppg_sensor_sample.raw_ir, ppg_sensor_sample.ppg_num_samples, BPT_DISP_WINDOW_SIZE);
 }
 
 extern struct k_sem sem_spo2_cancel;
