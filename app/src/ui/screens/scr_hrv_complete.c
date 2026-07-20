@@ -316,7 +316,10 @@ void draw_scr_spl_hrv_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
     // Gesture handler
     lv_obj_add_event_cb(scr_hrv_frequency_compact, gesture_handler, LV_EVENT_GESTURE, NULL);
-    hpi_disp_set_curr_screen(SCR_SPL_HRV_FREQUENCY);
+    /* P0-2: register the id this screen is actually loaded as (SCR_SPL_HRV_COMPLETE,
+     * per the screen_func_table). It previously set SCR_SPL_HRV_FREQUENCY, so
+     * sleep/wake save + gesture routing misidentified the results screen. */
+    hpi_disp_set_curr_screen(SCR_SPL_HRV_COMPLETE);
     hpi_show_screen(scr_hrv_frequency_compact, m_scroll_dir);
     lv_async_call(lvgl_update_cb, NULL);
 }

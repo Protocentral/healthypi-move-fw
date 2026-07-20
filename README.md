@@ -32,9 +32,9 @@ HealthyPi Move is now available for pre-order in the ongoing campaign on [Crowd 
 - **Blood Pressure**: Finger-based blood pressure estimation with calibration
 - **Activity Tracking**: Step counting, activity recognition via 6-axis IMU
 - **Galvanic Skin Response (GSR)**: Stress and EDA measurement
-- **Data Logging**: Internal storage of trends and recordings on 112MB LittleFS filesystem
-- **Bluetooth LE**: Real-time streaming and data synchronization
-- **DFU Support**: Over-the-air firmware updates via MCUBoot
+- **Health store**: Typed samples + episodic records on LittleFS; phone sync via **MCUmgr `HPI_HS`** (group `0x1000`) — see [Health data sync (HPI_HS)](#health-data-sync-hpi_hs) and `docs/HPI_HS_API.md`
+- **Bluetooth LE**: Real-time GATT streaming (HR, SpO₂, temp, ECG/PPG/GSR waveforms) plus MCUmgr (DFU, datetime, `HPI_HS`)
+- **DFU Support**: Over-the-air firmware updates via MCUboot (images must be signed with the published keys in `app/keys/` — see [Firmware signing keys](#firmware-signing-keys-required-for-dfu))
 - **Power Management**: Battery monitoring and optimized sleep modes
 - **LVGL UI**: Modern touch-enabled display interface
 
@@ -169,6 +169,65 @@ After flashing, the device should:
 
 Check logs via UART (115200 baud, 8N1) on the debug port.
 
+## Firmware signing keys (required for DFU)
+
+HealthyPi Move ships with **secure boot** (NSIB) and **MCUboot**. Application and net-core images are signed; the bootloader will only accept updates signed with the matching private keys.
+
+**These keys are intentionally published in this repository** under `app/keys/`:
+
+| File | Role |
+|------|------|
+| `mcuboot_priv.pem` | MCUboot image signing (app / update packages) |
+| `nsib_priv.pem` | Nordic secure boot (NSIB) |
+| `root-ec-p256.pem` | Root ECDSA-P256 material used in the signing chain |
+
+### Why the keys are in the repo
+
+1. **Shipped devices** are provisioned with the **public** half of this key material in the bootloader. Official OTA/DFU packages are signed with the corresponding private keys above.
+2. **Future updates** — including factory releases and any firmware you build yourself — **must use the same private keys**, or MCUboot/NSIB will reject the image and the device will not boot the update.
+3. **Customer and community builds** are therefore expected to use these same keys when producing `dfu_application.zip` (or other signed packages) for watches already in the field. Replacing the keys only works if you also reflash a bootloader that trusts the new public keys (a full secure-boot re-provision), which is **not** what end users get over OTA.
+
+### Practical notes
+
+- Keep using `app/keys/` as checked into this tree for any build intended to run on stock HealthyPi Move hardware or to update it over DFU.
+- Do **not** generate a private key set and sign “just for development” if you still want that binary to OTA onto a production/shipping unit — it will fail signature verification.
+- If you deliberately re-key (custom product line, etc.), you must flash a matching bootloader/provisioning image; that path is outside normal DFU and is not interchangeable with stock devices.
+- Key-generation references for NCS are linked from `app/keys/generate_keys.txt`.
+
+### ⚠️ These are development keys — use your own for production
+
+**The private keys in `app/keys/` are published in this repository, so they are public.**
+They exist so that anyone can clone, build, and DFU a stock HealthyPi Move out of the
+box, and so community builds stay compatible with devices already in the field.
+
+Because they are public, they provide **no firmware-authenticity guarantee**: any image
+signed with them will be accepted by any device that trusts them. That is an acceptable
+trade-off for an open development platform, but it is **not** appropriate for a shipping
+product.
+
+**If you are building a product on HealthyPi Move, generate and use your own keys:**
+
+```bash
+# 1. Generate your own signing keys (keep these secret — never commit them)
+west build -t generate_signing_key           # or: imgtool keygen -k my-mcuboot.pem -t ecdsa-p256
+python3 $NCS/nrf/scripts/bootloader/keygen.py --private-key my-nsib-priv.pem
+
+# 2. Point sysbuild at them (app/sysbuild.conf)
+SB_CONFIG_BOOT_SIGNATURE_KEY_FILE="/secure/path/my-mcuboot.pem"
+SB_CONFIG_SECURE_BOOT_SIGNING_KEY_FILE="/secure/path/my-nsib-priv.pem"
+```
+
+Then note the following:
+
+- **You must flash the bootloader, not just OTA.** The trust anchor (the *public* key)
+  lives in MCUboot/NSIB provisioning, so switching keys requires programming a bootloader
+  built with your key — over SWD/USB, not over DFU.
+- **After re-keying, your devices and stock devices are no longer interchangeable.**
+  Yours will reject ProtoCentral-signed images and vice versa. That is the intended result.
+- **Keep the private keys out of version control.** Store them in a CI secret store or an
+  HSM, publish only the public half, and back them up — losing them means you can no
+  longer ship updates to your fleet.
+
 ## Development Workflow
 
 ### Configuration
@@ -181,9 +240,7 @@ Check logs via UART (115200 baud, 8N1) on the debug port.
 Key configuration options:
 ```
 CONFIG_HPI_GSR_SCREEN=y              # Enable GSR feature
-CONFIG_HPI_RECORDING_MODULE=y        # Enable multi-signal recording
 CONFIG_HEAP_MEM_POOL_SIZE=24576      # Heap size
-CONFIG_DEBUG_INFO=y                  # Enable debug symbols
 ```
 
 ### Directory Structure
@@ -192,12 +249,13 @@ CONFIG_DEBUG_INFO=y                  # Enable debug symbols
 app/
 ├── src/                      # Application source code
 │   ├── *_module.c           # Hardware/feature modules
+│   ├── health/              # Health store + HPI_HS MCUmgr group (sync API)
 │   ├── sm/                  # State machines (Zephyr SMF)
 │   └── ui/                  # LVGL user interface
 │       ├── screens/         # Individual screen implementations
 │       └── components/      # Reusable UI components
 ├── include/                 # Public headers
-├── keys/                    # Signing keys for secure boot
+├── keys/                    # Published signing keys (required for stock DFU — see above)
 ├── build/                   # Build output directory
 └── tests/                   # Unit tests
 
@@ -257,48 +315,71 @@ The HealthyPi Move exposes various Bluetooth LE services and characteristics for
 | **PPG Wrist** | `cd5c1525-4448-7db8-ae4c-d1da8cba36d0` | Notify, Read | Array of uint32_t (little-endian, 4 bytes per sample) | Wrist PPG raw data (Green LED channel). Multiple samples per notification. Streaming starts on subscription. |
 | **PPG Finger** | `cd5ca86f-4448-7db8-ae4c-d1da8cba36d0` | Notify, Read | Array of uint32_t (little-endian, 4 bytes per sample) | Finger PPG raw data (IR LED channel). Multiple samples per notification. Streaming starts on subscription. |
 
-#### 3. Command Service
-**Service UUID**: `01bf7492-970f-8d96-d44d-9023c47faddc`
+### Removed: legacy Command Service and log/recording pull
 
-| Characteristic | UUID | Properties | Data Format | Description |
-|----------------|------|------------|-------------|-------------|
-| **Command TX** | `01bf1528-970f-8d96-d44d-9023c47faddc` | Write, Write Without Response, Read, Authenticated | Command packets (see protocol below) | Send commands to device (time sync, calibration, logs, recordings) |
-| **Command RX** | `01bf1527-970f-8d96-d44d-9023c47faddc` | Notify, Write Without Response, Read, Authenticated | Response packets (see protocol below) | Receive responses and data from device |
+The older **framed Command Service** (`01bf7492-…`) and its `LOG_*` / `RECORDING_*` file-pull commands (`0x50`–`0x54`, `0x30`–`0x34`, SOF `0x0A 0xFA`) are **no longer implemented**. Do not document or call them from new clients.
 
-### Command Protocol
+| Old path | Replacement |
+|----------|-------------|
+| BLE Command `SET_DEVICE_TIME` (`0x41`) | MCUmgr **OS datetime** group |
+| BLE Command `LOG_*` session-log download | **`HPI_HS` `SYNC` / `SUMMARY`** (typed samples) |
+| BLE Command `RECORDING_*` / whole-file LittleFS pull of `/lfs/{ecg,gsr,…}` | **`HPI_HS` `RECORDS`** (list / get / ack) |
+| BLE Command BPT cal control (`0x60/0x61/0x62`) | **`HPI_HS` cmds 8–11** (`BPT_CAL_ENTER`/`POINT`/`STATUS`/`END`, group v2) |
 
-Commands are sent via the Command TX characteristic using the following packet format:
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| **[`docs/HPI_HS_API.md`](docs/HPI_HS_API.md)** | **Full `HPI_HS` wire contract** (MCUmgr group `0x1000`) — the API to build a phone/desktop client against: commands, CBOR shapes, the sample schema and type registry, records, and BPT calibration |
+| [`docs/H6_ADVANCED_METRICS.md`](docs/H6_ADVANCED_METRICS.md) | Derived metrics (readiness/recovery, HRV, stress) and how they are computed |
+| **[`KNOWN_ISSUES.md`](KNOWN_ISSUES.md)** | Current limitations — **read before updating a device in the field** |
+| [`LICENSE.md`](LICENSE.md) · [`THIRD_PARTY.md`](THIRD_PARTY.md) | Licensing breakdown and third-party attribution |
+
+## Health data sync (`HPI_HS`)
+
+**This is the only supported history/sync API.** It is a **custom MCUmgr (SMP) management group**, id **`0x1000`**, registered at boot from `app/src/health/hpi_hs_mgmt.c`. Full wire contract: **[`docs/HPI_HS_API.md`](docs/HPI_HS_API.md)**. Headers: `hpi_hs_sync.h` (group/command ids), `hpi_hs_types.h` (sample schema / type registry).
+
+### Transport
+
+| Path | Notes |
+|------|--------|
+| **BLE** | Same SMP stack as DFU (`smp_bt`); works with any MCUmgr client |
+| **UART** (optional) | Same commands if serial MCUmgr transport is enabled |
+
+Live waveforms (ECG/PPG/GSR) stay on the **GATT notify** services above. DFU stays on **MCUmgr image** group. Device clock uses **MCUmgr OS datetime**. Do not reintroduce history sync as custom GATT characteristics.
+
+### Commands (group `0x1000`)
+
+| Cmd | Name | Op | Role |
+|-----|------|-----|------|
+| 0 | `HELLO` | READ | Schema/group version, device class, per-unit `uid`, seq head/oldest |
+| 1 | `TYPES` | READ | Self-describing type registry (**paged** — loop `from` until `next == total`) |
+| 2 | `SYNC` | READ | Incremental sample batch by seq cursor (`since` / `next` / `more`) |
+| 3 | `SUMMARY` | READ | On-device today summary + baselines |
+| 4 | `RECORDS` | READ | Episodic raw sessions (ECG, BioZ, HRV R-R, …): list / get / ack |
+| 5 | `ACK` | WRITE | Client-acked seq (device may drop retained samples ≤ acked) |
+| 6 | `SYNTH` | WRITE | Test-only synthetic data (`CONFIG_HPI_HS_SYNTH`; **off in release**) |
+
+### Client loop (samples)
 
 ```
-[SOF1] [SOF2] [LEN_LSB] [LEN_MSB] [PKT_TYPE] [PAYLOAD...] [STOP1] [STOP2]
+HELLO
+TYPES          # cache registry by id (fetch all pages once)
+loop:
+  SYNC { since: cursor, max: N }
+  ingest recs  # 18-byte little-endian packed samples; dedup on seq
+  cursor = next
+  while more
+ACK { acked: cursor }   # optional, enables retention drop
+SUMMARY                 # optional UI cards
 ```
 
-- **SOF1/SOF2**: Start of frame markers (`0x0A`, `0xFA`)
-- **LEN**: 16-bit packet length (little-endian)
-- **PKT_TYPE**: Packet type (0x01 = Command, 0x02 = Data, 0x03 = Status, etc.)
-- **PAYLOAD**: Command-specific data
-- **STOP1/STOP2**: End of frame markers (`0x00`, `0x0B`)
+### On-device storage
 
-#### Supported Commands
-
-| Command ID | Name | Arguments | Description |
-|------------|------|-----------|-------------|
-| `0x40` | GET_DEVICE_STATUS | None | Get current device status |
-| `0x41` | SET_DEVICE_TIME | Timestamp (unix epoch) | Synchronize device time |
-| `0x42` | DEVICE_RESET | None | Reset device |
-| `0x50` | LOG_GET_INDEX | Log type (uint8) | Get list of stored logs |
-| `0x51` | LOG_GET_FILE | Session ID (uint16) | Retrieve log file data |
-| `0x52` | LOG_DELETE | Session ID (uint16) | Delete specific log |
-| `0x53` | LOG_WIPE_ALL | None | Delete all logs |
-| `0x54` | LOG_GET_COUNT | Log type (uint8) | Get count of logs |
-| `0x60` | BPT_SEL_CAL_MODE | None | Enter blood pressure calibration mode |
-| `0x61` | START_BPT_CAL_START | Systolic (uint8), Diastolic (uint8) | Start BP calibration with reference values |
-| `0x62` | BPT_EXIT_CAL_MODE | None | Exit BP calibration mode |
-| `0x30` | RECORDING_COUNT | Recording type (uint8) | Get count of recordings |
-| `0x31` | RECORDING_INDEX | Recording type (uint8) | Get list of recordings |
-| `0x32` | RECORDING_FETCH_FILE | Recording type (uint8) | Retrieve recording file |
-| `0x33` | RECORDING_DELETE | Recording type (uint8) | Delete recording |
-| `0x34` | RECORDING_WIPE_ALL | None | Delete all recordings |
+- Module: `app/src/health/` (`hpi_health_store`, durable log under `/lfs/hs`, RAM ring).
+- Sensors publish on zbus; `hs_*_lis` listeners call `hpi_hs_record()`.
+- Episodic captures use the record tier (`hpi_hs_rec_start` / `append` / `stop`).
+- **Phone is the system of record** for long-term history; the watch keeps a rolling window plus latest-per-type for the UI.
 
 ### Data Formats
 
@@ -421,7 +502,18 @@ for applicable conditions
 Software
 --------
 
-**All software is released under the MIT License(http://opensource.org/licenses/MIT).**
+**The firmware is primarily released under the [MIT License](http://opensource.org/licenses/MIT)** (see [`LICENSE`](LICENSE)).
+
+**Not every file is MIT.** Portions are Apache-2.0 (Zephyr/NCS build glue and some
+drivers), BSD-3-Clause (Bosch SensorAPI header), and **LicenseRef-Nordic-5-Clause**
+— the last is *not* OSI-approved open source and is restricted to use with Nordic
+Semiconductor devices. Bundled fonts are SIL OFL 1.1 / Apache-2.0. Every file carries
+an `SPDX-License-Identifier`; full texts are in [`LICENSES/`](LICENSES/) and every
+third-party component is attributed in [`THIRD_PARTY.md`](THIRD_PARTY.md).
+
+> **Vendor sensor-hub firmware is not distributed here.** The MAX32664C/D `.msbl`
+> images are proprietary to Analog Devices and are **not** included; they are
+> provisioned to the device filesystem separately (`app/src/max32664_updater/`).
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 

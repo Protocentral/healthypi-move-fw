@@ -37,8 +37,25 @@ void send_usb_cdc(const char *buf, size_t len);
 
 void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day, uint8_t m_month, uint8_t m_year);
 
+/* BMI323 any-motion (CONFIG_HPI_IMU_MOTION_WAKE). `last_motion_s` is the uptime, in
+ * seconds, of the most recent physical motion assertion -- the stillness signal the
+ * HRV gate needs (motion destroys pulse-rate variability). Defined in hw_module.c;
+ * these were previously not declared anywhere, so nothing outside that file could use
+ * them. */
+uint32_t hpi_hw_get_motion_count(void);
+int64_t  hpi_hw_get_last_motion_s(void);
+
 void hpi_bpt_pause_thread(void);
 void hpi_bpt_abort(void);
+
+/* BPT calibration control (HPI_HS group v2, cmds 8-11). Non-blocking — safe to
+ * call from the SMP/mgmt thread. enter/point/end return 0 or a negative errno
+ * (-EINVAL bad idx, -EBUSY a point already running); status fills a snapshot for
+ * the polled BPT_CAL_STATUS command. Cal is a fixed 3 points (idx 0..2). */
+int  hpi_bpt_cal_enter(void);
+int  hpi_bpt_cal_point(uint8_t sys, uint8_t dia, uint8_t idx);
+int  hpi_bpt_cal_end(void);
+void hpi_bpt_cal_status(uint8_t *st, uint8_t *prog, uint8_t *idx, bool *run);
 
 void hpi_hw_pmic_off(void);
 
@@ -55,11 +72,14 @@ int hw_max32664c_stop_algo(void);
 bool get_on_skin(void);
 void set_on_skin(bool on_skin);
 
-void today_init_steps(uint16_t steps);
+void today_init_steps(uint32_t steps);
+
+/* Recovered-fault breadcrumb (P0 safety net, main.c) — for surfacing on the
+ * display when the console is unavailable. false if the last boot was clean. */
+bool hpi_crash_get_last(uint32_t *reason, char *thread, size_t thread_sz, uint32_t *count);
 
 // Low battery management functions
 bool hw_is_low_battery(void);
-bool hw_is_critical_battery(void);
-void hw_reset_low_battery_state(void);
 uint8_t hw_get_current_battery_level(void);
 float hw_get_current_battery_voltage(void);
+bool hw_is_vbus_connected(void);   /* true when USB/charger power is present */

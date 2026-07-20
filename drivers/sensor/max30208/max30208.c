@@ -83,6 +83,37 @@ static int max30208_start_convert(const struct device *dev)
 	return ret;
 }
 
+/*
+ * Poll the STATUS register's TEMP_RDY bit until the one-shot conversion completes,
+ * instead of a blind worst-case sleep. Conversion is 15 ms typ / 50 ms max, so
+ * poll at a fine interval up to a bounded timeout. Uses a tight I2C read (no
+ * inter-read settle delay) so the poll interval — not bus turnaround — sets the
+ * granularity. Returns 0 when ready, -ETIMEDOUT if the flag never asserts.
+ */
+#define MAX30208_CONV_POLL_MS      2
+#define MAX30208_CONV_TIMEOUT_MS   60
+
+static int max30208_wait_conversion(const struct device *dev)
+{
+	const struct max30208_config *config = dev->config;
+	const uint8_t reg = MAX30208_REG_STATUS;
+	uint8_t status;
+	int ret;
+
+	for (int elapsed = 0; elapsed <= MAX30208_CONV_TIMEOUT_MS;
+	     elapsed += MAX30208_CONV_POLL_MS)
+	{
+		ret = i2c_write_read_dt(&config->i2c, &reg, 1U, &status, 1U);
+		if (ret == 0 && (status & MAX30208_STATUS_TEMP_RDY))
+		{
+			return 0;
+		}
+		k_sleep(K_MSEC(MAX30208_CONV_POLL_MS));
+	}
+
+	return -ETIMEDOUT;
+}
+
 static int max30208_get_temp(const struct device *dev)
 {
 	uint8_t read_buf[2] = {0, 0};
@@ -111,8 +142,15 @@ static int max30208_sample_fetch(const struct device *dev,
 		return ret;
 	}
 
-	/* Wait for conversion to complete */
-	k_sleep(K_MSEC(100));
+	/* Wait for conversion to complete (TEMP_RDY poll, ~15 ms typ vs blind 100 ms).
+	 * On timeout, fall through and read anyway (best-effort, matches the old blind
+	 * behaviour) but flag it so a wedged sensor is observable. */
+	ret = max30208_wait_conversion(dev);
+	if (ret < 0)
+	{
+		LOG_WRN("Temp conversion not ready within %d ms; reading anyway",
+				MAX30208_CONV_TIMEOUT_MS);
+	}
 
 	data->temp_int = max30208_get_temp(dev);
 
@@ -126,14 +164,9 @@ static int max30208_channel_get(const struct device *dev, enum sensor_channel ch
 	switch (chan)
 	{
 	case SENSOR_CHAN_AMBIENT_TEMP:
-	{
-		/* MAX30208 LSB = 0.005 °C = 5000 µ°C. Report degrees Celsius so the
-		 * sensor is interchangeable with the AS6221 at the application layer. */
-		int64_t micro_c = (int64_t)data->temp_int * 5000;
-		val->val1 = (int32_t)(micro_c / 1000000);
-		val->val2 = (int32_t)(micro_c % 1000000);
+		val->val1 = data->temp_int;
+		val->val2 = 0;
 		break;
-	}
 
 	default:
 		LOG_ERR("Unsupported sensor channel: %d", chan);

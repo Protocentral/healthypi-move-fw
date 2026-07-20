@@ -36,7 +36,6 @@
 #include <stdio.h>
 #include <app_version.h>
 #include <time.h>
-#include <zephyr/posix/time.h>
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/zbus/zbus.h>
@@ -73,39 +72,26 @@ static lv_style_t style_btn_secondary;
 static lv_style_t style_btn_icon;
 
 /* Modern arc styles - made global for external access */
-lv_style_t style_health_arc;
 lv_style_t style_health_arc_bg;
 
 // Global LVGL Styles
-lv_style_t style_tiny;
 lv_style_t style_scr_black;
 lv_style_t style_red_medium;
-lv_style_t style_red_large;
-lv_style_t style_lbl_red_small;
 
 lv_style_t style_white_medium;
 lv_style_t style_white_small;
 
-lv_style_t style_scr_container;
 
 lv_style_t style_lbl_white_14;
 lv_style_t style_white_large_numeric;
 
 /* Modern typography styles - made global for external access */
-lv_style_t style_headline;
-lv_style_t style_body_large;
 lv_style_t style_body_medium;
 lv_style_t style_caption;
 
 /* Additional specialized styles */
 lv_style_t style_numeric_large;  // For large numeric displays (time, main values)
-lv_style_t style_numeric_medium; // For medium numeric displays
-lv_style_t style_status_small;   // For small status text
 
-lv_style_t style_bg_blue;
-lv_style_t style_bg_red;
-lv_style_t style_bg_green;
-lv_style_t style_bg_purple;
 
 static uint8_t hpi_disp_curr_brightness = DISPLAY_DEFAULT_BRIGHTNESS;
 #define KEY_BRIGHTNESS "display/brightness"
@@ -117,7 +103,6 @@ int tmp_scr_parent = 0;
 // Externs
 extern const struct device *display_dev;
 
-extern struct k_sem sem_stop_one_shot_spo2;
 
 static int brightness_settings_set(const char *name, size_t len,
                                    settings_read_cb read_cb, void *cb_arg)
@@ -148,33 +133,26 @@ void display_init_styles(void)
     lv_style_set_border_width(&style_btn, 3);
 
     // Subscript (Unit) label style
-    lv_style_init(&style_tiny);
-    lv_style_set_text_color(&style_tiny, lv_color_white());
-    lv_style_set_text_font(&style_tiny, &lv_font_montserrat_20);
 
     lv_style_init(&style_white_medium);
     lv_style_set_text_color(&style_white_medium, lv_color_white());
-    lv_style_set_text_font(&style_white_medium, &inter_semibold_24);
+    lv_style_set_text_font(&style_white_medium, &manrope_700_22);
 
     lv_style_init(&style_white_large_numeric);
     lv_style_set_text_color(&style_white_large_numeric, lv_color_white());
-    lv_style_set_text_font(&style_white_large_numeric, &oxanium_90); // &ui_font_number_big); //&ui_font_Number_extra);
+    lv_style_set_text_font(&style_white_large_numeric, &rubik_500_32); /* was oxanium_90 (retired for flash) */
 
     // Label Red
     lv_style_init(&style_red_medium);
     lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
-    lv_style_set_text_font(&style_red_medium, &inter_semibold_24);
+    lv_style_set_text_font(&style_red_medium, &manrope_700_22);
 
     // Label White 14
     lv_style_init(&style_lbl_white_14);
     lv_style_set_text_color(&style_lbl_white_14, lv_color_white());
-    lv_style_set_text_font(&style_lbl_white_14, &inter_semibold_24);
+    lv_style_set_text_font(&style_lbl_white_14, &manrope_700_22);
 
     // Container for scrollable screen layout
-    lv_style_init(&style_scr_container);
-    lv_style_set_flex_flow(&style_scr_container, LV_FLEX_FLOW_ROW_WRAP);
-    lv_style_set_flex_main_place(&style_scr_container, LV_FLEX_ALIGN_SPACE_EVENLY);
-    lv_style_set_flex_cross_place(&style_scr_container, LV_FLEX_ALIGN_CENTER);
 
     // Black screen background
     lv_style_init(&style_scr_black);
@@ -220,53 +198,7 @@ void display_init_styles(void)
     lv_style_set_min_height(&style_btn_black_pressed, 56);
     lv_style_set_margin_all(&style_btn_black_pressed, 6);
 
-    lv_style_init(&style_bg_blue);
-    lv_style_set_radius(&style_bg_blue, 15);
-    lv_style_set_bg_opa(&style_bg_blue, LV_OPA_COVER);
-    static lv_grad_dsc_t grad;
-    grad.dir = LV_GRAD_DIR_VER;
-    grad.stops_count = 2;
-    grad.stops[0].color = lv_color_black();
-    grad.stops[1].color = lv_palette_darken(LV_PALETTE_BLUE, 4);
-    grad.stops[0].frac = 168;
-    grad.stops[1].frac = 255;
-    lv_style_set_bg_grad(&style_bg_blue, &grad);
-
-    lv_style_init(&style_bg_red);
-    lv_style_set_radius(&style_bg_red, 15);
-    lv_style_set_bg_opa(&style_bg_red, LV_OPA_COVER);
-    static lv_grad_dsc_t grad_red;
-    grad_red.dir = LV_GRAD_DIR_VER;
-    grad_red.stops_count = 2;
-    grad_red.stops[0].color = lv_color_black();
-    grad_red.stops[1].color = lv_palette_darken(LV_PALETTE_DEEP_ORANGE, 4);
-    grad_red.stops[0].frac = 168;
-    grad_red.stops[1].frac = 255;
-    lv_style_set_bg_grad(&style_bg_red, &grad_red);
-
-    lv_style_init(&style_bg_green);
-    lv_style_set_radius(&style_bg_green, 15);
-    lv_style_set_bg_opa(&style_bg_green, LV_OPA_COVER);
-    static lv_grad_dsc_t grad_green;
-    grad_green.dir = LV_GRAD_DIR_VER;
-    grad_green.stops_count = 2;
-    grad_green.stops[0].color = lv_color_black();
-    grad_green.stops[1].color = lv_palette_darken(LV_PALETTE_CYAN, 2);
-    grad_green.stops[0].frac = 168;
-    grad_green.stops[1].frac = 255;
-    lv_style_set_bg_grad(&style_bg_green, &grad_green);
-
-    lv_style_init(&style_bg_purple);
-    lv_style_set_radius(&style_bg_purple, 15);
-    lv_style_set_bg_opa(&style_bg_purple, LV_OPA_COVER);
-    static lv_grad_dsc_t grad_purple;
-    grad_purple.dir = LV_GRAD_DIR_VER;
-    grad_purple.stops_count = 2;
-    grad_purple.stops[0].color = lv_color_black();
-    grad_purple.stops[1].color = lv_palette_darken(LV_PALETTE_PURPLE, 4);
-    grad_purple.stops[0].frac = 168;
-    grad_purple.stops[1].frac = 255;
-    lv_style_set_bg_grad(&style_bg_purple, &grad_purple);
+    /* (dead style_bg_blue/red/green/purple gradient styles removed - unused) */
 
     /* Initialize modern primary button styles */
     lv_style_init(&style_btn_primary);
@@ -337,10 +269,6 @@ void display_init_styles(void)
     lv_style_set_shadow_opa(&style_btn_icon, LV_OPA_30);
 
     /* Initialize modern arc styles */
-    lv_style_init(&style_health_arc);
-    lv_style_set_arc_width(&style_health_arc, 6);
-    lv_style_set_arc_rounded(&style_health_arc, true);
-    lv_style_set_arc_color(&style_health_arc, lv_color_hex(COLOR_PRIMARY_BLUE));
 
     lv_style_init(&style_health_arc_bg);
     lv_style_set_arc_width(&style_health_arc_bg, 6);
@@ -349,42 +277,49 @@ void display_init_styles(void)
     lv_style_set_arc_opa(&style_health_arc_bg, LV_OPA_50);
 
     /* Initialize modern typography styles */
-    lv_style_init(&style_headline);
-    lv_style_set_text_color(&style_headline, lv_color_white());
-    lv_style_set_text_font(&style_headline, &inter_semibold_24); /* Headlines use Inter SemiBold 24px - increased for readability */
 
-    lv_style_init(&style_body_large);
-    lv_style_set_text_color(&style_body_large, lv_color_white());
-    lv_style_set_text_font(&style_body_large, &inter_semibold_24); /* Metric values use Inter SemiBold 24px - increased for readability */
 
     lv_style_init(&style_body_medium);
     lv_style_set_text_color(&style_body_medium, lv_color_white());
-    lv_style_set_text_font(&style_body_medium, &inter_semibold_24); /* Standard body text */
+    lv_style_set_text_font(&style_body_medium, &manrope_700_22); /* Standard body text */
 
     lv_style_init(&style_caption);
     lv_style_set_text_color(&style_caption, lv_color_hex(COLOR_TEXT_SECONDARY));
-    lv_style_set_text_font(&style_caption, &inter_semibold_24); /* Small labels and captions - increased to 24px minimum for small display readability */
+    lv_style_set_text_font(&style_caption, &manrope_700_22); /* Small labels and captions - increased to 24px minimum for small display readability */
 
     /* Initialize numeric display styles */
     lv_style_init(&style_numeric_large);
     lv_style_set_text_color(&style_numeric_large, lv_color_white());
-    lv_style_set_text_font(&style_numeric_large, &inter_semibold_80_time); /* Large numeric displays (time, hero values) */
+    lv_style_set_text_font(&style_numeric_large, &rubik_500_32); /* Large numeric displays (time, hero values) */
 
-    lv_style_init(&style_numeric_medium);
-    lv_style_set_text_color(&style_numeric_medium, lv_color_white());
-    lv_style_set_text_font(&style_numeric_medium, &inter_semibold_24); /* Medium numeric displays */
 
     // Style for small status text
-    lv_style_init(&style_status_small);
-    lv_style_set_text_color(&style_status_small, lv_color_hex(COLOR_TEXT_SECONDARY));
-    lv_style_set_text_font(&style_status_small, &inter_semibold_24); /* Status text - increased to 24px minimum for small display readability */
 
     //lv_disp_set_bg_color(NULL, lv_color_black());
 }
 
 void hpi_disp_restore_brightness(void)
 {
-    settings_load();
+    /* Load ONLY the "display" subtree (see the SETTINGS_STATIC_HANDLER_DEFINE above).
+     *
+     * This used to call the GLOBAL settings_load(), which re-runs EVERY registered
+     * settings handler -- including Bluetooth's. ble_module_init() has already called
+     * settings_load() once after bt_enable(), so this second pass made the BT host
+     * re-load its bonded keys and re-add their IRKs, corrupting its resolving-list
+     * bookkeeping. The symptom surfaces LATER, on disconnect: the host re-adds a
+     * bonded peer's IRK (the entry cannot be touched while the link is up), the
+     * controller sees an address already in the list, and returns
+     * HCI 0x12 "Invalid HCI Command Parameters":
+     *
+     *     <wrn> bt_hci_core: opcode 0x2027 status 0x12
+     *     <err> bt_id: Failed to add IRK to controller
+     *
+     * A peer whose IRK is not in the resolving list cannot have its RPA resolved, so
+     * the watch stops recognising the bonded phone across reconnects.
+     *
+     * Nothing outside the display subtree has any business being re-loaded to read one
+     * brightness byte. */
+    (void)settings_load_subtree("display");
     hpi_disp_set_brightness(hpi_disp_curr_brightness);
 }
 
@@ -468,77 +403,46 @@ uint8_t hpi_disp_get_brightness(void)
     return hpi_disp_curr_brightness;
 }
 
-/**
- * @brief Get the appropriate battery symbol for a given battery level and charging state
- * @param level Battery level percentage (0-100)
- * @param charging Whether the battery is currently charging
- * @return LVGL symbol string for the battery state
- */
-const char* hpi_get_battery_symbol(uint8_t level, bool charging)
-{
-    if (charging) {
-        return LV_SYMBOL_CHARGE; // Lightning bolt for charging
-    }
-    
-    // Battery symbols based on level thresholds
-    if (level >= HPI_BATTERY_LEVEL_FULL) {
-        return LV_SYMBOL_BATTERY_FULL;  // Full battery (90-100%)
-    } else if (level >= HPI_BATTERY_LEVEL_HIGH) {
-        return LV_SYMBOL_BATTERY_3;     // 3/4 battery (65-89%)
-    } else if (level >= HPI_BATTERY_LEVEL_MEDIUM) {
-        return LV_SYMBOL_BATTERY_2;     // 2/4 battery (35-64%)
-    } else if (level >= HPI_BATTERY_LEVEL_LOW) {
-        return LV_SYMBOL_BATTERY_1;     // 1/4 battery (15-34%)
-    } else {
-        return LV_SYMBOL_BATTERY_EMPTY; // Empty battery (0-14%)
-    }
-}
-
-/**
- * @brief Get the appropriate color for battery display
- * @param level Battery level percentage (0-100)
- * @param charging Whether the battery is currently charging
- * @return LVGL color for the battery display
- */
-lv_color_t hpi_get_battery_color(uint8_t level, bool charging)
-{
-    if (charging) {
-        return lv_color_hex(0x66FF66);  // Bright green when charging
-    } else if (level <= HPI_BATTERY_LEVEL_LOW) {
-        return lv_color_hex(0xFF6666);  // Bright red for low battery
-    } else if (level <= 30) {
-        return lv_color_hex(0xFFBB66);  // Bright orange for warning
-    } else {
-        return lv_color_hex(0xFFFFFF);  // Bright white for normal levels
-    }
-}
+/* P5 screen cache: the carousel overview screens (SCR_LIST_START..SCR_LIST_END)
+ * are built once and kept resident, so swiping between them reuses the existing
+ * lv_obj tree instead of rebuilding it every time. Special (SCR_SPL_*) screens
+ * are still rebuilt and auto-deleted as before. `auto_del` in lv_scr_load_anim
+ * deletes the *outgoing* screen, so we suppress it only when leaving a cached
+ * carousel screen; leaving a special screen still deletes it (no leak, no manual
+ * lifetime juggling). */
+#define HPI_SCR_IS_CAROUSEL(id) ((id) > SCR_LIST_START && (id) < SCR_LIST_END)
+static int g_shown_scr_id = -1;
 
 void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 {
+    /* Re-showing a cached screen would stack a second gesture handler, so remove
+     * any existing one first -> exactly one handler regardless of cache hits. */
+    lv_obj_remove_event_cb(m_screen, disp_screen_event);
     lv_obj_add_event_cb(m_screen, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
-    // Let LVGL automatically delete the old screen after animation completes
-    // This is the safest approach as LVGL handles the timing correctly
-    if (m_scroll_dir == SCROLL_LEFT)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_LEFT, SCREEN_TRANS_TIME, 0, true);
-    }
-    else if (m_scroll_dir == SCROLL_RIGHT)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_RIGHT, SCREEN_TRANS_TIME, 0, true);
-    }
-    else if (m_scroll_dir == SCROLL_UP)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_TOP, SCREEN_TRANS_TIME, 0, true);
-    }
-    else if (m_scroll_dir == SCROLL_DOWN)
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_OVER_BOTTOM, SCREEN_TRANS_TIME, 0, true);
-    }
-    else
-    {
-        lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
-    }
+    /* Keep the outgoing screen alive if it is a cached carousel screen. */
+    bool auto_del = !HPI_SCR_IS_CAROUSEL(g_shown_scr_id);
+
+    /* The SH8601 is SPI-bound: a full 390x390 frame takes ~74 ms to push, so any
+     * multi-frame slide/fade transition looks slow and jagged. Load instantly -
+     * a clean single-frame swap - regardless of gesture direction. (The OVER_*
+     * transitions even at SCREEN_TRANS_TIME=0 could still show a one-frame
+     * composite artifact; ANIM_NONE avoids that entirely.) The direction arg is
+     * retained for callers/back-compat but no longer drives a transition. */
+    (void)m_scroll_dir;
+    lv_scr_load_anim(m_screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, auto_del);
+
+    /* Force a full repaint of the shown screen. A freshly-built screen is
+     * already fully dirty, but a *cached* screen re-shown (e.g. reloaded on the
+     * same page after wake-from-sleep, where lv_scr_load_anim to the already-
+     * active screen is a no-op) would otherwise only redraw its dirty widgets
+     * and leave the rest of the panel showing stale/garbage GRAM. Invalidating
+     * marks the whole screen dirty so LVGL repaints it. */
+    lv_obj_invalidate(m_screen);
+
+    /* Record the now-current screen so the *next* transition knows whether the
+     * screen it is leaving is cached. Set by the draw fn just before this call. */
+    g_shown_scr_id = hpi_disp_get_curr_screen();
 }
 
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
@@ -550,45 +454,20 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     switch (m_screen)
     {
     case SCR_HOME:
-        draw_scr_home(m_scroll_dir);
+        hpi_carousel_show(SCR_HOME, m_scroll_dir);   /* P6: tileview carousel (tile 0) */
         break;
-#if defined(CONFIG_HPI_TODAY_SCREEN)
-    case SCR_TODAY:
-        draw_scr_today(m_scroll_dir);
-        break;
-#endif
+    /* P6: all metric overview screens are now tiles in the carousel. Route each
+     * to the carousel at the matching tile (e.g. measurement-return lands on it). */
     case SCR_HR:
-        draw_scr_hr(m_scroll_dir);
-        break;
     case SCR_SPO2:
-        draw_scr_spo2(m_scroll_dir);
-        break;
     case SCR_BPT:
-        draw_scr_bpt(m_scroll_dir);
-        break;
     case SCR_TEMP:
-        draw_scr_temp(m_scroll_dir);
-        break;
     case SCR_ECG:
-        draw_scr_ecg(m_scroll_dir);
-        break;
+    case SCR_ACTIVITY:
     case SCR_HRV:
-        draw_scr_hrv(m_scroll_dir, 0, 0, 0, 0);
-        break;
     case SCR_GSR:
-#if defined(CONFIG_HPI_GSR_SCREEN)
-        draw_scr_gsr(m_scroll_dir);
-#else
-    printk("GSR screen disabled by config\n");
-#endif
+        hpi_carousel_show(m_screen, m_scroll_dir);
         break;
-    case SCR_RECORDING:
-        draw_scr_recording(m_scroll_dir);
-        break;
-
-    /*case SCR_PLOT_EDA:
-        draw_scr_pre(m_scroll_dir);
-        break;*/
     default:
         printk("Invalid screen: %d", m_screen);
     }

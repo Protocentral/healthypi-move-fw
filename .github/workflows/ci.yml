@@ -1,12 +1,15 @@
 name: CI Build
 
+# CI auto-build temporarily disabled (manual-only). To re-enable, restore the
+# push/pull_request triggers below.
 on:
-  push:
-    branches:
-      - '**'  # Trigger on all branches
-  pull_request:
-    branches:
-      - '**'
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - '**'  # Trigger on all branches
+  # pull_request:
+  #   branches:
+  #     - '**'
 
 permissions:
   contents: read

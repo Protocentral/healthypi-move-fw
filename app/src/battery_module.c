@@ -54,9 +54,14 @@ static int64_t ref_time;
 
 // Low battery state tracking
 static bool low_battery_screen_active = false;
-static bool critical_battery_notified = false;
 static uint8_t last_battery_level = 100;  // Store last known battery level
 static float last_battery_voltage = 4.2f; // Store last known battery voltage
+
+// battery_evaluate() latched state + debounce streaks (see HPI_BATTERY_DEBOUNCE_SAMPLES)
+static enum hpi_batt_state s_batt_state = HPI_BATT_NORMAL;
+static uint8_t s_low_streak;      // consecutive samples with SoC <= LOW
+static uint8_t s_recover_streak;  // consecutive samples with SoC >= RECOVER
+static uint8_t s_shutdown_streak; // consecutive samples below the voltage floor while not charging
 
 /**
  * @brief Read sensors from the NPM13xx charger
@@ -238,10 +243,11 @@ int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
 
     current = -current; // Invert current sign for nrf_fuel_gauge lib
 
-    /* Process fuel gauge data with nRF Connect SDK 3.0.2 API */
-    soc = nrf_fuel_gauge_process(voltage, current, temp, delta, NULL);
-    tte = nrf_fuel_gauge_tte_get();
-    ttf = nrf_fuel_gauge_ttf_get();
+    /* Process fuel gauge data. NCS 3.4 API: results returned via out-params
+     * (soc/tte/ttf) with an int status, not the previous by-value returns. */
+    (void)nrf_fuel_gauge_process(voltage, current, temp, delta, &soc, NULL);
+    (void)nrf_fuel_gauge_tte_get(&tte);
+    (void)nrf_fuel_gauge_ttf_get(&ttf);
 
     // LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
     //          (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
@@ -263,17 +269,6 @@ bool battery_is_low(void)
     return low_battery_screen_active;
 }
 
-bool battery_is_critical(void)
-{
-    return (last_battery_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE);
-}
-
-void battery_reset_low_state(void)
-{
-    low_battery_screen_active = false;
-    critical_battery_notified = false;
-}
-
 uint8_t battery_get_level(void)
 {
     return last_battery_level;
@@ -284,58 +279,101 @@ float battery_get_voltage(void)
     return last_battery_voltage;
 }
 
+enum hpi_batt_state battery_evaluate(uint8_t soc, bool charging, float voltage)
+{
+    /* Over-discharge hard floor first: below the floor while not charging, we
+     * ship-mode regardless of the SoC estimate. Debounced so a transient sag
+     * under load (Li-ion voltage droops hard) can't power the device off. */
+    if (!charging && voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
+    {
+        if (++s_shutdown_streak >= HPI_BATTERY_DEBOUNCE_SAMPLES)
+        {
+            s_batt_state = HPI_BATT_SHUTDOWN;
+            return s_batt_state;
+        }
+    }
+    else
+    {
+        s_shutdown_streak = 0;
+    }
+
+    /* SoC-based low-battery warning with hysteresis. Recovery is condition-based
+     * (SoC rebound), NOT gated on charging - a load dropping off and the resting
+     * voltage/SoC recovering must dismiss the warning even without a charger. */
+    switch (s_batt_state)
+    {
+    case HPI_BATT_NORMAL:
+        if (soc <= HPI_BATTERY_LOW_SOC_PCT)
+        {
+            if (++s_low_streak >= HPI_BATTERY_DEBOUNCE_SAMPLES)
+            {
+                s_batt_state = HPI_BATT_LOW;
+                s_low_streak = 0;
+            }
+        }
+        else
+        {
+            s_low_streak = 0;
+        }
+        break;
+
+    case HPI_BATT_LOW:
+        if (soc >= HPI_BATTERY_RECOVER_SOC_PCT)
+        {
+            if (++s_recover_streak >= HPI_BATTERY_DEBOUNCE_SAMPLES)
+            {
+                s_batt_state = HPI_BATT_NORMAL;
+                s_recover_streak = 0;
+            }
+        }
+        else
+        {
+            s_recover_streak = 0;
+        }
+        break;
+
+    case HPI_BATT_SHUTDOWN:
+    default:
+        /* terminal - the device is powering off */
+        break;
+    }
+
+    return s_batt_state;
+}
+
 void battery_monitor_conditions(uint8_t sys_batt_level, bool sys_batt_charging, float sys_batt_voltage)
 {
     // Update internal state
     last_battery_level = sys_batt_level;
     last_battery_voltage = sys_batt_voltage;
 
-    // Check for low battery conditions (voltage-based)
-    if (!sys_batt_charging)
-    { // Only check cutoff when not charging
-        if (sys_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE)
-        {
-            // Critical battery voltage - immediately shutdown
-            LOG_ERR("Critical battery voltage (%.2f V) - shutting down", (double)sys_batt_voltage);
-            k_msleep(1000); // Give time for log message
-            hpi_hw_pmic_off();
-        }
-        else if (sys_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE && !low_battery_screen_active)
-        {
-            // Show low battery warning screen
-            LOG_WRN("Low battery voltage (%.2f V) - showing warning screen", (double)sys_batt_voltage);
-            low_battery_screen_active = true;
-            critical_battery_notified = true;
-
-            // Load the low battery screen with battery level and voltage as arguments
-            // Pass voltage as arg3 (multiply by 100 to preserve 2 decimal places in uint32_t)
-            hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, sys_batt_level, sys_batt_charging, (uint32_t)(sys_batt_voltage * 100), 0);
-        }
-    }
-    else
+    /* S3: this runs on hw_thread and MUST NOT touch LVGL. It only latches the
+     * battery state; the display thread owns the low-battery screen and shows /
+     * dismisses it from hw_is_low_battery() (see smf_display reconcile). The
+     * shutdown path stays here - hpi_hw_pmic_off() is not a UI call. */
+    switch (battery_evaluate(sys_batt_level, sys_batt_charging, sys_batt_voltage))
     {
-        // Reset flags when charging and voltage recovers
-        if (sys_batt_voltage > HPI_BATTERY_RECOVERY_VOLTAGE)
-        {
-            if (low_battery_screen_active)
-            {
-                LOG_INF("Battery voltage recovered (%.2f V) - dismissing low battery screen", (double)sys_batt_voltage);
-                // Cleanup low battery screen UI references
-                hpi_disp_low_battery_cleanup();
-                // Return to home screen and reset low battery screen state
-                hpi_load_screen(SCR_HOME, SCROLL_NONE);
-            }
-            low_battery_screen_active = false;
-            critical_battery_notified = false;
-        }
-    }
-}
+    case HPI_BATT_SHUTDOWN:
+        LOG_ERR("Battery below floor (%.2f V) - shutting down", (double)sys_batt_voltage);
+        k_msleep(1000); // Give time for the log message to flush
+        hpi_hw_pmic_off();
+        break;
 
-void battery_update_low_battery_screen(uint8_t sys_batt_level, bool sys_batt_charging, float sys_batt_voltage)
-{
-    // The display state machine now handles updates via hpi_disp_low_battery_update()
-    // This function is kept for backward compatibility but no longer does screen recreation
-    (void)sys_batt_level;
-    (void)sys_batt_charging;
-    (void)sys_batt_voltage;
+    case HPI_BATT_LOW:
+        if (!low_battery_screen_active)
+        {
+            LOG_WRN("Low battery (SoC %u%%) - warning latched", sys_batt_level);
+            low_battery_screen_active = true;
+        }
+        break;
+
+    case HPI_BATT_NORMAL:
+    default:
+        if (low_battery_screen_active)
+        {
+            LOG_INF("Battery recovered (SoC %u%%) - clearing low battery warning", sys_batt_level);
+            low_battery_screen_active = false;
+        }
+        break;
+    }
 }

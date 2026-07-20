@@ -264,13 +264,27 @@ static int bmi323_enable_step_counter(const struct device *dev)
 		return ret;
 	}
 
-	// Write step counter config
-	// ret = bmi323_write_step_counter_config(dev, false);
-	/*if (ret < 0)
-	{
-		LOG_ERR("Error writing step counter config %d", ret);
-		return ret;
-	}*/
+	/*
+	 * TODO(device-validation): optionally program the step-counter parameter
+	 * block before enabling the feature engine.
+	 *
+	 * bmi323_write_step_counter_config(dev, false) writes the SC config at
+	 * base address BMI3_BASE_ADDR_STEP_CNT (0x10) with config word 0x0001,
+	 * which sets the step-counter watermark_level (interrupt/status cadence)
+	 * and leaves the reset bit clear. It is intentionally left disabled here:
+	 * the counter already runs correctly using only the FEATURE_IO0 = 0x0200
+	 * enable below, and changing the watermark/parameter config directly alters
+	 * step-counting/reporting behavior. Enabling this must be validated on
+	 * device (confirm the counter still increments and totals match a measured
+	 * walk) before it ships. The same helper is already exercised by the reset
+	 * path (bmi323_reset_step_counter -> write_step_counter_config(dev, true)).
+	 *
+	 * ret = bmi323_write_step_counter_config(dev, false);
+	 * if (ret < 0) {
+	 *     LOG_ERR("Error writing step counter config %d", ret);
+	 *     return ret;
+	 * }
+	 */
 
 	// Reset Feature register
 	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, 0x0000);
@@ -513,11 +527,79 @@ static int bosch_bmi323_driver_api_attr_get(const struct device *dev, enum senso
 
 static int bmi323_trigger_set_acc_drdy(const struct device *dev)
 {
-	// struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	ARG_UNUSED(dev);
+	/* data-ready trigger not yet wired (steps are polled); see any-motion below */
+	return 0;
+}
+
+/*
+ * Enable the BMI323 any-motion feature and route it to the INT1 pin (P3 wear /
+ * wake-on-motion). The feature engine (BMI323 ROM) is already enabled at init,
+ * so any-motion just needs: accel running, INT1 pin configured, the feature
+ * enabled + committed via FEATURE_IO0/IO_STATUS (mirrors the step counter), and
+ * the any-motion output mapped to INT1. Uses the sensor's power-on-reset
+ * any-motion thresholds/duration (tunable later via the feature-data block).
+ */
+static int bmi323_trigger_set_acc_motion(const struct device *dev)
+{
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	const struct bmi323_config *config = (const struct bmi323_config *)dev->config;
 	int ret;
+	uint16_t reg;
 
-	
+	/* the accelerometer must be running for the feature engine to detect motion */
+	ret = bmi323_enable_acc(dev);
+	if (ret < 0) {
+		return ret;
+	}
 
+	/* INT1 pin: output enabled, push-pull, active-low (matches the DT
+	 * `int-gpios ... GPIO_ACTIVE_LOW`): int1_output_en=bit2, int1_od=bit1=0,
+	 * int1_lvl=bit0=0. */
+	ret = bmi323_write_reg_16(dev, BMI3_REG_IO_INT_CTRL, 0x0004);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* enable any-motion on X/Y/Z, preserving the step-counter bit already set */
+	ret = bmi323_read_reg_16(dev, BMI3_REG_FEATURE_IO0, &reg);
+	if (ret < 0) {
+		return ret;
+	}
+	reg |= (BMI3_ANY_MOTION_X_EN_MASK | BMI3_ANY_MOTION_Y_EN_MASK |
+		BMI3_ANY_MOTION_Z_EN_MASK);
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO0, reg);
+	if (ret < 0) {
+		return ret;
+	}
+	ret = bmi323_write_reg_16(dev, BMI3_REG_FEATURE_IO_STATUS, 0x0001); /* commit */
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* map any-motion output to INT1: INT_MAP1 any_motion field = bits[3:2],
+	 * 0b01 = INT1. */
+	ret = bmi323_read_reg_16(dev, BMI3_REG_INT_MAP1, &reg);
+	if (ret < 0) {
+		return ret;
+	}
+	reg = (reg & ~0x000C) | 0x0004;
+	ret = bmi323_write_reg_16(dev, BMI3_REG_INT_MAP1, reg);
+	if (ret < 0) {
+		return ret;
+	}
+
+	data->feature_any_motion_enabled = true;
+
+	/* arm the host GPIO interrupt (active-low -> to-active/falling edge) */
+	ret = gpio_pin_interrupt_configure_dt(&config->int_gpio, GPIO_INT_EDGE_TO_ACTIVE);
+	if (ret < 0) {
+		LOG_ERR("BMI323 any-motion: failed to arm GPIO int %d", ret);
+		return ret;
+	}
+
+	LOG_INF("BMI323 any-motion armed on INT1 (%s pin %d)",
+		config->int_gpio.port->name, config->int_gpio.pin);
 	return 0;
 }
 
@@ -542,7 +624,7 @@ static int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
 			ret = bmi323_trigger_set_acc_drdy(dev);
 			break;
 		case SENSOR_TRIG_MOTION:
-			// ret = bosch_bmi323_driver_api_trigger_set_acc_motion(dev);
+			ret = bmi323_trigger_set_acc_motion(dev);
 			break;
 		default:
 			break;

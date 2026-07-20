@@ -147,7 +147,8 @@ static int max32664_async_sample_fetch(const struct device *dev,
     return 0;
 }
 
-int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+/* NCS 3.2: the RTIO sensor submit handler now returns void (was int). */
+void max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
     uint32_t min_buf_len = sizeof(struct max32664d_encoded_data);
     int rc;
@@ -164,7 +165,7 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         LOG_ERR("Failed to get a read buffer of size %u bytes", min_buf_len);
         rtio_iodev_sqe_err(iodev_sqe, rc);
-        return rc;
+        return;
     }
 
     if ((data->op_mode == MAX32664D_OP_MODE_BPT_EST) || (data->op_mode == MAX32664D_OP_MODE_RAW) || (data->op_mode == MAX32664D_OP_MODE_BPT_CAL_START))
@@ -184,12 +185,12 @@ int max32664d_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         // LOG_ERR("Failed: %d", rc);
         rtio_iodev_sqe_err(iodev_sqe, rc);
-        return rc;
+        return;
     }
 
     rtio_iodev_sqe_ok(iodev_sqe, 0);
 
-    return 0;
+    return;
 }
 
 /*

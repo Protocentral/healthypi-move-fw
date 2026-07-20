@@ -39,11 +39,32 @@
 #define NPM1300_CHG_STATUS_CC_MASK	 BIT(3)
 #define NPM1300_CHG_STATUS_CV_MASK	 BIT(4)
 
-// Battery cutoff thresholds - voltage based (typical Li-ion voltages)
-// These values can be adjusted based on the specific battery characteristics
-#define HPI_BATTERY_CRITICAL_VOLTAGE 3.3f // Show critical low battery screen (V)
-#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f // Auto shutdown level (V) - prevents over-discharge
-#define HPI_BATTERY_RECOVERY_VOLTAGE 3.5f // Recovery threshold when charging (V) - allows hysteresis
+/*
+ * Battery thresholds — single source of truth for both the boot check and the
+ * runtime monitor.
+ *
+ * The user-facing "battery low" warning is driven by fuel-gauge STATE OF CHARGE
+ * (SoC), so what the warning trips on matches the "%" the screen shows. VOLTAGE
+ * is used ONLY as an over-discharge hard floor: below it, when not charging, we
+ * ship-mode the PMIC to protect the cell regardless of the SoC estimate.
+ */
+#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f // Over-discharge hard floor (V) - ship mode below this when not charging
+
+#define HPI_BATTERY_LOW_SOC_PCT     10 // Enter low-battery warning at/below this SoC (%)
+#define HPI_BATTERY_RECOVER_SOC_PCT 15 // Exit the warning at/above this SoC (%) - hysteresis; NOT gated on charging
+
+// Debounce: consecutive hw_thread samples (~5 s each) a condition must hold before
+// the state flips, so a transient under-load voltage sag / noisy SoC read can't trip it.
+#define HPI_BATTERY_DEBOUNCE_SAMPLES 3
+
+/**
+ * @brief Latched battery state produced by battery_evaluate().
+ */
+enum hpi_batt_state {
+    HPI_BATT_NORMAL = 0, // SoC above the recover threshold
+    HPI_BATT_LOW,        // SoC-based low-battery warning latched (hysteresis)
+    HPI_BATT_SHUTDOWN,   // voltage hard floor breached while not charging - powering off
+};
 
 /**
  * @brief Initialize the fuel gauge system
@@ -68,24 +89,10 @@ int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
 
 /**
  * @brief Check if the device is currently in low battery condition
- * 
- * @return true if low battery screen is active, false otherwise
+ *
+ * @return true if the low-battery warning is latched, false otherwise
  */
 bool battery_is_low(void);
-
-/**
- * @brief Check if the battery is in critical voltage range
- * 
- * @return true if battery voltage is critically low, false otherwise
- */
-bool battery_is_critical(void);
-
-/**
- * @brief Reset low battery state flags
- * 
- * Used when charging resumes or battery voltage recovers
- */
-void battery_reset_low_state(void);
 
 /**
  * @brief Get the last known battery level
@@ -102,24 +109,26 @@ uint8_t battery_get_level(void);
 float battery_get_voltage(void);
 
 /**
+ * @brief Evaluate battery state (SoC warning + voltage hard floor).
+ *
+ * Pure decision with hysteresis + debounce; no UI side effects. Both the boot
+ * check and the runtime monitor share the same thresholds via this module.
+ *
+ * @param soc      Fuel-gauge state of charge (0-100%)
+ * @param charging True if the charger is supplying current
+ * @param voltage  Battery terminal voltage (V)
+ * @return latched ::hpi_batt_state
+ */
+enum hpi_batt_state battery_evaluate(uint8_t soc, bool charging, float voltage);
+
+/**
  * @brief Check for battery conditions and handle low battery scenarios
- * 
+ *
  * This function should be called periodically from the main system thread
  * to monitor battery status and take appropriate actions.
- * 
+ *
  * @param sys_batt_level Current battery level (0-100%)
  * @param sys_batt_charging Current charging status
  * @param sys_batt_voltage Current battery voltage
  */
 void battery_monitor_conditions(uint8_t sys_batt_level, bool sys_batt_charging, float sys_batt_voltage);
-
-/**
- * @brief Update low battery screen if currently active
- * 
- * Refreshes the low battery warning screen with current status
- * 
- * @param sys_batt_level Current battery level (0-100%)
- * @param sys_batt_charging Current charging status  
- * @param sys_batt_voltage Current battery voltage
- */
-void battery_update_low_battery_screen(uint8_t sys_batt_level, bool sys_batt_charging, float sys_batt_voltage);

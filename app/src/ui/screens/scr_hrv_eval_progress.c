@@ -1,5 +1,6 @@
 
 #include <zephyr/kernel.h>
+#include "hpi_evt.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <lvgl.h>
@@ -40,7 +41,6 @@ extern lv_style_t style_caption;
 extern lv_style_t style_numeric_large;
 
 K_MUTEX_DEFINE(Lead_on_off_handler_mutex);
-extern struct k_sem sem_hrv_eval_cancel;
 
 // HRV evaluation parameters
 #define HRV_MEASUREMENT_DURATION_S 60  // 120 seconds for detailed HRV measurement  
@@ -264,7 +264,7 @@ void gesture_down_scr_spl_hrv_eval_progress(void)
     printk("Exiting HRV Evaluation Progress Screen via gesture\n");
     unload_scr_hrv_eval_progress(); 
     hpi_ecg_timer_reset();
-    k_sem_give(&sem_hrv_eval_cancel);
+    k_event_post(&ecg_evt, EVT_HRV_CANCEL);
 
     // Return to HRV home screen
     hpi_load_screen(SCR_HRV, SCROLL_DOWN);

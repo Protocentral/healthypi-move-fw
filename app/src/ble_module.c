@@ -44,8 +44,8 @@
 #include <zephyr/settings/settings.h>
 #include <app_version.h>
 
-#include "cmd_module.h"
 #include "hpi_common_types.h"
+#include "hpi_dfu.h"
 #include "ble_module.h"
 #include "ui/move_ui.h"
 
@@ -80,18 +80,10 @@ struct bt_conn *current_conn;
 // PPG Finger Characteristic cd5ca86f-4448-7db8-ae4c-d1da8cba36d0
 #define UUID_HPI_PPG_FI_CHAR BT_UUID_DECLARE_128(BT_UUID_128_ENCODE(0xcd5ca86f, 0x4448, 0x7db8, 0xae4c, 0xd1da8cba36d0))
 
-#define CMD_SERVICE_UUID 0xdc, 0xad, 0x7f, 0xc4, 0x23, 0x90, 0x4d, 0xd4, \
-						 0x96, 0x8d, 0x0f, 0x97, 0x92, 0x74, 0xbf, 0x01
-
-#define CMD_TX_CHARACTERISTIC_UUID 0xdc, 0xad, 0x7f, 0xc4, 0x23, 0x90, 0x4d, 0xd4, \
-								   0x96, 0x8d, 0x0f, 0x97, 0x28, 0x15, 0xbf, 0x01
-
-#define CMD_RX_CHARACTERISTIC_UUID 0xdc, 0xad, 0x7f, 0xc4, 0x23, 0x90, 0x4d, 0xd4, \
-								   0x96, 0x8d, 0x0f, 0x97, 0x27, 0x15, 0xbf, 0x01
-
-#define UUID_HPI_CMD_SERVICE BT_UUID_DECLARE_128(CMD_SERVICE_UUID)
-#define UUID_HPI_CMD_SERVICE_CHAR_TX BT_UUID_DECLARE_128(CMD_TX_CHARACTERISTIC_UUID)
-#define UUID_HPI_CMD_SERVICE_CHAR_RX BT_UUID_DECLARE_128(CMD_RX_CHARACTERISTIC_UUID)
+/* Legacy framed Command Service (UUIDs 01bf…, SOF 0x0A 0xFA) and its LOG /
+ * RECORDING file-pull commands are fully removed. Health history sync is the
+ * HPI_HS MCUmgr group (id 0x1000) — see docs/HPI_HS_API.md. Device time uses
+ * MCUmgr OS datetime. Live waveforms remain GATT notify on the services below. */
 
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
@@ -104,7 +96,6 @@ static const struct bt_data sd[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 
-extern struct k_msgq q_cmd_msg;
 extern struct k_sem sem_ble_thread_start;
 
 static void spo2_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
@@ -192,8 +183,6 @@ static void ppg_wr_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t val
 	}
 }
 
-uint8_t in_data_buffer[50];
-
 BT_GATT_SERVICE_DEFINE(hpi_spo2_service,
 					   BT_GATT_PRIMARY_SERVICE(HPI_SPO2_SERVICE),
 					   BT_GATT_CHARACTERISTIC(HPI_SPO2_CHAR,
@@ -243,80 +232,6 @@ BT_GATT_SERVICE_DEFINE(hpi_ecg_gsr_service,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 /* This function is called whenever the RX Characteristic has been written to by a Client */
-static ssize_t on_receive_cmd(struct bt_conn *conn,
-							  const struct bt_gatt_attr *attr,
-							  const void *buf,
-							  uint16_t len,
-							  uint16_t offset,
-							  uint8_t flags)
-{
-	const uint8_t *buffer = buf;
-
-	// LOG_DBG("Received CMD len %d \n", len);
-
-	/*for (uint8_t i = 0; i < len; i++)
-	{
-		in_data_buffer[i] = buffer[i];
-		printk("%02X", buffer[i]);
-	}
-	printk("\n");
-	*/
-
-	struct hpi_cmd_data_obj_t cmd_data_obj;
-	cmd_data_obj.pkt_type = 0x00;
-	cmd_data_obj.data_len = len;
-	memcpy(cmd_data_obj.data, buffer, len);
-
-	k_msgq_put(&q_cmd_msg, &cmd_data_obj, K_MSEC(100));
-
-	return len;
-}
-
-static void cmd_on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
-{
-	ARG_UNUSED(attr);
-	switch (value)
-	{
-	case BT_GATT_CCC_NOTIFY:
-		LOG_DBG("CMD RX/TX CCCD subscribed");
-		break;
-
-	case BT_GATT_CCC_INDICATE:
-		// Start sending stuff via indications
-		break;
-
-	case 0:
-		LOG_DBG("CMD RX/TX CCCD unsubscribed");
-		break;
-
-	default:
-		LOG_DBG("Error, CCCD has been set to an invalid value");
-	}
-}
-
-BT_GATT_SERVICE_DEFINE(hpi_cmd_service,
-					   BT_GATT_PRIMARY_SERVICE(UUID_HPI_CMD_SERVICE),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_TX,
-											  BT_GATT_CHRC_WRITE | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN,
-											  NULL, on_receive_cmd, NULL),
-					   BT_GATT_CHARACTERISTIC(UUID_HPI_CMD_SERVICE_CHAR_RX,
-											  BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_READ,
-											  BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_WRITE_AUTHEN,
-											  NULL, NULL, NULL),
-					   BT_GATT_CCC(cmd_on_cccd_changed,
-								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
-
-void hpi_ble_send_data(const uint8_t *data, uint16_t len)
-{
-
-	const struct bt_gatt_attr *attr = &hpi_cmd_service.attrs[4];
-
-	// printk("Sending data len %d \n", len);
-
-	bt_gatt_notify(NULL, attr, data, len);
-}
-
 void ble_ppg_notify_wr(uint32_t *ppg_data, uint8_t len)
 {
 	uint8_t out_data[128];
@@ -386,17 +301,6 @@ void ble_gsr_notify(int32_t *gsr_data, uint8_t len)
 	
 }
 
-void ble_bpt_cal_progress_notify(uint8_t bpt_status, uint8_t bpt_progress)
-{
-	uint8_t out_data[3];
-
-	out_data[0] = bpt_status;
-	out_data[1] = bpt_progress;
-	out_data[2] = 0x00;
-
-	bt_gatt_notify(NULL, &hpi_cmd_service.attrs[4], &out_data, sizeof(out_data));
-}
-
 void ble_hrs_notify(uint16_t hr_val)
 {
 	bt_hrs_notify(hr_val);
@@ -406,6 +310,25 @@ void ble_bas_notify(uint8_t batt_level)
 {
 	bt_bas_set_battery_level(batt_level);
 }
+
+/* A connectable advertising set stops automatically once a connection is
+ * established, so it must be restarted after a disconnect. Do it from a work
+ * item rather than inline in the disconnected callback (BT RX context). */
+static void adv_work_handler(struct k_work *work)
+{
+	int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad),
+							  sd, ARRAY_SIZE(sd));
+	if (err && err != -EALREADY)
+	{
+		LOG_ERR("Advertising failed to restart (err %d)\n", err);
+	}
+	else
+	{
+		LOG_INF("Advertising restarted");
+	}
+}
+
+static K_WORK_DEFINE(adv_work, adv_work_handler);
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
@@ -436,6 +359,18 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
 	LOG_INF("Disconnected from %s, reason 0x%02x %s\n", addr,
 			reason, bt_hci_err_to_str(reason));
+
+	/* App dropped off mid-OTA: fail fast so the watch leaves the update modal
+	 * and returns to normal instead of hanging (a raw disconnect emits no
+	 * img-mgmt DFU_STOPPED). The display's stall timeout is the backstop. */
+	if (hpi_dfu_is_active()) {
+		LOG_WRN("BLE disconnect during DFU - failing the update");
+		hpi_dfu_set_state(HPI_DFU_FAILED);
+	}
+
+	/* Connectable advertising stopped on connect; bring it back so the
+	 * device is discoverable again after the peer goes away. */
+	k_work_submit(&adv_work);
 }
 
 static void security_changed(struct bt_conn *conn, bt_security_t level,
@@ -526,7 +461,9 @@ void ble_module_init()
 
 	settings_load();
 
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+	/* NCS 3.2: BT_LE_ADV_CONN was removed; BT_LE_ADV_CONN_FAST_2 is the identical
+	 * replacement (BT_LE_ADV_OPT_CONN + FAST_INT_MIN_2/MAX_2). */
+	err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 	if (err)
 	{
 		LOG_ERR("Advertising failed to start (err %d)\n", err);
@@ -543,24 +480,7 @@ void ble_module_init()
 	LOG_DBG("Bluetooth init !");
 }
 
-static uint8_t m_ble_prev_progress = 0;
-static uint8_t m_ble_prev_status = 0;
-
-static void ble_bpt_listener(const struct zbus_channel *chan)
-{
-	const struct hpi_bpt_t *hpi_bpt = zbus_chan_const_msg(chan);
-	if (hpi_bpt->progress == m_ble_prev_progress &&
-		hpi_bpt->status == m_ble_prev_status)
-	{
-		return;
-	}
-	m_ble_prev_progress = hpi_bpt->progress;
-	m_ble_prev_status = hpi_bpt->status;
-
-	ble_bpt_cal_progress_notify(hpi_bpt->status, hpi_bpt->progress);
-	LOG_DBG("ZB BPT Status: %d Progress: %d\n", hpi_bpt->status, hpi_bpt->progress);
-}
-ZBUS_LISTENER_DEFINE(ble_bpt_lis, ble_bpt_listener);
+/* ble_bpt_lis / legacy Command Service removed — health sync is HPI_HS (MCUmgr). */
 
 void ble_thread(void)
 {

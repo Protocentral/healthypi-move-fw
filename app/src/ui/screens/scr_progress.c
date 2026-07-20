@@ -107,6 +107,13 @@ void draw_scr_progress(const char *title, const char *message)
     label_error_msg = lv_label_create(cont_col);
     lv_label_set_text(label_error_msg, "");
     lv_obj_add_style(label_error_msg, &style_red_medium, 0);
+    /* This label carries a status glyph, so it must stay on the built-in font:
+     * style_red_medium is manrope_700_22 (0x20-0x7E), which has neither the
+     * FontAwesome range nor U+2713/U+2717 -- the literal tick/cross this screen
+     * used to print rendered as a blank box. Montserrat carries both, and no
+     * matsym bin has an error/cross glyph to swap in. Same call as
+     * scr_spo2_result.c. Keep this AFTER add_style, or the style wins. */
+    lv_obj_set_style_text_font(label_error_msg, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_align(label_error_msg, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_flag(label_error_msg, LV_OBJ_FLAG_HIDDEN);
 
@@ -133,8 +140,8 @@ void hpi_disp_scr_update_progress(int progress, const char *status)
         {
             // Show error state
             lv_obj_clear_flag(label_error_msg, LV_OBJ_FLAG_HIDDEN);
-            lv_label_set_text(label_error_msg, "✗ Update Failed");
-            
+            lv_label_set_text(label_error_msg, LV_SYMBOL_CLOSE " Update Failed");
+
             // Change progress bar color to red for error indication
             lv_obj_set_style_bg_color(bar_progress, lv_palette_main(LV_PALETTE_RED), LV_PART_INDICATOR);
             
@@ -147,7 +154,7 @@ void hpi_disp_scr_update_progress(int progress, const char *status)
         {
             // Show success state
             lv_obj_clear_flag(label_error_msg, LV_OBJ_FLAG_HIDDEN);
-            lv_label_set_text(label_error_msg, "✓ Update Complete");
+            lv_label_set_text(label_error_msg, LV_SYMBOL_OK " Update Complete");
             lv_obj_set_style_text_color(label_error_msg, lv_palette_main(LV_PALETTE_GREEN), 0);
             
             // Change progress bar color to green for success
@@ -172,11 +179,14 @@ void hpi_disp_scr_show_error(const char *error_message)
     
     // Show prominent error display
     lv_obj_clear_flag(label_error_msg, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(label_error_msg, "✗ Update Failed");
-    
+    lv_label_set_text(label_error_msg, LV_SYMBOL_CLOSE " Update Failed");
+
     // Ensure the error message has red color styling
     lv_obj_remove_style_all(label_error_msg);
     lv_obj_add_style(label_error_msg, &style_red_medium, 0);
+    /* remove_style_all dropped the built-in font set in draw_scr_progress(), and
+     * style_red_medium puts manrope back -- which would box the glyph above. */
+    lv_obj_set_style_text_font(label_error_msg, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(label_error_msg, lv_palette_main(LV_PALETTE_RED), 0);
     lv_obj_set_style_text_align(label_error_msg, LV_TEXT_ALIGN_CENTER, 0);
     

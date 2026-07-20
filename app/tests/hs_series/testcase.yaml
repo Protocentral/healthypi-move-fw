@@ -1,0 +1,11 @@
+tests:
+  healthypi.hs.series:
+    tags: health_store series
+    # native_sim is Linux-only, so it cannot run on a macOS dev host. qemu_cortex_m3
+    # runs everywhere the Zephyr SDK does (it ships the QEMU binary) and exercises
+    # the same code on a real kernel. native_sim stays listed for Linux CI.
+    platform_allow:
+      - qemu_cortex_m3
+      - native_sim
+    integration_platforms:
+      - qemu_cortex_m3

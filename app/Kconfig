@@ -7,13 +7,14 @@ rsource "src/max32664_updater/Kconfig"
  
 menu "HealthyPi Move application options"
 
-config HPI_TODAY_SCREEN
-		bool "Enable TODAY screen"
-		default y
-		help
-			Enable the TODAY screen showing daily activity summary (steps, calories,
-			active time). Disable to temporarily exclude from build during debugging
-			or to save flash/RAM. When disabled, screen is excluded from navigation.
+config HPI_SH8601_HW_AOD
+	bool "SH8601 native AOD mode for Always-on display"
+	default y
+	help
+	  When enabled, Settings → Always-on uses the SH8601 panel AOD path
+	  (AODMON 0x49 / AODMOFF 0x48 + AOD brightness 0x4A) after painting the
+	  dim face. When disabled, Always-on falls back to software dimming of
+	  normal display mode (lower power savings, useful for bring-up/A-B).
 
 config HPI_GSR_SCREEN
 		bool "Enable GSR screen"
@@ -33,34 +34,145 @@ config HPI_GSR_STRESS_INDEX
 			Adds ~2KB flash and ~300 bytes RAM for history buffers.
 			Disable to save memory if only raw GSR values are needed.
 
-config HPI_RECORDING_MODULE
-		bool "Enable background recording module"
-		default y
-		help
-			Enable multi-signal background recording with BLE configuration.
-			Supports recording PPG (wrist/finger), IMU, and GSR data for
-			configurable durations. Data is stored in LittleFS and retrieved
-			via MCUMgr FS commands over BLE.
+# Legacy CONFIG_HPI_RECORDING_MODULE (background multi-signal record + BLE/FS
+# pull) was removed. Spot-check captures (ECG/GSR/HRV R-R) go through the health
+# store record tier and sync via the HPI_HS MCUmgr group (docs/HPI_HS_API.md).
 
-config HPI_RECORDING_MAX_DURATION_S
-		int "Maximum recording duration in seconds"
-		default 3600
-		range 60 7200
-		depends on HPI_RECORDING_MODULE
-		help
-			Maximum allowed recording duration in seconds.
-			Default is 3600 (1 hour). Range: 60s to 7200s (2 hours).
+config HPI_IMU_MOTION_WAKE
+	bool "BMI323 any-motion (wake-on-motion) interrupt"
+	default n
+	help
+		Register the BMI323 any-motion interrupt (INT1 -> P1.12) at boot
+		(P3 interrupt/RTIO). On motion the driver's trigger handler fires
+		and the app records a motion event. Foundation for P4 wear-state
+		power gating. OFF by default; enable to validate on device (boot
+		log "BMI323 any-motion armed", then "any-motion detected" on move).
 
-config HPI_RECORDING_BUFFER_SIZE
-		int "Recording buffer size per signal (bytes)"
-		default 1024
-		range 512 4096
-		depends on HPI_RECORDING_MODULE
-		help
-			Size of each dual-buffer for recording. Larger buffers reduce
-			write frequency but use more RAM. Each signal uses 2x this size.
-			Default is 1024 bytes (2KB per signal, 10KB total for 5 signals).
+# --- HS-2 P1: health-store epoch aggregation -------------------------------
+# Continuous signals are reduced to one epoch record per window instead of being
+# written on every publish (~46k samples/day -> ~6k). The statistic emitted
+# depends on the KIND of signal -- see docs/HS_SYNC_REDESIGN_PLAN.md 2.2.
+
+config HPI_HS_EPOCH_HR_S
+	int "Health-store HR epoch length (seconds)"
+	default 60
+	help
+	  HR is spiky, so each epoch emits mean + min + max (the mean alone would
+	  under-report peaks). Enable HPI_HS_EPOCH_SPREAD_LOG and check the logged
+	  within-epoch spread on real wear before changing this: if the spread is
+	  routinely small, this can grow to 300 and save ~5x more.
+
+config HPI_HS_EPOCH_TEMP_S
+	int "Health-store skin-temp epoch length (seconds)"
+	default 300
+	help
+	  Skin temp moves over minutes, so each epoch emits mean + count only. No
+	  min/max: a within-epoch extreme would capture artifacts (contact pressure,
+	  sun, watch removal), not physiology, and a nightly min / daily max is
+	  recoverable from the series of means.
+
+config HPI_HS_EPOCH_COUNTER_S
+	int "Health-store cumulative-counter epoch length (seconds)"
+	default 60
+	help
+	  Steps and active energy are cumulative counters. Only the last value in the
+	  window is meaningful (max == last; the mean of a monotonic ramp is not a
+	  number that means anything). A decrease -- the local-midnight reset --
+	  force-closes the window so the day's final total is not swallowed.
+
+config HPI_HS_SYNTH
+	bool "Health-store synthetic data generator (TEST ONLY)"
+	default n
+	help
+	  Generates backdated, physiologically plausible data straight into the epoch
+	  aggregator, so trends, the 7-day temp baseline, retention and sync-at-scale
+	  can be tested WITHOUT wearing the watch for a week: it generates a week in
+	  seconds.
+
+	  Triggered by the HPI_HS `SYNTH` MCUmgr command (id 6) over BLE -- NOT at boot,
+	  and not from a shell (this board's debug UART is TX-only, so nothing can be
+	  typed into it). Boot-triggering was the old design and was a liability: a run
+	  that faults partway comes back, regenerates and faults again -- a boot loop.
+
+	  Every sample it writes carries HPI_HS_Q_SYNTHETIC so fabricated data can
+	  never be mistaken for a real measurement. MUST BE OFF IN RELEASE BUILDS.
+
+config HPI_HS_SYNTH_RTC_BOOTSTRAP
+	bool "Set the RTC to a fixed test date if it is invalid (TEST ONLY)"
+	default y
+	depends on HPI_HS_SYNTH
+	help
+	  The synthetic generator needs a VALID RTC: hpi_sys_is_time_valid() requires a
+	  2020..2030 timestamp, and SUMMARY computes "today" from the RTC, so synthetic
+	  data timestamped outside the RTC's day would simply not show up.
+
+	  A bench board typically has an unset RTC (it reads year 2000), and the debug
+	  UART is TX-only so the time cannot be typed in. This sets a fixed date when the
+	  RTC is invalid, which also makes the test dataset REPRODUCIBLE.
+
+# --- HS-2 P3: continuous PPG-derived HRV ----------------------------------
+# The MAX32664C already emits R-R intervals with a confidence value and nothing read
+# them, so HRV/stress needed a manual ECG spot check. These gate the R-R stream.
+
+config HPI_HS_HRV_WINDOW_S
+	int "HRV window length (seconds)"
+	default 300
+	help
+	  The Task-Force short-term HRV window. Metrics (RMSSD/SDNN/mean-RR/coverage) are
+	  computed per window and stored; the raw beats are NOT (86,400 intervals/day would
+	  be worse than the firehose P1 removed -- raw R-R belongs in the Record tier).
+
+config HPI_HS_HRV_MIN_CONF
+	int "Minimum hub R-R confidence to accept a beat (0..100)"
+	default 80
+	help
+	  Motion destroys pulse-rate variability. A permissive gate does not produce more
+	  HRV data -- it produces a plausible-looking trend made of artefacts, which is
+	  worse than no trend at all. Lower this only with evidence.
+
+config HPI_HS_HRV_QUIET_S
+	int "Seconds of no IMU motion required before a beat is accepted"
+	default 10
+	help
+	  The stillness gate, from the BMI323 any-motion trigger. 0 disables it (e.g. if
+	  HPI_IMU_MOTION_WAKE is off), which leaves only the confidence + contact gates.
+
+config HPI_HS_HRV_MIN_BEATS
+	int "Minimum accepted beats before a window is emitted"
+	default 30
+
+config HPI_HS_HRV_MIN_COVERAGE
+	int "Minimum window coverage (%) before a window is emitted"
+	default 50
+	help
+	  Coverage = the share of the window actually backed by accepted beats. A window
+	  below this is too sparse for its RMSSD to mean anything, so it is discarded
+	  rather than stored as a misleading data point.
+
+config HPI_HS_EPOCH_SPREAD_LOG
+	bool "Log within-epoch spread (max-min) for epoch-length validation"
+	default n
+	help
+	  Prints n/mean/min/max/spread as each epoch closes. This is the measurement
+	  that validates the epoch lengths above against real wear rather than
+	  assumption. Leave off in production.
 
 endmenu
+
+# --- NCS v3.3 migration shim ---------------------------------------------
+# With SB_CONFIG_SECURE_BOOT_NETCORE=y, NCS sysbuild (nrf/sysbuild/secureboot.cmake)
+# pushes CONFIG_TFM_HAS_B0N into the default (app) image even on this secure
+# `cpuapp` build that does not use TF-M. Upstream only defines TFM_HAS_B0N inside
+# `if BUILD_WITH_TFM` (nrf/modules/trusted-firmware-m/Kconfig), and we blocklist
+# trusted-firmware-m in west.yml, so the symbol is otherwise undefined here -- the
+# sysbuild assignment then aborts Kconfig ("assign to undefined symbol"). Define an
+# inert stub (mirrors the upstream prompt) purely to absorb that informative value.
+# Nothing in this non-TF-M build reads it.
+config TFM_HAS_B0N
+	bool "Network core bootloader present (informative only, do not change)"
+	depends on SOC_SERIES_NRF53
+	help
+	  Migration stub mirroring nrf/modules/trusted-firmware-m/Kconfig. Absorbs the
+	  sysbuild-propagated CONFIG_TFM_HAS_B0N value on no-TF-M secure-boot builds.
 
 source "Kconfig.zephyr"

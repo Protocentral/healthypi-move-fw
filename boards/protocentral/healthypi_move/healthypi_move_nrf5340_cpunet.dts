@@ -92,26 +92,32 @@ arduino_i2c: &i2c0 {
 
 &flash1 {
 
+	/*
+	 * M3: PM->DTS. Net core uses NSIB secure boot (b0n) + a single app slot,
+	 * matching the previous PM-resolved layout. b0n boots s0_partition; net
+	 * updates arrive via the app-core external staging and PCD.
+	 */
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		boot_partition: partition@0 {
-			label = "mcuboot";
-			reg = <0x00000000 0xc000>;
+		/* Net-core immutable secure bootloader (NSIB / b0n). */
+		b0n_partition: partition@0 {
+			label = "b0n";
+			reg = <0x00000000 0x00008580>;
 		};
-		slot0_partition: partition@c000 {
+
+		/* b0n provisioning data (bl_storage label required by NSIB). */
+		bl_storage: provision_partition: partition@8580 {
+			label = "b0n-provision";
+			reg = <0x00008580 0x00000280>;
+		};
+
+		/* Net-core application slot (booted by b0n). */
+		s0_partition: partition@8800 {
 			label = "image-0";
-			reg = <0x0000C000 0x17000>;
-		};
-		slot1_partition: partition@23000 {
-			label = "image-1";
-			reg = <0x00023000 0x17000>;
-		};
-		storage_partition: partition@3a000 {
-			label = "storage";
-			reg = <0x0003a000 0x6000>;
+			reg = <0x00008800 0x00037800>;
 		};
 	};
 };

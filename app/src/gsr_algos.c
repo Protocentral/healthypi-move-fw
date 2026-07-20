@@ -10,7 +10,10 @@
 LOG_MODULE_REGISTER(gsr_algos, LOG_LEVEL_DBG);
 
 #define SCR_MIN_INTERVAL 32      // Minimum interval between SCRs (1 s at 32 Hz)
-#define GSR_MAX_SAMPLES  2048    // Maximum expected GSR samples
+/* GSR algo scratch is sized for one 30 s capture: GSR_RECORD_BUFFER_SAMPLES=960
+ * (32 Hz x 30 s), clamped in data_module. 1024 gives margin without the old 2048
+ * over-provision (saves 8 KB across gsr_uS[] + temp_buf[]). */
+#define GSR_MAX_SAMPLES  1024    // >= GSR_RECORD_BUFFER_SAMPLES (960)
 
 // Static buffers
 static float gsr_uS[GSR_MAX_SAMPLES];

@@ -99,7 +99,10 @@ void draw_scr_spl_low_battery(enum scroll_dir m_scroll_dir, uint32_t arg1, uint3
     // Add charging status info if available
     if (is_charging) {
         label_charging = lv_label_create(cont_col);
-        lv_label_set_text(label_charging, LV_SYMBOL_CHARGE " Charging...");
+        /* Text-only: style_white_medium is manrope_700_22 (0x20-0x7E), which has no
+         * FontAwesome range, so LV_SYMBOL_CHARGE rendered here as a blank box. No
+         * matsym bin carries a charging bolt either. The word + green already say it. */
+        lv_label_set_text(label_charging, "Charging...");
         lv_obj_add_style(label_charging, &style_white_medium, 0);
         lv_obj_set_style_text_color(label_charging, lv_color_hex(0x00FF00), 0); // Green color for charging
     } else {
@@ -125,13 +128,13 @@ void hpi_disp_low_battery_update(uint8_t battery_level, bool is_charging)
             lv_obj_t *parent = lv_obj_get_parent(label_battery_percent);
             if (parent != NULL) {
                 label_charging = lv_label_create(parent);
-                lv_label_set_text(label_charging, LV_SYMBOL_CHARGE " Charging...");
+                lv_label_set_text(label_charging, "Charging...");   /* see draw: no bolt glyph in manrope */
                 lv_obj_add_style(label_charging, &style_white_medium, 0);
                 lv_obj_set_style_text_color(label_charging, lv_color_hex(0x00FF00), 0); // Green color for charging
             }
         } else {
             // Update existing charging label
-            lv_label_set_text(label_charging, LV_SYMBOL_CHARGE " Charging...");
+            lv_label_set_text(label_charging, "Charging...");
         }
         
         // Update info text for charging
@@ -160,7 +163,16 @@ void hpi_disp_low_battery_cleanup(void)
     label_info = NULL;
 }
 
+/* P1-6: deliberately inert. The warning is the only thing between the user and
+ * a 3.0 V shutdown, so a swipe must not dismiss it while the battery is still
+ * low. Dismiss-on-recovery is already automatic and does not need a gesture:
+ * battery S3 has the display thread reconcile this screen from the latched
+ * state (hpi_disp_reconcile_low_battery() in smf_display.c), which drops it and
+ * returns Home once SoC rebounds past HPI_BATTERY_RECOVER_SOC_PCT - charger or
+ * not. A manual dismiss would also desync that edge-driven reconciler, which
+ * would then never re-show the warning. Leave empty.
+ */
 void gesture_down_scr_spl_low_battery(void)
 {
-    // No action on gesture down
+    // No action on gesture down - see the note above (P1-6).
 }

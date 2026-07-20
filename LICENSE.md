@@ -1,51 +1,63 @@
 License Information
 ===================
 
+HealthyPi Move is open hardware and open source. Different parts of the project
+are released under different licenses, summarised below.
+
+| Part | License |
+|---|---|
+| Hardware (schematics, PCB, mechanical) | **CERN-OHL-P v2** (permissive) |
+| Software / firmware | **MIT** (with exceptions — see below) |
+| Documentation | **CC BY-SA 4.0** |
+
+---
+
 Hardware
----------
+--------
 
-**All hardware is released under [Creative Commons Share-alike 4.0 International](http://creativecommons.org/licenses/by-sa/4.0/).**
+**All hardware is released under the
+[CERN Open Hardware Licence Version 2 - Permissive (CERN-OHL-P v2)](https://cern-ohl.web.cern.ch/).**
 
-You are free to:
-
-Share — copy and redistribute the material in any medium or format
-Adapt — remix, transform, and build upon the material
-for any purpose, even commercially.
-The licensor cannot revoke these freedoms as long as you follow the license terms.
-Under the following terms:
-
-Attribution — You must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
-ShareAlike — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
-No additional restrictions — You may not apply legal terms or technological measures that legally restrict others from doing anything the license permits.
-Notices:
-
-You do not have to comply with the license for elements of the material in the public domain or where your use is permitted by an applicable exception or limitation.
-No warranties are given. The license may not give you all of the permissions necessary for your intended use. For example, other rights such as publicity, privacy, or moral rights may limit how you use the material.
+You may use, study, modify, manufacture and distribute the hardware designs and
+products derived from them, including commercially, without the obligation to
+release your modifications. Attribution and retention of notices are required.
+The designs are provided without warranty, to the extent permitted by law.
 
 
 Software
 --------
 
-**All software is released under the MIT License(http://opensource.org/licenses/MIT).**
+**The firmware in this repository is primarily released under the
+[MIT License](http://opensource.org/licenses/MIT), Copyright (c) 2019-2025
+Protocentral Electronics.** The full MIT text is in [`LICENSE`](LICENSE).
 
-The MIT License (MIT)
+**Not every file is MIT.** This repository also contains:
 
-Copyright (c) 2019 ProtoCentral
+| License | Where | Notes |
+|---|---|---|
+| Apache-2.0 | Zephyr/NCS build glue, board files, some drivers | Standard Zephyr ecosystem licensing |
+| BSD-3-Clause | `drivers/sensor/bmi323hpi/bmi323_hpi.h` | Bosch Sensortec SensorAPI header |
+| **LicenseRef-Nordic-5-Clause** | 4 Nordic-derived config/data files | ⚠️ **Not OSI-approved open source.** Redistribution is permitted **only for use with Nordic Semiconductor devices.** |
+| SIL OFL 1.1 | Bundled typefaces in `app/src/ui/fonts/` | Inter, JetBrains Mono, Jost, Manrope, Orbitron, Rubik, Saira, Train One |
+| Apache-2.0 | Material Symbols icon font | Google LLC |
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Every source file carries an `SPDX-License-Identifier`. Full license texts are in
+[`LICENSES/`](LICENSES/). Third-party and derived components — including code
+forked from Zephyr and from other open-source projects — are itemised with
+attribution in [`THIRD_PARTY.md`](THIRD_PARTY.md).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+**Vendor sensor-hub firmware is not distributed here.** The MAX32664C/D hub
+firmware images (`.msbl`) are proprietary to Analog Devices and are **not**
+included in this repository. See `app/src/max32664_updater/` for how they are
+provisioned to the device filesystem.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+
+Documentation
+-------------
+
+**Documentation and design assets are released under
+[Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](http://creativecommons.org/licenses/by-sa/4.0/).**
+
+You are free to share and adapt the material for any purpose, including
+commercially, provided you give appropriate credit, indicate changes, and
+distribute your contributions under the same license.

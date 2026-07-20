@@ -13,9 +13,10 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(healthypi_move)
 
-FILE(GLOB app_sources   src/*.c 
-                        src/images/*.c 
-                        src/ui/*.c 
+FILE(GLOB app_sources   src/*.c
+                        src/health/*.c
+                        src/images/*.c
+                        src/ui/*.c
                         src/ui/components/*.c
                         src/ui/images/*.c
                         src/ui/fonts/*.c
@@ -23,26 +24,19 @@ FILE(GLOB app_sources   src/*.c
                         src/ui/screens/*.c
                         src/ui/screens/*.c
                         src/ui/screens/*.c
-                        src/sm/*.c)  
+                        src/sm/*.c)
 
-# Exclude TODAY screen source if disabled
-if(NOT CONFIG_HPI_TODAY_SCREEN)
-  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_today\\.c$")
+# Synthetic data generator is TEST-ONLY; keep it out of the binary when disabled.
+if(NOT CONFIG_HPI_HS_SYNTH)
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/health/hpi_hs_synth\\.c$")
 endif()
 
-# Exclude GSR sources if the screen is disabled
-if(NOT CONFIG_HPI_GSR_SCREEN)
-  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr\\.c$")
-  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr_plot\\.c$")
-endif()
+# JetBrains Mono was only used by the boot POST log; that screen now uses
+# Manrope (HPI_FONT_LABEL). Keep the .c on disk for regeneration history but
+# do not link it (~52 KB of source / multi-KB of glyph data).
+list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/fonts/lvgl/jetbrains_mono_700_20\\.c$")
 
 target_sources(app PRIVATE ${app_sources})
-
-# Explicitly include autoscale helper (ensure CMake picks it up if globbing was run earlier)
-target_sources(app PRIVATE src/ui/hpi_ppg_autoscale.c)
-
-# Explicitly include measurement settings (ensure CMake picks it up if globbing was run earlier)
-target_sources(app PRIVATE src/hpi_measurement_settings.c)
 
 if(CONFIG_MAX32664_UPDATER)
     FILE(GLOB max32664_updater_sources 
@@ -54,6 +48,14 @@ endif()
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/drivers)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+# NOTE: the M3-era -Wno-error=incompatible-pointer-types escape hatch is GONE.
+# It existed for exactly one thing: sm/smf_display.c stored the 1-arg
+# draw_scr_carousel in the 5-arg screen_func_table (8 entries). That is now
+# adapted by draw_scr_carousel_entry(), so the table is type-correct and GCC 14's
+# -Wincompatible-pointer-types is a hard error again for the whole app library --
+# which is what we want, since the flag was suppressing the diagnostic everywhere,
+# not just on those 8 entries. Do not re-add it to paper over a new mismatch.
 
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 

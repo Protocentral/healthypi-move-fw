@@ -35,6 +35,7 @@
 #include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"
 
 LOG_MODULE_REGISTER(scr_bpt_cal_required, LOG_LEVEL_DBG);
 
@@ -74,18 +75,20 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
 
     // Warning icon - large, centered near top
     lv_obj_t *label_warning = lv_label_create(scr_bpt_cal_required);
-    lv_label_set_text(label_warning, LV_SYMBOL_WARNING);
+    /* sensors (U+E51E) is in matsym_24 - the Material bins carry no warning glyph */
+    lv_label_set_text(label_warning, SYM_SENSORS);
     lv_obj_align(label_warning, LV_ALIGN_TOP_MID, 0, 55);
-    lv_obj_set_style_text_color(label_warning, lv_color_hex(0xFFAA00), LV_PART_MAIN);  // Amber/orange for warning
-    lv_obj_set_style_text_font(label_warning, &lv_font_montserrat_24, LV_PART_MAIN);   // Larger icon
+    lv_obj_set_style_text_color(label_warning, lv_color_hex(R0_WARNING), 0);
+    lv_obj_set_style_text_font(label_warning, &HPI_FONT_ICON, 0);
 
     // Screen title - positioned below the warning icon
     lv_obj_t *label_title = lv_label_create(scr_bpt_cal_required);
-    lv_label_set_text(label_title, "Calibration Required");
+    lv_label_set_text(label_title, "CALIBRATION REQUIRED");
     lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 115);
-    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_font(label_title, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(label_title, lv_color_hex(R0_WARNING), 0);
+    lv_obj_set_style_text_letter_space(label_title, 1, 0);
 
     // Main message (centered below title)
     label_bpt_cal_required = lv_label_create(scr_bpt_cal_required);
@@ -93,22 +96,22 @@ void draw_scr_bpt_cal_required(enum scroll_dir m_scroll_dir, uint32_t arg1, uint
     lv_obj_set_width(label_bpt_cal_required, 300);
     lv_label_set_text(label_bpt_cal_required, "Please complete calibration using the HealthyPi Mobile App before taking BP measurements.");
     lv_obj_align(label_bpt_cal_required, LV_ALIGN_CENTER, 0, 10);
-    lv_obj_add_style(label_bpt_cal_required, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_bpt_cal_required, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_bpt_cal_required, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_obj_set_style_text_font(label_bpt_cal_required, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_align(label_bpt_cal_required, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(label_bpt_cal_required, lv_color_hex(V2_MUTED), 0);
 
     // BOTTOM ZONE: Action Button (consistent with other screens)
-    btn_ok = hpi_btn_create_primary(scr_bpt_cal_required);
-    //lv_obj_add_event_cb(btn_ok, scr_btn_ok_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_size(btn_ok, 180, 50);  // Standard size matching other screens
-    lv_obj_align(btn_ok, LV_ALIGN_BOTTOM_MID, 0, -30);  // Standard bottom positioning
-    lv_obj_set_style_radius(btn_ok, 25, LV_PART_MAIN);
+    btn_ok = hpi_btn_create_secondary(scr_bpt_cal_required);
+    lv_obj_set_size(btn_ok, 160, 56);
+    lv_obj_align(btn_ok, LV_ALIGN_BOTTOM_MID, 0, -30);
 
     lv_obj_t *label_btn = lv_label_create(btn_ok);
-    lv_label_set_text(label_btn, LV_SYMBOL_OK " OK");
+    lv_label_set_text(label_btn, "OK");
     lv_obj_center(label_btn);
-    // Note: Do not apply style_body_medium - LVGL symbols require default LVGL font
-     lv_obj_add_event_cb(btn_ok, scr_btn_ok_handler, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_style_text_font(label_btn, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(label_btn, lv_color_hex(V2_VALUE), 0);
+    lv_obj_set_style_text_letter_space(label_btn, 1, 0);
+    lv_obj_add_event_cb(btn_ok, scr_btn_ok_handler, LV_EVENT_CLICKED, NULL);
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_CAL_REQUIRED);
     hpi_show_screen(scr_bpt_cal_required, m_scroll_dir);

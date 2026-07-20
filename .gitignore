@@ -67,3 +67,8 @@ app/.DS_Store
 CLAUDE.md
 .DS_Store
 app/.DS_Store
+
+# Large font source archive (download separately if regenerating fonts)
+app/src/ui/fonts/ttf/Inter-4.0.zip
+docs/design_handoff_healthypi_move_v2/fonts/
+twister-out*/

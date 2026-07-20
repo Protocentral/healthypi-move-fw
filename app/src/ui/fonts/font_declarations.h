@@ -1,13 +1,10 @@
-/* Modern Google Fonts for HealthyPi Move - LVGL Font Declarations */
-/* Generated fonts for AMOLED circular display optimization */
+/* HealthyPi Move — LVGL font declarations (v2 type system) */
+/* Rubik = all numerals, Manrope = all labels. 4 text bins + 2 icon sizes.
+ * Canonical role macros live in ui/hpi_r0_theme.h (HPI_FONT_*). */
 
-// Phase 1: Core System Fonts (Essential)
-LV_FONT_DECLARE(inter_semibold_24);       // General UI text - Primary font (upgraded from regular to semibold)
-LV_FONT_DECLARE(inter_semibold_18);       // Legacy 18px font - kept for compatibility but styles now enforce 24px minimum for readability
-LV_FONT_DECLARE(inter_semibold_80_time);  // Large minimalist time display (80px, digits only)
-LV_FONT_DECLARE(jetbrains_mono_regular_16); // Time display, sensor readings
-
-// Phase 2: Additional Essential Sizes  
-LV_FONT_DECLARE(inter_regular_16);        // Secondary size for specific contexts
-LV_FONT_DECLARE(inter_semibold_24); // Large time display, main clock
-
+LV_FONT_DECLARE(rubik_500_88);      // Hero numerals: time, HR, SpO2, temp
+LV_FONT_DECLARE(rubik_500_32);      // Secondary numerals: chips, min/max, steps, …
+LV_FONT_DECLARE(rubik_500_22);      // Small numerals: ECG countdown, AOD HR
+LV_FONT_DECLARE(manrope_700_22);    // All labels / units / captions
+LV_FONT_DECLARE(matsym_24);         // Material Symbols icons
+LV_FONT_DECLARE(matsym_28);         // Material Symbols icons (large)

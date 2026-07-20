@@ -37,14 +37,22 @@
 #include <zephyr/zbus/zbus.h>
 #include <zephyr/mgmt/mcumgr/mgmt/mgmt.h>
 #include <zephyr/mgmt/mcumgr/mgmt/callbacks.h>
-#include <zephyr/posix/time.h>
+#include <zephyr/mgmt/mcumgr/grp/os_mgmt/os_mgmt_callbacks.h>
+#include <zephyr/mgmt/mcumgr/grp/img_mgmt/img_mgmt.h>
+#include <zephyr/mgmt/mcumgr/grp/img_mgmt/img_mgmt_callbacks.h>
 #include <zephyr/sys/timeutil.h>
 #include <zephyr/drivers/rtc.h>
 
 #include "hpi_common_types.h"
 #include "hpi_sys.h"
 #include "hw_module.h"
-#include "hpi_measurement_settings.h"
+#include "hpi_user_settings_api.h"  /* utc offset get/set + persistence */
+#include "hpi_dfu.h"      /* DFU system-mode state + progress */
+#include "ui/move_ui.h"  /* hpi_disp_restore_brightness() */
+
+/* Refuse to start an OTA below this SoC% unless on charger — overwrite-only DFU
+ * has no revert, so a brown-out during the post-reboot MCUboot swap can brick. */
+#define HPI_DFU_MIN_BATTERY_PCT 30
 
 LOG_MODULE_REGISTER(hpi_sys_module, LOG_LEVEL_DBG);
 
@@ -57,8 +65,11 @@ static int64_t rtc_to_uptime_offset = 0;
 // Display time cache (updated every 5s via ZBus for UI display only)
 static struct tm m_sys_sys_time;
 
-// Offset in minutes from UTC, set by phone app on connect
-int16_t timezone_offset_sec = 0; 
+/* UTC offset in SECONDS east of UTC (local = UTC + offset), DST-inclusive.
+ * Set by the phone via HPI_HS SET_TZ and persisted; loaded at boot. int32 so
+ * the full -12h..+14h range fits (int16 overflowed past ~9.1h). The RTC holds
+ * UTC; this offset is applied only at the display / local-calendar edge. */
+int32_t timezone_offset_sec = 0;
 
 K_MUTEX_DEFINE(mutex_time_sync);
 
@@ -69,8 +80,59 @@ enum mgmt_cb_return dfu_callback_func(uint32_t event, enum mgmt_cb_return prev_s
                                       void *data, size_t data_size)
 {
 
-    LOG_DBG("DFU callback event: %d, prev_status: %d, rc: %d, group: %d, abort_more: %d",
-            event, prev_status, *rc, *group, *abort_more);
+    switch (event) {
+    case MGMT_EVT_OP_IMG_MGMT_DFU_STARTED:
+        LOG_INF("DFU started");
+        hpi_dfu_set_progress(0);
+        hpi_dfu_set_state(HPI_DFU_ACTIVE);
+        break;
+
+    case MGMT_EVT_OP_IMG_MGMT_DFU_CHUNK: {
+        /* Upload-check hook (CONFIG_MCUMGR_GRP_IMG_UPLOAD_CHECK_HOOK): authorise
+         * each chunk and report progress. Battery-gate on the first chunk so the
+         * upload is refused before any flash is written. */
+        const struct img_mgmt_upload_check *chk = data;
+
+        if (chk != NULL && chk->req != NULL && chk->req->off == 0) {
+            if (hw_get_current_battery_level() < HPI_DFU_MIN_BATTERY_PCT &&
+                !hw_is_vbus_connected()) {
+                LOG_WRN("DFU refused: battery %u%% < %d%% and not charging",
+                        hw_get_current_battery_level(), HPI_DFU_MIN_BATTERY_PCT);
+                hpi_dfu_set_state(HPI_DFU_LOW_BATTERY);
+                *rc = MGMT_ERR_EBADSTATE;
+                *group = MGMT_GROUP_ID_IMAGE;
+                return MGMT_CB_ERROR_RC;
+            }
+        }
+
+        if (chk != NULL && chk->req != NULL && chk->action != NULL &&
+            chk->action->size > 0) {
+            uint64_t off = (uint64_t)chk->req->off;
+            uint64_t total = (uint64_t)chk->action->size;
+            hpi_dfu_set_progress((int)((off * 100U) / total));
+        }
+        hpi_dfu_set_state(HPI_DFU_ACTIVE);
+        break;
+    }
+
+    case MGMT_EVT_OP_IMG_MGMT_DFU_PENDING:
+        LOG_INF("DFU upload complete — image pending");
+        hpi_dfu_set_progress(100);
+        hpi_dfu_set_state(HPI_DFU_FINALIZING);
+        break;
+
+    case MGMT_EVT_OP_IMG_MGMT_DFU_STOPPED:
+        /* Only a genuine abort/failure of a running upload — don't clobber a
+         * successful FINALIZING or the LOW_BATTERY rejection. */
+        if (hpi_dfu_get_state() == HPI_DFU_ACTIVE) {
+            LOG_WRN("DFU stopped/failed");
+            hpi_dfu_set_state(HPI_DFU_FAILED);
+        }
+        break;
+
+    default:
+        break;
+    }
 
     /* Return OK status code to continue with acceptance to underlying handler */
     return MGMT_CB_OK;
@@ -89,6 +151,58 @@ enum mgmt_cb_return img_callback_func(uint32_t event, enum mgmt_cb_return prev_s
     return MGMT_CB_OK;
 }
 
+#if defined(CONFIG_MCUMGR_GRP_OS_DATETIME_HOOK)
+struct mgmt_callback datetime_callback;
+
+/* MCUmgr OS datetime SET (group 0 / cmd 4). Payload is struct rtc_time. */
+enum mgmt_cb_return datetime_callback_func(uint32_t event, enum mgmt_cb_return prev_status,
+                                           int32_t *rc, uint16_t *group, bool *abort_more,
+                                           void *data, size_t data_size)
+{
+    ARG_UNUSED(prev_status);
+    ARG_UNUSED(group);
+    ARG_UNUSED(abort_more);
+
+    if (event != MGMT_EVT_OP_OS_MGMT_DATETIME_SET) {
+        return MGMT_CB_OK;
+    }
+    if (data == NULL || data_size < sizeof(struct rtc_time) || rc == NULL) {
+        if (rc) {
+            *rc = MGMT_ERR_EINVAL;
+        }
+        return MGMT_CB_ERROR_RC;
+    }
+
+    const struct rtc_time *rt = data;
+    struct tm tm_set = {
+        .tm_sec = rt->tm_sec,
+        .tm_min = rt->tm_min,
+        .tm_hour = rt->tm_hour,
+        .tm_mday = rt->tm_mday,
+        .tm_mon = rt->tm_mon,
+        .tm_year = rt->tm_year,
+        .tm_wday = rt->tm_wday,
+        .tm_yday = rt->tm_yday,
+        .tm_isdst = rt->tm_isdst,
+    };
+
+    if (rtc_dev != NULL && !device_is_ready(rtc_dev)) {
+        (void)device_init(rtc_dev);
+    }
+
+    /* Writes RV8263 via rtc_set_time and refreshes rtc_to_uptime_offset. */
+    hpi_sys_set_rtc_time(&tm_set);
+
+    LOG_INF("MCUmgr datetime SET applied: %04d-%02d-%02d %02d:%02d:%02d",
+            tm_set.tm_year + 1900, tm_set.tm_mon + 1, tm_set.tm_mday,
+            tm_set.tm_hour, tm_set.tm_min, tm_set.tm_sec);
+
+    /* Skip Zephyr's second rtc_set_time in os_mgmt_datetime_write. */
+    *rc = MGMT_ERR_EOK;
+    return MGMT_CB_ERROR_RC;
+}
+#endif
+
 
 static bool is_on_skin = false;
 K_MUTEX_DEFINE(mutex_on_skin);
@@ -98,33 +212,7 @@ K_MUTEX_DEFINE(mutex_sys_time);
 // Externs
 extern struct k_sem sem_hpi_sys_thread_start;
 
-static struct hpi_last_update_time_t g_hpi_last_update = {
-    .bp_last_update_ts = 0,
-    .hr_last_update_ts = 0,
-    .spo2_last_update_ts = 0,
-    .ecg_last_update_ts = 0,
 
-    .hr_last_value = 0,
-    .spo2_last_value = 0,
-    .bp_sys_last_value = 0,
-    .bp_dia_last_value = 0,
-
-    .temp_last_update_ts = 0,
-    .temp_last_value = 0,
-
-    .steps_last_update_ts = 0,
-    .steps_last_value = 0,
-
-    .gsr_last_update_ts = 0,
-    .gsr_last_value = 0,
-
-    .hrv_lf_hf_ratio_x100 = 0,
-    .hrv_sdnn_x10 = 0,
-    .hrv_rmssd_x10 = 0,
-    .hrv_last_update_ts = 0,
-};
-
-K_MUTEX_DEFINE(mutex_hpi_last_update_time);
 
 
 int hpi_sys_set_sys_time(struct tm *tm)
@@ -177,9 +265,13 @@ static int hpi_sys_sync_time_with_rtc(void)
         return ret;
     }
 
+    /* RTC holds UTC (the phone sends UTC via MCUmgr os-datetime), so timegm() of
+     * it IS the canonical UTC epoch. The timezone offset is NOT applied here — it
+     * belongs only at the display / local-calendar edge (get_current_time,
+     * ts_is_today). Keeping storage/logs in UTC is what makes samples comparable
+     * across DST changes and travel. */
     struct tm rtc_tm = *rtc_time_to_tm(&rtc_sys_time);
-    int64_t rtc_timestamp = timeutil_timegm64(&rtc_tm); // Generates UTC timestamp from RTC time struct
-    rtc_timestamp -= timezone_offset_sec; // Subtract timezone offset to get proper local time epoch from UTC output generated by timeutil_timegm64
+    int64_t rtc_timestamp = timeutil_timegm64(&rtc_tm); // RTC (UTC) -> UTC epoch
     int64_t current_uptime = k_uptime_get();
 
     k_mutex_lock(&mutex_time_sync, K_FOREVER);
@@ -197,6 +289,17 @@ void hpi_sys_set_rtc_time(const struct tm *time_to_set)
 {
     struct rtc_time rtc_time_set;
 
+    if (time_to_set == NULL || rtc_dev == NULL) {
+        return;
+    }
+    if (!device_is_ready(rtc_dev)) {
+        int r = device_init(rtc_dev);
+        if (r < 0) {
+            LOG_ERR("RTC not ready for set (%d)", r);
+            return;
+        }
+    }
+
     rtc_time_set.tm_sec = time_to_set->tm_sec;
     rtc_time_set.tm_min = time_to_set->tm_min;
     rtc_time_set.tm_hour = time_to_set->tm_hour;
@@ -205,6 +308,7 @@ void hpi_sys_set_rtc_time(const struct tm *time_to_set)
     rtc_time_set.tm_year = time_to_set->tm_year;
     rtc_time_set.tm_wday = time_to_set->tm_wday;
     rtc_time_set.tm_yday = time_to_set->tm_yday;
+    rtc_time_set.tm_nsec = 0;
 
     int ret = rtc_set_time(rtc_dev, &rtc_time_set);
     if (ret < 0)
@@ -223,13 +327,52 @@ int hpi_sys_force_time_sync(void)
     return hpi_sys_sync_time_with_rtc();
 }
 
+/* Set + persist the UTC offset (seconds east of UTC), then re-derive the display
+ * clock so it updates immediately. Called from the HPI_HS SET_TZ command. The RTC
+ * (UTC) is not touched — only the display/local-calendar view shifts. */
+void hpi_sys_set_utc_offset(int32_t offset_sec)
+{
+    if (hpi_user_settings_set_utc_offset(offset_sec) != 0) {
+        LOG_WRN("UTC offset %d out of range, ignored", offset_sec);
+        return;
+    }
+    timezone_offset_sec = offset_sec;
+    LOG_INF("UTC offset set: %d sec", offset_sec);
+    hpi_sys_sync_time_with_rtc();   /* refresh display cache + offset now */
+}
+
+int32_t hpi_sys_get_utc_offset(void)
+{
+    return timezone_offset_sec;
+}
+
 struct tm hpi_sys_get_current_time(void)
 {
-    int64_t current_timestamp = hw_get_synced_system_time(); 
+    int64_t current_timestamp = hw_get_synced_system_time();
     current_timestamp += timezone_offset_sec; // Add offset back for local time display purposes
     struct tm current_time;
     gmtime_r(&current_timestamp, &current_time);
     return current_time;
+}
+
+// True if a stored UTC timestamp falls on the current *local* calendar day.
+// Used to decide whether a persisted daily total (e.g. steps) still applies
+// after a reboot, or belongs to a previous day and should start fresh.
+bool hpi_sys_ts_is_today(int64_t ts_utc)
+{
+    if (ts_utc < HPI_TIME_MIN_TIMESTAMP || ts_utc > HPI_TIME_MAX_TIMESTAMP)
+    {
+        return false;
+    }
+    if (!hpi_sys_is_time_valid())
+    {
+        return false;
+    }
+    struct tm now = hpi_sys_get_current_time();
+    int64_t local_ts = ts_utc + timezone_offset_sec; // to local-as-UTC, same basis as above
+    struct tm then;
+    gmtime_r(&local_ts, &then);
+    return (then.tm_year == now.tm_year && then.tm_yday == now.tm_yday);
 }
 
 bool hpi_sys_get_device_on_skin(void)
@@ -293,194 +436,9 @@ int hpi_helper_get_relative_time_str(int64_t in_ts, char *out_str, size_t out_st
 }
 
 
-void hpi_sys_set_last_hr_update(uint16_t hr_last_value, int64_t hr_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.hr_last_value = hr_last_value;
-    g_hpi_last_update.hr_last_update_ts = hr_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
+/* Last-value store removed — the health store owns this now (greenfield). */
 
-    /* Persist via settings subsystem */
-    hpi_meas_save_hr(hr_last_value, hr_last_update_ts);
-}
-
-void hpi_sys_set_last_spo2_update(uint8_t spo2_last_value, int64_t spo2_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.spo2_last_value = spo2_last_value;
-    g_hpi_last_update.spo2_last_update_ts = spo2_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem */
-    hpi_meas_save_spo2(spo2_last_value, spo2_last_update_ts);
-}
-
-void hpi_sys_set_last_bp_update(uint16_t bp_sys_last_value, uint16_t bp_dia_last_value, int64_t bp_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.bp_sys_last_value = bp_sys_last_value;
-    g_hpi_last_update.bp_dia_last_value = bp_dia_last_value;
-    g_hpi_last_update.bp_last_update_ts = bp_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem */
-    hpi_meas_save_bp((uint8_t)bp_sys_last_value, (uint8_t)bp_dia_last_value, bp_last_update_ts);
-}
-
-void hpi_sys_set_last_ecg_update(int64_t ecg_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.ecg_last_update_ts = ecg_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem - ECG HR saved from ZBus listener */
-}
-
-void hpi_sys_set_last_hrv_update(uint16_t lf_hf_ratio_x100, uint16_t sdnn_x10,
-                                  uint16_t rmssd_x10, int64_t hrv_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.hrv_lf_hf_ratio_x100 = lf_hf_ratio_x100;
-    g_hpi_last_update.hrv_sdnn_x10 = sdnn_x10;
-    g_hpi_last_update.hrv_rmssd_x10 = rmssd_x10;
-    g_hpi_last_update.hrv_last_update_ts = hrv_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem */
-    hpi_meas_save_hrv(lf_hf_ratio_x100, sdnn_x10, rmssd_x10, hrv_last_update_ts);
-}
-
-int hpi_sys_get_last_hrv_update(uint16_t *lf_hf_ratio_x100, uint16_t *sdnn_x10,
-                                 uint16_t *rmssd_x10, int64_t *hrv_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *lf_hf_ratio_x100 = g_hpi_last_update.hrv_lf_hf_ratio_x100;
-    *sdnn_x10 = g_hpi_last_update.hrv_sdnn_x10;
-    *rmssd_x10 = g_hpi_last_update.hrv_rmssd_x10;
-    *hrv_last_update_ts = g_hpi_last_update.hrv_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    return 0;
-}
-
-int hpi_sys_get_last_hr_update(uint16_t *hr_last_value, int64_t *hr_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *hr_last_value = g_hpi_last_update.hr_last_value;
-    *hr_last_update_ts = g_hpi_last_update.hr_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    return 0;
-}
-
-int hpi_sys_get_last_spo2_update(uint8_t *spo2_last_value, int64_t *spo2_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *spo2_last_value = g_hpi_last_update.spo2_last_value;
-    *spo2_last_update_ts = g_hpi_last_update.spo2_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    return 0;
-}
-
-int hpi_sys_get_last_bp_update(uint8_t *bp_sys_last_value, uint8_t *bp_dia_last_value, int64_t *bp_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *bp_sys_last_value = g_hpi_last_update.bp_sys_last_value;
-    *bp_dia_last_value = g_hpi_last_update.bp_dia_last_value;
-    *bp_last_update_ts = g_hpi_last_update.bp_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    return 0;
-}
-
-int hpi_sys_get_last_ecg_update(uint8_t *ecg_hr, int64_t *ecg_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *ecg_hr = g_hpi_last_update.ecg_last_hr;
-    *ecg_last_update_ts = g_hpi_last_update.ecg_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    return 0;
-}
-
-int hpi_sys_get_last_temp_update(uint16_t *temp_last_value_x100, int64_t *temp_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *temp_last_update_ts = g_hpi_last_update.temp_last_update_ts;
-    *temp_last_value_x100 = g_hpi_last_update.temp_last_value;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-    return 0;
-}
-
-void hpi_sys_set_last_gsr_update(uint16_t gsr_last_value, int64_t gsr_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.gsr_last_value = gsr_last_value;
-    g_hpi_last_update.gsr_last_update_ts = gsr_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Note: GSR stress data saved via hpi_sys_set_last_gsr_stress() */
-}
-
-void hpi_sys_set_last_gsr_stress(uint8_t stress_level, uint16_t tonic_x100, uint8_t peaks_per_min, int64_t update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.gsr_stress_level = stress_level;
-    g_hpi_last_update.gsr_tonic_level_x100 = tonic_x100;
-    g_hpi_last_update.gsr_peaks_per_minute = peaks_per_min;
-    g_hpi_last_update.gsr_last_update_ts = update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem */
-    hpi_meas_save_gsr_stress(stress_level, tonic_x100, peaks_per_min, update_ts);
-}
-
-int hpi_sys_get_last_gsr_update(uint16_t *gsr_last_value, int64_t *gsr_last_update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *gsr_last_value = g_hpi_last_update.gsr_last_value;
-    *gsr_last_update_ts = g_hpi_last_update.gsr_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-    return 0;
-}
-
-int hpi_sys_get_last_gsr_stress(uint8_t *stress_level, uint16_t *tonic_x100, uint8_t *peaks_per_min, int64_t *update_ts)
-{
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    *stress_level = g_hpi_last_update.gsr_stress_level;
-    *tonic_x100 = g_hpi_last_update.gsr_tonic_level_x100;
-    *peaks_per_min = g_hpi_last_update.gsr_peaks_per_minute;
-    *update_ts = g_hpi_last_update.gsr_last_update_ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-    return 0;
-}
-
-static bool is_timestamp_today(int64_t ts)
-{
-    if (ts == 0)
-    {
-        return false;
-    }
-
-    // Get current system time as int64_t
-    int64_t now_ts = hw_get_sys_time_ts();
-
-    struct tm today_time_tm = *gmtime(&now_ts);
-    today_time_tm.tm_hour = 0;
-    today_time_tm.tm_min = 0;
-    today_time_tm.tm_sec = 0;
-    int64_t today_ts = timeutil_timegm64(&today_time_tm);
-
-    LOG_DBG("Checking if timestamp %lld is today. Today's start: %lld", ts, today_ts);
-
-    // Check if ts is within today's range
-    if (ts >= today_ts && ts < (today_ts + 86400))
-    {
-        return true;
-    }
-    return false;
-}
+/* is_timestamp_today removed (was only used by the steps last-value restore) */
 
 void hpi_sys_thread(void)
 {
@@ -489,122 +447,32 @@ void hpi_sys_thread(void)
     k_sem_take(&sem_hpi_sys_thread_start, K_FOREVER);
     LOG_INF("HPI Sys Thread starting");
 
+    /* Restore the persisted UTC offset so the clock reads local before the phone
+     * next connects. Settings are loaded by hw init before this thread runs. */
+    timezone_offset_sec = hpi_user_settings_get_utc_offset();
+    LOG_INF("UTC offset restored: %d sec", timezone_offset_sec);
+
     dfu_callback.callback = dfu_callback_func;
-    dfu_callback.event_id = (MGMT_EVT_OP_IMG_MGMT_DFU_STOPPED | MGMT_EVT_OP_IMG_MGMT_DFU_STARTED | MGMT_EVT_OP_IMG_MGMT_DFU_PENDING | MGMT_EVT_OP_IMG_MGMT_DFU_CONFIRMED);
+    dfu_callback.event_id = (MGMT_EVT_OP_IMG_MGMT_DFU_STOPPED | MGMT_EVT_OP_IMG_MGMT_DFU_STARTED | MGMT_EVT_OP_IMG_MGMT_DFU_PENDING | MGMT_EVT_OP_IMG_MGMT_DFU_CONFIRMED | MGMT_EVT_OP_IMG_MGMT_DFU_CHUNK);
     mgmt_callback_register(&dfu_callback);
 
-    // img_callback.callback = img_callback_func;
-    // img_callback.event_id = (MGMT_EVT_OP_IMG_MGMT_DFU_CHUNK);
-    // mgmt_callback_register(&img_callback);
+#if defined(CONFIG_MCUMGR_GRP_OS_DATETIME_HOOK)
+    /* MCUmgr os datetime write calls rtc_set_time() on DT_ALIAS(rtc) but does
+     * not touch our software RTC↔uptime offset. Take ownership of SET: write
+     * the RV8263 via hpi_sys_set_rtc_time() (which re-syncs the offset) and
+     * return EOK with MGMT_CB_ERROR_RC so the default second rtc_set_time is
+     * skipped. GET is left to the default handler (reads RTC hardware). */
+    datetime_callback.callback = datetime_callback_func;
+    datetime_callback.event_id = MGMT_EVT_OP_OS_MGMT_DATETIME_SET;
+    mgmt_callback_register(&datetime_callback);
+    LOG_DBG("MCUmgr datetime SET hook registered");
+#endif
+
     LOG_DBG("DFU callback registered");
 
-    // Initialize measurement settings (uses Zephyr settings subsystem)
-    ret = hpi_measurement_settings_init();
-    if (ret != 0)
-    {
-        LOG_ERR("Error initializing measurement settings: %d", ret);
-    }
-
     hpi_disp_restore_brightness();
-
-    // Load steps from settings and initialize if from today
-    uint16_t saved_steps = 0;
-    int64_t saved_steps_ts = 0;
-    if (hpi_meas_load_steps(&saved_steps, &saved_steps_ts) == 0 && saved_steps_ts > 0)
-    {
-        if (is_timestamp_today(saved_steps_ts))
-        {
-            today_init_steps(saved_steps);
-            LOG_DBG("Steps initialized from settings: %u", saved_steps);
-        }
-        else
-        {
-            today_init_steps(0);
-        }
-    }
-    else
-    {
-        today_init_steps(0);
-    }
-
-    // Load other cached values from settings into RAM cache
-    uint16_t hr_val;
-    int64_t hr_ts;
-    if (hpi_meas_load_hr(&hr_val, &hr_ts) == 0 && hr_ts > 0)
-    {
-        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-        g_hpi_last_update.hr_last_value = hr_val;
-        g_hpi_last_update.hr_last_update_ts = hr_ts;
-        k_mutex_unlock(&mutex_hpi_last_update_time);
-    }
-
-    uint8_t spo2_val;
-    int64_t spo2_ts;
-    if (hpi_meas_load_spo2(&spo2_val, &spo2_ts) == 0 && spo2_ts > 0)
-    {
-        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-        g_hpi_last_update.spo2_last_value = spo2_val;
-        g_hpi_last_update.spo2_last_update_ts = spo2_ts;
-        k_mutex_unlock(&mutex_hpi_last_update_time);
-    }
-
-    uint8_t bp_sys, bp_dia;
-    int64_t bp_ts;
-    if (hpi_meas_load_bp(&bp_sys, &bp_dia, &bp_ts) == 0 && bp_ts > 0)
-    {
-        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-        g_hpi_last_update.bp_sys_last_value = bp_sys;
-        g_hpi_last_update.bp_dia_last_value = bp_dia;
-        g_hpi_last_update.bp_last_update_ts = bp_ts;
-        k_mutex_unlock(&mutex_hpi_last_update_time);
-    }
-
-    uint8_t ecg_hr;
-    int64_t ecg_ts;
-    if (hpi_meas_load_ecg(&ecg_hr, &ecg_ts) == 0 && ecg_ts > 0)
-    {
-        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-        g_hpi_last_update.ecg_last_hr = ecg_hr;
-        g_hpi_last_update.ecg_last_update_ts = ecg_ts;
-        k_mutex_unlock(&mutex_hpi_last_update_time);
-    }
-
-    uint16_t temp_val;
-    int64_t temp_ts;
-    if (hpi_meas_load_temp(&temp_val, &temp_ts) == 0 && temp_ts > 0)
-    {
-        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-        g_hpi_last_update.temp_last_value = temp_val;
-        g_hpi_last_update.temp_last_update_ts = temp_ts;
-        k_mutex_unlock(&mutex_hpi_last_update_time);
-    }
-
-    uint8_t gsr_stress, gsr_peaks;
-    uint16_t gsr_tonic;
-    int64_t gsr_ts;
-    if (hpi_meas_load_gsr_stress(&gsr_stress, &gsr_tonic, &gsr_peaks, &gsr_ts) == 0 && gsr_ts > 0)
-    {
-        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-        g_hpi_last_update.gsr_stress_level = gsr_stress;
-        g_hpi_last_update.gsr_tonic_level_x100 = gsr_tonic;
-        g_hpi_last_update.gsr_peaks_per_minute = gsr_peaks;
-        g_hpi_last_update.gsr_last_update_ts = gsr_ts;
-        k_mutex_unlock(&mutex_hpi_last_update_time);
-    }
-
-    uint16_t hrv_lf_hf, hrv_sdnn, hrv_rmssd;
-    int64_t hrv_ts;
-    if (hpi_meas_load_hrv(&hrv_lf_hf, &hrv_sdnn, &hrv_rmssd, &hrv_ts) == 0 && hrv_ts > 0)
-    {
-        k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-        g_hpi_last_update.hrv_lf_hf_ratio_x100 = hrv_lf_hf;
-        g_hpi_last_update.hrv_sdnn_x10 = hrv_sdnn;
-        g_hpi_last_update.hrv_rmssd_x10 = hrv_rmssd;
-        g_hpi_last_update.hrv_last_update_ts = hrv_ts;
-        k_mutex_unlock(&mutex_hpi_last_update_time);
-    }
-
-    LOG_INF("Measurement settings loaded from persistent storage");
+    /* step total is owned + initialized by hw_thread (restores today's count
+     * from the health store, or starts at 0); no reset here (would race it). */
 
     // Thread now just sleeps - all saves happen immediately via settings subsystem
     while (1)
@@ -613,51 +481,6 @@ void hpi_sys_thread(void)
     }
 }
 
-static void sys_bpt_list(const struct zbus_channel *chan)
-{
-    const struct hpi_bpt_t *hpi_bp = zbus_chan_const_msg(chan);
-    hpi_sys_set_last_bp_update(hpi_bp->sys, hpi_bp->dia, hw_get_sys_time_ts());
-}
-ZBUS_LISTENER_DEFINE(sys_bpt_lis, sys_bpt_list);
-
-static void sys_hr_list(const struct zbus_channel *chan)
-{
-    const struct hpi_hr_t *hpi_hr = zbus_chan_const_msg(chan);
-    hpi_sys_set_last_hr_update(hpi_hr->hr, hpi_hr->timestamp);
-}
-ZBUS_LISTENER_DEFINE(sys_hr_lis, sys_hr_list);
-
-static void sys_temp_list(const struct zbus_channel *chan)
-{
-    const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
-    uint16_t temp_x100 = (uint16_t)(hpi_temp->temp_f * 100);
-    int64_t ts = hw_get_sys_time_ts();
-
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.temp_last_value = temp_x100;
-    g_hpi_last_update.temp_last_update_ts = ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem */
-    hpi_meas_save_temp(temp_x100, ts);
-}
-ZBUS_LISTENER_DEFINE(sys_temp_lis, sys_temp_list);
-
-static void sys_steps_list(const struct zbus_channel *chan)
-{
-    const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
-    uint16_t steps = hpi_steps->steps;
-    int64_t ts = hw_get_sys_time_ts();
-
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.steps_last_value = steps;
-    g_hpi_last_update.steps_last_update_ts = ts;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem */
-    hpi_meas_save_steps(steps, ts);
-}
-ZBUS_LISTENER_DEFINE(sys_steps_lis, sys_steps_list);
 
 static void sys_sys_time_list(const struct zbus_channel *chan)
 {
@@ -666,35 +489,6 @@ static void sys_sys_time_list(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(sys_sys_time_lis, sys_sys_time_list);
 
-static void sys_ecg_stat_list(const struct zbus_channel *chan)
-{
-    const struct hpi_ecg_status_t *hpi_ecg = zbus_chan_const_msg(chan);
-    uint8_t hr = hpi_ecg->hr;
-    int64_t ts = hw_get_sys_time_ts();
-
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.ecg_last_update_ts = ts;
-    g_hpi_last_update.ecg_last_hr = hr;
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    /* Persist via settings subsystem */
-    hpi_meas_save_ecg(hr, ts);
-}
-ZBUS_LISTENER_DEFINE(sys_ecg_stat_lis, sys_ecg_stat_list);
-
-static void sys_hrv_stat_list(const struct zbus_channel *chan)
-{
-    const struct hpi_hrv_status_t *hpi_hrv = zbus_chan_const_msg(chan);
-    int64_t ts = hw_get_sys_time_ts();
-
-    k_mutex_lock(&mutex_hpi_last_update_time, K_FOREVER);
-    g_hpi_last_update.hrv_last_update_ts = ts;
-    /* HRV value is set via hpi_sys_set_last_hrv_update() when result is available */
-    k_mutex_unlock(&mutex_hpi_last_update_time);
-
-    ARG_UNUSED(hpi_hrv);
-}
-ZBUS_LISTENER_DEFINE(sys_hrv_stat_lis, sys_hrv_stat_list);
 
 #define HPI_SYS_THREAD_STACKSIZE 2048
 #define HPI_SYS_THREAD_PRIORITY 5

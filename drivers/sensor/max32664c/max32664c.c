@@ -27,7 +27,7 @@
  * SOFTWARE.
  */
 
-#define DT_DRV_COMPAT maxim_max32664c
+#define DT_DRV_COMPAT protocentral_max32664c
 
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>

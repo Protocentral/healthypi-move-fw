@@ -206,7 +206,11 @@
 	};
 
 	rtc_rv: rv@51 {
-		compatible = "microcrystal,rv8263";
+		/* Zephyr in-tree RV-8263-C8 driver (CONFIG_RTC_RV8263). Replaced the
+		 * out-of-tree drivers/rtc copy in 2026-07; upstream implements the same
+		 * RTC API plus alarms/clkout and already handles the BCD year/month
+		 * conversion correctly. */
+		compatible = "microcrystal,rv-8263-c8";
 		reg = <0x51>;
 		zephyr,deferred-init;
 	};
@@ -215,7 +219,8 @@
 		compatible = "bosch,bmi323hpi";
 		reg = <0x68>;
 		status = "okay";
-		int-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+		/* BMI323 INT1 is routed to nRF5340 P1.11 (schematic-confirmed). */
+		int-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 		zephyr,deferred-init;
 	};
 
@@ -249,7 +254,7 @@
 	zephyr,flash-buf-max-size = <8250>;
 
 	max32664c: max32664c@55 {
-		compatible = "maxim,max32664c";
+		compatible = "protocentral,max32664c";
 		reg = <0x55>;
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
@@ -271,8 +276,10 @@
 		zephyr,deferred-init;
 	};
 
-	/* Newer boards populate the AS6221 (0x48) instead of the MAX30208.
-	 * Detected at runtime; only the populated sensor will init. */
+	/* AS6221 - temperature sensor on newer hardware revisions (older boards
+	 * populate a MAX30208 at 0x50/0x52 instead). hw_module.c probes MAX30208
+	 * first, then this, at boot and uses whichever is present. Handled by the
+	 * upstream TMP108 driver (ams,as6221 variant). */
 	as6221: as6221@48 {
 		compatible = "ams,as6221";
 		status = "okay";
@@ -324,8 +331,12 @@
 		t-enter-dpd = <30000>;
 		t-exit-dpd = <30000>;
 		jedec-id = [ ef 40 21  ];
+		/* Flash Deep-Power-Down (zephyr,pm-device-runtime-auto + global
+		 * CONFIG_PM_DEVICE_RUNTIME) was reverted — the global runtime-PM flag
+		 * left the deferred touch controller suspended after boot. Revisit at
+		 * the measurement session (see app/prj.conf note). */
 		status = "okay";
-		
+
 	};
 };
 
@@ -344,7 +355,11 @@
 		status = "okay";
 		reg = <0x0>;
 		spi-max-frequency = <DT_FREQ_M(4)>;
-		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
+		/* MAX30001 INTB (DRDY) confirmed routed to nRF5340 P1.09 (active low).
+		 * Enabled here so the pin is documented in DT; the driver does not yet
+		 * consume intb_gpio (still FIFO/status-polled) — trigger-driven reads
+		 * off this line are P3 (interrupt/RTIO acquisition) work. */
+		intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
 		//rtor-enabled;
 		//ecg-enabled;
 		bioz-enabled;
@@ -405,3 +420,79 @@ zephyr_udc0: &usbd {
 
 /* Include default memory partition configuration file */
 #include <nordic/nrf5340_cpuapp_partition.dtsi>
+
+/*
+ * HealthyPi Move flash layout (M3: Partition Manager -> DTS).
+ * Overrides the stock DK partition map (above) to match the previous
+ * pm_static.yml byte-for-byte, so DFU stays compatible with fielded units:
+ *   - app primary (slot0) grown to 0xd4000 (= external secondary size).
+ *   - app secondary (slot1) RELOCATED to external QSPI NOR (w25q01jv).
+ *   - settings/storage moved to 0xf0000/0x10000.
+ *   - net-core update staging + littlefs live on external flash.
+ */
+
+/* App primary slot: 0x10000..0xe4000 (0xd4000). Must equal the secondary size. */
+&slot0_partition {
+	reg = <0x00010000 0x000d4000>;
+};
+
+/*
+ * Settings/storage: 0xf0000..0x100000 (matches old PM settings_storage).
+ * Redefine rather than reg-override so the node name (partition@f0000) matches
+ * its address — a plain &storage_partition reg override leaves the stock
+ * partition@f8000 node name and trips a DTC unit-address/reg mismatch warning.
+ */
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		storage_partition: partition@f0000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x000f0000 0x00010000>;
+		};
+	};
+};
+
+/* The app secondary is on external QSPI NOR, not internal flash. */
+/delete-node/ &slot1_partition;
+
+&w25q01jv {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* App core (image 0) secondary — MCUboot swaps into this. */
+		slot1_partition: partition@0 {
+			label = "image-1";
+			reg = <0x00000000 0x000d4000>;
+		};
+
+		/* Net core (image 1) secondary. */
+		slot3_partition: partition@d4000 {
+			label = "image-3";
+			reg = <0x000d4000 0x00040000>;
+		};
+
+		/* 0x114000..0x120000 (0xc000) left as a gap (was EMPTY_1). */
+
+		/* Net core update primary_2 slot. */
+		slot4_partition: partition@120000 {
+			label = "image-4";
+			reg = <0x00120000 0x00200000>;
+		};
+
+		/* Net core update secondary_2 slot. */
+		slot5_partition: partition@320000 {
+			label = "image-5";
+			reg = <0x00320000 0x00200000>;
+		};
+
+		/* LittleFS data volume (/lfs) — 112 MiB. */
+		littlefs_storage: partition@520000 {
+			label = "littlefs-storage";
+			reg = <0x00520000 0x07000000>;
+		};
+	};
+};

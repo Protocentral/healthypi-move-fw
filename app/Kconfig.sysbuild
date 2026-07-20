@@ -6,8 +6,10 @@
 
 source "${ZEPHYR_BASE}/share/sysbuild/Kconfig"
 
-config PM_EXTERNAL_FLASH_MCUBOOT_SECONDARY
-	default y 
+# M3 (PM->DTS): Partition Manager is disabled — the flash layout, including the
+# external-flash MCUboot secondary, is defined in the board devicetree.
+config PARTITION_MANAGER
+	default n
 
 choice MCUBOOT_MODE
 	default MCUBOOT_MODE_OVERWRITE_ONLY if SOC_SERIES_NRF53X

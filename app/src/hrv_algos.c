@@ -1,12 +1,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include "health/hpi_health_store.h"
+#include "hpi_sys.h"
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <math.h>
 #include <string.h>
 #include "hrv_algos.h"
 #include "ui/move_ui.h"
-#include "log_module.h"
 #include "hpi_sys.h"
 #include "arm_math.h"
 #include "arm_const_structs.h"
@@ -369,7 +370,13 @@ void hpi_hrv_frequency_compact_update_spectrum(uint16_t *rr_intervals, int num_i
         uint16_t rmssd_x10 = (uint16_t)(rmssd_val * 10);
         LOG_INF("Saving HRV to settings: LF/HF=%u (ratio=%.2f), SDNN=%u, RMSSD=%u, ts=%lld",
                 lf_hf_x100, ratio, sdnn_x10, rmssd_x10, now_ts);
-        hpi_sys_set_last_hrv_update(lf_hf_x100, sdnn_x10, rmssd_x10, now_ts);
+        {
+            uint8_t q = hpi_sys_is_time_valid() ? HPI_HS_Q_VALID : 0;
+            q |= HPI_HS_Q_MANUAL;
+            hpi_hs_record(HPI_HS_T_HRV_SDNN, sdnn_x10, q, now_ts);
+            hpi_hs_record(HPI_HS_T_HRV_RMSSD, rmssd_x10, q, now_ts);
+            hpi_hs_record(HPI_HS_T_HRV_LFHF, lf_hf_x100, q, now_ts);
+        }
     }
     else
     {

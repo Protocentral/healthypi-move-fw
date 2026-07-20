@@ -29,6 +29,9 @@ struct sh8601_data
 	enum display_orientation orientation;
 
 	bool device_in_sleep;
+	bool aod_active;
+	uint8_t aod_brightness;
+	uint8_t nor_brightness; /* last normal-mode (0x51) level for AOD exit restore */
 };
 
 static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
@@ -273,11 +276,96 @@ static int sh8601_set_orientation(const struct device *dev,
 static int sh8601_set_brightness(const struct device *dev,
 								 const uint8_t brightness)
 {
+	struct sh8601_data *data = dev->data;
 	uint8_t args[1] = {brightness};
 
-	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+	/*
+	 * While native AOD is active the panel uses the AOD brightness bank
+	 * (0x4A). Route there so callers cannot silently poke normal-mode 0x51.
+	 */
+	if (data->aod_active) {
+		return sh8601_aod_set_brightness(dev, brightness);
+	}
 
+	data->nor_brightness = brightness;
+	return sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+}
+
+int sh8601_aod_set_brightness(const struct device *dev, uint8_t brightness)
+{
+	struct sh8601_data *data = dev->data;
+	uint8_t args[1] = {brightness};
+	int r;
+
+	r = sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALAOD, args, 1U);
+	if (r < 0) {
+		return r;
+	}
+	data->aod_brightness = brightness;
 	return 0;
+}
+
+int sh8601_aod_enter(const struct device *dev, uint8_t brightness)
+{
+	struct sh8601_data *data = dev->data;
+	int r;
+
+	if (data->aod_active) {
+		return sh8601_aod_set_brightness(dev, brightness);
+	}
+
+	/* Brightness first, then AODMON — matches SH8601 register programming order. */
+	r = sh8601_aod_set_brightness(dev, brightness);
+	if (r < 0) {
+		LOG_ERR("AOD brightness write failed: %d", r);
+		return r;
+	}
+
+	r = sh8601_send_cmd(dev, SH8601_C_AODMON);
+	if (r < 0) {
+		LOG_ERR("AODMON failed: %d", r);
+		return r;
+	}
+
+	data->aod_active = true;
+	data->device_in_sleep = false;
+	LOG_DBG("SH8601 AOD enter (brightness=%u)", brightness);
+	return 0;
+}
+
+int sh8601_aod_exit(const struct device *dev)
+{
+	struct sh8601_data *data = dev->data;
+	int r;
+
+	if (!data->aod_active) {
+		return 0;
+	}
+
+	r = sh8601_send_cmd(dev, SH8601_C_AODMOFF);
+	if (r < 0) {
+		LOG_ERR("AODMOFF failed: %d", r);
+		return r;
+	}
+
+	data->aod_active = false;
+
+	/* Restore normal-mode brightness bank if we have a saved level. */
+	if (data->nor_brightness > 0) {
+		uint8_t args[1] = {data->nor_brightness};
+
+		(void)sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
+	}
+
+	LOG_DBG("SH8601 AOD exit");
+	return 0;
+}
+
+bool sh8601_aod_is_active(const struct device *dev)
+{
+	const struct sh8601_data *data = dev->data;
+
+	return data->aod_active;
 }
 
 static int sh8601_configure(const struct device *dev)
@@ -562,15 +650,19 @@ static const struct display_driver_api sh8601_api = {
 static int sh8601_pm_action(const struct device *dev,
 							enum pm_device_action action)
 {
+	struct sh8601_data *data = dev->data;
+
 	switch (action)
 	{
 	case PM_DEVICE_ACTION_SUSPEND:
-		//printk("Suspend device");
+		/* Never SLPIN while AOD-lit — leave AOD first. */
+		if (data->aod_active) {
+			(void)sh8601_aod_exit(dev);
+		}
 		sh8601_send_cmd(dev, SH8601_C_SLPIN);
 		k_msleep(SH8601_SLPIN_DELAY);
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-		//printk("Resume device");
 		sh8601_send_cmd(dev, SH8601_C_SLPOUT);
 		k_msleep(SH8601_SLPOUT_DELAY);
 		break;

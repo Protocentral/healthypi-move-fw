@@ -487,6 +487,12 @@ struct max30001_data
 	uint8_t bioz_lead_off;
 
 	uint8_t chip_op_mode;
+
+#ifdef CONFIG_MAX30001_TRIGGER
+	const struct device *dev;             /* back-pointer for the GPIO callback */
+	struct gpio_callback intb_cb;         /* INTB (DRDY) edge callback */
+	void (*drdy_handler)(const struct device *dev); /* app-registered, called on assertion */
+#endif
 };
 
 struct max30001_encoded_data
@@ -510,7 +516,18 @@ struct max30001_encoded_data
 	uint8_t rrint;
 };
 
-int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+void max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe);
+
+#ifdef CONFIG_MAX30001_TRIGGER
+/*
+ * Register the application handler invoked when INTB (DRDY) asserts, i.e. when
+ * the ECG (EINT) or BioZ (BINT) FIFO reaches its threshold. The handler runs in
+ * GPIO-callback (ISR) context - keep it to a k_work_submit / k_sem_give. Pass
+ * NULL to disarm. Returns 0 on success, -ENOTSUP if no intb-gpios is wired.
+ */
+int max30001_trigger_set_handler(const struct device *dev,
+				 void (*handler)(const struct device *dev));
+#endif
 int max30001_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder);
 
 void max30001_synch(const struct device *dev);

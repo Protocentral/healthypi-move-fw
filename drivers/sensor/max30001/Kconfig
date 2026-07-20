@@ -15,6 +15,21 @@ config SENSOR_MAX30001_INIT_PRIORITY
 	help
 	  MAX30001 device driver initialization priority.
 
+config MAX30001_TRIGGER
+	bool "DRDY (INTB) interrupt-driven acquisition"
+	default n
+	depends on GPIO
+	help
+	  Drive ECG/BioZ FIFO reads from the MAX30001 INTB (DRDY) interrupt
+	  instead of the application's polling timers (P3 interrupt/RTIO).
+	  Requires the `intb-gpios` property on the max30001 DT node (routed to
+	  nRF5340 P1.09 on HealthyPi Move). The driver enables EINT/BINT on the
+	  INTB pin and invokes an application-registered handler on assertion;
+	  the app then performs the same RTIO sensor_read it does today.
+
+	  HARDWARE-GATED: verify sample rates on a scope before enabling in a
+	  production build. Left OFF, acquisition stays on the proven poll path.
+
 endif # SENSOR_MAX30001
 
 module = MAX30001
