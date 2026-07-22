@@ -256,6 +256,16 @@ void draw_scr_spl_hrv_eval_progress(enum scroll_dir m_scroll_dir, uint32_t arg1,
 
     hpi_disp_set_curr_screen(SCR_SPL_HRV_EVAL_PROGRESS);
     hpi_show_screen(scr_hrv_eval_progress, m_scroll_dir);
+
+    /* Kick off the timer-based ECG capture for HRV. The ECG SMF's HRV branch
+     * (smf_ecg_bioz.c) consumes EVT_HRV_START, waits for lead-on, runs the
+     * countdown, feeds this screen's chart via hpi_ecg_disp_draw_plotECG_hrv(),
+     * and posts EVT_HRV_COMPLETE when done. This post was previously issued by
+     * the retired scr_hrv.c Start button and dropped in the P6 overview-screen
+     * retirement (273c426), which left the eval screen opening with no capture
+     * ever running. Symmetric with the EVT_HRV_CANCEL post in the gesture-down
+     * teardown below. */
+    k_event_post(&ecg_evt, EVT_HRV_START);
 }
 
 void gesture_down_scr_spl_hrv_eval_progress(void)

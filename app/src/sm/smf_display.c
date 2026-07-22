@@ -1412,6 +1412,19 @@ static enum smf_state_result st_display_active_run(void *o)
                  screen_func_table[g_screen].draw)
         {
             screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
+
+            /* OOM guard: the metric carousel (SCR_HOME) is kept resident as a swipe
+             * cache, but with auto_del suppressed (hp_ui_common.c) every visited
+             * tile — including the heavy ECG/PPG/HR waveform monitors — stays
+             * allocated underneath. Layering a special screen (e.g. Settings) on top
+             * of a fully-built carousel can exhaust the 60 KB LVGL pool; the failure
+             * surfaces as LV_ASSERT_NULL in lv_event_add() (lv_malloc returns NULL)
+             * and cold-reboots the device — reproducible by opening Settings after
+             * swiping out to the far tiles (Steps/HRV/Recovery). Now that the special
+             * screen is the active LVGL screen, drop the carousel to reclaim its
+             * heap; returning to a metric rebuilds it at the right tile via
+             * hpi_carousel_show(). No-op when the carousel isn't resident. */
+            hpi_carousel_rebuild();
         }
         else
         {
