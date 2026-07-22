@@ -87,20 +87,6 @@ int hpi_data_get_last_scr_count(void);
 void hpi_data_set_gsr_measurement_active(bool active);
 bool hpi_data_is_gsr_measurement_active(void);
 float hpi_data_get_last_converted_us(void);
-void hpi_data_set_hrv_record_active(bool active);
-void hpi_data_reset_hrv_record_buffer(void);
-bool hpi_data_is_hrv_record_active(void);
-
-void hpi_data_set_gsr_measurement_active(bool active);
-bool hpi_data_is_gsr_measurement_active(void);
-
-void hpi_data_set_hrv_eval_active(bool active);
-bool hpi_data_is_hrv_eval_active(void);
-struct hpi_hrv_eval_result_t *hpi_data_get_hrv_eval_result(void);
-void hpi_data_add_hrv_interval(uint16_t rtor_ms);
-void hpi_data_hrv_record_to_file(bool active);
-struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void);
-void hpi_data_reset_hrv_record_buffer(void);
 
 void gsr_background_start(void);
 void gsr_background_stop(void);

@@ -50,7 +50,6 @@ LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 #include "ble_module.h"
 #include "health/hpi_hs_record.h"
 #include "health/hpi_hs_hrv.h"
-#include "hrv_algos.h"
 #include "ui/move_ui.h"
 #include "hpi_sys.h"
 
@@ -117,10 +116,6 @@ static int s_gsr_rid = 0;
 static bool s_gsr_cancelled = false;
 #define HS_GSR_RATE_HZ 32
 
-/* HRV R-R intervals are buffered by the SMF and written once at eval completion,
- * so this record is one-shot rather than streamed. R-R is not sampled at a fixed
- * rate, hence rate 0. */
-#define HS_HRV_RATE_HZ 0
 K_MUTEX_DEFINE(mutex_is_ecg_record_active);
 
 static bool is_gsr_record_active = false;
@@ -144,20 +139,8 @@ K_MUTEX_DEFINE(mutex_is_ppg_finger_record_active);
 #define HS_PPG_FINGER_RATE_HZ 100 /* MAX32664D finger BP/SpO2 nominal rate */
 
 static int g_last_scr_count = 0;
-K_MUTEX_DEFINE(mutex_is_hrv_record_active);
-static uint16_t rr_buffer[HRV_MAX_INTERVALS];
 
 static bool is_gsr_measurement_active = false;
-
-// HRV (Heart Rate Variability) Evaluation State - Separate from ECG recording
-static bool is_hrv_eval_active = false;
-static struct hpi_hrv_eval_result_t hrv_eval_result = {0};
-struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];  // R-to-R interval buffer (shared with state machine)
-volatile uint16_t hrv_interval_count = 0;                     // Number of intervals collected (shared with state machine)
-K_MUTEX_DEFINE(mutex_is_hrv_eval_active);
-
-// Track last R-to-R interval to detect new beats
-static uint16_t last_rtor_value = 0;
 K_MUTEX_DEFINE(mutex_is_gsr_measurement_active);
 
 static uint32_t last_hr_update_time = 0;
@@ -253,56 +236,6 @@ void send_data_text_1(int32_t in_sample)
     send_usb_cdc(data, strlen(data));
 }
 
-void hpi_data_hrv_record_to_file(bool active)
-{
-    k_mutex_lock(&mutex_is_hrv_record_active, K_FOREVER);
-
-        if(hrv_interval_count > 0)
-        {
-            if (hrv_interval_count > HRV_MAX_INTERVALS)
-            {
-                LOG_ERR("HRV counter overflow detected: %d > %d - clamping to max",
-                        hrv_interval_count, HRV_MAX_INTERVALS);
-                hrv_interval_count = HRV_MAX_INTERVALS;
-            }
-
-            int64_t log_time = hw_get_synced_system_time();
-
-            // Copying intervals to rr_buffer
-            for (int i = 0; i < hrv_interval_count; i++) {
-                    rr_buffer[i] = hrv_intervals[i].rtor_ms;
-            }
-            
-            // Calling calculation function
-             hpi_hrv_frequency_compact_update_spectrum(rr_buffer, hrv_interval_count);
-
-             LOG_INF("HRV recording stopped - storing %d R-R intervals", hrv_interval_count);
-
-             /* H-REC Stage 2b: the intervals are already buffered, so this record is
-              * written in one shot rather than streamed. Only reached on a successful
-              * eval (the SMF skips this call when the measurement was cancelled), so
-              * there is no drop path here. */
-             int hrv_rid = hpi_hs_rec_start(HPI_HS_SIG_HRV_RR, HPI_HS_SFMT_U16, 1, HS_HRV_RATE_HZ);
-             if (hrv_rid <= 0) {
-                 LOG_ERR("HRV rec_start failed: %d", hrv_rid);
-             } else {
-                 int ret = hpi_hs_rec_append((uint32_t)hrv_rid, rr_buffer,
-                                             (size_t)hrv_interval_count * sizeof(uint16_t));
-                 if (ret != 0) {
-                     LOG_ERR("HRV rec_append failed: %d", ret);
-                 }
-                 hpi_hs_rec_stop((uint32_t)hrv_rid);
-                 LOG_INF("HRV record %d stored (%d R-R intervals)", hrv_rid, hrv_interval_count);
-             }
-
-           //  k_event_post(&ecg_evt, EVT_HRV_COMPLETE);
-        }
-    
-    
-         k_mutex_unlock(&mutex_is_hrv_record_active);
-    
-
-}
 void hpi_data_set_ecg_record_active(bool active)
 {
     k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
@@ -315,20 +248,13 @@ void hpi_data_set_ecg_record_active(bool active)
         ecg_cancellation = false;  // reset cancellation flag for new recording session
         // H-REC: open a record session now (captures the real start_ts); batches
         // are streamed in as they drain, so an interrupted session recovers as
-        // PARTIAL at next boot rather than being lost. Skip for an HRV eval — that
-        // reuses the recording state but consumes samples as RR intervals, not a
-        // stored ECG waveform (a SIG_HRV_RR record is separate future wiring), so
-        // starting one here would only leave an empty ECG record.
-        if (!is_hrv_eval_active) {
-            s_ecg_rid = hpi_hs_rec_start(HPI_HS_SIG_ECG, HPI_HS_SFMT_I32, 1, HS_ECG_RATE_HZ);
-            if (s_ecg_rid <= 0) {
-                LOG_ERR("ECG rec_start failed: %d", s_ecg_rid);
-                s_ecg_rid = 0;
-            } else {
-                LOG_INF("ECG recording started - record %d", s_ecg_rid);
-            }
-        } else {
+        // PARTIAL at next boot rather than being lost.
+        s_ecg_rid = hpi_hs_rec_start(HPI_HS_SIG_ECG, HPI_HS_SFMT_I32, 1, HS_ECG_RATE_HZ);
+        if (s_ecg_rid <= 0) {
+            LOG_ERR("ECG rec_start failed: %d", s_ecg_rid);
             s_ecg_rid = 0;
+        } else {
+            LOG_INF("ECG recording started - record %d", s_ecg_rid);
         }
     }
     else if (s_ecg_rid > 0)
@@ -573,85 +499,6 @@ bool hpi_data_is_gsr_measurement_active(void)
     return active;
 }
 
-/**
- * @brief Set HRV evaluation active/inactive state
- * @param active true to start evaluation, false to stop
- */
-void hpi_data_set_hrv_eval_active(bool active)
-{
-    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
-    is_hrv_eval_active = active;
-    
-    if (active) {
-        // Reset result when starting new evaluation
-        memset(&hrv_eval_result, 0, sizeof(hrv_eval_result));
-        last_rtor_value = 0;
-        LOG_INF("HRV evaluation started - buffer reset");
-    }
-    
-    k_mutex_unlock(&mutex_is_hrv_eval_active);
-}
-
-/**
- * @brief Check if HRV evaluation is active
- * @return true if evaluation in progress, false otherwise
- */
-bool hpi_data_is_hrv_eval_active(void)
-{
-    bool active = false;
-    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
-    active = is_hrv_eval_active;
-    k_mutex_unlock(&mutex_is_hrv_eval_active);
-    return active;
-}
-
-/**
- * @brief Add R-to-R interval to HRV evaluation buffer
- * @param rtor_ms R-to-R interval in milliseconds
- */
-void hpi_data_add_hrv_interval(uint16_t rtor_ms)
-{
-    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
-    
-    // if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms > 0 && rtor_ms < 2000) {
-    if (is_hrv_eval_active && hrv_interval_count < HRV_MAX_INTERVALS && rtor_ms >= 300 && rtor_ms <= 1500) {
-        // Detect new beat: RtoR value should change between samples
-        // Only add if different from last (to avoid duplicate intervals)
-        if (rtor_ms != last_rtor_value) {
-            LOG_INF("New RR interval detected : %d", rtor_ms);
-            hrv_intervals[hrv_interval_count].rtor_ms = rtor_ms;
-            hrv_intervals[hrv_interval_count].timestamp = k_uptime_get();
-            hrv_interval_count++;
-            last_rtor_value = rtor_ms;
-            
-            if (hrv_interval_count % 10 == 0) {
-                LOG_DBG("HRV: collected %d intervals", hrv_interval_count);
-            }
-        }
-    }
-    
-    k_mutex_unlock(&mutex_is_hrv_eval_active);
-}
-
-/**
- * @brief Get HRV evaluation results
- * @return Pointer to HRV evaluation result structure
- */
-struct hpi_hrv_eval_result_t *hpi_data_get_hrv_eval_result(void)
-{
-    return &hrv_eval_result;
-}
-void hpi_data_reset_hrv_record_buffer(void)
-{
-    k_mutex_lock(&mutex_is_hrv_eval_active, K_FOREVER);
-    // Reset buffer and counter without saving (for lead-off restart)
-    hrv_interval_count = 0;
-    memset(hrv_intervals, 0, sizeof(hrv_intervals));
-    LOG_INF("HRV recording buffer reset (discard incomplete data)");
-    is_hrv_eval_active = false;
-    k_mutex_unlock(&mutex_is_hrv_eval_active);
-}
-
 /* Reconcile a PPG record's desired-active flag with its open/closed state, doing
  * the FS-heavy hpi_hs_rec_start/stop here on the data_thread (which has the stack
  * for LittleFS) rather than on the shallow SMF/control threads that set the flag.
@@ -747,7 +594,7 @@ void data_thread(void)
 
             k_mutex_lock(&mutex_is_ecg_record_active, K_FOREVER);
             /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to record regardless of lead state */
-            if (is_ecg_record_active == true && !is_hrv_eval_active)
+            if (is_ecg_record_active == true)
             {
                 int samples_to_copy = ecg_sensor_sample.ecg_num_samples;
                 int space_left = ECG_RECORD_BUFFER_SAMPLES - ecg_record_counter;
@@ -817,18 +664,7 @@ void data_thread(void)
             }
         
             k_mutex_unlock(&mutex_is_ecg_record_active);
-            
-            // HRV interval capture - only when leads are connected
-            // Skip when lead-off to prevent garbage values from corrupting HRV data
-           // LOG_INF("HRV Eval Active : %s", is_hrv_eval_active ? "True" : "False");
-            /* DEBUG: Removed !ecg_sensor_sample.ecg_lead_off check to capture HRV regardless of lead state */
-            if (is_hrv_eval_active && ecg_sensor_sample.rtor > 0)
-            {
-                // Capture R-to-R intervals for HRV analysis
-                // RtoR value is in milliseconds from the MAX30001 sensor
-                hpi_data_add_hrv_interval(ecg_sensor_sample.rtor);
-            }
-        
+
         }
         if (k_msgq_get(&q_bioz_sample, &bsample, K_NO_WAIT) == 0)
         {

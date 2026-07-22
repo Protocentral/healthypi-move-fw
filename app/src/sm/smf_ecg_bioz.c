@@ -76,25 +76,10 @@ static int64_t gsr_measurement_start_time = 0;
 static bool gsr_measurement_in_progress = false;
 static uint32_t gsr_last_status_pub_s = 0; // Last published elapsed seconds
 
-// HRV (Heart Rate Variability) Evaluation Control Semaphores - Independent from ECG
-
-// HRV Measurement Timing (configurable duration, default 30 seconds for quick evaluation)
-#define HRV_MEASUREMENT_DURATION_S 60  
-
-static uint32_t hrv_last_status_pub_s = 0; // Last published elapsed seconds
-
-// HRV state variables managed by data_module.c
-extern struct hpi_hrv_interval_t hrv_intervals[HRV_MAX_INTERVALS];
-extern volatile uint16_t hrv_interval_count;
-
 // RTOS-safe lead contact state using atomic operations
 // true = leads are in contact (on skin), false = leads are off
 // static atomic_t hrv_lead_contact = ATOMIC_INIT(0);  // 0 = no contact, 1 = contact
 // static atomic_t hrv_prev_lead_contact = ATOMIC_INIT(0);
-
-ZBUS_CHAN_DECLARE(hrv_stat_chan);
-K_MUTEX_DEFINE(hrv_eval_mutex);
-K_MUTEX_DEFINE(hrv_timer_mutex);
 
 
 K_SEM_DEFINE(sem_ecg_lead_on_local, 0, 1);
@@ -272,7 +257,6 @@ RTIO_DEFINE(max30001_read_rtio_poll_ctx, 1, 1);
 
 static bool ecg_active = false;
 static bool gsr_active = false;  // Independent GSR (BioZ) state
-static bool hrv_active = false;  // Independent HRV evaluation state
 static bool m_ecg_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
 static bool gsr_contact_ok = false;
 static bool m_gsr_lead_on_off = true;  // true = leads OFF, false = leads ON (initialized to OFF state)
@@ -286,7 +270,6 @@ static int hw_max30001_ecg_disable(void);
 
 // EXTERNS
 extern const struct device *const max30001_dev;
-//extern bool hrv_active;
 
 /**
  * @brief Configure ECG leads based on hand worn setting
@@ -351,18 +334,6 @@ static void set_gsr_active(bool active)
     gsr_active = active;
 }
 
-static bool get_hrv_active(void)
-{
-    // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
-    return hrv_active;
-}
-
-static void set_hrv_active(bool active)
-{
-    // Use atomic write for ISR safety - single bool write is typically atomic on most architectures
-    hrv_active = active;
-}
-
 static bool get_ecg_lead_on_off(void)
 {
     // Use atomic read for ISR safety - single bool read is typically atomic on most architectures
@@ -423,10 +394,10 @@ void hpi_ecg_clear_lead_placement_timeout(void)
     LOG_DBG("ECG SMF: Lead placement timeout cleared");
 }
 
-// Function to reset ECG timer countdown to full duration (30s for ECG, 60s for HRV)
+// Function to reset ECG timer countdown to full duration
 void hpi_ecg_reset_countdown_timer(void)
 {
-    int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+    int duration = ECG_RECORD_DURATION_S;
 
     k_mutex_lock(&ecg_timer_mutex, K_FOREVER);
     ecg_countdown_val = duration;
@@ -459,13 +430,6 @@ static void gsr_pub_status(uint8_t status, int remaining, bool contact)
     zbus_chan_pub(&gsr_status_chan, &s, K_NO_WAIT);
 }
 
-
-// Function to reset HRV timer countdown to full duration (60 seconds)
-// Note: This now just calls hpi_ecg_reset_countdown_timer() which handles both ECG and HRV
-void hpi_hrv_reset_countdown_timer(void)
-{
-    hpi_ecg_reset_countdown_timer();
-}
 
 static void set_ecg_stabilization_values(int stabilization_countdown, bool complete)
 {
@@ -935,8 +899,6 @@ void gsr_background_stop(void)
     
 }
 
-struct hpi_hrv_eval_result_t g_hrv_result;
-
 static void st_ecg_idle_entry(void *o)
 {
     int ret;
@@ -959,9 +921,7 @@ static void st_ecg_idle_entry(void *o)
         }
     }
 
-    // Reset all ECG/HRV state flags
-    set_hrv_active(false);
-    hpi_data_set_hrv_eval_active(false);
+    // Reset ECG state flags
     hpi_data_set_ecg_record_active(false);
     hpi_ecg_timer_reset();
     ecg_cancellation = false;
@@ -988,9 +948,8 @@ static enum smf_state_result st_ecg_idle_run(void *o)
          * us to idle (idle never consumes the Cancel bits). Left set, the very
          * next state (WAIT_FOR_LEAD) would consume it and abort this new
          * measurement immediately. Clear them so Start begins from a clean slate. */
-        k_event_clear(&ecg_evt, EVT_ECG_CANCEL | EVT_HRV_CANCEL);
+        k_event_clear(&ecg_evt, EVT_ECG_CANCEL);
         LOG_INF("ECG SMF: ECG start requested - transitioning to WAIT_FOR_LEAD");
-        set_hrv_active(false);
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_WAIT_FOR_LEAD]);
     }
 
@@ -998,17 +957,6 @@ static enum smf_state_result st_ecg_idle_run(void *o)
     if (hpi_evt_consume(&ecg_evt, EVT_GSR_START))
     {
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_GSR_MEASURE_ENTRY]);
-    }
-
-    // Handle HRV evaluation start request
-    if (hpi_evt_consume(&ecg_evt, EVT_HRV_START))
-    {
-        /* Fresh Start supersedes a stale Cancel (see EVT_ECG_START above). */
-        k_event_clear(&ecg_evt, EVT_ECG_CANCEL | EVT_HRV_CANCEL);
-        LOG_INF("ECG SMF: HRV start requested - transitioning to WAIT_FOR_LEAD");
-        set_hrv_active(true);
-        hpi_data_set_hrv_eval_active(true);
-        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_WAIT_FOR_LEAD]);
     }
     return SMF_EVENT_HANDLED;
 }
@@ -1167,12 +1115,7 @@ static enum smf_state_result st_gsr_complete_run(void *o)
 
     smf_set_state(SMF_CTX(&s_ecg_obj),
                   &ecg_states[HPI_ECG_STATE_IDLE]);
-    // Note: HRV eval start is now handled in st_ecg_idle_run() to ensure it's processed
     return SMF_EVENT_HANDLED;
-} 
-struct hpi_hrv_eval_result_t hpi_data_get_hrv_result(void)
-{
-    return g_hrv_result;
 }
 
 /*
@@ -1313,12 +1256,6 @@ static enum smf_state_result st_ecg_wait_for_lead_run(void *o)
         smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
         return SMF_EVENT_HANDLED;
     }
-    if (hpi_evt_consume(&ecg_evt, EVT_HRV_CANCEL)) {
-        LOG_INF("ECG SMF: HRV cancelled in WAIT_FOR_LEAD");
-        ecg_cancellation = true;
-        smf_set_state(SMF_CTX(&s_ecg_obj), &ecg_states[HPI_ECG_STATE_IDLE]);
-        return SMF_EVENT_HANDLED;
-    }
     return SMF_EVENT_HANDLED;
 }
 
@@ -1392,13 +1329,6 @@ static void st_ecg_stabilizing_entry(void *o)
     set_ecg_stabilization_values(ECG_STABILIZATION_DURATION_S, false);
     set_ecg_timer_values(k_uptime_get_32(), 0);
 
-    // Clear HRV buffers
-    if (get_hrv_active()) {
-        hrv_interval_count = 0;
-        memset(hrv_intervals, 0, sizeof(hrv_intervals));
-        hrv_last_status_pub_s = 0;
-    }
-
     // Lead tracking - leads are ON when entering stabilizing
     smf_last_lead_off = false;
 
@@ -1406,7 +1336,7 @@ static void st_ecg_stabilizing_entry(void *o)
     k_event_post(&ecg_evt, EVT_ECG_LEAD_ON);
 
     // Publish status
-    int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+    int duration = ECG_RECORD_DURATION_S;
     struct hpi_ecg_status_t ecg_stat = {
         .ts_complete = 0,
         .status = HPI_ECG_STATUS_STREAMING,
@@ -1418,8 +1348,7 @@ static void st_ecg_stabilizing_entry(void *o)
 static enum smf_state_result st_ecg_stabilizing_run(void *o)
 {
     // Explicit cancel wins in every phase, including during a leads-off warning.
-    if (hpi_evt_consume(&ecg_evt, EVT_ECG_CANCEL) ||
-        hpi_evt_consume(&ecg_evt, EVT_HRV_CANCEL)) {
+    if (hpi_evt_consume(&ecg_evt, EVT_ECG_CANCEL)) {
         LOG_INF("ECG SMF: Cancelled during STABILIZING");
         ecg_cancellation = true;
         ecg_leadoff_grace_start = 0;
@@ -1431,7 +1360,7 @@ static enum smf_state_result st_ecg_stabilizing_run(void *o)
     // only if leads stay off past the grace window.
     int stabilization_countdown;
     get_ecg_stabilization_values(&stabilization_countdown, NULL);
-    int stab_duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+    int stab_duration = ECG_RECORD_DURATION_S;
     if (ecg_leadoff_grace(stab_duration + stabilization_countdown, "STABILIZING")) {
         set_ecg_timer_values(k_uptime_get_32(), 0);   /* freeze the stabilize clock */
         return SMF_EVENT_HANDLED;
@@ -1453,7 +1382,7 @@ static enum smf_state_result st_ecg_stabilizing_run(void *o)
         set_ecg_stabilization_values(stabilization_countdown, false);
 
         // Publish progress
-        int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+        int duration = ECG_RECORD_DURATION_S;
         struct hpi_ecg_status_t ecg_stat = {
             .ts_complete = 0,
             .status = HPI_ECG_STATUS_STREAMING,
@@ -1479,12 +1408,12 @@ static void st_ecg_stabilizing_exit(void *o)
 
 /*
  * RECORDING STATE
- * - Active recording with countdown (30s ECG, 60s HRV)
+ * - Active recording with countdown (ECG_RECORD_DURATION_S)
  * - If leads go off, reset buffer and return to WAIT_FOR_LEAD
  */
 static void st_ecg_recording_entry(void *o)
 {
-    int duration = get_hrv_active() ? HRV_MEASUREMENT_DURATION_S : ECG_RECORD_DURATION_S;
+    int duration = ECG_RECORD_DURATION_S;
 
     LOG_INF("ECG SMF: Entering RECORDING state - %d seconds", duration);
     ecg_leadoff_grace_start = 0;
@@ -1508,21 +1437,12 @@ static void st_ecg_recording_entry(void *o)
         .hr = get_ecg_hr(),
         .progress_timer = duration};
     zbus_chan_pub(&ecg_stat_chan, &ecg_stat, K_NO_WAIT);
-
-    // Initialize HRV collection
-    if (get_hrv_active()) {
-        LOG_INF("ECG SMF: HRV recording started");
-        hrv_interval_count = 0;
-        memset(hrv_intervals, 0, sizeof(hrv_intervals));
-        hrv_last_status_pub_s = 0;
-    }
 }
 
 static enum smf_state_result st_ecg_recording_run(void *o)
 {
     // Explicit cancel / buffer-full win in every phase, incl. a leads-off warn.
-    if (hpi_evt_consume(&ecg_evt, EVT_ECG_CANCEL) ||
-        hpi_evt_consume(&ecg_evt, EVT_HRV_CANCEL)) {
+    if (hpi_evt_consume(&ecg_evt, EVT_ECG_CANCEL)) {
         LOG_INF("ECG SMF: Cancelled during RECORDING");
         ecg_cancellation = true;
         ecg_leadoff_grace_start = 0;
@@ -1593,9 +1513,8 @@ static void st_ecg_complete_entry(void *o)
     LOG_INF("ECG SMF: Entering COMPLETE state");
     int ret;
 
-    /* Latch before the branches below mutate either flag. */
+    /* Latch before the branches below mutate the flag. */
     const bool success = !ecg_cancellation;
-    const bool was_hrv = get_hrv_active();
 
     ecg_complete_entry_ms = k_uptime_get_32();
 
@@ -1613,33 +1532,19 @@ static void st_ecg_complete_entry(void *o)
         LOG_ERR("Failed to disable ECG in complete entry: %d", ret);
     }
 
-    // Handle HRV post-processing if HRV evaluation was active
-    if (get_hrv_active() && !ecg_cancellation) {
-        LOG_INF("HRV evaluation complete - processing results");
-        // Call HRV post-processing function (FFT, frequency analysis, stress index)
-        // This will update hrv_eval_result and write to file
-        hpi_data_hrv_record_to_file(true);
-        hpi_data_set_hrv_eval_active(false);
-        // Signal HRV complete
-        k_event_post(&ecg_evt, EVT_HRV_COMPLETE);
-        ecg_cancellation = true;
-        // Reset HRV active flag
-        set_hrv_active(false);
-    } else {
-        // ECG recording complete - signal ECG completion
-        if(!ecg_cancellation)
-        {
-             k_event_post(&ecg_evt, EVT_ECG_RESET);
-             ecg_cancellation = true; // To avoid duplicate file write in idle state
-        }
+    // ECG recording complete - signal ECG completion
+    if (!ecg_cancellation)
+    {
+        k_event_post(&ecg_evt, EVT_ECG_RESET);
+        ecg_cancellation = true; // To avoid duplicate file write in idle state
     }
 
     /* Announce COMPLETE so the inline monitor can show its "ECG RECORDED" tick
      * and latch the session HR. The final HR is what the health store records
      * (hs_ecg_listener gates on COMPLETE); the display path also needs it —
      * publishing 0 here used to wipe m_disp_ecg_hr / subj_ecg back to "--"
-     * right after a successful capture. HRV has its own result screen. */
-    if (success && !was_hrv) {
+     * right after a successful capture. */
+    if (success) {
         struct hpi_ecg_status_t done_stat = {
             .ts_complete = hw_get_sys_time_ts(),
             .status = HPI_ECG_STATUS_COMPLETE,

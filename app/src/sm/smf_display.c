@@ -238,9 +238,6 @@ static int m_disp_gsr_remaining_synced = -1;
 static int m_disp_gsr_contact_synced = -1;
 static int m_disp_gsr_sleep_synced = -1;
 
-// @brief HRV Screen variables
-static int m_disp_hrv_timer = 0;
-
 
 
 
@@ -307,8 +304,6 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
     [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
-    [SCR_SPL_HRV_EVAL_PROGRESS] = {draw_scr_spl_hrv_eval_progress, gesture_down_scr_spl_hrv_eval_progress},
-    [SCR_SPL_HRV_COMPLETE] = {draw_scr_spl_hrv_complete, gesture_down_scr_spl_hrv_complete},
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
     [SCR_SPL_SPO2_RESULT] = {draw_scr_spo2_result, gesture_down_scr_spo2_result},   /* P6 pilot */
     [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, gesture_down_scr_gsr_complete},
@@ -980,10 +975,6 @@ static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sens
         }
     }
 
-    if (hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
-    {
-        hpi_ecg_disp_draw_plotECG_hrv(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
-    }
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
         hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
@@ -1119,47 +1110,6 @@ static void hpi_disp_update_screens(void)
          }        
         lv_disp_trig_activity(NULL);
         break;
-    case SCR_SPL_HRV_EVAL_PROGRESS:
-        hpi_hrv_disp_update_timer(m_disp_ecg_timer);
-
-        // Check for lead placement timeout - return to HRV home screen
-        // (signaled by ECG SMF when user doesn't place leads within timeout)
-        if (hpi_evt_consume(&ecg_evt, EVT_ECG_LEAD_TIMEOUT))
-        {
-            LOG_INF("DISPLAY THREAD: Lead placement timeout - returning to HRV home screen");
-            unload_scr_hrv_eval_progress();
-            hpi_load_screen(SCR_HRV, SCROLL_DOWN);
-            hpi_disp_show_toast("Measurement cancelled\nNo leads detected", 3000);
-            break;
-        }
-
-        // Check for HRV evaluation complete - show completion screen
-        if (hpi_evt_consume(&ecg_evt, EVT_HRV_COMPLETE))
-        {
-            LOG_INF("DISPLAY THREAD: HRV evaluation complete");
-            hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
-            break;
-        }
-
-        // Handle lead ON/OFF UI updates (signaled by ECG SMF)
-        // Note: State transitions are handled by the SMF, display just updates UI
-        if (hpi_evt_consume(&ecg_evt, EVT_ECG_LEAD_ON))
-        {
-            LOG_INF("DISPLAY THREAD: HRV Lead ON - updating UI");
-            scr_hrv_lead_on_off_handler(false); // false = leads ON
-            m_lead_on_off = false;
-        }
-
-        if (hpi_evt_consume(&ecg_evt, EVT_ECG_LEAD_OFF))
-        {
-            LOG_INF("DISPLAY THREAD: HRV Lead OFF - updating UI");
-            scr_hrv_lead_on_off_handler(true); // true = leads OFF
-            m_lead_on_off = true;
-        }
-
-        lv_disp_trig_activity(NULL);
-        break;
-
     /* SCR_SPL_ECG_SCR2 and SCR_SPL_RAW_PPG removed (legacy full-screen plots). */
     /*case SCR_SPL_FI_SENS_CHECK:
         if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
@@ -1346,10 +1296,6 @@ static enum smf_state_result st_display_active_run(void *o)
         else if(hpi_disp_get_curr_screen() == SCR_SPL_BPT_MEASURE)
         {
             gesture_down_scr_bpt_measure();
-        }
-        else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
-        {
-            gesture_down_scr_spl_hrv_eval_progress();
         }
         else
         {
@@ -2153,13 +2099,6 @@ bool hpi_disp_get_last_ecg_hr(uint16_t *hr, int64_t *ts_utc, uint32_t *uptime_ms
     return true;
 }
 
-static void disp_hrv_stat_listener(const struct zbus_channel *chan)
-{
-    const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
-      m_disp_hrv_timer = hrv_status->remaining_s;
-    // m_disp_hrv_timer = hrv_status->progress_timer;
-}
-ZBUS_LISTENER_DEFINE(disp_hrv_stat_lis, disp_hrv_stat_listener);
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 static void disp_gsr_stress_listener(const struct zbus_channel *chan)

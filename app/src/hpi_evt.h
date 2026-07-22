@@ -33,8 +33,7 @@ extern struct k_event ecg_evt;
 #define EVT_ECG_CANCEL       BIT(1)
 #define EVT_GSR_START        BIT(2)
 #define EVT_GSR_CANCEL       BIT(3)
-#define EVT_HRV_START        BIT(4)
-#define EVT_HRV_CANCEL       BIT(5)
+/* BIT(4)/BIT(5) free — were EVT_HRV_START/EVT_HRV_CANCEL (ECG HRV eval removed) */
 #define EVT_ECG_COMPLETE     BIT(6)
 #define EVT_GSR_COMPLETE     BIT(7)
 /* Outputs: ECG SMF / data_module -> display */
@@ -43,7 +42,7 @@ extern struct k_event ecg_evt;
 #define EVT_ECG_LEAD_TIMEOUT BIT(10)
 #define EVT_GSR_LEAD_ON      BIT(11)
 #define EVT_GSR_LEAD_OFF     BIT(12)
-#define EVT_HRV_COMPLETE     BIT(13)
+/* BIT(13) free — was EVT_HRV_COMPLETE (ECG HRV eval removed) */
 #define EVT_ECG_RESET        BIT(14)
 #define EVT_GSR_RESET        BIT(15)
 /* hw_module -> ECG SMF: one-shot boot handshake ("MAX30001 is up"). Kept
