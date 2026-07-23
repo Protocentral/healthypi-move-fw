@@ -422,84 +422,12 @@ zephyr_udc0: &usbd {
 #include <nordic/nrf5340_cpuapp_partition.dtsi>
 
 /*
- * HealthyPi Move flash layout (M3: Partition Manager -> DTS).
- * Overrides the stock DK partition map (above) to match the previous
- * pm_static.yml byte-for-byte, so DFU stays compatible with fielded units:
- *   - app primary (slot0) grown to 0xd4000 (= external secondary size).
- *   - app secondary (slot1) RELOCATED to external QSPI NOR (w25q01jv).
- *   - settings/storage moved to 0xf0000/0x10000.
- *   - net-core update staging + littlefs live on external flash.
+ * Flash layout is owned by the Partition Manager (app/pm_static.yml), not by
+ * this file. The DTS partition block that lived here during the 3.4 rework was
+ * removed: Nordic documents nRF53 DFU with MCUboot in overwrite mode as the one
+ * configuration that still requires the Partition Manager (NCS migration guide
+ * 3.3, "the only exception that still requires the Partition Manager"), and
+ * without it MCUboot loses MCUBOOT_NRF53_MULTI_IMAGE_UPDATE — which is selected
+ * only from PM_EXTERNAL_FLASH_MCUBOOT_SECONDARY — and takes a net-core update
+ * path that cannot address an off-chip secondary slot.
  */
-
-/* App primary slot: 0x10000..0xe4000 (0xd4000). Must equal the secondary size. */
-&slot0_partition {
-	reg = <0x00010000 0x000d4000>;
-};
-
-/*
- * Settings/storage: 0xf0000..0x100000 (matches old PM settings_storage).
- * Redefine rather than reg-override so the node name (partition@f0000) matches
- * its address — a plain &storage_partition reg override leaves the stock
- * partition@f8000 node name and trips a DTC unit-address/reg mismatch warning.
- */
-/delete-node/ &storage_partition;
-
-&flash0 {
-	partitions {
-		storage_partition: partition@f0000 {
-			compatible = "zephyr,mapped-partition";
-			label = "storage";
-			reg = <0x000f0000 0x00010000>;
-		};
-	};
-};
-
-/* The app secondary is on external QSPI NOR, not internal flash. */
-/delete-node/ &slot1_partition;
-
-&w25q01jv {
-	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		/* App core (image 0) secondary — MCUboot swaps into this. */
-		slot1_partition: partition@0 {
-			label = "image-1";
-			reg = <0x00000000 0x000d4000>;
-		};
-
-		/* Net core (image 1) secondary. */
-		slot3_partition: partition@d4000 {
-			label = "image-3";
-			reg = <0x000d4000 0x00040000>;
-		};
-
-		/* 0x114000..0x120000 (0xc000) left as a gap (was EMPTY_1). */
-
-		/* C3: slot4/slot5 are the LEGACY G1 (<= v1.2.2, NCS 2.9) QSPI-XIP
-		 * image-2 primary/secondary slots — NOT net-core update slots (the
-		 * net core is image 1 and lives in slot3 above). v3.0.0 builds two
-		 * images and never writes here, but the regions are kept, at these
-		 * exact addresses, so the external-flash map stays byte-compatible
-		 * with firmware already in the field: a G1 watch updated to v3 must
-		 * find the same flash geometry underneath it, and the LittleFS
-		 * volume must not shift. Do not reclaim without a fleet-wide
-		 * migration plan (see docs/internal/plans/V3_0_0_RELEASE_PLAN.md). */
-		slot4_partition: partition@120000 {
-			label = "image-4";
-			reg = <0x00120000 0x00200000>;
-		};
-
-		slot5_partition: partition@320000 {
-			label = "image-5";
-			reg = <0x00320000 0x00200000>;
-		};
-
-		/* LittleFS data volume (/lfs) — 112 MiB. */
-		littlefs_storage: partition@520000 {
-			label = "littlefs-storage";
-			reg = <0x00520000 0x07000000>;
-		};
-	};
-};
