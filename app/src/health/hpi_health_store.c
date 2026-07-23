@@ -28,6 +28,7 @@
 #include "health/hpi_hs_readiness.h"
 #include "health/hpi_hs_layout.h"
 #include "hpi_common_types.h"
+#include "hpi_dfu.h"     /* hpi_dfu_is_active() — /lfs shares the OTA's QSPI die */
 #include "hpi_sys.h"
 #include "hw_module.h"   /* hpi_hw_get_last_motion_s() for the LOW_MOTION quality tag */
 
@@ -1426,6 +1427,23 @@ static void hpi_hs_thread(void)
     for (;;) {
         k_sleep(K_MSEC(HS_FLUSH_MS));
         if (!s_storage_ready) {
+            continue;
+        }
+
+        /* DFU quiesce — same reasoning data_module.c already applies to the
+         * record tier: the MCUboot secondary slot and /lfs share one QSPI die,
+         * so every flush here (open + seek + write + close, plus LittleFS's own
+         * metadata writes) contends with the OTA's block erases. A 10 s cadence
+         * against a multi-minute erase/write stream stalls SMP responses long
+         * enough for the phone to time out and drop the link.
+         *
+         * Ingest is unaffected: hpi_hs_record() is RAM-only, and the 512-sample
+         * ring holds far more than an update's worth. The samples land on the
+         * next flush once the flag clears — no explicit resume needed.
+         *
+         * The 5-minute summary/trend pass below is skipped for the same reason:
+         * hs_recompute_* re-read segments off the same die. */
+        if (hpi_dfu_is_active()) {
             continue;
         }
 

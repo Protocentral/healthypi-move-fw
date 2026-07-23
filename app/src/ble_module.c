@@ -334,8 +334,17 @@ void ble_bas_notify(uint8_t batt_level)
  * no callers and the PLX/HTS characteristics were never written. Each listener
  * below runs in the context of the thread that published the value (hw_thread,
  * data_thread, PPG SMF), so they must stay short — queue a GATT PDU and return.
- * Every one of them bails out when no central is connected.
+ * Every one of them bails out when no central is connected, and every one of
+ * them stands down during a DFU: the OTA owns the link for minutes at a time,
+ * and competing ATT traffic (an HTS *indication* especially, which holds the
+ * bearer until the peer confirms) delays the SMP responses the phone is waiting
+ * on. Same quiesce the sensor/record paths already apply (data_module.c,
+ * smf_ppg_wrist.c, smf_ecg_bioz.c).
  */
+static inline bool ble_notify_allowed(void)
+{
+	return hpi_ble_is_connected() && !hpi_dfu_is_active();
+}
 ZBUS_CHAN_DECLARE(hr_chan, batt_chan, spo2_chan, temp_chan);
 
 /* Last HR seen on hr_chan. The SpO2 channel carries no pulse rate, but the PLX
@@ -363,7 +372,7 @@ static void ble_hr_listener(const struct zbus_channel *chan)
 
 	s_last_hr = m->hr;
 
-	if (hpi_ble_is_connected())
+	if (ble_notify_allowed())
 	{
 		bt_hrs_notify(m->hr);
 	}
@@ -377,6 +386,13 @@ static void ble_batt_listener(const struct zbus_channel *chan)
 {
 	const struct hpi_batt_status_t *m = zbus_chan_const_msg(chan);
 	uint8_t level = (m->batt_level > 100) ? 100 : m->batt_level;
+
+	/* Keeping the stored level current while disconnected is fine, but during a
+	 * DFU even the notify this may trigger competes with the upload. */
+	if (hpi_dfu_is_active())
+	{
+		return;
+	}
 
 	bt_bas_set_battery_level(level);
 }
@@ -394,7 +410,7 @@ static void ble_spo2_listener(const struct zbus_channel *chan)
 	bool clock_set = hpi_sys_is_time_valid();
 	bool ts_present = clock_set && (m->timestamp > 0);
 
-	if (m->spo2 == 0 || !hpi_ble_is_connected())
+	if (m->spo2 == 0 || !ble_notify_allowed())
 	{
 		return;
 	}
@@ -454,7 +470,7 @@ static void ble_temp_listener(const struct zbus_channel *chan)
 	int32_t mantissa;
 	int err;
 
-	if (m->temp_c <= 0.0 || !hpi_ble_is_connected())
+	if (m->temp_c <= 0.0 || !ble_notify_allowed())
 	{
 		return;
 	}
