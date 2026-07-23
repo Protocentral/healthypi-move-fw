@@ -194,8 +194,19 @@ if [ "${NET_ONLY}" -eq 0 ]; then
         --options chip_erase_mode=ERASE_ALL "${DEV_ARGS[@]+"${DEV_ARGS[@]}"}"
 fi
 
-echo "==> reset"
+echo "==> reset (pin)"
 nrfutil device reset --reset-kind RESET_PIN "${DEV_ARGS[@]+"${DEV_ARGS[@]}"}"
+
+# Follow with a soft reset over CTRL-AP. The pin reset restarts the part, but the
+# debugger can still be holding the core after a program+reset sequence, and both
+# cores need to come out together for the net core to hand over a working BLE
+# controller. Not fatal if the probe or device does not implement it (the help
+# for RESET_SOFT says it depends on the CTRL-AP implementation) — the pin reset
+# above has already done the essential work.
+echo "==> reset (soft)"
+if ! nrfutil device reset --reset-kind RESET_SOFT "${DEV_ARGS[@]+"${DEV_ARGS[@]}"}"; then
+    echo "flash_bin.sh: soft reset not supported here — continuing" >&2
+fi
 
 cat <<EOF
 
