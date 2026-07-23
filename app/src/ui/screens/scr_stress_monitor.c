@@ -55,9 +55,13 @@ static void stress_apply_band(int v)
     if (s_bal_lbl == NULL) {
         return;
     }
+    /* "--", not an em dash: HPI_FONT_LABEL (manrope_700_22) is generated for
+     * 0x20-0x7E plus a 5-glyph sparse set (° µ · ₂ −). U+2014 is not in it, so
+     * the no-data state rendered as a missing-glyph box. "--" is also what every
+     * other screen uses for "nothing measured yet". */
     const char *word = "BALANCED";
     if (v <= 0) {
-        word = "—";
+        word = "--";
     } else if (v >= 70) {
         word = "HIGH";
     } else if (v >= 40) {
@@ -200,7 +204,7 @@ void hpi_stress_monitor_into(lv_obj_t *parent)
     lv_subject_add_observer_obj(&subj_stress, stress_score_cb, score, NULL);
 
     s_bal_lbl = lv_label_create(col);
-    lv_label_set_text(s_bal_lbl, "—");
+    lv_label_set_text(s_bal_lbl, "--");   /* see stress_apply_band(): no em dash in this font */
     lv_obj_set_style_margin_top(s_bal_lbl, 10, 0);
     lv_obj_set_style_text_font(s_bal_lbl, &HPI_FONT_LABEL, 0);
     lv_obj_set_style_text_color(s_bal_lbl, lv_color_hex(V2_INDIGO), 0);

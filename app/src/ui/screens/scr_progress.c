@@ -66,6 +66,8 @@ extern lv_style_t style_caption;
 
 void draw_scr_progress(const char *title, const char *message)
 {
+    hpi_scr_release_current();   /* reclaim the outgoing screen before building */
+
     scr_progress = lv_obj_create(NULL);
     lv_obj_clear_flag(scr_progress, LV_OBJ_FLAG_SCROLLABLE); /// Flags
     // AMOLED OPTIMIZATION: Pure black background for power efficiency

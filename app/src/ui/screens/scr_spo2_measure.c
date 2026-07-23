@@ -313,8 +313,12 @@ static void spo2_plot_raw(uint32_t *data, int num)
     if (wave_ppg == NULL || num <= 0) {
         return;
     }
+    /* push_linear, not push_auto: this is the spot-check trace the user judges
+     * the reading by, so it has to be the same faithful, linearly-scaled picture
+     * of the raw IR value that v2's lv_chart drew. push_auto's AGC (high-pass +
+     * instant-attack envelope + clip) is kept for the always-on HR tile. */
     for (int i = 0; i < num; i++) {
-        hpi_wave_monitor_push_auto(wave_ppg, (int32_t)data[i]);
+        hpi_wave_monitor_push_linear(wave_ppg, (int32_t)data[i]);
     }
 }
 

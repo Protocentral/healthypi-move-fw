@@ -246,6 +246,52 @@ static void carousel_ensure_tile(int tile_idx)
     LOG_DBG("carousel: built tile %d", tile_idx);
 }
 
+/* Empty tile shell at carousel index `i`. Tiles are located by position, not by
+ * child order (lv_tileview_set_tile_by_index matches on x/y), so one can be
+ * deleted and recreated at the same index. */
+static lv_obj_t *carousel_make_tile(int i)
+{
+    lv_obj_t *tile = lv_tileview_add_tile(carousel_tv, i, 0, LV_DIR_HOR);
+    lv_obj_set_style_bg_color(tile, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
+    carousel_tiles[i] = tile;
+    return tile;
+}
+
+/* Tear down tile content outside [cur-1, cur+1].
+ *
+ * Without this the carousel accumulates: every tile the user swipes past keeps
+ * its monitor (waveform buffers, arcs, bar rows, bound observers) allocated for
+ * as long as the carousel lives, so the pool that a *later* screen has to fit
+ * into shrinks with every swipe. Building all of them at once already OOM'd once
+ * (hence the lazy build), and swiping end to end reaches the same place slowly.
+ *
+ * The tile is deleted and recreated rather than lv_obj_clean()'d: the monitors
+ * hang their LV_EVENT_DELETE teardown on the TILE itself (hpi_spo2_monitor_into,
+ * hpi_ecg_monitor_into, …), and those handlers are what null out their static
+ * widget pointers. lv_obj_clean() keeps the tile alive, so they would never fire
+ * and the statics would dangle into freed objects.
+ *
+ * MUST be called only AFTER lv_tileview_set_tile_by_index() has made `cur` the
+ * active tile — the tileview holds a tile_act pointer, and deleting whatever it
+ * currently points at would leave that dangling. */
+static void carousel_evict_far_tiles(int cur)
+{
+    for (int i = 0; i <= M_COUNT; i++) {
+        uint16_t bit = (uint16_t)(1u << i);
+        if (!(carousel_built_mask & bit) || carousel_tiles[i] == NULL) {
+            continue;
+        }
+        if (i >= cur - 1 && i <= cur + 1) {
+            continue;
+        }
+        lv_obj_del(carousel_tiles[i]);
+        carousel_built_mask &= (uint16_t)~bit;
+        carousel_make_tile(i);
+    }
+}
+
 /* Also prepare neighbors so the next swipe is cheap and not empty. */
 static void carousel_ensure_neighborhood(int tile_idx)
 {
@@ -414,10 +460,20 @@ static void build_home_minimal_tile(lv_obj_t *tile)
     lv_obj_set_style_text_letter_space(time, -2, 0);
     hpi_ui_bind_label(time, &subj_time);
 
-    /* thin accent seconds progress bar (128px wide, fills over the minute) */
+    /* thin accent seconds progress bar (128px wide, fills over the minute)
+     *
+     * Absolute LV_ALIGN_CENTER, not lv_obj_align_to(): align_to computes a
+     * position ONCE and stores no alignment, while lv_obj_refr_size() grows an
+     * object by pinning coords.x1 and extending x2 rightwards. The hero label
+     * above is subject-bound ("00:00" -> "9:05"), so anything chained off it with
+     * align_to drifts left by half the width change and never re-centres.
+     * The offsets below reproduce the original geometry exactly:
+     * hero line_height 77, centred at -22 -> its bottom is +16; +1 +20 gap and a
+     * 2px bar puts the bar centre at +38, and the 26px date row 21px below that
+     * at +72. */
     lv_obj_t *bar = lv_bar_create(tile);
     lv_obj_set_size(bar, 128, 2);
-    lv_obj_align_to(bar, time, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
+    lv_obj_align(bar, LV_ALIGN_CENTER, 0, 38);
     lv_bar_set_range(bar, 0, 59);
     lv_bar_set_value(bar, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, LV_PART_MAIN);   /* v2: no track, bar only */
@@ -429,7 +485,7 @@ static void build_home_minimal_tile(lv_obj_t *tile)
     lv_obj_t *drow = lv_obj_create(tile);
     lv_obj_remove_style_all(drow);
     lv_obj_set_size(drow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_align_to(drow, bar, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
+    lv_obj_align(drow, LV_ALIGN_CENTER, 0, 72);   /* see the bar comment above */
     lv_obj_set_flex_flow(drow, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(drow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(drow, 6, 0);
@@ -496,6 +552,7 @@ void hpi_carousel_step(int dir)
     carousel_ensure_neighborhood(next);
     carousel_cur_tile = next;
     lv_tileview_set_tile_by_index(carousel_tv, next, 0, LV_ANIM_OFF);
+    carousel_evict_far_tiles(next);   /* only after `next` is the active tile */
 }
 
 /* Map a carousel screen id to its tile index (home = 0, metrics 1..N). */
@@ -540,6 +597,15 @@ int hpi_carousel_curr_screen(void)
  * here. */
 void hpi_carousel_show(int scr, enum scroll_dir dir)
 {
+    /* Reclaim the screen we are leaving BEFORE building/showing this one, so a
+     * fresh carousel is allocated against a reclaimed pool rather than on top of
+     * the outgoing screen (see hpi_scr_release_current). Skipped when the
+     * carousel is already the screen on the panel -- then this is just a tile
+     * change and tearing it down would be a pointless full rebuild. */
+    if (scr_carousel == NULL || lv_scr_act() != scr_carousel) {
+        hpi_scr_release_current();
+    }
+
     carousel_pending_tile = carousel_tile_for_screen(scr);
     draw_scr_carousel(dir);
 }
@@ -552,6 +618,7 @@ void draw_scr_carousel(enum scroll_dir m_scroll_dir)
         carousel_ensure_neighborhood(carousel_pending_tile);
         carousel_cur_tile = carousel_pending_tile;
         lv_tileview_set_tile_by_index(carousel_tv, carousel_pending_tile, 0, LV_ANIM_OFF);
+        carousel_evict_far_tiles(carousel_pending_tile);   /* after the tile is active */
         hpi_show_screen(scr_carousel, m_scroll_dir);
         return;
     }
@@ -577,19 +644,20 @@ void draw_scr_carousel(enum scroll_dir m_scroll_dir)
 
     carousel_built_mask = 0;
 
-    /* Empty shells for every tile; populate home + target + neighbors only.
+    /* Empty shells for every tile; content is filled in on demand.
      * Full eager build of all monitors OOM'd the LVGL pool on first paint. */
     for (int i = 0; i <= M_COUNT; i++) {
-        lv_obj_t *tile = lv_tileview_add_tile(carousel_tv, i, 0, LV_DIR_HOR);
-        lv_obj_set_style_bg_color(tile, lv_color_black(), LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
-        carousel_tiles[i] = tile;
+        carousel_make_tile(i);
     }
 
     lv_obj_add_event_cb(scr_carousel, carousel_delete_cb, LV_EVENT_DELETE, NULL);
 
-    carousel_ensure_neighborhood(carousel_pending_tile);
+    /* Target tile only — NOT the neighbourhood. This build runs with the blank
+     * placeholder on the panel (hpi_scr_release_current), so it is the one moment
+     * the user is staring at nothing; keep it to the single tile that is about to
+     * be shown. The neighbours are built by hpi_carousel_step() before the first
+     * swipe lands on them, which is after a frame is already up. */
+    carousel_ensure_tile(carousel_pending_tile);
     carousel_cur_tile = carousel_pending_tile;
     lv_tileview_set_tile_by_index(carousel_tv, carousel_pending_tile, 0, LV_ANIM_OFF);
     hpi_show_screen(scr_carousel, m_scroll_dir);

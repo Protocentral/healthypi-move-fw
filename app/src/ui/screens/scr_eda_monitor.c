@@ -139,6 +139,33 @@ static void eda_wave_del(lv_event_t *e)
     g_gsr_active = false;
 }
 
+/* Tile teardown. Only g_gsr_wave used to be cleared, so every other widget
+ * pointer above survived the tile being freed — and hpi_eda_monitor_update(),
+ * which the display loop calls on each GSR status/countdown/contact edge, writes
+ * straight into them. That was a latent use-after-free whenever the carousel was
+ * rebuilt, and the tile eviction in scr_carousel.c makes tile teardown routine,
+ * so clear the whole set here. Hung on the TILE, so it fires however the tile
+ * dies (eviction, carousel rebuild, screen release). */
+static void eda_monitor_del(lv_event_t *e)
+{
+    ARG_UNUSED(e);
+    s_hero = NULL;
+    s_unit = NULL;
+    s_measure_btn = NULL;
+    s_age_cap = NULL;
+    s_ctx_pill = NULL;
+    s_ctx_lbl = NULL;
+    s_progress = NULL;
+    s_count_row = NULL;
+    s_count_num = NULL;
+    s_phase_card = NULL;
+    s_phase_title = NULL;
+    s_phase_sub = NULL;
+    s_stop_hint = NULL;
+    g_gsr_wave = NULL;
+    g_gsr_active = false;
+}
+
 /* Called when the user navigates away from the EDA tile. A GSR spot check is a
  * focused, attended measurement (fingers on the electrodes); leaving abandons it,
  * so cancel rather than leave it capturing invisibly in the background. */
@@ -191,6 +218,8 @@ void hpi_eda_monitor_update(int status, int remaining_s, bool contact)
 
 void hpi_eda_monitor_into(lv_obj_t *parent)
 {
+    lv_obj_add_event_cb(parent, eda_monitor_del, LV_EVENT_DELETE, NULL);
+
     /* header caption */
     lv_obj_t *hdr = lv_label_create(parent);
     lv_label_set_text(hdr, "EDA/GSR");

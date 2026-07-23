@@ -73,6 +73,12 @@ void hpi_v2_aod_enter(void)
         return;
     }
 
+    /* Free the screen we are sleeping away from before building the face.
+     * Without this the whole pre-sleep screen (often a fully-built carousel)
+     * stayed allocated underneath the AOD face for the entire sleep, and was
+     * then leaked when sleep_exit loaded Home over the top of it. */
+    hpi_scr_release_current();
+
     scr_aod = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(scr_aod, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scr_aod, LV_OPA_COVER, LV_PART_MAIN);

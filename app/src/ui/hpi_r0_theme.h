@@ -184,6 +184,7 @@ void hpi_v2_aod_exit(void);
 lv_obj_t *hpi_wave_monitor_create(lv_obj_t *parent, int w, int h, lv_color_t color);
 void hpi_wave_monitor_push(lv_obj_t *wm, float sample);
 void hpi_wave_monitor_push_auto(lv_obj_t *wm, int32_t raw);  /* real samples, auto-scaled (PPG) */
+void hpi_wave_monitor_push_linear(lv_obj_t *wm, int32_t raw);/* raw, linear min/max window scale */
 void hpi_wave_monitor_push_ecg(lv_obj_t *wm, int32_t raw);   /* ECG: HP baseline + envelope AGC */
 void hpi_wave_monitor_push_eda(lv_obj_t *wm, int32_t raw);   /* EDA/BioZ: window envelope + min span */
 void hpi_wave_monitor_reset(lv_obj_t *wm);                  /* reset adaptive scaler + clear trace */

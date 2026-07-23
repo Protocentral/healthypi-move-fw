@@ -43,6 +43,11 @@ static void dfu_del(lv_event_t *e)
 
 void draw_scr_dfu(void)
 {
+    /* Free whatever is on the panel first — an OTA can start from anywhere,
+     * including a fully-built carousel, and running out of LVGL heap here would
+     * reboot the watch mid-update. */
+    hpi_scr_release_current();
+
     scr_dfu = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(scr_dfu, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_dfu, LV_OBJ_FLAG_SCROLLABLE);

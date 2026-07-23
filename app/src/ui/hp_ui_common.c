@@ -410,6 +410,70 @@ uint8_t hpi_disp_get_brightness(void)
 #define HPI_SCR_IS_CAROUSEL(id) ((id) > SCR_LIST_START && (id) < SCR_LIST_END)
 static int g_shown_scr_id = -1;
 
+/* One-object screen we park on while the outgoing screen is freed and the
+ * incoming one is built. Created once, never deleted. */
+static lv_obj_t *s_blank_scr;
+
+/* Free the screen that is on the panel RIGHT NOW, before the next one is built.
+ *
+ * LVGL only frees the outgoing screen inside lv_scr_load_anim(), which the draw
+ * functions call as their LAST step -- so navigation used to peak with BOTH
+ * screens resident. That peak is what has been rebooting the watch: the LVGL
+ * pool is finite, an allocation returns NULL, and in a release build
+ * (CONFIG_ASSERT=n) LV_ASSERT_MALLOC compiles to nothing, so LVGL dereferences
+ * the NULL and the device hard-faults. Worst offenders are exactly the reported
+ * cases -- SpO2 measure (296x74 wave monitor) -> the SpO2 tile, which drags in
+ * the neighbouring ECG and BP monitors; the 13-row Settings screen -> a fresh
+ * carousel; the shade -> a fresh carousel.
+ *
+ * Parking on a 1-object screen first means the incoming screen is built against
+ * a heap that has already been reclaimed, halving the peak and, just as
+ * importantly, keeping the pool from fragmenting across repeated round trips
+ * (which is why the crashes were intermittent -- "sometimes", "3-4 times").
+ *
+ * Load the blank screen BEFORE deleting: the outgoing object is then no longer
+ * disp->act_scr, so LVGL never has to run its "the active screen was deleted"
+ * path. Deleting from inside that screen's own gesture callback is safe on LVGL
+ * 9.5 -- lv_event_mark_deleted() aborts the dispatch and lv_indev.c does an
+ * indev_reset_check() straight after indev_gesture().
+ *
+ * Display (LVGL) thread only. */
+void hpi_scr_release_current(void)
+{
+    if (s_blank_scr == NULL) {
+        s_blank_scr = lv_obj_create(NULL);
+        if (s_blank_scr == NULL) {
+            return;   /* out of memory already; leave the current screen up */
+        }
+        lv_obj_set_style_bg_color(s_blank_scr, lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(s_blank_scr, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_clear_flag(s_blank_scr, LV_OBJ_FLAG_SCROLLABLE);
+    }
+
+    lv_obj_t *act = lv_scr_act();
+    if (act == NULL || act == s_blank_scr) {
+        g_shown_scr_id = -1;
+        return;
+    }
+
+    lv_scr_load(s_blank_scr);
+
+    /* Deleting the object is enough for every screen INCLUDING the carousel --
+     * its statics are cleared by its own LV_EVENT_DELETE handler
+     * (carousel_delete_cb), which fires either way. Do not branch on
+     * g_shown_scr_id here: it is only updated by hpi_show_screen(), so screens
+     * loaded around it (the AOD face, the splash) leave it stale, and trusting it
+     * would delete the wrong object. */
+    lv_obj_del(act);
+
+    /* ...then drop a carousel that is resident but was NOT the active screen
+     * (it used to be kept as a swipe cache under a special screen). No-op if the
+     * delete above was the carousel, or if none is built. */
+    hpi_carousel_rebuild();
+
+    g_shown_scr_id = -1;
+}
+
 void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
 {
     /* Re-showing a cached screen would stack a second gesture handler, so remove
@@ -417,8 +481,12 @@ void hpi_show_screen(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir)
     lv_obj_remove_event_cb(m_screen, disp_screen_event);
     lv_obj_add_event_cb(m_screen, disp_screen_event, LV_EVENT_GESTURE, NULL);
 
-    /* Keep the outgoing screen alive if it is a cached carousel screen. */
-    bool auto_del = !HPI_SCR_IS_CAROUSEL(g_shown_scr_id);
+    /* Keep the outgoing screen alive if it is a cached carousel screen -- and
+     * never delete the parked blank screen, which is reused for every
+     * transition. In the normal path hpi_scr_release_current() has already freed
+     * the outgoing screen, so this is just a backstop for any caller that has
+     * not been through it. */
+    bool auto_del = (lv_scr_act() != s_blank_scr) && !HPI_SCR_IS_CAROUSEL(g_shown_scr_id);
 
     /* The SH8601 is SPI-bound: a full 390x390 frame takes ~74 ms to push, so any
      * multi-frame slide/fade transition looks slow and jagged. Load instantly -
@@ -447,7 +515,12 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     // CRITICAL: Set global transition flag to suspend ALL screen updates
     // This protects the entire screen loading process across all screens
     screen_transition_in_progress = true;
-    
+
+    /* Every branch below delegates to hpi_carousel_show(), which is where the
+     * outgoing screen gets reclaimed (hpi_scr_release_current) -- it has to make
+     * the call itself so it can skip the teardown when the carousel is already
+     * the screen on the panel and this is only a tile change. */
+
     switch (m_screen)
     {
     case SCR_HOME:

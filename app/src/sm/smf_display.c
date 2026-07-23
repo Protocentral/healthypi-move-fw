@@ -299,6 +299,12 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_BPT] = {draw_scr_carousel_entry, NULL},
     [SCR_GSR] = {draw_scr_carousel_entry, NULL},
     [SCR_HRV] = {draw_scr_carousel_entry, NULL},
+    /* Activity + Recovery are carousel tiles too, and were the only two metric
+     * ids missing here — hpi_load_scr_spl() validates against this table, so a
+     * deferred load of either was rejected as "Invalid screen" while the other
+     * seven worked. */
+    [SCR_ACTIVITY] = {draw_scr_carousel_entry, NULL},
+    [SCR_RECOVERY] = {draw_scr_carousel_entry, NULL},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
     [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
@@ -1361,20 +1367,18 @@ static enum smf_state_result st_display_active_run(void *o)
         else if (g_screen >= 0 && g_screen < (int)ARRAY_SIZE(screen_func_table) &&
                  screen_func_table[g_screen].draw)
         {
-            screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
+            /* OOM guard: reclaim whatever is on the panel BEFORE building this
+             * screen. The carousel keeps every visited tile allocated (heavy
+             * ECG/PPG/HR waveform monitors), and layering e.g. Settings on top of
+             * it used to exhaust the LVGL pool — lv_malloc returns NULL and, in a
+             * release build where LV_ASSERT_MALLOC compiles away, the device
+             * hard-faults. This used to be a hpi_carousel_rebuild() *after* the
+             * draw, which never helped the peak and only covered one direction.
+             * hpi_scr_release_current() handles both (carousel -> its own
+             * teardown, special screen -> delete). */
+            hpi_scr_release_current();
 
-            /* OOM guard: the metric carousel (SCR_HOME) is kept resident as a swipe
-             * cache, but with auto_del suppressed (hp_ui_common.c) every visited
-             * tile — including the heavy ECG/PPG/HR waveform monitors — stays
-             * allocated underneath. Layering a special screen (e.g. Settings) on top
-             * of a fully-built carousel can exhaust the 60 KB LVGL pool; the failure
-             * surfaces as LV_ASSERT_NULL in lv_event_add() (lv_malloc returns NULL)
-             * and cold-reboots the device — reproducible by opening Settings after
-             * swiping out to the far tiles (Steps/HRV/Recovery). Now that the special
-             * screen is the active LVGL screen, drop the carousel to reclaim its
-             * heap; returning to a metric rebuilds it at the right tile via
-             * hpi_carousel_show(). No-op when the carousel isn't resident. */
-            hpi_carousel_rebuild();
+            screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
         }
         else
         {
@@ -1460,6 +1464,14 @@ static void st_display_sleep_entry(void *o)
     LOG_DBG("Display SM Sleep Entry");
 
     s_display_asleep = true;
+
+    /* Drop any touch-wakeup left over from the ACTIVE state. The touch driver
+     * gives this semaphore on every press, but it is only taken here in SLEEP —
+     * so the last touch before the idle timeout was still sitting in it, and
+     * st_display_sleep_run() consumed it immediately and woke straight back up.
+     * The effect was that the watch took two full sleep timeouts to actually
+     * stay asleep after any interaction. */
+    k_sem_reset(&sem_touch_wakeup);
 
     // Save the current screen state before going to sleep
     hpi_disp_save_screen_state();

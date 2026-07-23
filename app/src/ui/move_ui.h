@@ -426,6 +426,13 @@ void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
 
+/* Park on a blank screen and free the screen currently on the panel, so the next
+ * one is built against a reclaimed LVGL heap instead of peaking with both
+ * resident. Called from hpi_load_screen(), hpi_carousel_show() and the display
+ * thread's screen-load drain — every navigation path goes through one of those.
+ * Display (LVGL) thread only. */
+void hpi_scr_release_current(void);
+
 // Toast notification utility
 void hpi_disp_show_toast(const char *message, uint32_t duration_ms);
 

@@ -12,6 +12,7 @@
 #include <zephyr/kernel.h>
 #include <lvgl.h>
 #include <string.h>
+#include <stdint.h>
 #include <math.h>
 
 #include "ui/hpi_r0_theme.h"
@@ -33,6 +34,12 @@ typedef struct {
     int         auto_init;
     float       ecg_base, ecg_env, ecg_amp;  /* ECG baseline(HP), peak env, long-term amp */
     int         ecg_init, ecg_n;
+    /* linear min/max window autoscale (push_linear) */
+    int32_t     lin_bmin, lin_bmax;   /* extremes seen since the last rescale */
+    int32_t     lin_lo, lin_hi;       /* range currently mapped to the plot    */
+    int         lin_n;                /* samples since the last rescale        */
+    int         lin_stable;           /* consecutive windows with no rescale   */
+    int         lin_init;
 } wave_monitor_t;
 
 static void wave_delete_cb(lv_event_t *e)
@@ -83,7 +90,15 @@ lv_obj_t *hpi_wave_monitor_create(lv_obj_t *parent, int w, int h, lv_color_t col
     lv_obj_set_style_bg_color(obj, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
 
+    /* Both allocations are checked: under memory pressure lv_malloc returns NULL,
+     * and in a release build LV_ASSERT_MALLOC compiles away (CONFIG_ASSERT=n), so
+     * an unchecked write here is a hard fault. A monitor without its buffer draws
+     * nothing (wave_draw_cb / the push helpers all early-out on a NULL user_data)
+     * instead of taking the watch down. */
     wave_monitor_t *wm = lv_malloc(sizeof(*wm));
+    if (wm == NULL) {
+        return obj;
+    }
     memset(wm, 0, sizeof(*wm));
     wm->w = w;
     wm->h = h;
@@ -92,6 +107,10 @@ lv_obj_t *hpi_wave_monitor_create(lv_obj_t *parent, int w, int h, lv_color_t col
     wm->mid = h / 2;
     wm->amp = (int)(h * 0.34f);
     wm->y = lv_malloc(sizeof(int16_t) * w);
+    if (wm->y == NULL) {
+        lv_free(wm);
+        return obj;
+    }
     for (int i = 0; i < w; i++) {
         wm->y[i] = wm->mid;
     }
@@ -269,6 +288,131 @@ void hpi_wave_monitor_push_eda(lv_obj_t *obj, int32_t raw)
     hpi_wave_monitor_push(obj, (norm - 0.5f) * 2.6f);     /* centered, ~88% fill */
 }
 
+/* Linear min/max window autoscale — the SpO2 spot-check plot.
+ *
+ * push_auto() is an AGC (high-pass + instant-attack envelope + soft clip at
+ * ±1.3). That is fine for the always-on HR tile, where the point is "is there a
+ * pulse", but it visibly distorts the SpO2 measuring trace: one motion artefact
+ * sets the envelope and collapses the visible pulse amplitude for seconds
+ * afterwards, and tall peaks flatten against the clip. Up to v2 the SpO2 screen
+ * plotted the RAW IR value into an lv_chart and simply rescaled the Y axis from
+ * a running min/max (hpi_ppg_autoscale.c, removed in the v2->v3 UI rework), so
+ * the trace was a faithful, linear picture of the signal.
+ *
+ * This restores exactly that behaviour inside the wave monitor: accumulate the
+ * extremes, recompute the mapped range every quarter-window with the same
+ * expansion / padding / hysteresis rules v2 used, and map every sample linearly
+ * in between. No high-pass, no envelope, no clipping. */
+#define WM_LIN_MIN_SPAN   64      /* counts; below this the range is opened up  */
+#define WM_LIN_FILL       1.3f    /* ±1.3 * amp ≈ 88% of the plot height        */
+#define WM_LIN_STABLE_MAX 8       /* forced rescale after this many quiet windows */
+
+static void wave_lin_rescale(wave_monitor_t *wm)
+{
+    int32_t min_v = wm->lin_bmin;
+    int32_t max_v = wm->lin_bmax;
+
+    if (min_v >= max_v) {
+        /* flat or no data this window — open a symmetric window around it */
+        int32_t c = min_v;
+        min_v = c - WM_LIN_MIN_SPAN;
+        max_v = c + WM_LIN_MIN_SPAN;
+    } else if ((max_v - min_v) < WM_LIN_MIN_SPAN) {
+        int32_t c = (min_v + max_v) / 2;
+        min_v = c - WM_LIN_MIN_SPAN;
+        max_v = c + WM_LIN_MIN_SPAN;
+    } else {
+        int32_t pad = (max_v - min_v) / 10;   /* 10% headroom, as in v2 */
+        if (pad < 8) {
+            pad = 8;
+        }
+        min_v -= pad;
+        max_v += pad;
+    }
+
+    bool update = !wm->lin_init;
+    if (wm->lin_init) {
+        int32_t cur_range = wm->lin_hi - wm->lin_lo;
+        int32_t new_range = max_v - min_v;
+
+        if (cur_range <= 0) {
+            update = true;
+        } else {
+            int32_t d_range = (new_range > cur_range) ? new_range - cur_range : cur_range - new_range;
+            int32_t d_lo = (min_v > wm->lin_lo) ? min_v - wm->lin_lo : wm->lin_lo - min_v;
+            int32_t d_hi = (max_v > wm->lin_hi) ? max_v - wm->lin_hi : wm->lin_hi - max_v;
+
+            /* >10% range change, or either edge moved >15% of the range */
+            if (d_range * 10 > cur_range || d_lo * 100 > cur_range * 15 ||
+                d_hi * 100 > cur_range * 15) {
+                update = true;
+            }
+            /* always allow a scale-UP so an improving signal is never stuck small */
+            if (new_range * 5 > cur_range * 6) {
+                update = true;
+            }
+            /* the trace is running into the current bounds — rescale now */
+            if ((min_v - wm->lin_lo) * 10 < cur_range || (wm->lin_hi - max_v) * 10 < cur_range) {
+                update = true;
+            }
+        }
+
+        if (!update && ++wm->lin_stable >= WM_LIN_STABLE_MAX) {
+            update = true;   /* catch gradual drift the thresholds miss */
+        }
+    }
+
+    if (update) {
+        wm->lin_lo = min_v;
+        wm->lin_hi = max_v;
+        wm->lin_init = 1;
+        wm->lin_stable = 0;
+    }
+
+    wm->lin_n = 0;
+    wm->lin_bmin = INT32_MAX;
+    wm->lin_bmax = INT32_MIN;
+}
+
+void hpi_wave_monitor_push_linear(lv_obj_t *obj, int32_t raw)
+{
+    wave_monitor_t *wm = lv_obj_get_user_data(obj);
+    if (wm == NULL) {
+        return;
+    }
+
+    if (!wm->lin_init && wm->lin_n == 0) {
+        wm->lin_bmin = INT32_MAX;
+        wm->lin_bmax = INT32_MIN;
+        /* provisional range until the first window closes */
+        wm->lin_lo = raw - WM_LIN_MIN_SPAN;
+        wm->lin_hi = raw + WM_LIN_MIN_SPAN;
+    }
+
+    if (raw < wm->lin_bmin) {
+        wm->lin_bmin = raw;
+    }
+    if (raw > wm->lin_bmax) {
+        wm->lin_bmax = raw;
+    }
+
+    int32_t span = wm->lin_hi - wm->lin_lo;
+    if (span < 1) {
+        span = 1;
+    }
+    float norm = ((float)(raw - wm->lin_lo) / (float)span - 0.5f) * 2.0f * WM_LIN_FILL;
+    hpi_wave_monitor_push(obj, norm);
+
+    /* v2 rescaled every window/4 samples to keep the range steady but responsive */
+    int period = wm->n / 4;
+    if (period < 8) {
+        period = 8;
+    }
+    if (++wm->lin_n >= period) {
+        wave_lin_rescale(wm);
+    }
+}
+
 /* ECG-specific scaler. Unlike push_auto (tuned for pulsatile PPG), ECG is a flat
  * baseline with a sharp QRS spike, so a running min/max gets pinned by the R/S
  * peaks and squashes everything else. Instead:
@@ -346,6 +490,9 @@ void hpi_wave_monitor_reset(lv_obj_t *obj)
     }
     wm->ecg_init = 0;
     wm->auto_init = 0;
+    wm->lin_init = 0;
+    wm->lin_n = 0;
+    wm->lin_stable = 0;
     wm->head = 0;
     for (int i = 0; i < wm->n; i++) {
         wm->y[i] = wm->mid;
