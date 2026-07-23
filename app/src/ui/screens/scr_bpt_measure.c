@@ -286,5 +286,11 @@ void gesture_down_scr_bpt_measure(void)
 {
     LOG_INF("Cancel BPT measurement (swipe/CANCEL) - posting EVT_FI_BPT_EST_CANCEL");
     k_event_post(&fi_evt, EVT_FI_BPT_EST_CANCEL);
-    hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+    /* Defer, not hpi_load_screen(): this runs inside LVGL input dispatch (swipe
+     * gesture or the CANCEL button), and this screen carries a live PPG wave
+     * monitor. Rebuilding synchronously here frees this screen and the child
+     * under the finger from within the event still walking it -- the same
+     * reboot the SpO2 measure screen hit. Queue it; the display loop draws it on
+     * a clean stack. */
+    hpi_load_scr_spl(SCR_BPT, SCROLL_DOWN, 0, 0, 0, 0);
 }

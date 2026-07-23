@@ -341,5 +341,22 @@ void gesture_down_scr_spo2_measure(void)
         k_event_post(&spo2_evt, EVT_SPO2_CANCEL);
         LOG_INF("SpO2 measurement cancelled (wrist)");
     }
-    hpi_carousel_show(SCR_SPO2, SCROLL_DOWN);
+
+    /* Latch so a late SUCCESS/timeout sample landing before this screen is torn
+     * down cannot also queue a result screen and override the cancel. */
+    routed_away = true;
+
+    /* DEFER the navigation instead of hpi_carousel_show() (which draws
+     * synchronously in the caller's context). This handler runs from inside
+     * LVGL input dispatch -- for the swipe, deep inside lv_timer_handler ->
+     * indev_gesture -> the screen's own LV_EVENT_GESTURE; for the CANCEL button,
+     * inside its LV_EVENT_CLICKED. Rebuilding the whole screen stack there means
+     * freeing THIS screen (and the live wave-monitor child under the finger) and
+     * allocating the carousel from within the event that is still walking this
+     * screen -- the SpO2-measure swipe reboot. hpi_load_scr_spl() queues the
+     * request; the display loop drains it at the top of the next iteration, on a
+     * clean stack outside any event dispatch, and routes SCR_SPO2 back to the
+     * carousel tile. (The stall/timeout/success paths in this file already
+     * navigate this way; the cancel gesture was the one that did not.) */
+    hpi_load_scr_spl(SCR_SPO2, SCROLL_DOWN, 0, 0, 0, 0);
 }

@@ -444,12 +444,36 @@ static void min_sec_bar_cb(lv_observer_t *obs, lv_subject_t *subj)
 /* v2 Minimal watch face: hero time only + a thin accent seconds bar + the
  * "DATE · AM/PM" line. Built and selectable via hpi_home_set_face(), but not
  * the default yet (activation is a later phase). */
+/* One AOD-style vitals cell: dim icon + subject-bound value, no chip. */
+static void min_vital(lv_obj_t *row, const char *sym, uint32_t color, lv_subject_t *subj)
+{
+    lv_obj_t *cell = lv_obj_create(row);
+    lv_obj_remove_style_all(cell);
+    lv_obj_set_size(cell, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cell, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cell, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(cell, 6, 0);
+
+    lv_obj_t *ic = lv_label_create(cell);
+    lv_label_set_text(ic, sym);
+    lv_obj_set_style_text_font(ic, &HPI_FONT_ICON, 0);   /* matsym 24 */
+    lv_obj_set_style_text_color(ic, lv_color_hex(color), 0);
+
+    lv_obj_t *v = lv_label_create(cell);
+    lv_label_set_text(v, "--");
+    lv_obj_set_style_text_font(v, &HPI_FONT_LABEL, 0);    /* Manrope 22 */
+    lv_obj_set_style_text_color(v, lv_color_hex(V2_MUTED2), 0);
+    hpi_ui_bind_label(v, subj);
+}
+
 static void build_home_minimal_tile(lv_obj_t *tile)
 {
     lv_obj_set_style_bg_color(tile, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
-    hpi_v2_dial_bg(tile);   /* dial motif behind the minimal face */
+    /* No dial motif on the minimal face: the design is deliberately spare, and
+     * the accent ticks fought the seconds bar for the same accent colour. (The
+     * digital face keeps it.) */
 
     /* hero time (Rubik 88) */
     lv_obj_t *time = lv_label_create(tile);
@@ -508,11 +532,23 @@ static void build_home_minimal_tile(lv_obj_t *tile)
     lv_obj_set_style_text_color(ampm, lv_color_hex(V2_MUTED2), 0);
     hpi_ui_bind_label(ampm, &subj_ampm);
 
+    /* subtle vitals (HR · steps), AOD-style: tinted icon + dim value, no chips.
+     * Absolute centre offset for the same reason the rows above use it. */
+    lv_obj_t *vrow = lv_obj_create(tile);
+    lv_obj_remove_style_all(vrow);
+    lv_obj_set_size(vrow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(vrow, LV_ALIGN_CENTER, 0, 118);
+    lv_obj_set_flex_flow(vrow, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(vrow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(vrow, 22, 0);
+    min_vital(vrow, SYM_HR,    hpi_accent_rgb(), &subj_hr);
+    min_vital(vrow, SYM_STEPS, R0_GREEN,         &subj_steps);
+
     /* set-time reminder (shown only when the clock isn't valid) */
     home_hint = NULL;
     home_warn = lv_label_create(tile);
     lv_label_set_text(home_warn, "Set time from app");
-    lv_obj_align(home_warn, LV_ALIGN_CENTER, 0, 150);
+    lv_obj_align(home_warn, LV_ALIGN_CENTER, 0, 158);
     lv_obj_set_style_text_color(home_warn, lv_color_hex(R0_WARNING), LV_PART_MAIN);
     lv_obj_set_style_text_font(home_warn, &HPI_FONT_LABEL, LV_PART_MAIN);
     lv_subject_add_observer_obj(&subj_time, home_timevalid_cb, tile, NULL);
