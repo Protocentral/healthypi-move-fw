@@ -456,7 +456,10 @@ static void min_vital(lv_obj_t *row, const char *sym, uint32_t color, lv_subject
 
     lv_obj_t *ic = lv_label_create(cell);
     lv_label_set_text(ic, sym);
-    lv_obj_set_style_text_font(ic, &HPI_FONT_ICON, 0);   /* matsym 24 */
+    /* matsym_28, not matsym_24: the 24px set does not carry directions_walk
+     * (U+E536, SYM_STEPS) — it rendered as a missing-glyph box. The digital home
+     * face uses matsym_28 for these same two symbols. */
+    lv_obj_set_style_text_font(ic, &HPI_FONT_ICON_LG, 0);   /* matsym 28 */
     lv_obj_set_style_text_color(ic, lv_color_hex(color), 0);
 
     lv_obj_t *v = lv_label_create(cell);
