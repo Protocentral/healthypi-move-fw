@@ -1,9 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./build.sh *)",
-      "Bash(./build.sh)",
-      "Bash(CLEAN=1 ./build.sh *)",
+      "Bash(./scripts/build.sh *)",
+      "Bash(./scripts/build.sh)",
+      "Bash(RELEASE=1 ./scripts/build.sh *)",
       "Bash(west build *)",
       "Bash(west twister *)",
       "Bash(west list *)",

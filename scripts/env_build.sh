@@ -1,14 +1,18 @@
 #!/bin/bash
 # Source the nRF Connect SDK / Zephyr environment and run a west build.
 # Usage:
-#   ./env_build.sh                  # incremental build
-#   ./env_build.sh --pristine       # clean build
+#   ./scripts/env_build.sh              # incremental build
+#   ./scripts/env_build.sh --pristine   # clean build
+#
+# Superseded by build.sh, which resolves the toolchain from the workspace SDK
+# version instead of the hardcoded id below. Kept as a fallback.
 
 NCS_BASE="/opt/nordic/ncs"
 NCS_TOOLCHAIN_ID="5c0d382932"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_DIR="$(dirname "${SCRIPT_DIR}")"
+REPO_DIR="$(dirname "${SCRIPT_DIR}")"
+WORKSPACE_DIR="$(dirname "${REPO_DIR}")"
 
 # Use the workspace's own Zephyr (matches west.yml manifest)
 export ZEPHYR_BASE="${WORKSPACE_DIR}/zephyr"

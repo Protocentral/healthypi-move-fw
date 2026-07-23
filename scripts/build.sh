@@ -3,9 +3,10 @@
 # Build the HealthyPi Move application firmware.
 #
 # Usage:
-#   ./build.sh                 # incremental build into app/build
-#   ./build.sh --pristine      # clean build (any west build flags are passed through)
-#   ./build.sh -p              # same, short form
+#   ./scripts/build.sh              # incremental build into app/build
+#   ./scripts/build.sh --pristine   # clean build (west build flags pass through)
+#   ./scripts/build.sh -p           # same, short form
+#   RELEASE=1 ./scripts/build.sh --pristine   # the shipping artifact
 #
 # What this handles:
 # - BOARD_ROOT is passed as an ABSOLUTE path. A relative "." resolves against the
@@ -21,7 +22,10 @@
 # Overrides (env vars): NCS_BASE, NCS_TOOLCHAIN_ID, ZEPHYR_BASE.
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# scripts/ lives one level below the repo root, which in turn sits inside the
+# west workspace: <workspace>/healthypi-move-fw/scripts/build.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "${SCRIPT_DIR}")"
 WORKSPACE_DIR="$(dirname "${REPO_DIR}")"
 NCS_BASE="${NCS_BASE:-/opt/nordic/ncs}"
 
@@ -103,9 +107,35 @@ command -v west >/dev/null 2>&1 || { echo "build.sh: west not on PATH after tool
 # setting is a field-DFU requirement). "app" is the sysbuild image name for this
 # application, hence the app_-prefixed variable.
 EXTRA_CMAKE_ARGS=()
+WANT_RELEASE=0
 if [ "${RELEASE:-0}" = "1" ]; then
+    WANT_RELEASE=1
     echo "build.sh: RELEASE build - applying app/overlay-release.conf"
     EXTRA_CMAKE_ARGS+=("-Dapp_EXTRA_CONF_FILE=${REPO_DIR}/app/overlay-release.conf")
+fi
+
+# -Dapp_EXTRA_CONF_FILE lands in the CMake cache and STAYS there: without this,
+# one RELEASE=1 build turns every later incremental build into a release build
+# too — no asserts, no console — with nothing on screen to say so. Switching
+# between the two therefore has to start from a clean build dir.
+CACHE_FILE="${REPO_DIR}/app/build/CMakeCache.txt"
+CACHED_RELEASE=0
+if [ -f "${CACHE_FILE}" ] && grep -q "app_EXTRA_CONF_FILE.*overlay-release\.conf" "${CACHE_FILE}"; then
+    CACHED_RELEASE=1
+fi
+if [ "${CACHED_RELEASE}" != "${WANT_RELEASE}" ]; then
+    already_pristine=0
+    for arg in "$@"; do
+        case "${arg}" in -p|--pristine|--pristine=*) already_pristine=1 ;; esac
+    done
+    if [ "${already_pristine}" -eq 0 ]; then
+        if [ "${WANT_RELEASE}" -eq 1 ]; then
+            echo "build.sh: switching dev -> RELEASE; forcing --pristine"
+        else
+            echo "build.sh: existing build dir is a RELEASE build; forcing --pristine for a dev build"
+        fi
+        set -- --pristine "$@"
+    fi
 fi
 
 west build \

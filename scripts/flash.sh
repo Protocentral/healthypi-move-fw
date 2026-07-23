@@ -2,8 +2,8 @@
 #
 # Flash the HealthyPi Move firmware.
 #
-#   ./flash.sh          # app core only (mcuboot + app), chip erase — the fast path
-#   ./flash.sh --full   # all four domains, incl. the net core (b0n + ipc_radio)
+#   ./scripts/flash.sh          # app core only (mcuboot + app), chip erase
+#   ./scripts/flash.sh --full   # every domain, incl. the net core (b0n + ipc_radio)
 #
 # Use --full for: a fresh/recovered board, after `nrfutil device recover`, or
 # whenever the net core actually changes (ipc_radio / b0n / a BLE controller
@@ -30,9 +30,8 @@
 # refers to the XIP region (nrf_common.py: ext_mem_erase_opt), which this one
 # does not.
 #
-# Why 4 domains at all: M3 removed Partition Manager, so there is no merged.hex
-# and sysbuild flashes each domain separately, in the order given by
-# app/build/domains.yaml:
+# Why per-domain at all: sysbuild flashes each domain separately, in the order
+# given by app/build/domains.yaml:
 #     mcuboot -> b0n -> ipc_radio -> app
 #      (CPUAPP)  (CPUNET) (CPUNET)  (CPUAPP)
 # Four images is CORRECT — it is the MCUboot + NSIB b0n + ipc_radio + app set
@@ -43,6 +42,9 @@
 # per-core, so skipping them leaves the net core's b0n + ipc_radio in place.
 # ---------------------------------------------------------------------------
 set -euo pipefail
+
+# Runnable from anywhere: app/build is relative to the repo root, not to $PWD.
+cd "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
 
 if [ "${1:-}" = "--full" ]; then
     west flash -d app/build --erase
