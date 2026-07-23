@@ -31,6 +31,17 @@ if(NOT CONFIG_HPI_HS_SYNTH)
   list(FILTER app_sources EXCLUDE REGEX ".*/src/health/hpi_hs_synth\\.c$")
 endif()
 
+# CONFIG_HPI_GSR_SCREEN=n promises "GSR source files are excluded" (app/Kconfig).
+# Until now nothing enforced it, so the =n build still compiled the screens and
+# only failed later, at link, on the runtime hooks. Exclude the two GSR-only
+# screens; move_ui.h supplies inline no-op stubs for their entry points.
+# NOTE: scr_stress_monitor.c is deliberately NOT in this list — the Stress/HRV
+# tile is fed by PPG R-R HRV out of the health store and has no GSR dependency.
+if(NOT CONFIG_HPI_GSR_SCREEN)
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_gsr_complete\\.c$")
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/ui/screens/scr_eda_monitor\\.c$")
+endif()
+
 # JetBrains Mono was only used by the boot POST log; that screen now uses
 # Manrope (HPI_FONT_LABEL). Keep the .c on disk for regeneration history but
 # do not link it (~52 KB of source / multi-KB of glyph data).

@@ -1244,6 +1244,17 @@ static void hs_recompute_summary(void)
      * the user's own 7-day sleep baselines (Whoop/Oura model), sleep-gated on both
      * sides so it reflects overnight recovery, not daytime load. Invalid until the
      * baselines exist — never presented as 0. */
+
+    /* Warm-up progress: 50 points per baseline, each proportional to how much of
+     * the required data has accrued. Drives the "learning baseline" caption on the
+     * Recovery tile while readiness is still invalid. */
+    {
+        uint32_t hw = MIN(a.rmsb_n, (uint32_t)HPI_HS_READINESS_MIN_HRV_WINDOWS);
+        uint32_t rw = MIN(a.hrb_sleep_n, (uint32_t)HPI_HS_READINESS_MIN_RHR_N);
+        sum.readiness_warmup_pct = (uint8_t)((hw * 50) / HPI_HS_READINESS_MIN_HRV_WINDOWS +
+                                             (rw * 50) / HPI_HS_READINESS_MIN_RHR_N);
+    }
+
     if (a.rms_sleep_n > 0 && a.hr_sleep_n > 0 && a.hrb_sleep_n > 0) {
         int32_t rmssd_today = (int32_t)(a.rms_sleep_sum / a.rms_sleep_n);
         int32_t rhr_today   = (int32_t)(a.hr_sleep_sum  / a.hr_sleep_n);

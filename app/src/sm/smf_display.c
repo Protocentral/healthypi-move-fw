@@ -82,7 +82,6 @@ static uint32_t get_sleep_timeout_ms(void)
 K_MSGQ_DEFINE(q_plot_ecg, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);
-K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);
 K_MSGQ_DEFINE(q_plot_gsr, sizeof(struct hpi_gsr_sensor_data_t), 128, 1);
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
@@ -666,14 +665,17 @@ extern struct k_msgq q_ecg_sample;
 extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_plot_ecg;
 extern struct k_msgq q_plot_ppg_wrist;
-extern struct k_msgq q_plot_hrv;
 extern struct k_msgq q_plot_gsr;
 
 /* R2 new-design waveforms (carousel monitors), fed real samples here. The SpO2
  * tile has no waveform: its spot check runs on SCR_SPL_SPO2_MEASURE, which owns
  * the only PPG plot in that flow and is fed via hpi_disp_spo2_plot_*. */
-extern lv_obj_t *g_hr_wave, *g_ecg_wave, *g_gsr_wave;
-extern bool g_ecg_active, g_gsr_active;   /* spot checks: gated on Start/Stop */
+extern lv_obj_t *g_hr_wave, *g_ecg_wave;
+extern bool g_ecg_active;                 /* spot check: gated on Start/Stop */
+#if defined(CONFIG_HPI_GSR_SCREEN)
+extern lv_obj_t *g_gsr_wave;              /* both live in scr_eda_monitor.c, */
+extern bool g_gsr_active;                 /* which A5 excludes when GSR is off */
+#endif
 void hpi_wave_monitor_push_eda(lv_obj_t *wm, int32_t raw);
 void hpi_wave_monitor_push_auto(lv_obj_t *wm, int32_t raw);
 void hpi_wave_monitor_push_ecg(lv_obj_t *wm, int32_t raw);
@@ -1016,11 +1018,13 @@ static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sa
      * screen, exactly like the ECG trace: the tile owns the plot now, so gating
      * on the old plot screen would starve it. Uses the EDA scaler - push_auto's
      * envelope is tuned for pulsatile PPG and collapses on a slow tonic level. */
+#if defined(CONFIG_HPI_GSR_SCREEN)
     if (g_gsr_wave && g_gsr_active) {
         for (int i = 0; i < gsr_sensor_sample.bioz_num_samples; i++) {
             hpi_wave_monitor_push_eda(g_gsr_wave, gsr_sensor_sample.bioz_samples[i]);
         }
     }
+#endif
 
     if (gsr_sensor_sample.bioz_num_samples > 0)
     {
@@ -1760,7 +1764,8 @@ static void hpi_disp_push_subjects(void)
         } else if (summ.stress_valid) {
             hpi_ui_subj_set_stress(summ.stress_last);
         }
-        hpi_ui_subj_set_recovery(summ.readiness, summ.readiness_valid);
+        hpi_ui_subj_set_recovery(summ.readiness, summ.readiness_valid,
+                                 summ.readiness_warmup_pct);
     }
 
     /* P3: trend cache paint — early-outs if tile widgets are not mounted. */
@@ -2052,12 +2057,9 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 
-static void disp_ecg_timer_listener(const struct zbus_channel *chan)
-{
-    const struct hpi_ecg_status_t *ecg_status = zbus_chan_const_msg(chan);
-    m_disp_ecg_timer = ecg_status->progress_timer;
-}
-ZBUS_LISTENER_DEFINE(disp_ec, disp_ecg_timer_listener);
+/* A6: disp_ec / disp_ecg_timer_listener removed — the listener was never added
+ * to any ZBUS_OBSERVERS list, and disp_ecg_stat_listener below already keeps
+ * m_disp_ecg_timer current from the same ecg_stat_chan message. */
 
 static void disp_ecg_stat_listener(const struct zbus_channel *chan)
 {

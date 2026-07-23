@@ -293,9 +293,18 @@ bool hpi_disp_get_last_ecg_hr(uint16_t *hr, int64_t *ts_utc, uint32_t *uptime_ms
 void hpi_stress_monitor_into(lv_obj_t *parent); /* build Stress/HRV monitor into a carousel tile */
 void hpi_activity_monitor_into(lv_obj_t *parent); /* build Activity monitor into a carousel tile */
 void hpi_bpt_monitor_into(lv_obj_t *parent);    /* build BP idle tile into a carousel tile (v2) */
+#if defined(CONFIG_HPI_GSR_SCREEN)
 void hpi_eda_monitor_into(lv_obj_t *parent);    /* build EDA/GSR monitor into a carousel tile (v2) */
 void hpi_eda_monitor_update(int status, int remaining_s, bool contact); /* render monitor to GSR SMF phase (LVGL thread) */
 void hpi_eda_monitor_leave(void);   /* cancel an in-progress GSR when navigating away from the tile */
+#else
+/* GSR disabled: scr_eda_monitor.c is not compiled (see app/CMakeLists.txt). */
+static inline void hpi_eda_monitor_into(lv_obj_t *parent) { ARG_UNUSED(parent); }
+static inline void hpi_eda_monitor_update(int status, int remaining_s, bool contact) {
+    ARG_UNUSED(status); ARG_UNUSED(remaining_s); ARG_UNUSED(contact);
+}
+static inline void hpi_eda_monitor_leave(void) { }
+#endif
 /* SpO2 result outcome (arg2 to draw_scr_spo2_result / SCR_SPL_SPO2_RESULT) */
 #define HPI_SPO2_RESULT_SUCCESS   0
 #define HPI_SPO2_RESULT_TIMEOUT   1
@@ -346,7 +355,11 @@ void gesture_down_scr_bpt_est_complete(void);
 void gesture_down_scr_ble(void);
 void gesture_down_scr_pulldown(void);
 void gesture_down_scr_bpt_cal_required(void);
+#if defined(CONFIG_HPI_GSR_SCREEN)
 void gesture_down_scr_gsr_complete(void);
+#else
+static inline void gesture_down_scr_gsr_complete(void) { }
+#endif
 
 /* The shared PPG chart autoscale helper (hpi_ppg_autoscale.c) was removed with
  * its last caller: the Raw PPG screen went first, then the SpO2 measure screen
@@ -389,18 +402,16 @@ void draw_scr_height_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_
 void gesture_down_scr_height_select(void);
 void draw_scr_weight_select(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
 void gesture_down_scr_weight_select(void);
-void hpi_update_height_weight_labels(void);
-void hpi_update_setting_labels(void);
+/* A6: hpi_update_height_weight_labels() / hpi_update_setting_labels() declared
+ * here but never defined anywhere — they belonged to the deleted P2 settings
+ * menu. Same for hpi_show_screen_spl() and hpi_move_load_scr_pulldown(). */
 
 // Global flag to suspend screen updates during transitions
 extern volatile bool screen_transition_in_progress;
 
 // Helper objects
-void draw_scr_common(lv_obj_t *parent);
 void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir);
 void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4);
-
-void hpi_move_load_scr_pulldown(enum scroll_dir m_scroll_dir);
 
 void hpi_disp_set_curr_screen(int screen);
 int hpi_disp_get_curr_screen(void);
@@ -414,7 +425,6 @@ void hpi_disp_settings_update_batt_level(int batt_level, bool charging);
 
 
 void hpi_show_screen(lv_obj_t *parent, enum scroll_dir m_scroll_dir);
-void hpi_show_screen_spl(lv_obj_t *m_screen, enum scroll_dir m_scroll_dir);
 
 // Toast notification utility
 void hpi_disp_show_toast(const char *message, uint32_t duration_ms);

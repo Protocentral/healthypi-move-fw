@@ -22,6 +22,7 @@ lv_subject_t subj_hr, subj_spo2, subj_ecg, subj_temp, subj_bp,
              subj_hrv, subj_gsr, subj_steps, subj_time, subj_ampm, subj_date, subj_batt,
              subj_stress, subj_act, subj_sec, subj_recovery;
 lv_subject_t subj_hr_resting, subj_hr_min, subj_hr_max, subj_temp_dev;
+lv_subject_t subj_recovery_sub;
 lv_subject_t subj_batt_charging;
 
 /* current + previous string storage per string subject */
@@ -34,6 +35,7 @@ DEF_STR_SUBJ(hr_min); DEF_STR_SUBJ(hr_max); DEF_STR_SUBJ(recovery);
 static char act_cur[28]; static char act_prv[28];   /* "3.1 MI . 412 KCAL" */
 static char temp_dev_cur[24]; static char temp_dev_prv[24];   /* "+0.3\xB0 baseline" */
 static char hr_resting_cur[20]; static char hr_resting_prv[20];   /* "RESTING 62 BPM" */
+static char recovery_sub_cur[24]; static char recovery_sub_prv[24];   /* "learning baseline 45%" */
 
 void hpi_ui_subjects_init(void)
 {
@@ -60,6 +62,8 @@ void hpi_ui_subjects_init(void)
     lv_subject_init_string(&subj_temp_dev, temp_dev_cur, temp_dev_prv, sizeof(temp_dev_cur),
                            "baseline forming");
     lv_subject_init_string(&subj_recovery, recovery_cur, recovery_prv, SUBJ_STR_LEN, "--");
+    lv_subject_init_string(&subj_recovery_sub, recovery_sub_cur, recovery_sub_prv,
+                           sizeof(recovery_sub_cur), "learning baseline");
 }
 
 void hpi_ui_subj_set_stress(int level)
@@ -67,15 +71,21 @@ void hpi_ui_subj_set_stress(int level)
     lv_subject_set_int(&subj_stress, level);
 }
 
-void hpi_ui_subj_set_recovery(int32_t score, bool valid)
+void hpi_ui_subj_set_recovery(int32_t score, bool valid, int warmup_pct)
 {
     char b[SUBJ_STR_LEN];
+    char sub[24];
     if (valid && score >= 0) {
         snprintf(b, sizeof(b), "%d", (int)score);
+        sub[0] = '\0';   /* score speaks for itself — no caption */
     } else {
         strcpy(b, "--");   /* baseline still forming */
+        if (warmup_pct < 0)   { warmup_pct = 0; }
+        if (warmup_pct > 100) { warmup_pct = 100; }
+        snprintf(sub, sizeof(sub), "learning baseline %d%%", warmup_pct);
     }
     lv_subject_copy_string(&subj_recovery, b);
+    lv_subject_copy_string(&subj_recovery_sub, sub);
 }
 
 void hpi_ui_subj_set_activity(int steps)

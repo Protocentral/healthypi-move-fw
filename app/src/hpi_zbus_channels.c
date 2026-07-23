@@ -41,7 +41,7 @@ ZBUS_CHAN_DEFINE(batt_chan,                     /* Name */
                  struct hpi_batt_status_t,      /* Message type */
                  NULL,                          /* Validator */
                  NULL,                          /* User Data */
-                 ZBUS_OBSERVERS(disp_batt_lis), /* observers */
+                 ZBUS_OBSERVERS(disp_batt_lis, ble_batt_lis), /* observers */
                  ZBUS_MSG_INIT(0)               /* Initial value {0} */
 );
 
@@ -57,7 +57,7 @@ ZBUS_CHAN_DEFINE(hr_chan,         /* Name */
                  struct hpi_hr_t, /* Message type */
                  NULL,            /* Validator */
                  NULL,            /* User Data */
-                 ZBUS_OBSERVERS(disp_hr_lis, hs_hr_lis),
+                 ZBUS_OBSERVERS(disp_hr_lis, hs_hr_lis, ble_hr_lis),
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
 
@@ -73,7 +73,7 @@ ZBUS_CHAN_DEFINE(temp_chan, /* Name */
                  struct hpi_temp_t,
                  NULL, /* Validator */
                  NULL, /* User Data */
-                 ZBUS_OBSERVERS(disp_temp_lis, hs_temp_lis),
+                 ZBUS_OBSERVERS(disp_temp_lis, hs_temp_lis, ble_temp_lis),
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
 
@@ -89,7 +89,7 @@ ZBUS_CHAN_DEFINE(spo2_chan, /* Name */
                  struct hpi_spo2_point_t,
                  NULL, /* Validator */
                  NULL, /* User Data */
-                 ZBUS_OBSERVERS(disp_spo2_lis, hs_spo2_lis),
+                 ZBUS_OBSERVERS(disp_spo2_lis, hs_spo2_lis, ble_spo2_lis),
                  ZBUS_MSG_INIT(0) /* Initial value {0} */
 );
 

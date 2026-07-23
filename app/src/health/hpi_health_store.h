@@ -135,6 +135,13 @@ struct hpi_hs_summary {
      * resting HR vs the user's own baseline. Invalid until both baselines exist. */
     int32_t  readiness;    bool readiness_valid;
 
+    /* Warm-up progress toward a valid readiness score, 0..100: fraction of the
+     * required baseline data (sleep HRV windows + sleep-RHR epochs) accrued so
+     * far. 100 does not by itself imply readiness_valid (a sleep-gated "today"
+     * sample is also needed) — it exists so the UI can show "learning baseline"
+     * progress instead of a bare "--" during the first nights of wear. */
+    uint8_t  readiness_warmup_pct;
+
     uint32_t steps_today;
     uint32_t energy_today_kcal;
 

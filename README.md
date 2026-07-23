@@ -285,13 +285,18 @@ The HealthyPi Move exposes various Bluetooth LE services and characteristics for
 
 ### Standard BLE Services
 
-| Service | UUID | Description | Characteristics |
-|---------|------|-------------|-----------------|
-| **Heart Rate Service (HRS)** | `0x180D` | Standard BLE Heart Rate Service | Heart Rate Measurement (0x2A37) - Notify, Read |
-| **Battery Service (BAS)** | `0x180F` | Standard BLE Battery Service | Battery Level (0x2A19) - Notify, Read |
-| **Device Information Service (DIS)** | `0x180A` | Device information and version | Manufacturer, Model, Firmware Revision |
-| **Pulse Oximeter Service** | `0x1822` | Standard BLE Pulse Oximeter Service | PLX Spot-Check Measurement (0x2A5E) - Notify, Read, Encrypted |
-| **Health Thermometer Service** | `0x1809` | Standard BLE Temperature Service | Temperature Measurement (0x2A1C) - Notify, Read, Encrypted |
+| Service | UUID | Description | Characteristics | When it updates |
+|---------|------|-------------|-----------------|-----------------|
+| **Heart Rate Service (HRS)** | `0x180D` | Standard BLE Heart Rate Service | Heart Rate Measurement (0x2A37) - Notify, Read | On every accepted wrist-PPG HR (~1 per 3 s while worn) |
+| **Battery Service (BAS)** | `0x180F` | Standard BLE Battery Service | Battery Level (0x2A19) - Notify, Read | On each fuel-gauge read (level is kept current even while disconnected) |
+| **Device Information Service (DIS)** | `0x180A` | Device information and version | Manufacturer, Model, Firmware Revision | Static. **Firmware Revision is derived from `app/VERSION`** (`3.0.0+0` on this branch) and is what the mobile app reads to pick the right OTA package — do not hand-edit it |
+| **Pulse Oximeter Service** | `0x1822` | Standard BLE Pulse Oximeter Service | PLX Spot-Check Measurement (0x2A5E) - Notify, Read, Encrypted | One record per **completed** SpO₂ spot check (wrist or finger); never during progress |
+| **Health Thermometer Service** | `0x1809` | Standard BLE Temperature Service | Temperature Measurement (0x2A1C) - **Indicate**, Read, Encrypted | While worn, rate-limited to a ≥0.1 °C change or one indication per 30 s |
+
+All four are fed from zbus listeners in `app/src/ble_module.c` (`ble_hr_lis`, `ble_batt_lis`,
+`ble_spo2_lis`, `ble_temp_lis`), registered as observers on the matching channels in
+`app/src/hpi_zbus_channels.c`. Before v3.0.0 these services were declared but never
+written to, so a client saw the characteristics and no data.
 
 ### Custom BLE Services
 
@@ -384,16 +389,22 @@ SUMMARY                 # optional UI cards
 ### Data Formats
 
 #### Heart Rate (HRS)
-- **Format**: Standard BLE Heart Rate Measurement format (uint16, BPM)
-- **Update Rate**: Variable, based on detection
+- **Format**: Standard BLE Heart Rate Measurement (`bt_hrs_notify()`; uint8 flags + uint8 BPM)
+- **Update Rate**: One notification per accepted wrist-PPG HR — roughly every 3 s while worn, nothing while off-skin or below the confidence gate
 
 #### SpO₂ (Pulse Oximeter)
-- **Format**: Standard BLE PLX Spot-Check Measurement format
-- **Update Rate**: Variable, based on measurement completion
+- **Format**: Standard BLE PLX Spot-Check Measurement (0x2A5E)
+  - `flags` (uint8): bit0 = timestamp present, bit4 = device clock not set
+  - `SpO₂` (SFLOAT, percent, exponent 0)
+  - `Pulse Rate` (SFLOAT, bpm — the most recent HR, or NaN `0x07FF` if none is known)
+  - `Timestamp` (7-byte `date_time`, **local** time) when the RTC has been set
+- **Update Rate**: One record per completed spot check
 
 #### Temperature
-- **Format**: Standard BLE Temperature Measurement format (IEEE-11073 FLOAT)
-- **Update Rate**: Periodic updates
+- **Format**: Standard BLE Temperature Measurement (0x2A1C), sent as an **indication**
+  - `flags` (uint8) = 0 → Celsius, no timestamp, no temperature type
+  - value: IEEE-11073 32-bit FLOAT — 24-bit signed mantissa (`°C × 100`, little-endian) + int8 exponent `-2`
+- **Update Rate**: On-skin only, and only when the reading moved ≥0.1 °C or 30 s have passed since the last indication; one indication in flight at a time
 
 #### ECG Data
 - **Format**: Array of signed 32-bit integers (int32_t)

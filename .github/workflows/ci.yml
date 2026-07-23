@@ -39,6 +39,25 @@ jobs:
         run: |
           west build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
 
+      # C5: the app-core slot is 0xd4000 = 868352 B and MCUboot is overwrite-only,
+      # so an image that outgrows the slot cannot be flashed over the air at all —
+      # it has to be caught here, not on a fielded watch. Fail with ~16 KiB of
+      # headroom left so there is room for a hotfix without a font/LVGL diet.
+      - name: Check app image size
+        working-directory: healthypi_move
+        run: |
+          BIN=build/app/zephyr/zephyr.signed.bin
+          SLOT=868352      # 0xd4000, mcuboot_primary (see nrf5340_cpuapp_common.dtsi)
+          LIMIT=852000     # slot minus ~16 KiB
+          test -f "$BIN" || { echo "::error::$BIN not found"; exit 1; }
+          SIZE=$(stat -c%s "$BIN")
+          PCT=$(( SIZE * 100 / SLOT ))
+          echo "signed app image: $SIZE B / $SLOT B slot (${PCT}%)"
+          if [ "$SIZE" -gt "$LIMIT" ]; then
+            echo "::error::app image $SIZE B exceeds the $LIMIT B budget (slot $SLOT B)"
+            exit 1
+          fi
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: success()

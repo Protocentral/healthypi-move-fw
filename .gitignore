@@ -72,3 +72,10 @@ app/.DS_Store
 app/src/ui/fonts/ttf/Inter-4.0.zip
 docs/design_handoff_healthypi_move_v2/fonts/
 twister-out*/
+
+# Claude Code local scratch
+.claude/scratch/
+.claude/settings.local.json
+
+# Internal planning / release docs — kept in the tree, never published
+/docs/internal/

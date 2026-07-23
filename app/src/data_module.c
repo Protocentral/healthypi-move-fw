@@ -162,7 +162,6 @@ extern struct k_msgq q_ppg_fi_sample;
 extern struct k_msgq q_plot_ecg;
 extern struct k_msgq q_plot_ppg_wrist;
 extern struct k_msgq q_plot_ppg_fi;
-extern struct k_msgq q_plot_hrv;
 extern struct k_msgq q_plot_gsr;
 
 void sendData(int32_t ecg_sample, int32_t bioz_sample, uint32_t raw_red, uint32_t raw_ir, int32_t temp, uint8_t hr,

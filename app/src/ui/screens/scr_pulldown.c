@@ -175,14 +175,9 @@ static void tile_aod_cb(lv_event_t *e)
     tile_apply_state(lv_event_get_target(e), hpi_v2_aod_get());
 }
 
-static void tile_bsaver_cb(lv_event_t *e)
-{
-    if (lv_event_get_code(e) != LV_EVENT_CLICKED) {
-        return;
-    }
-    hpi_v2_bsaver_set(!hpi_v2_bsaver_get());
-    tile_apply_state(lv_event_get_target(e), hpi_v2_bsaver_get());
-}
+/* A7: the Battery-saver quick tile is gone — the flag it toggled was never read
+ * by any power policy. Setting storage stays in hpi_v2_widgets.c so the tile can
+ * come back unchanged when there is something for it to do. */
 
 /* P1-1: shade return target when opened from Settings → Brightness, etc. */
 static uint32_t m_pulldown_parent = SCR_HOME;
@@ -245,8 +240,8 @@ void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_style_text_color(b_hi, lv_color_hex(0xC7CED1), 0);
     lv_obj_align(b_hi, LV_ALIGN_CENTER, 140, -58);
 
-    /* Row 3: quick-toggle tiles — Always-on, Battery saver (real toggles) +
-     * momentary Shutdown. (Handoff DND/flashlight/find-phone dropped.) */
+    /* Row 3: quick-toggle tiles — Always-on (real toggle) + momentary Shutdown.
+     * (Handoff DND/flashlight/find-phone dropped; Battery saver removed in A7.) */
     lv_obj_t *trow = lv_obj_create(scr_pulldown);
     lv_obj_remove_style_all(trow);
     lv_obj_set_size(trow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -255,9 +250,8 @@ void draw_scr_pulldown(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg
     lv_obj_set_flex_align(trow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(trow, 14, 0);
 
-    /* AOD + Battery saver glyphs live only in matsym_26 (HPI_FONT_ICON_MD). */
+    /* The AOD glyph lives only in matsym_26 (HPI_FONT_ICON_MD). */
     make_tile(trow, SYM_AOD, &HPI_FONT_ICON_MD, hpi_v2_aod_get(), tile_aod_cb);
-    make_tile(trow, SYM_BATT_SAVER, &HPI_FONT_ICON_MD, hpi_v2_bsaver_get(), tile_bsaver_cb);
     /* Power glyph is LVGL built-in only — leave font NULL for the default bin. */
     make_tile(trow, LV_SYMBOL_POWER, NULL, false, btn_shutdown_event_cb);
 

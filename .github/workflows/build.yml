@@ -33,6 +33,16 @@ jobs:
         working-directory: healthypi_move
         run: |
           west build app --pristine --board healthypi_move/nrf5340/cpuapp -- -DNCS_TOOLCHAIN_VERSION=NONE -DBOARD_ROOT=.
+
+          # C5: refuse to publish an image that cannot be pushed over the air.
+          # Slot is 0xd4000 = 868352 B, overwrite-only; keep ~16 KiB headroom.
+          SIZE=$(stat -c%s build/app/zephyr/zephyr.signed.bin)
+          echo "signed app image: $SIZE B / 868352 B slot"
+          if [ "$SIZE" -gt 852000 ]; then
+            echo "::error::app image $SIZE B exceeds the 852000 B budget (slot 868352 B)"
+            exit 1
+          fi
+
           if [ "${{ env.IS_RELEASE }}" = "true" ]; then
             mv build/merged.hex healthypi_move_${{ github.ref_name }}.hex
             mv build/merged_CPUNET.hex healthypi_move_cpunet_${{ github.ref_name }}.hex || true

@@ -477,13 +477,20 @@ zephyr_udc0: &usbd {
 
 		/* 0x114000..0x120000 (0xc000) left as a gap (was EMPTY_1). */
 
-		/* Net core update primary_2 slot. */
+		/* C3: slot4/slot5 are the LEGACY G1 (<= v1.2.2, NCS 2.9) QSPI-XIP
+		 * image-2 primary/secondary slots — NOT net-core update slots (the
+		 * net core is image 1 and lives in slot3 above). v3.0.0 builds two
+		 * images and never writes here, but the regions are kept, at these
+		 * exact addresses, so the external-flash map stays byte-compatible
+		 * with firmware already in the field: a G1 watch updated to v3 must
+		 * find the same flash geometry underneath it, and the LittleFS
+		 * volume must not shift. Do not reclaim without a fleet-wide
+		 * migration plan (see docs/internal/plans/V3_0_0_RELEASE_PLAN.md). */
 		slot4_partition: partition@120000 {
 			label = "image-4";
 			reg = <0x00120000 0x00200000>;
 		};
 
-		/* Net core update secondary_2 slot. */
 		slot5_partition: partition@320000 {
 			label = "image-5";
 			reg = <0x00320000 0x00200000>;

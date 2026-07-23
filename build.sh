@@ -97,10 +97,22 @@ source "${ZEPHYR_BASE}/zephyr-env.sh"
 
 command -v west >/dev/null 2>&1 || { echo "build.sh: west not on PATH after toolchain activation" >&2; exit 1; }
 
+# Release artifact:  RELEASE=1 ./build.sh --pristine
+# Layers app/overlay-release.conf on top of prj.conf for the app-core image only
+# (console/logging off, CONFIG_ASSERT=n — the overlay explains why the assert
+# setting is a field-DFU requirement). "app" is the sysbuild image name for this
+# application, hence the app_-prefixed variable.
+EXTRA_CMAKE_ARGS=()
+if [ "${RELEASE:-0}" = "1" ]; then
+    echo "build.sh: RELEASE build - applying app/overlay-release.conf"
+    EXTRA_CMAKE_ARGS+=("-Dapp_EXTRA_CONF_FILE=${REPO_DIR}/app/overlay-release.conf")
+fi
+
 west build \
     --build-dir "${REPO_DIR}/app/build" \
     "${REPO_DIR}/app" \
     --board healthypi_move/nrf5340/cpuapp \
     "$@" \
     -- -DBOARD_ROOT="${REPO_DIR}" \
-       -DNCS_TOOLCHAIN_VERSION=NONE
+       -DNCS_TOOLCHAIN_VERSION=NONE \
+       ${EXTRA_CMAKE_ARGS[@]+"${EXTRA_CMAKE_ARGS[@]}"}

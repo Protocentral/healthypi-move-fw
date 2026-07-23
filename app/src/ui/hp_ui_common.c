@@ -324,12 +324,9 @@ void hpi_disp_restore_brightness(void)
 }
 
 
-void draw_scr_common(lv_obj_t *parent)
-{
-    lv_obj_add_style(parent, &style_scr_black, 0);
-    lv_obj_set_scroll_dir(parent, LV_DIR_VER);
-    // lv_obj_clear_flag(scr_bpt, LV_OBJ_FLAG_SCROLLABLE);
-}
+/* A6: draw_scr_common() removed — every v2 screen styles its own root object
+ * (bg 0x0E1114 + scroll flags), so nothing had called this since the v1 screens
+ * went away. */
 
 void hpi_disp_set_brightness(uint8_t brightness_percent)
 {
@@ -466,6 +463,7 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ACTIVITY:
     case SCR_HRV:
     case SCR_GSR:
+    case SCR_RECOVERY:
         hpi_carousel_show(m_screen, m_scroll_dir);
         break;
     default:
@@ -477,10 +475,9 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     screen_transition_in_progress = false;
 }
 
-void hpi_move_load_scr_pulldown(enum scroll_dir m_scroll_dir)
-{
-    draw_scr_pulldown(m_scroll_dir, 0, 0, 0, 0);
-}
+/* A6: hpi_move_load_scr_pulldown() removed — a one-line wrapper around
+ * draw_scr_pulldown() with no callers; the shade is reached through
+ * hpi_load_scr_spl(SCR_SPL_PULLDOWN, ...) like every other special screen. */
 
 /*
 void disp_spl_screen_event(lv_event_t *e)

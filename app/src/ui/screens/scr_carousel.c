@@ -59,7 +59,7 @@ static const struct metric_desc metrics[M_COUNT] = {
     [M_HRV]      = {"HRV",  0xA78BFA, "ms",   -1},   /* continuous PPG HRV/stress: no tap-to-measure */
     [M_BPT]      = {"BP",   V2_BP,  "mmHg", -1},   /* v2 idle tile owns MEASURE */
     [M_GSR]      = {"EDA",  V2_EDA, "uS",   -1},   /* v2 idle tile owns MEASURE */
-    [M_RECOVERY] = {"Recovery", 0x4ADE80, "", -1}, /* H6 readiness 0..100 (placeholder) */
+    [M_RECOVERY] = {"Recovery", 0x4ADE80, "", -1}, /* H6 readiness 0..100 + warm-up caption */
 };
 
 /* idx -> subject (see hpi_ui_subjects.c) */
@@ -147,10 +147,15 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
         hpi_bpt_monitor_into(tile);
         return;
     }
+#if defined(CONFIG_HPI_GSR_SCREEN)
     if (idx == M_GSR) {
         hpi_eda_monitor_into(tile);
         return;
     }
+    /* With GSR disabled the EDA tile falls through to the generic subject-bound
+     * layout (last stored value, no MEASURE button) rather than rendering an
+     * empty tile through the no-op stub. */
+#endif
     /* HRV/Stress stays tappable to reach its measure flow (for now). */
     if (idx == M_HRV) {
         lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
@@ -192,6 +197,17 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
         lv_obj_align(hint, LV_ALIGN_CENTER, 0, 120);
         lv_obj_set_style_text_color(hint, lv_color_hex(0x5A5A62), LV_PART_MAIN);
         lv_obj_set_style_text_font(hint, &FONT_CAPTION, LV_PART_MAIN);
+    }
+
+    /* Recovery needs ~a week of sleep baselines before it can score — show the
+     * warm-up progress ("learning baseline N%") instead of a bare "--" so a new
+     * wearer knows the tile is working, not broken. Empty once a score exists. */
+    if (idx == M_RECOVERY) {
+        lv_obj_t *sub = lv_label_create(tile);
+        lv_obj_align(sub, LV_ALIGN_CENTER, 0, 64);
+        lv_obj_set_style_text_color(sub, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+        lv_obj_set_style_text_font(sub, &FONT_CAPTION, LV_PART_MAIN);
+        hpi_ui_bind_label(sub, &subj_recovery_sub);
     }
 }
 

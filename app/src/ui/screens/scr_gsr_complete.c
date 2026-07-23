@@ -20,6 +20,7 @@
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
 #include "ui/hpi_r0_theme.h"
+#include "ui/hpi_ui_subjects.h"
 #include "hw_module.h"
 #include "hpi_sys.h"
 
@@ -83,6 +84,14 @@ void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t
 {
     LV_UNUSED(arg1); LV_UNUSED(arg2); LV_UNUSED(arg3); LV_UNUSED(arg4);
     bool ready = stored_results.stress_data_ready;
+
+    /* Push the fresh result into the carousel EDA subject here (LVGL thread —
+     * the zbus update callback above must not touch LVGL). Without this the
+     * tile keeps its boot-restored value until the next reboot. Same unit as
+     * the boot restore path: SCR events/min (HPI_HS_T_EDA_SCR_RATE). */
+    if (ready) {
+        hpi_ui_subj_set_gsr(stored_results.peaks_per_minute);
+    }
 
     scr_gsr_complete = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(scr_gsr_complete, lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);

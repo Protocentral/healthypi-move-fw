@@ -42,9 +42,12 @@
 #include <zephyr/zbus/zbus.h>
 
 #include <zephyr/settings/settings.h>
+#include <zephyr/sys/byteorder.h>
 #include <app_version.h>
+#include <time.h>
 
 #include "hpi_common_types.h"
+#include "hpi_sys.h"
 #include "hpi_dfu.h"
 #include "ble_module.h"
 #include "ui/move_ui.h"
@@ -52,7 +55,16 @@
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 LOG_MODULE_REGISTER(ble_module, LOG_LEVEL_DBG);
 
-struct bt_conn *current_conn;
+/* Live link state for the Settings "Bluetooth" row (A4). Maintained from the BT
+ * RX thread (connected/disconnected callbacks) and read from the LVGL thread, so
+ * it is a counter and not a bt_conn pointer the reader could dereference after
+ * the stack freed it. The old `current_conn` global was never assigned. */
+static atomic_t ble_conn_count;
+
+bool hpi_ble_is_connected(void)
+{
+	return atomic_get(&ble_conn_count) > 0;
+}
 
 // BLE GATT Identifiers
 
@@ -192,10 +204,13 @@ BT_GATT_SERVICE_DEFINE(hpi_spo2_service,
 					   BT_GATT_CCC(spo2_on_cccd_changed,
 								   BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
+/* B4: HTS Temperature Measurement is INDICATE per the spec (the client has to
+ * acknowledge each measurement), not NOTIFY. It was declared NOTIFY here while
+ * nothing sent anything at all; fixed together with the wiring below. */
 BT_GATT_SERVICE_DEFINE(hpi_temp_service,
 					   BT_GATT_PRIMARY_SERVICE(HPI_TEMP_SERVICE),
 					   BT_GATT_CHARACTERISTIC(HPI_TEMP_CHAR,
-											  BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+											  BT_GATT_CHRC_READ | BT_GATT_CHRC_INDICATE,
 											  BT_GATT_PERM_READ_ENCRYPT,
 											  NULL, NULL, NULL),
 					   BT_GATT_CCC(temp_on_cccd_changed,
@@ -311,6 +326,186 @@ void ble_bas_notify(uint8_t batt_level)
 	bt_bas_set_battery_level(batt_level);
 }
 
+/* ---------------------------------------------------------------------------
+ * B1-B4 — the four standard SIG services, fed from zbus.
+ *
+ * HRS/BAS/PLX/HTS were declared (and HRS/BAS/DIS even advertised) since v1, but
+ * nothing ever pushed a value into them: ble_hrs_notify()/ble_bas_notify() had
+ * no callers and the PLX/HTS characteristics were never written. Each listener
+ * below runs in the context of the thread that published the value (hw_thread,
+ * data_thread, PPG SMF), so they must stay short — queue a GATT PDU and return.
+ * Every one of them bails out when no central is connected.
+ */
+ZBUS_CHAN_DECLARE(hr_chan, batt_chan, spo2_chan, temp_chan);
+
+/* Last HR seen on hr_chan. The SpO2 channel carries no pulse rate, but the PLX
+ * spot-check record has a mandatory PR field — feed it the most recent HR and
+ * fall back to the IEEE-11073 NaN when there is none. */
+static uint16_t s_last_hr;
+
+/* IEEE-11073 16-bit SFLOAT: 4-bit signed exponent : 12-bit signed mantissa.
+ * Both PLX fields here are whole percent / bpm, so the exponent is 0. */
+#define SFLOAT_NAN 0x07FFU
+static inline uint16_t sfloat_from_uint(uint16_t v)
+{
+	return (uint16_t)(v & 0x0FFFU);
+}
+
+/* B1 — Heart Rate Service (0x180D) */
+static void ble_hr_listener(const struct zbus_channel *chan)
+{
+	const struct hpi_hr_t *m = zbus_chan_const_msg(chan);
+
+	if (m->hr == 0 || !m->hr_ready_flag)
+	{
+		return;
+	}
+
+	s_last_hr = m->hr;
+
+	if (hpi_ble_is_connected())
+	{
+		bt_hrs_notify(m->hr);
+	}
+}
+ZBUS_LISTENER_DEFINE(ble_hr_lis, ble_hr_listener);
+
+/* B2 — Battery Service (0x180F). bt_bas_set_battery_level() stores the level and
+ * notifies only subscribers, so no connection guard is needed (and a value kept
+ * up to date while disconnected is what the next reader should see). */
+static void ble_batt_listener(const struct zbus_channel *chan)
+{
+	const struct hpi_batt_status_t *m = zbus_chan_const_msg(chan);
+	uint8_t level = (m->batt_level > 100) ? 100 : m->batt_level;
+
+	bt_bas_set_battery_level(level);
+}
+ZBUS_LISTENER_DEFINE(ble_batt_lis, ble_batt_listener);
+
+/* B3 — Pulse Oximeter Service (0x1822), Spot-check Measurement (0x2A5E).
+ * spo2_chan is only published on a *completed* spot check (both the wrist and
+ * finger SMFs publish once, after the confidence gate), so every publish maps
+ * 1:1 to one PLX record. */
+static void ble_spo2_listener(const struct zbus_channel *chan)
+{
+	const struct hpi_spo2_point_t *m = zbus_chan_const_msg(chan);
+	uint8_t buf[12];
+	uint8_t i = 0;
+	bool clock_set = hpi_sys_is_time_valid();
+	bool ts_present = clock_set && (m->timestamp > 0);
+
+	if (m->spo2 == 0 || !hpi_ble_is_connected())
+	{
+		return;
+	}
+
+	/* Flags: bit0 = timestamp present, bit4 = device clock is not set. */
+	buf[i++] = (ts_present ? BIT(0) : 0) | (clock_set ? 0 : BIT(4));
+
+	sys_put_le16(sfloat_from_uint(m->spo2), &buf[i]);
+	i += 2;
+	sys_put_le16(s_last_hr ? sfloat_from_uint(s_last_hr) : SFLOAT_NAN, &buf[i]);
+	i += 2;
+
+	if (ts_present)
+	{
+		/* org.bluetooth.characteristic.date_time, in local time. */
+		time_t local = (time_t)(m->timestamp + hpi_sys_get_utc_offset());
+		struct tm tm_local;
+
+		gmtime_r(&local, &tm_local);
+		sys_put_le16((uint16_t)(tm_local.tm_year + 1900), &buf[i]);
+		i += 2;
+		buf[i++] = (uint8_t)(tm_local.tm_mon + 1);
+		buf[i++] = (uint8_t)tm_local.tm_mday;
+		buf[i++] = (uint8_t)tm_local.tm_hour;
+		buf[i++] = (uint8_t)tm_local.tm_min;
+		buf[i++] = (uint8_t)tm_local.tm_sec;
+	}
+
+	bt_gatt_notify(NULL, &hpi_spo2_service.attrs[2], buf, i);
+}
+ZBUS_LISTENER_DEFINE(ble_spo2_lis, ble_spo2_listener);
+
+/* B4 — Health Thermometer Service (0x1809), Temperature Measurement (0x2A1C).
+ * temp_chan publishes every 5 s while the watch is on-skin; that is far more
+ * traffic than a thermometer client needs, so rate-limit to a change of
+ * >=0.1 degC or one indication per 30 s. */
+#define HTS_MIN_INTERVAL_MS 30000
+#define HTS_MIN_DELTA_C     0.1
+
+static struct bt_gatt_indicate_params s_temp_ind_params;
+static uint8_t s_temp_ind_buf[5];
+static atomic_t s_temp_ind_busy;
+
+static void temp_indicate_destroy(struct bt_gatt_indicate_params *params)
+{
+	ARG_UNUSED(params);
+	atomic_clear(&s_temp_ind_busy);
+}
+
+static void ble_temp_listener(const struct zbus_channel *chan)
+{
+	const struct hpi_temp_t *m = zbus_chan_const_msg(chan);
+	static int64_t last_sent_ms;
+	static double last_sent_c;
+	int64_t now = k_uptime_get();
+	double delta;
+	int32_t mantissa;
+	int err;
+
+	if (m->temp_c <= 0.0 || !hpi_ble_is_connected())
+	{
+		return;
+	}
+
+	delta = m->temp_c - last_sent_c;
+	if (delta < 0.0)
+	{
+		delta = -delta;
+	}
+	if (last_sent_ms != 0 && (now - last_sent_ms) < HTS_MIN_INTERVAL_MS &&
+		delta < HTS_MIN_DELTA_C)
+	{
+		return;
+	}
+
+	/* One indication in flight at a time — the params and the value buffer are
+	 * owned by the stack until it calls destroy. */
+	if (!atomic_cas(&s_temp_ind_busy, 0, 1))
+	{
+		return;
+	}
+
+	/* Flags byte 0: Celsius, no timestamp, no temperature type. Value is an
+	 * IEEE-11073 32-bit FLOAT — 24-bit signed mantissa (LE) + int8 exponent. */
+	mantissa = (int32_t)(m->temp_c * 100.0);
+	s_temp_ind_buf[0] = 0;
+	s_temp_ind_buf[1] = (uint8_t)(mantissa & 0xFF);
+	s_temp_ind_buf[2] = (uint8_t)((mantissa >> 8) & 0xFF);
+	s_temp_ind_buf[3] = (uint8_t)((mantissa >> 16) & 0xFF);
+	s_temp_ind_buf[4] = (uint8_t)((int8_t)-2);
+
+	s_temp_ind_params.attr = &hpi_temp_service.attrs[2];
+	s_temp_ind_params.func = NULL;
+	s_temp_ind_params.destroy = temp_indicate_destroy;
+	s_temp_ind_params.data = s_temp_ind_buf;
+	s_temp_ind_params.len = sizeof(s_temp_ind_buf);
+
+	err = bt_gatt_indicate(NULL, &s_temp_ind_params);
+	if (err)
+	{
+		/* -ENOTCONN simply means nobody subscribed to HTS; not an error worth
+		 * logging every 30 s. The stack never took ownership, so clear here. */
+		atomic_clear(&s_temp_ind_busy);
+		return;
+	}
+
+	last_sent_ms = now;
+	last_sent_c = m->temp_c;
+}
+ZBUS_LISTENER_DEFINE(ble_temp_lis, ble_temp_listener);
+
 /* A connectable advertising set stops automatically once a connection is
  * established, so it must be restarted after a disconnect. Do it from a work
  * item rather than inline in the disconnected callback (BT RX context). */
@@ -345,6 +540,8 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 	LOG_INF("Connected to %s\n", addr);
 
+	atomic_inc(&ble_conn_count);
+
 	if (bt_conn_set_security(conn, BT_SECURITY_L2))
 	{
 		LOG_ERR("Failed to set security\n");
@@ -359,6 +556,11 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
 	LOG_INF("Disconnected from %s, reason 0x%02x %s\n", addr,
 			reason, bt_hci_err_to_str(reason));
+
+	if (atomic_get(&ble_conn_count) > 0)
+	{
+		atomic_dec(&ble_conn_count);
+	}
 
 	/* App dropped off mid-OTA: fail fast so the watch leaves the update modal
 	 * and returns to normal instead of hanging (a raw disconnect emits no

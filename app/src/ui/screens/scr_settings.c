@@ -7,7 +7,8 @@
  * Scrollable list of setting rows (icon + label + right-aligned value). The
  * value is accent-colored when the setting is on/active. Changing watch face /
  * accent / units drops the cached carousel so the new look takes effect when
- * the user swipes back. Bluetooth state is a deferred placeholder.
+ * the user swipes back. The Bluetooth row is a read-only status line (ON /
+ * CONNECTED), sampled when the screen is built.
  */
 
 #include <zephyr/kernel.h>
@@ -17,11 +18,17 @@
 #include "ui/move_ui.h"
 #include "ui/hpi_r0_theme.h"
 #include "hpi_user_settings_api.h"
+#include "ble_module.h"
 
 static lv_obj_t *scr_settings;
 
+/* A7: ROW_BSAVER is gone. The toggle persisted a flag nothing acted on — no
+ * scan-rate, sensor-duty or display policy ever read hpi_v2_bsaver_get(), so it
+ * read as a working power control that did nothing. The setting itself is kept
+ * in hpi_v2_widgets.c (still loaded/saved) so re-adding the row is one line once
+ * a real battery-saver policy exists. */
 enum row_id { ROW_BRIGHT, ROW_AOD, ROW_FACE, ROW_UNITS, ROW_TIMEFMT, ROW_ACCENT, ROW_MOTIF,
-              ROW_SLEEP, ROW_HEIGHT, ROW_WEIGHT, ROW_HAND, ROW_BSAVER, ROW_BT, ROW_ABOUT };
+              ROW_SLEEP, ROW_HEIGHT, ROW_WEIGHT, ROW_HAND, ROW_BT, ROW_ABOUT };
 
 static const char *const accent_name[4] = {"AMBER", "BLUE", "GREEN", "INDIGO"};
 
@@ -61,8 +68,11 @@ static void row_refresh(lv_obj_t *val, enum row_id id)
     case ROW_HEIGHT: snprintf(b, sizeof(b), "%d cm", hpi_user_settings_get_height()); row_val(val, b, false); break;
     case ROW_WEIGHT: snprintf(b, sizeof(b), "%d kg", hpi_user_settings_get_weight()); row_val(val, b, false); break;
     case ROW_HAND:   row_val(val, hpi_user_settings_get_hand_worn() ? "RIGHT" : "LEFT", true); break;
-    case ROW_BSAVER: row_val(val, hpi_v2_bsaver_get() ? "ON" : "OFF", hpi_v2_bsaver_get()); break;
-    case ROW_BT:     row_val(val, "OFF", false); break;   /* deferred */
+    /* A4: live link state, not a toggle. An advertising on/off control is out of
+     * scope on purpose — turning the radio off would strand the mobile app and,
+     * with it, the only OTA path back. */
+    case ROW_BT:     row_val(val, hpi_ble_is_connected() ? "CONNECTED" : "ON",
+                             hpi_ble_is_connected()); break;
     case ROW_ABOUT:  row_val(val, "FW " APP_VERSION_STRING, false); break;
     default: break;
     }
@@ -96,7 +106,6 @@ static void row_click_cb(lv_event_t *e)
     case ROW_HAND:   hpi_user_settings_set_hand_worn(hpi_user_settings_get_hand_worn() ? 0 : 1); break;
     case ROW_HEIGHT: hpi_load_scr_spl(SCR_SPL_HEIGHT_SELECT, SCROLL_UP, SCR_SPL_SETTINGS, 0, 0, 0); return;
     case ROW_WEIGHT: hpi_load_scr_spl(SCR_SPL_WEIGHT_SELECT, SCROLL_UP, SCR_SPL_SETTINGS, 0, 0, 0); return;
-    case ROW_BSAVER: hpi_v2_bsaver_set(!hpi_v2_bsaver_get()); break;
     default: return;   /* bt/about not clickable here */
     }
     row_refresh(val, id);
@@ -208,7 +217,6 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     make_row(list, SYM_HEIGHT,    0x8B9498, "Height",       ROW_HEIGHT, true);
     make_row(list, SYM_WEIGHT,    0x8B9498, "Weight",       ROW_WEIGHT, true);
     make_row(list, SYM_HAND,      0x8B9498, "Hand worn",    ROW_HAND,   true);
-    make_row(list, SYM_BATT_SAVER,0x8B9498, "Battery saver",ROW_BSAVER, true);
     make_row(list, SYM_BLUETOOTH, 0x6FB3CC, "Bluetooth",    ROW_BT,     false);
     make_row(list, SYM_INFO,      0x8B9498, "About",        ROW_ABOUT,  false);
 
