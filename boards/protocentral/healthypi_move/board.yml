@@ -1,5 +1,6 @@
 board:
   name: healthypi_move
+  full_name: HealthyPi Move
   vendor: protocentral
   socs:
   - name: 'nrf5340'

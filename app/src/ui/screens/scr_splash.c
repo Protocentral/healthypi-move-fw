@@ -53,16 +53,22 @@ void draw_scr_splash(void)
 
     // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_splash, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_clear_flag(scr_splash, LV_OBJ_FLAG_SCROLLABLE);
 
+    /* Splash: ProtoCentral wordmark above the MOVE logo. No product text —
+     * the MOVE mark is the product name. MOVE asset is I2 240×58 (see
+     * ui/images/logos/move-logo-3b.png); PC mark is the existing 300×20 I4. */
     LV_IMG_DECLARE(pc_logo_text_300);
-    lv_obj_t *img1 = lv_img_create(scr_splash);
-    lv_img_set_src(img1, &pc_logo_text_300);
-    lv_obj_align(img1, LV_ALIGN_CENTER, 0, 0);
+    LV_IMG_DECLARE(img_move_logo_240);
 
-    /*LV_IMG_DECLARE(pc_logo_round_120);
-    lv_obj_t *img_logo = lv_img_create(scr_splash);
-    lv_img_set_src(img_logo, &pc_logo_round_120);
-    lv_obj_align_to(img_logo, NULL, LV_ALIGN_CENTER, 0, 0);*/
+    lv_obj_t *pc = lv_img_create(scr_splash);
+    lv_img_set_src(pc, &pc_logo_text_300);
+    /* Shift the pair up so the stack reads as one centered block. */
+    lv_obj_align(pc, LV_ALIGN_CENTER, 0, -44);
+
+    lv_obj_t *move = lv_img_create(scr_splash);
+    lv_img_set_src(move, &img_move_logo_240);
+    lv_obj_align_to(move, pc, LV_ALIGN_OUT_BOTTOM_MID, 0, 18);
 
     lv_scr_load_anim(scr_splash, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0, true);
 }

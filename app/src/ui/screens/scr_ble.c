@@ -126,12 +126,18 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
         lv_label_set_text(label_btn, LV_SYMBOL_CLOSE " Close");
         lv_obj_center(label_btn);
     }
-    else if (hpi_ble_event == HPI_BLE_EVENT_PAIR_FAILED)
+    else if (hpi_ble_event == HPI_BLE_EVENT_PAIR_FAILED ||
+             hpi_ble_event == HPI_BLE_EVENT_PAIR_CANCELLED)
     {
         lv_obj_t *label_info = lv_label_create(cont_col);
         lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
         lv_obj_set_width(label_info, 300);
-        lv_label_set_text(label_info, "BLE Pairing Failed");
+        /* PAIR_CANCELLED is published by ble_module.c but had no branch here: it
+         * fell through to the error path and drew an empty screen with no way
+         * out. Share the failed layout; only the copy differs. */
+        lv_label_set_text(label_info, (hpi_ble_event == HPI_BLE_EVENT_PAIR_CANCELLED)
+                                          ? "BLE Pairing Cancelled"
+                                          : "BLE Pairing Failed");
         lv_obj_add_style(label_info, &style_white_medium, 0);
         lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
 
@@ -155,4 +161,14 @@ void draw_scr_ble(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, ui
 
     hpi_disp_set_curr_screen(SCR_SPL_BLE);
     hpi_show_screen(scr_ble, m_scroll_dir);
+}
+
+/* P1-1/P1-3: the pairing screen had no gesture-down handler (NULL in the
+ * screen table), so a swipe was inert and the on-screen button was the only
+ * exit. Dismiss to Home, matching what that button already does.
+ * NOTE: like the Cancel button, this only navigates away - it does not reject
+ * the pairing request (the BLE side is left to time out). */
+void gesture_down_scr_ble(void)
+{
+    hpi_load_screen(SCR_HOME, SCROLL_DOWN);
 }

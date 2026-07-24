@@ -1,0 +1,8 @@
+tests:
+  healthypi.hs.readiness:
+    tags: health_store readiness
+    platform_allow:
+      - qemu_cortex_m3
+      - native_sim
+    integration_platforms:
+      - qemu_cortex_m3

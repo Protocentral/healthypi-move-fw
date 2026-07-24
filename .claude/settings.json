@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/build.sh *)",
+      "Bash(./scripts/build.sh)",
+      "Bash(RELEASE=1 ./scripts/build.sh *)",
+      "Bash(west build *)",
+      "Bash(west twister *)",
+      "Bash(west list *)",
+      "Bash(west status)",
+      "Bash(west diff)",
+      "Bash(sed -n *)",
+      "Bash(mkdir -p .claude/scratch*)",
+      "Bash(flutter analyze *)",
+      "Bash(flutter analyze)",
+      "Bash(flutter test *)",
+      "Bash(dart analyze *)",
+      "Bash(arduino-cli lib list *)",
+      "Bash(arduino-cli lib search *)",
+      "Bash(arduino-cli board list *)",
+      "mcp__pressable__discover_tools",
+      "mcp__pressable__describe_tool",
+      "WebFetch(domain:nrfconnectdocs.nordicsemi.com)",
+      "WebFetch(domain:docs.nordicsemi.com)",
+      "WebFetch(domain:docs.zephyrproject.org)"
+    ]
+  }
+}

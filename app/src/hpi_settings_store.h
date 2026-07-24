@@ -47,6 +47,7 @@
 #define SETTINGS_BACKLIGHT_TIMEOUT_KEY  "display/backlight_timeout"
 #define SETTINGS_RAISE_TO_WAKE_KEY      "power/raise_to_wake"
 #define SETTINGS_BUTTON_SOUNDS_KEY      "audio/button_sounds"
+#define SETTINGS_UTC_OFFSET_KEY         "time/utc_offset"
 
 // Settings structure for easy management
 struct hpi_user_settings {
@@ -60,19 +61,21 @@ struct hpi_user_settings {
     uint8_t backlight_timeout;    // seconds
     bool raise_to_wake;           // Raise to wake on/off
     bool button_sounds;           // Button sounds on/off
+    int32_t utc_offset_sec;       // seconds east of UTC (local = UTC + offset); DST-inclusive
 };
 
 // Default settings values
 #define DEFAULT_USER_HEIGHT         170
 #define DEFAULT_USER_WEIGHT         70
 #define DEFAULT_HAND_WORN           0
-#define DEFAULT_TIME_FORMAT         0
+#define DEFAULT_TIME_FORMAT         1   /* 12-hour (AM/PM) by default */
 #define DEFAULT_TEMP_UNIT           0
 #define DEFAULT_AUTO_SLEEP          true
 #define DEFAULT_SLEEP_TIMEOUT       30
 #define DEFAULT_BACKLIGHT_TIMEOUT   15
 #define DEFAULT_RAISE_TO_WAKE       true
 #define DEFAULT_BUTTON_SOUNDS       true
+#define DEFAULT_UTC_OFFSET          0   /* UTC until the phone sends the local offset */
 
 /**
  * @brief Initialize the settings subsystem

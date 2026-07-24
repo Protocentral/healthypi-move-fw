@@ -8,6 +8,8 @@
 
 #define DT_DRV_COMPAT chipsemi_chsc5816
 
+#include <zephyr/kernel.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/input/input.h>
 #include <zephyr/drivers/i2c.h>
@@ -26,11 +28,56 @@ struct chsc5816_config
 	const struct gpio_dt_spec rst_gpio;
 };
 
+union CHSC5816_rpt_point_t
+{
+	struct
+	{
+		uint8_t status;
+		uint8_t fingerNumber;
+		uint8_t x_l8;
+		uint8_t y_l8;
+		uint8_t z;
+		uint8_t x_h4 : 4;
+		uint8_t y_h4 : 4;
+		uint8_t id : 4;
+		uint8_t event : 4;
+		uint8_t p2;
+	} rp;
+	unsigned char data[8];
+};
+
+/*
+ * Touch reports are serviced on a driver-owned work queue, not the system one.
+ *
+ * They used to go to the system workqueue, which on this application also
+ * carries the MAX32664 RTIO completion handlers (multi-ms I2C), the off-skin
+ * timer and MCUmgr work. Two things went wrong there. Head-of-line blocking
+ * delayed every report behind whatever sensor transfer was in flight; and,
+ * worse, k_work_submit() on an item that is already queued-but-not-yet-running
+ * is a no-op, so a second edge arriving in that window was silently dropped.
+ * Losing either half of a quick tap means LVGL never sees a press/release pair
+ * and never emits LV_EVENT_CLICKED — the "Start/Measure needs several taps"
+ * report. The pending counter below closes the coalescing hole regardless.
+ */
+#define CHSC5816_WQ_STACK_SIZE 1024
+#define CHSC5816_WQ_PRIORITY   3
+
+/* If the panel goes quiet this long after a press without ever reporting the
+ * release, re-read it ourselves and synthesize one. A missed release leaves LVGL
+ * latched in the pressed state, where no further tap can produce a click. */
+#define CHSC5816_RELEASE_WATCHDOG_MS 120
+
 struct chsc5816_data
 {
 	const struct device *dev;
 	struct k_work work;
+	struct k_work_delayable release_work;
 	struct gpio_callback int_gpio_cb;
+	/* Edges seen but not yet serviced. Incremented in the ISR, drained by the
+	 * work handler, so an edge arriving while the item is queued is not lost. */
+	atomic_t pending;
+	bool pressed;                       /* last state reported to the input subsystem */
+	union CHSC5816_rpt_point_t report;  /* was a file-scope global shared by all instances */
 };
 
 #define CHSC5816_REG_CMD_BUFF (0x20000000U)
@@ -64,25 +111,13 @@ struct chsc5816_data
 #define CHSC5816_GLOVE_GATE (1 << 19)
 #define CHSC5816_ORIENTATION_GATE (1 << 20)
 
-union CHSC5816_rpt_point_t
-{
-	struct
-	{
-		uint8_t status;
-		uint8_t fingerNumber;
-		uint8_t x_l8;
-		uint8_t y_l8;
-		uint8_t z;
-		uint8_t x_h4 : 4;
-		uint8_t y_h4 : 4;
-		uint8_t id : 4;
-		uint8_t event : 4;
-		uint8_t p2;
-	} rp;
-	unsigned char data[8];
-} CHSC5816_rpt_point;
-
 LOG_MODULE_REGISTER(chsc5816, CONFIG_INPUT_LOG_LEVEL);
+
+/* Driver-owned work queue (see the comment on struct chsc5816_data). Shared by
+ * every instance; started once, from the first instance to initialise. */
+static K_THREAD_STACK_DEFINE(chsc5816_wq_stack, CHSC5816_WQ_STACK_SIZE);
+static struct k_work_q chsc5816_work_q;
+static bool chsc5816_wq_started;
 
 static int chsc5816_chip_init(const struct device *dev);
 
@@ -148,35 +183,58 @@ static int chsc5816_read_reg4(const struct device *dev, uint32_t reg, uint8_t *v
 	return 0;
 }
 
+/* Report a release exactly once, and stand the watchdog down. */
+static void chsc5816_report_release(const struct device *dev)
+{
+	struct chsc5816_data *data = dev->data;
+
+	k_work_cancel_delayable(&data->release_work);
+	if (!data->pressed)
+	{
+		return;
+	}
+	data->pressed = false;
+	input_report_key(dev, INPUT_BTN_TOUCH, 0, true, K_FOREVER);
+	LOG_DBG("Touch released");
+}
+
 static int chsc5816_process(const struct device *dev)
 {
+	struct chsc5816_data *data = dev->data;
 	int ret;
 	uint16_t col = 0;
 	uint16_t row = 0;
 
-	ret = chsc5816_read_reg4(dev, CHSC5816_REG_POINT, CHSC5816_rpt_point.data, 8);
+	ret = chsc5816_read_reg4(dev, CHSC5816_REG_POINT, data->report.data, 8);
 	if (ret < 0)
 	{
 		LOG_ERR("Could not read data: %i", ret);
 		return -ENODATA;
 	}
 
-	if (CHSC5816_rpt_point.rp.status == 0xFF)
+	if (data->report.rp.status == 0xFF)
 	{
-		if (CHSC5816_rpt_point.rp.fingerNumber == 0)
+		if (data->report.rp.fingerNumber == 0)
 		{
-			input_report_key(dev, INPUT_BTN_TOUCH, 0, true, K_FOREVER);
-			LOG_DBG("Touch released");
+			chsc5816_report_release(dev);
 		}
 		else
 		{
-			row = (CHSC5816_rpt_point.rp.x_h4 << 8) | CHSC5816_rpt_point.rp.x_l8;
-			col = (CHSC5816_rpt_point.rp.y_h4 << 8) | CHSC5816_rpt_point.rp.y_l8;
+			row = (data->report.rp.x_h4 << 8) | data->report.rp.x_l8;
+			col = (data->report.rp.y_h4 << 8) | data->report.rp.y_l8;
 
 			input_report_abs(dev, INPUT_ABS_X, col, false, K_FOREVER);
 			input_report_abs(dev, INPUT_ABS_Y, row, false, K_FOREVER);
 			input_report_key(dev, INPUT_BTN_TOUCH, 1, true, K_FOREVER);
-			
+			data->pressed = true;
+
+			/* (Re)arm the release watchdog: the panel is edge-driven, so if the
+			 * release edge is ever missed or comes back as a non-0xFF status
+			 * (below), nothing else would ever clear the pressed state and LVGL
+			 * would stay latched. */
+			k_work_reschedule(&data->release_work,
+					  K_MSEC(CHSC5816_RELEASE_WATCHDOG_MS));
+
 			/* Signal display wakeup - uses LVGL activity tracking internally */
 			hpi_display_signal_touch_wakeup();
 
@@ -185,7 +243,11 @@ static int chsc5816_process(const struct device *dev)
 	}
 	else
 	{
-		LOG_DBG("No touch");
+		/* Not a point report. If a finger was down this is the panel telling us
+		 * it has nothing to say, which used to be swallowed and left the touch
+		 * stuck pressed — treat it as the release. */
+		LOG_DBG("No touch (status 0x%02x)", data->report.rp.status);
+		chsc5816_report_release(dev);
 		return -ENODATA;
 	}
 
@@ -195,14 +257,48 @@ static int chsc5816_process(const struct device *dev)
 static void chsc5816_work_handler(struct k_work *work)
 {
 	struct chsc5816_data *data = CONTAINER_OF(work, struct chsc5816_data, work);
-	chsc5816_process(data->dev);
+
+	/* Drain every edge counted since the last pass. k_work_submit() cannot queue
+	 * an item that is already pending, so without this counter an edge arriving
+	 * while we were queued (or running) would be lost — and losing the release of
+	 * a quick tap costs the click. */
+	while (atomic_set(&data->pending, 0) != 0)
+	{
+		chsc5816_process(data->dev);
+	}
+}
+
+/* Watchdog: no further edge since the last press. Ask the panel directly and, if
+ * the finger is gone, synthesize the release LVGL is waiting for. */
+static void chsc5816_release_work_handler(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct chsc5816_data *data = CONTAINER_OF(dwork, struct chsc5816_data, release_work);
+
+	if (!data->pressed)
+	{
+		return;
+	}
+
+	if (chsc5816_read_reg4(data->dev, CHSC5816_REG_POINT, data->report.data, 8) == 0 &&
+	    data->report.rp.status == 0xFF && data->report.rp.fingerNumber != 0)
+	{
+		/* Still held — keep watching. */
+		k_work_reschedule(&data->release_work, K_MSEC(CHSC5816_RELEASE_WATCHDOG_MS));
+		return;
+	}
+
+	LOG_DBG("Release edge missed - synthesizing release");
+	data->pressed = false;
+	input_report_key(data->dev, INPUT_BTN_TOUCH, 0, true, K_FOREVER);
 }
 
 static void chsc5816_isr_handler(const struct device *dev, struct gpio_callback *cb, uint32_t mask)
 {
 	struct chsc5816_data *data = CONTAINER_OF(cb, struct chsc5816_data, int_gpio_cb);
 
-	k_work_submit(&data->work);
+	atomic_inc(&data->pending);
+	k_work_submit_to_queue(&chsc5816_work_q, &data->work);
 }
 
 static void chsc5816_chip_reset(const struct device *dev)
@@ -279,7 +375,20 @@ static int chsc5816_init(const struct device *dev)
 
 	data->dev = dev;
 
+	if (!chsc5816_wq_started)
+	{
+		k_work_queue_init(&chsc5816_work_q);
+		k_work_queue_start(&chsc5816_work_q, chsc5816_wq_stack,
+				   K_THREAD_STACK_SIZEOF(chsc5816_wq_stack),
+				   CHSC5816_WQ_PRIORITY, NULL);
+		k_thread_name_set(&chsc5816_work_q.thread, "chsc5816");
+		chsc5816_wq_started = true;
+	}
+
 	k_work_init(&data->work, chsc5816_work_handler);
+	k_work_init_delayable(&data->release_work, chsc5816_release_work_handler);
+	atomic_set(&data->pending, 0);
+	data->pressed = false;
 
 	const struct chsc5816_config *config = dev->config;
 

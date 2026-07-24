@@ -41,12 +41,6 @@
 #include "hpi_common_types.h"
 #include "fs_module.h"
 #include "ui/move_ui.h"
-#include "trends.h"
-#include "cmd_module.h"
-
-#ifdef CONFIG_MCUMGR_GRP_FS
-#include <zephyr/device.h>
-#endif
 
 LOG_MODULE_REGISTER(fs_module, LOG_LEVEL_DBG);
 
@@ -62,8 +56,6 @@ static struct fs_mount_t lfs_storage_mnt = {
 };
 
 struct fs_mount_t *mp = &lfs_storage_mnt;
-
-#define FILE_TRANSFER_BLE_PACKET_SIZE 64 // (16*7)
 
 static int littlefs_mount(struct fs_mount_t *mp)
 {
@@ -131,10 +123,11 @@ static int lsdir(const char *path)
         return res;
     }
 
-    LOG_PRINTK("\nListing dir %s ...\n", path);
+    /* Iterate to the end so the return code reflects dir existence/readability;
+     * the per-entry listing dump is intentionally silent (used as a boot-time
+     * directory-presence check, not a console dump). */
     for (;;)
     {
-
         res = fs_readdir(&dirp, &entry);
         if (res || entry.name[0] == 0)
         {
@@ -144,204 +137,21 @@ static int lsdir(const char *path)
             }
             break;
         }
-
-        if (entry.type == FS_DIR_ENTRY_DIR)
-        {
-            LOG_PRINTK("[DIR ] %s\n", entry.name);
-        }
-        else
-        {
-            LOG_PRINTK("[FILE] %s (size = %zu)\n",
-                       entry.name, entry.size);
-        }
     }
     fs_closedir(&dirp);
 
     return res;
 }
 
-uint32_t transfer_get_file_length(char *m_file_name)
-{
-    LOG_DBG("Getting file length for file %s", m_file_name);
-
-    uint32_t file_len = 0;
-    int rc = 0;
-
-    struct fs_dirent dirent;
-    rc = fs_stat(m_file_name, &dirent);
-    LOG_DBG("%s Stat: %d", m_file_name, rc);
-    if (rc >= 0)
-    {
-        // printk("\nfn '%s' siz %u\n", dirent.name, dirent.size);
-        file_len = dirent.size;
-    }
-    else
-    {
-        LOG_ERR("Error getting file length %d", rc);
-        return 0;
-    }
-
-    LOG_DBG("File length: %d", file_len);
-
-    return file_len;
-}
-
-void transfer_send_file(char *in_file_name)
-{
-    LOG_DBG("Start file transfer %s", in_file_name);
-    uint8_t m_buffer[FILE_TRANSFER_BLE_PACKET_SIZE + 1];
-
-    uint32_t file_len = transfer_get_file_length(in_file_name);
-    uint32_t number_writes = file_len / FILE_TRANSFER_BLE_PACKET_SIZE;
-
-    uint32_t i = 0;
-    struct fs_file_t m_file;
-    int rc = 0;
-
-    if (file_len % FILE_TRANSFER_BLE_PACKET_SIZE != 0)
-    {
-        number_writes++; // Last write will be smaller than 64 bytes
-    }
-
-    LOG_DBG("Send file: %s Size:%d No Writes: %d", in_file_name, file_len, number_writes);
-
-    fs_file_t_init(&m_file);
-
-    rc = fs_open(&m_file, in_file_name, FS_O_READ);
-
-    if (rc != 0)
-    {
-        LOG_ERR("Error opening file %d", rc);
-        return;
-    }
-
-    for (i = 0; i < number_writes; i++)
-    {
-        rc = fs_read(&m_file, m_buffer, FILE_TRANSFER_BLE_PACKET_SIZE);
-        if (rc < 0)
-        {
-            LOG_ERR("Error reading file %d", rc);
-            return;
-        }
-
-        cmdif_send_ble_data(m_buffer, rc); // FILE_TRANSFER_BLE_PACKET_SIZE);
-        k_sleep(K_MSEC(50));
-    }
-
-    rc = fs_close(&m_file);
-    if (rc != 0)
-    {
-        LOG_ERR("Error closing file %d", rc);
-        return;
-    }
-
-    LOG_INF("File sent!!");
-}
-
 void hpi_init_fs_struct(void)
 {
-    int ret;
-
-    // record_wipe_all();
-    //  Create FS directories
-    ret = fs_mkdir("/lfs/trhr");
+    /* Only /lfs/sys is needed now (settings + MAX32664 MSBL firmware). The
+     * health store creates its own storage when the durable log lands (H3);
+     * the old trend/record/recording dirs are no longer created. */
+    int ret = fs_mkdir("/lfs/sys");
     if (ret)
     {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/trspo2");
-    if (ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/trtemp");
-    if (ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/trsteps");
-    if (ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/trbpt");
-    if (ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/ecg");
-    if (ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("lfs/hrv");
-    if(ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/log");
-    if (ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/sys");
-    if (ret)
-    {
-        LOG_ERR("Unable to create dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created dir");
-    }
-
-    ret = fs_mkdir("/lfs/gsr");
-    if (ret)
-    {
-        LOG_ERR("Unable to create /lfs/gsr dir (err %d)", ret);
-    }
-    else
-    {
-        LOG_DBG("Created /lfs/gsr dir");
+        LOG_DBG("mkdir /lfs/sys: %d (-EEXIST is fine)", ret);
     }
 }
 
@@ -440,41 +250,11 @@ void fs_module_init(void)
             mp->mnt_point, sbuf.f_bsize, sbuf.f_frsize,
             sbuf.f_blocks, sbuf.f_bfree);
 
-    // record_wipe_all();
-
-    rc = lsdir("/lfs");
-    if (rc < 0)
+    /* First boot (or wiped FS): create the directory structure. */
+    if (lsdir("/lfs/sys") < 0)
     {
-        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
-    }
-
-    rc = lsdir("/lfs/trtemp");
-    if (rc < 0)
-    {
-        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
-    }
-
-    rc = lsdir("/lfs/sys");
-    if (rc < 0)
-    {
-        LOG_ERR("FAIL: lsdir %s: %d\n", mp->mnt_point, rc);
         LOG_INF("Creating FS directory structure");
         hpi_init_fs_struct();
-        lsdir("/lfs/trhr");
     }
 
-    rc = lsdir("/lfs/gsr");
-    if (rc < 0) {
-        LOG_ERR("FAIL: lsdir /lfs/gsr: %d\n", rc);
-        LOG_WRN("/lfs/gsr directory missing — creating it now");
-    fs_mkdir("/lfs/gsr");
-    }
-
-    rc = lsdir("/lfs/hrv");
-    if(rc < 0)
-    {
-         LOG_ERR("FAIL: lsdir /lfs/hrv: %d\n", rc);
-        LOG_WRN("/lfs/hrv directory missing — creating it now");
-    fs_mkdir("/lfs/hrv");
-    }
 }

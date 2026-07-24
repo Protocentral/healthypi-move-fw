@@ -1,32 +1,53 @@
-#!/bin/bash
-# Flash HealthyPi Move firmware (merged image: both cores + bootloader) and
-# erase external flash. Self-contained: sources the nRF Connect SDK / Zephyr
-# environment first. Run from anywhere.
-set -e
+#!/usr/bin/env bash
+#
+# Flash the HealthyPi Move firmware.
+#
+#   ./scripts/flash.sh          # app core only (mcuboot + app), chip erase
+#   ./scripts/flash.sh --full   # every domain, incl. the net core (b0n + ipc_radio)
+#
+# Use --full for: a fresh/recovered board, after `nrfutil device recover`, or
+# whenever the net core actually changes (ipc_radio / b0n / a BLE controller
+# config change). Otherwise the net core is untouched and reflashing it is pure
+# wall-clock cost.
+#
+# ---------------------------------------------------------------------------
+# Erase mode: --erase (chip erase) is deliberate and is what Nordic recommends
+#
+# NCS 3.4 doc (nrf/doc/nrf/app_dev/programming.rst, "Optional programming
+# parameters") calls `west flash --erase` "the recommended" form, and offers the
+# page-erase path — plain `west flash` — only as the alternative that "retains
+# old data in other areas".
+#
+# Do NOT drop --erase to try to speed this up: without it the runner uses
+# ERASE_RANGES_TOUCHED_BY_FIRMWARE ("Erasing address ranges touched by
+# firmware"), which page-erases ~800 KB of app image and is SLOWER than one
+# chip erase. Measured the wrong way round once already.
+#
+# What --erase costs you: it erases the INTERNAL flash of the cores being
+# programmed, so `storage_partition` (settings NVS, internal @0xf0000) is wiped.
+# The LittleFS volume — health store, records — lives on the EXTERNAL w25q01jv
+# and is NOT touched: --erase only reaches external memory when the image itself
+# refers to the XIP region (nrf_common.py: ext_mem_erase_opt), which this one
+# does not.
+#
+# Why per-domain at all: sysbuild flashes each domain separately, in the order
+# given by app/build/domains.yaml:
+#     mcuboot -> b0n -> ipc_radio -> app
+#      (CPUAPP)  (CPUNET) (CPUNET)  (CPUAPP)
+# Four images is CORRECT — it is the MCUboot + NSIB b0n + ipc_radio + app set
+# this sysbuild.conf asks for, not a misconfiguration.
+#
+# The default below keeps the CPUAPP pair in their existing relative order
+# (mcuboot then app) and simply omits the two CPUNET domains; --erase is
+# per-core, so skipping them leaves the net core's b0n + ipc_radio in place.
+# ---------------------------------------------------------------------------
+set -euo pipefail
 
-# --- nRF Connect SDK install (edit NCS_BASE to match your machine) ---
-NCS_BASE="/opt/nordic/ncs"
+# Runnable from anywhere: app/build is relative to the repo root, not to $PWD.
+cd "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(dirname "${SCRIPT_DIR}")"
-WORKSPACE_DIR="$(dirname "${REPO_DIR}")"
-
-# Always use the most recently installed toolchain (newest by mtime).
-NCS_TOOLCHAIN_DIR="$(ls -dt "${NCS_BASE}"/toolchains/*/ 2>/dev/null | head -n 1)"
-NCS_TOOLCHAIN_DIR="${NCS_TOOLCHAIN_DIR%/}"
-if [ -z "${NCS_TOOLCHAIN_DIR}" ]; then
-    echo "error: no nRF Connect SDK toolchain found under ${NCS_BASE}/toolchains" >&2
-    exit 1
+if [ "${1:-}" = "--full" ]; then
+    west flash -d app/build --erase
+else
+    west flash -d app/build --erase --domain mcuboot --domain app
 fi
-echo "Using toolchain: ${NCS_TOOLCHAIN_DIR}"
-
-export ZEPHYR_BASE="${WORKSPACE_DIR}/zephyr"
-export PATH="${NCS_TOOLCHAIN_DIR}/bin:${PATH}"
-if [ -d "${NCS_TOOLCHAIN_DIR}/opt/zephyr-sdk" ]; then
-    export ZEPHYR_SDK_INSTALL_DIR="${NCS_TOOLCHAIN_DIR}/opt/zephyr-sdk"
-    export ZEPHYR_TOOLCHAIN_VARIANT="zephyr"
-fi
-source "${ZEPHYR_BASE}/zephyr-env.sh"
-
-cd "${REPO_DIR}"
-west flash -d app/build --erase

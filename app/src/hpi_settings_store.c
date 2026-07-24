@@ -38,7 +38,7 @@ LOG_MODULE_REGISTER(hpi_settings_store, LOG_LEVEL_DBG);
 
 // Settings file path
 #define SETTINGS_FILE_PATH "/lfs/user_settings.bin"
-#define SETTINGS_FILE_VERSION 1
+#define SETTINGS_FILE_VERSION 2   /* v2: 12-hour time default (migrated from v1) */
 
 // File header structure for version control and validation
 struct settings_file_header {
@@ -85,6 +85,7 @@ static void settings_load_defaults(void)
     current_settings.backlight_timeout = DEFAULT_BACKLIGHT_TIMEOUT;
     current_settings.raise_to_wake = DEFAULT_RAISE_TO_WAKE;
     current_settings.button_sounds = DEFAULT_BUTTON_SOUNDS;
+    current_settings.utc_offset_sec = DEFAULT_UTC_OFFSET;
 
     /*LOG_INF("Default settings loaded:");
     LOG_INF("  Height: %d cm", current_settings.height);
@@ -96,6 +97,81 @@ static void settings_load_defaults(void)
     LOG_INF("  Sleep timeout: %d seconds", current_settings.sleep_timeout);
     */
 }
+
+/* Range-check every field, repairing anything out of range to its default.
+ * Returns the number of fields healed (0 = the record was already sound).
+ *
+ * This exists because a corrupted record ALREADY SHIPPED. The old
+ * device-user-settings menu saved via hpi_settings_save_all() -- a wholesale,
+ * unvalidated memcpy -- from a `current_ui_settings` struct that only the menu
+ * itself ever populated. P6 made that menu unreachable while leaving its
+ * Height/Weight rollers live, so the struct stayed ZEROED in BSS and moving
+ * either roller persisted every other field as 0. (Fixed at the source: the
+ * pickers now use the per-key API, and the orphan file is gone.)
+ *
+ * But the fix only stops NEW corruption. A watch bitten before it still has
+ * auto_sleep_enabled = 0 on flash, which makes get_sleep_timeout_ms() return
+ * UINT32_MAX -- "never sleep" -- so it just quietly burns battery forever. There
+ * is no UI to repair it: auto_sleep_enabled has a getter and no setter, and
+ * settings_read_from_file() accepts any CRC-valid record without looking at the
+ * values. Healing on load is the only path back for those units.
+ *
+ * NOTE the bool asymmetry: auto_sleep_enabled = false is a LEGAL value, so it is
+ * indistinguishable from the corruption. It is healed to the default anyway --
+ * nothing can currently set it false on purpose (no setter, no UI), so a false on
+ * flash is far likelier to be damage than intent. Revisit if a real
+ * "never sleep" toggle is ever added; it would then need its own key.
+ *
+ * (Two comments -- hpi_user_settings_api.c and scr_settings.c -- already referred
+ * to "hpi_settings_validate()" as though it existed. It did not; the only range
+ * check was inlined in hpi_settings_update_and_save(), which itself has no
+ * callers. This is that function, made real.) */
+static int hpi_settings_validate(struct hpi_user_settings *s)
+{
+    int healed = 0;
+
+    if (s->height < 100 || s->height > 250) {
+        LOG_WRN("settings: height %u out of range -> %u", s->height, DEFAULT_USER_HEIGHT);
+        s->height = DEFAULT_USER_HEIGHT;
+        healed++;
+    }
+    if (s->weight < 30 || s->weight > 200) {
+        LOG_WRN("settings: weight %u out of range -> %u", s->weight, DEFAULT_USER_WEIGHT);
+        s->weight = DEFAULT_USER_WEIGHT;
+        healed++;
+    }
+    if (s->hand_worn > 1) {
+        LOG_WRN("settings: hand_worn %u invalid -> %u", s->hand_worn, DEFAULT_HAND_WORN);
+        s->hand_worn = DEFAULT_HAND_WORN;
+        healed++;
+    }
+    if (s->time_format > 1) {
+        LOG_WRN("settings: time_format %u invalid -> %u", s->time_format, DEFAULT_TIME_FORMAT);
+        s->time_format = DEFAULT_TIME_FORMAT;
+        healed++;
+    }
+    if (s->temp_unit > 1) {
+        LOG_WRN("settings: temp_unit %u invalid -> %u", s->temp_unit, DEFAULT_TEMP_UNIT);
+        s->temp_unit = DEFAULT_TEMP_UNIT;
+        healed++;
+    }
+    if (s->sleep_timeout < 10 || s->sleep_timeout > 120) {
+        LOG_WRN("settings: sleep_timeout %u out of range -> %u",
+                s->sleep_timeout, DEFAULT_SLEEP_TIMEOUT);
+        s->sleep_timeout = DEFAULT_SLEEP_TIMEOUT;
+        healed++;
+    }
+    if (!s->auto_sleep_enabled && DEFAULT_AUTO_SLEEP) {
+        /* see the bool-asymmetry note above */
+        LOG_WRN("settings: auto_sleep_enabled was false (never-sleep) -> default");
+        s->auto_sleep_enabled = DEFAULT_AUTO_SLEEP;
+        healed++;
+    }
+
+    return healed;
+}
+
+static int settings_write_to_file(void);
 
 static int settings_read_from_file(void)
 {
@@ -134,8 +210,21 @@ static int settings_read_from_file(void)
     }
     
     if (header.version != SETTINGS_FILE_VERSION) {
-        LOG_WRN("Settings file version mismatch: %d (expected %d)", 
+        LOG_WRN("Settings file version mismatch: %d (expected %d)",
                 header.version, SETTINGS_FILE_VERSION);
+        /* v1 -> v2: preserve the user's settings but adopt the new time default
+         * (12-hour). Anything else falls through to a defaults rewrite. */
+        if (header.version == 1 && header.size == sizeof(struct hpi_user_settings)) {
+            rc = fs_read(&file, &current_settings, sizeof(current_settings));
+            fs_close(&file);
+            if (rc == sizeof(current_settings)) {
+                current_settings.time_format = DEFAULT_TIME_FORMAT;
+                LOG_INF("Migrated settings v1->v2 (time format -> 12H)");
+                (void)settings_write_to_file();
+                return 0;
+            }
+            return -EIO;
+        }
         rc = -EINVAL;
         goto close_file;
     }
@@ -267,6 +356,21 @@ int hpi_settings_store_init(void)
             LOG_ERR("Failed to create initial settings file: %d", rc);
             return rc;
         }
+    } else {
+        /* A CRC-valid record is not necessarily a SANE one: the read path checks
+         * the checksum, never the values. Heal anything out of range and write
+         * the repair straight back, so a watch corrupted by the old
+         * save_all-from-a-zeroed-struct bug fixes itself on the next boot instead
+         * of silently never sleeping forever. See hpi_settings_validate(). */
+        int healed = hpi_settings_validate(&current_settings);
+        if (healed > 0) {
+            LOG_WRN("settings: healed %d out-of-range field(s) on load; rewriting", healed);
+            if (settings_write_to_file() != 0) {
+                /* Not fatal - the in-RAM copy is already repaired, so this boot
+                 * behaves. It just heals again next time. */
+                LOG_ERR("settings: could not persist healed record");
+            }
+        }
     }
 
     settings_initialized = true;
@@ -367,6 +471,10 @@ int hpi_settings_save_single(const char *key, const void *value, size_t value_le
     else if (strcmp(key, SETTINGS_BUTTON_SOUNDS_KEY) == 0 && value_len == sizeof(current_settings.button_sounds)) {
         memcpy(&current_settings.button_sounds, value, value_len);
         LOG_INF("Updated button sounds: %s", current_settings.button_sounds ? "Enabled" : "Disabled");
+    }
+    else if (strcmp(key, SETTINGS_UTC_OFFSET_KEY) == 0 && value_len == sizeof(current_settings.utc_offset_sec)) {
+        memcpy(&current_settings.utc_offset_sec, value, value_len);
+        LOG_INF("Updated UTC offset: %d sec", current_settings.utc_offset_sec);
     }
     else {
         LOG_ERR("Unknown setting key: %s", key);

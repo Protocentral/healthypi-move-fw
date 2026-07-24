@@ -173,7 +173,7 @@ struct hpi_hr_t
 struct hpi_steps_t
 {
     int64_t timestamp;
-    uint16_t steps;
+    uint32_t steps; /* today's step total; widened from uint16_t so daily counts >65535 don't wrap */
 };
 
 struct hpi_temp_t
@@ -197,15 +197,6 @@ struct hpi_bpt_t
 
     uint8_t status;
     uint8_t progress;
-};
-
-struct hpi_bpt_point_t
-{ 
-    int64_t timestamp;
-
-    uint16_t sys;
-    uint16_t dia;
-    uint16_t hr;
 };
 
 struct hpi_spo2_point_t
@@ -281,40 +272,8 @@ struct hpi_version_desc_t
     uint8_t patch;
 };
 
-struct hpi_last_update_time_t
-{
-    uint16_t hr_last_value;
-    int64_t hr_last_update_ts;
-
-    uint8_t spo2_last_value;
-    int64_t spo2_last_update_ts;
-    
-    uint8_t bp_sys_last_value;
-    uint8_t bp_dia_last_value;
-    int64_t bp_last_update_ts;
-
-    uint8_t ecg_last_hr;
-    int64_t ecg_last_update_ts;
-
-    uint16_t steps_last_value;
-    int64_t steps_last_update_ts;
-
-    uint16_t temp_last_value;
-    int64_t temp_last_update_ts;
-
-    uint16_t gsr_last_value; // GSR value * 100 (microsiemens) - legacy, use stress_* fields
-    int64_t gsr_last_update_ts;
-
-    // GSR Stress Index fields
-    uint8_t gsr_stress_level;           // 0-100 stress score
-    uint16_t gsr_tonic_level_x100;      // SCL in μS * 100
-    uint8_t gsr_peaks_per_minute;       // SCR rate
-
-    uint16_t hrv_lf_hf_ratio_x100;  // LF/HF ratio * 100
-    uint16_t hrv_sdnn_x10;          // SDNN in ms * 10
-    uint16_t hrv_rmssd_x10;         // RMSSD in ms * 10
-    int64_t hrv_last_update_ts;
-};
+/* hpi_last_update_time_t removed with the last-value store — the health store
+ * (app/src/health/) owns per-metric last values now. */
 
 struct hpi_gsr_stress_index_t
 {
@@ -328,45 +287,21 @@ struct hpi_gsr_stress_index_t
 };
 
 // Live GSR measurement status (mirrors ECG status concept for timers)
+enum hpi_gsr_status
+{
+    HPI_GSR_STATUS_IDLE = 0x00,
+    HPI_GSR_STATUS_STREAMING,   // capture running; `contact` gives the sub-phase
+    HPI_GSR_STATUS_COMPLETE,
+};
+
 struct hpi_gsr_status_t
 {
     uint16_t elapsed_s;    // Seconds since measurement start
     uint16_t remaining_s;  // Seconds remaining to target duration (0 when complete)
     uint16_t total_s;      // Total target duration (e.g. 60)
     bool active;           // Measurement currently active
+    bool contact;          // Skin contact present; the countdown only runs when true
+    uint8_t status;        // enum hpi_gsr_status - drives the inline EDA monitor
 };
-
-// HRV (Heart Rate Variability) evaluation - stores R-to-R intervals for analysis
-#define HRV_MAX_INTERVALS 300  // Maximum R-to-R intervals to store (typically ~5 minutes @ ~60 bpm)
-
-struct hpi_hrv_interval_t
-{
-    uint16_t rtor_ms;      // R-to-R interval in milliseconds
-    int64_t timestamp;     // Timestamp when interval was captured
-};
-
-// HRV evaluation results
-struct hpi_hrv_eval_result_t
-{
-    uint16_t num_intervals;           // Number of R-to-R intervals captured
-    uint32_t total_duration_ms;       // Total duration in milliseconds
-    uint16_t min_interval_ms;         // Minimum R-to-R interval
-    uint16_t max_interval_ms;         // Maximum R-to-R interval
-    float mean_interval_ms;           // Mean R-to-R interval
-    float sdnn_ms;                    // Standard deviation of R-to-R intervals (HRV indicator)
-    float pnn50_percent;              // Percentage of intervals differing > 50ms (HRV indicator)
-    float rmssd_ms;                   // Root mean square of successive differences (HRV indicator)
-    int64_t measurement_start_ts;     // Unix timestamp when measurement started
-    int64_t measurement_complete_ts;  // Unix timestamp when measurement completed
-};
-
-struct hpi_hrv_status_t
-{
-    uint16_t elapsed_s;         // Seconds since measurement start
-    uint16_t remaining_s;       // Seconds remaining to target duration
-    uint16_t total_s;           // Total target duration
-    bool active;        // Current HRV measurement status
-};
-
 
 

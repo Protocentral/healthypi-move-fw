@@ -62,9 +62,8 @@ config HEAP_MEM_POOL_ADD_SIZE_BOARD
 
 endif #  BOARD_HEALTHYPI_MOVE_NRF5340_CPUAPP || BOARD_HEALTHYPI_MOVE_NRF5340_CPUAPP_NS
 
-if BOARD_HEALTHYPI_MOVE_NRF5340_CPUNET
-
-config BT_CTLR
-	default y if BT
-
-endif # BOARD_HEALTHYPI_MOVE_NRF5340_CPUNET
+# Note: BT_CTLR on the net core is enabled by the Bluetooth controller subsystem
+# (via the ipc_radio image). The legacy board-level "config BT_CTLR / default y"
+# was removed to match upstream nrf5340dk: defining it here without a type breaks
+# images that don't source the BT controller Kconfig (e.g. MCUboot) on NCS >= 3.2,
+# which now treats "defined without a type" as a fatal Kconfig warning.

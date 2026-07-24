@@ -5,8 +5,8 @@
 
 set -e
 
-# Paths
-FONT_DIR="/Users/akw/Documents/GitHub/wrkspc-move/healthypi-move-fw/app/src/ui/fonts"
+# Paths — default to this script's own directory; override with FONT_DIR=...
+FONT_DIR="${FONT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 TTF_DIR="$FONT_DIR/ttf"
 LVGL_DIR="$FONT_DIR/lvgl"
 CONVERTER="lv_font_conv"

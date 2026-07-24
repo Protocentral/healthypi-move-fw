@@ -3,6 +3,7 @@
 menu "Drivers"
 rsource "sensor/Kconfig"
 rsource "display/Kconfig"
-rsource "rtc/Kconfig"
+# RTC: the RV-8263-C8 now uses the Zephyr in-tree driver (CONFIG_RTC_RV8263);
+# the out-of-tree drivers/rtc copy was removed.
 rsource "input/Kconfig"
 endmenu

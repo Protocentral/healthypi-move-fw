@@ -27,6 +27,16 @@
  * SOFTWARE.
  */
 
+#pragma once
 
-
+/* Application-core clock switching — a P4 power lever, built and deliberately
+ * NOT wired up yet (see the DO-NOT-DELETE note in hw_helpers.c). Prototypes live
+ * here so the scaffolding is callable and doesn't read as dead code: this header
+ * was empty, which is why a 2026-07-16 audit flagged the .c as an orphan.
+ *
+ * Gated on the PPK/measurement session like the rest of P4 — halving HFCLK is
+ * only worth landing with before/after current numbers, and it needs the SPIM4
+ * display-link timing re-checked (see hw_helpers.c). */
+void hpi_switch_cpu_64mhz(void);
+void hpi_switch_cpu_128mhz(void);
 

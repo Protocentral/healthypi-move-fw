@@ -28,6 +28,7 @@
  */
 
 #include <zephyr/kernel.h>
+#include "hpi_evt.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
@@ -60,7 +61,6 @@
 #include <zephyr/pm/device_runtime.h>
 
 #include <time.h>
-#include <zephyr/posix/time.h>
 #include <zephyr/sys/timeutil.h>
 
 #include <nrfx_clock.h>
@@ -80,17 +80,14 @@
 #include "hpi_common_types.h"
 #include "ble_module.h"
 #include "hpi_sys.h"
+#include "health/hpi_health_store.h"
 #include "hpi_user_settings_api.h"
-#include "recording_module.h"
 
 #include <max32664_updater.h>
 
 #include <lvgl.h>
 
 LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
-
-// Re-define battery constants for backward compatibility
-#define HPI_BATTERY_SHUTDOWN_VOLTAGE 3.0f
 
 // Force update option for testing MAX32664 updater logic
 // Uncomment the line(s) below to force updates regardless of version
@@ -107,18 +104,64 @@ char curr_string[40];
 static const struct device *max30208a50_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a50));
 static const struct device *max30208a52_dev = DEVICE_DT_GET(DT_NODELABEL(max30208a52));
 static const struct device *as6221_dev = DEVICE_DT_GET(DT_NODELABEL(as6221));
-
-/* Active temperature sensor, selected at runtime. Newer boards populate the
- * AS6221 (0x48), older boards the MAX30208 (0x50, fallback 0x52). Both report
- * SENSOR_CHAN_AMBIENT_TEMP in degrees Celsius so they are used interchangeably. */
+/* Temperature sensor, resolved at boot to whichever part is populated on this
+ * hardware revision: older boards have a MAX30208 (0x50/0x52), newer boards an
+ * AS6221 (0x48). NULL if none responded. */
 static const struct device *temp_dev = NULL;
 
 const struct device *max32664d_dev = DEVICE_DT_GET_ANY(maxim_max32664);
-const struct device *max32664c_dev = DEVICE_DT_GET_ANY(maxim_max32664c);
+const struct device *max32664c_dev = DEVICE_DT_GET_ANY(protocentral_max32664c);
 const struct device *imu_dev = DEVICE_DT_GET(DT_NODELABEL(bmi323));
 const struct device *const max30001_dev = DEVICE_DT_GET(DT_ALIAS(max30001));
+
+#ifdef CONFIG_HPI_IMU_MOTION_WAKE
+/* P3: BMI323 any-motion (wake-on-motion) hook. The trigger handler runs in the
+ * driver work-queue context on each INT1 assertion; it stamps the last-motion
+ * uptime + bumps a counter for P4 wear-state gating to consume later.
+ *
+ * Any-motion re-asserts INT1 on every slope crossing while movement persists, so
+ * a single gesture fires the trigger many times. That is expected hardware
+ * behaviour, not a threshold miscalibration — coalesce it here into one logical
+ * event with a refractory window. `last_motion` still stamps every physical
+ * assertion (so wear-state freshness stays accurate); only the count/log — the
+ * "a movement happened" signal P4 consumes — is debounced. */
+#define HPI_MOTION_REFRACTORY_MS 2000
+
+static atomic_t m_last_motion_uptime_s;
+static atomic_t m_motion_evt_count;
+/* handler-context only (single driver workqueue), so no atomic needed */
+static int64_t  m_last_motion_ms;
+
+uint32_t hpi_hw_get_motion_count(void) { return (uint32_t)atomic_get(&m_motion_evt_count); }
+int64_t  hpi_hw_get_last_motion_s(void) { return (int64_t)atomic_get(&m_last_motion_uptime_s); }
+
+static void bmi323_motion_handler(const struct device *dev, const struct sensor_trigger *trig)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(trig);
+
+	int64_t now_ms = k_uptime_get();
+	bool new_event = (now_ms - m_last_motion_ms) > HPI_MOTION_REFRACTORY_MS;
+
+	m_last_motion_ms = now_ms;
+	atomic_set(&m_last_motion_uptime_s, (atomic_val_t)(now_ms / 1000));
+
+	if (new_event) {
+		atomic_inc(&m_motion_evt_count);
+		LOG_INF("BMI323 any-motion detected (#%u)",
+			(uint32_t)atomic_get(&m_motion_evt_count));
+	}
+}
+
+static const struct sensor_trigger m_motion_trig = {
+	.type = SENSOR_TRIG_MOTION,
+	.chan = SENSOR_CHAN_ACCEL_XYZ,
+};
+#endif /* CONFIG_HPI_IMU_MOTION_WAKE */
 const struct device *rtc_dev = DEVICE_DT_GET(DT_ALIAS(rtc));
+#if defined(CONFIG_USB_DEVICE_STACK) /* USB CDC streaming disabled on NCS 3.2 - see prj.conf */
 const struct device *usb_cdc_uart_dev = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
+#endif
 const struct device *const gpio_keys_dev = DEVICE_DT_GET(DT_NODELABEL(gpiokeys));
 const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv));
 
@@ -182,7 +225,6 @@ static void i2c2_bus_scan_debug(void)
                 LOG_INF("  -> Expected: AS6221 temperature sensor");
                 break;
             case 0x50:
-            case 0x52:
                 LOG_INF("  -> Expected: MAX30208 temperature sensor");
                 break;
             case 0x55:
@@ -208,11 +250,13 @@ static void i2c2_bus_scan_debug(void)
     LOG_INF("=== End I2C2 Bus Scan ===");
 }
 
-// USB CDC UART
+// USB CDC UART (disabled on NCS 3.2; re-enable with CONFIG_USB_DEVICE_STACK_NEXT)
+#if defined(CONFIG_USB_DEVICE_STACK)
 #define RING_BUF_SIZE 512 // Reduced from 1024 to 512 bytes
 uint8_t ring_buffer[RING_BUF_SIZE];
 struct ring_buf ringbuf_usb_cdc;
 static bool rx_throttled;
+#endif
 
 K_SEM_DEFINE(sem_hw_inited, 0, 1);
 K_SEM_DEFINE(sem_start_cal, 0, 1);
@@ -220,9 +264,7 @@ K_SEM_DEFINE(sem_start_cal, 0, 1);
 // Signals to start dependent threads
 K_SEM_DEFINE(sem_disp_smf_start, 0, 1);
 K_SEM_DEFINE(sem_imu_smf_start, 0, 1);
-K_SEM_DEFINE(sem_ecg_start, 0, 1);
 K_SEM_DEFINE(sem_ppg_wrist_sm_start, 0, 2);
-K_SEM_DEFINE(sem_ppg_finger_sm_start, 0, 1);
 K_SEM_DEFINE(sem_hw_thread_start, 0, 1);
 K_SEM_DEFINE(sem_ble_thread_start, 0, 1);
 K_SEM_DEFINE(sem_hpi_sys_thread_start, 0, 1);
@@ -236,7 +278,7 @@ ZBUS_CHAN_DECLARE(sys_time_chan, batt_chan);
 ZBUS_CHAN_DECLARE(steps_chan);
 ZBUS_CHAN_DECLARE(temp_chan);
 
-static uint16_t today_total_steps = 0;
+static uint32_t today_total_steps = 0;
 K_MUTEX_DEFINE(mutex_today_steps);
 
 static struct hpi_version_desc_t hpi_max32664c_req_ver = {
@@ -254,20 +296,10 @@ extern struct k_msgq q_session_cmd_msg;
 extern struct k_sem sem_disp_ready;
 extern struct k_msgq q_disp_boot_msg;
 
-extern struct k_msgq q_steps_trend;
 
-static int today_add_steps(uint16_t steps)
+static uint32_t today_get_steps(void)
 {
-    k_mutex_lock(&mutex_today_steps, K_FOREVER);
-    today_total_steps += steps;
-    k_mutex_unlock(&mutex_today_steps);
-
-    return 0;
-}
-
-static uint16_t today_get_steps(void)
-{
-    uint16_t steps = 0;
+    uint32_t steps = 0;
     k_mutex_lock(&mutex_today_steps, K_FOREVER);
     steps = today_total_steps;
     k_mutex_unlock(&mutex_today_steps);
@@ -275,7 +307,7 @@ static uint16_t today_get_steps(void)
     return steps;
 }
 
-void today_init_steps(uint16_t steps)
+void today_init_steps(uint32_t steps)
 {
     k_mutex_lock(&mutex_today_steps, K_FOREVER);
     today_total_steps = steps;
@@ -288,16 +320,6 @@ bool hw_is_low_battery(void)
     return battery_is_low();
 }
 
-bool hw_is_critical_battery(void)
-{
-    return battery_is_critical();
-}
-
-void hw_reset_low_battery_state(void)
-{
-    battery_reset_low_state();
-}
-
 uint8_t hw_get_current_battery_level(void)
 {
     return battery_get_level();
@@ -306,6 +328,11 @@ uint8_t hw_get_current_battery_level(void)
 float hw_get_current_battery_voltage(void)
 {
     return battery_get_voltage();
+}
+
+bool hw_is_vbus_connected(void)
+{
+    return vbus_connected;
 }
 
 static void today_reset_steps(void)
@@ -348,12 +375,23 @@ void hpi_hw_pmic_off(void)
     regulator_parent_ship_mode(regulators);
 }
 
+#if defined(CONFIG_USB_DEVICE_STACK)
 void send_usb_cdc(const char *buf, size_t len)
 {
     int rb_len;
     rb_len = ring_buf_put(&ringbuf_usb_cdc, buf, len);
     uart_irq_tx_enable(usb_cdc_uart_dev);
 }
+#else
+/* USB CDC streaming disabled on NCS 3.2 (see prj.conf). No-op stub keeps callers
+ * (data_module.c) linking. Re-enable for continuous streaming by migrating to the
+ * USB next stack and restoring the real implementation. */
+void send_usb_cdc(const char *buf, size_t len)
+{
+    ARG_UNUSED(buf);
+    ARG_UNUSED(len);
+}
+#endif
 
 #if 0 // USB CDC interrupt handler - not currently used
 static void usb_cdc_uart_interrupt_handler(const struct device *dev, void *user_data)
@@ -464,14 +502,23 @@ double read_temp_f(void)
 
     if (temp_dev == NULL)
     {
-        return 0.0;
+        return 0.0; /* no temperature sensor detected at boot */
     }
 
     sensor_sample_fetch(temp_dev);
     sensor_channel_get(temp_dev, SENSOR_CHAN_AMBIENT_TEMP, &temp_sample);
 
-    /* Both the MAX30208 and AS6221 drivers report degrees Celsius. */
-    double temp_c = sensor_value_to_double(&temp_sample);
+    double temp_c;
+    if (temp_dev == as6221_dev)
+    {
+        /* Upstream TMP108 driver reports a standard sensor_value in degrees C. */
+        temp_c = sensor_value_to_double(&temp_sample);
+    }
+    else
+    {
+        /* MAX30208 out-of-tree driver puts the raw count in val1; LSB = 0.005 C. */
+        temp_c = (double)temp_sample.val1 * 0.005;
+    }
     double temp_f = (temp_c * 1.8) + 32.0;
     // printk("Temp: %.2f F\n", temp_f);
     return temp_f;
@@ -659,6 +706,9 @@ void hw_module_init(void)
     int ret = 0;
     static struct rtc_time curr_time;
 
+    /* Health store: init the ingest ring before any sensor can publish (H1). */
+    hpi_hs_init();
+
     // Check battery voltage during boot
     uint8_t boot_batt_level = 0;
     bool boot_batt_charging = false;
@@ -723,8 +773,13 @@ void hw_module_init(void)
     // Signal to start display state machine
     k_sem_give(&sem_disp_smf_start);
 
-    // Wait for display system to be initialized and ready
-    k_sem_take(&sem_disp_ready, K_FOREVER);
+    // Wait for display system to be initialized and ready. Bounded so a display
+    // init hang cannot brick boot: after the timeout we continue in a degraded
+    // mode (the rest of the system still comes up).
+    if (k_sem_take(&sem_disp_ready, K_SECONDS(10)) != 0)
+    {
+        LOG_ERR("Display not ready within 10s - continuing boot in degraded mode");
+    }
 
     if (battery_fuel_gauge_update(charger, vbus_connected, &boot_batt_level, &boot_batt_charging, &boot_batt_voltage) == 0)
     {
@@ -734,7 +789,12 @@ void hw_module_init(void)
         snprintf(batt_msg, sizeof(batt_msg), "Battery: %d.%02d V (%d%%)",
                  voltage_mv / 1000, (voltage_mv % 1000) / 10, boot_batt_level);
 
-        // Check if battery voltage is critically low
+        /* Boot check shares the runtime thresholds (battery_module.h). It is an
+         * immediate, single-reading decision (no debounce) - the cell is read
+         * essentially unloaded at power-on, so a reading past a threshold is real:
+         *   - below the voltage hard floor while not charging -> abort boot;
+         *   - at/below the low-SoC warning point -> warn but continue to boot.
+         * The runtime monitor (battery_monitor_conditions) takes over after boot. */
         if (boot_batt_voltage <= HPI_BATTERY_SHUTDOWN_VOLTAGE && !boot_batt_charging)
         {
             hw_add_boot_msg(batt_msg, false, true, false, 0);
@@ -743,14 +803,14 @@ void hw_module_init(void)
 
             // Wait a bit to show the message, then shutdown
             k_msleep(3000);
-            LOG_ERR("Boot aborted - critical battery voltage: %.2f V", (double)boot_batt_voltage);
+            LOG_ERR("Boot aborted - battery below floor: %.2f V", (double)boot_batt_voltage);
             hpi_hw_pmic_off();
             return; // This should never be reached, but just in case
         }
-        else if (boot_batt_voltage <= HPI_BATTERY_CRITICAL_VOLTAGE) // && !boot_batt_charging)
+        else if (boot_batt_level <= HPI_BATTERY_LOW_SOC_PCT)
         {
             hw_add_boot_msg(batt_msg, false, true, false, 0);
-            hw_add_boot_msg("LOW VOLTAGE WARNING", false, true, false, 0);
+            hw_add_boot_msg("LOW BATTERY", false, true, false, 0);
         }
         else
         {
@@ -768,9 +828,9 @@ void hw_module_init(void)
 
     fs_module_init();
 
-#if defined(CONFIG_HPI_RECORDING_MODULE)
-    hpi_recording_init();
-#endif
+    /* Health store: open the durable log now that the filesystem is mounted
+     * (restores the seq cursor + latest-per-type snapshot). */
+    hpi_hs_storage_init();
 
     // Init IMU device
     ret = device_init(imu_dev);
@@ -789,6 +849,15 @@ void hw_module_init(void)
 
         // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_FEATURE_ENGINE, &set_val);
         // sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_EN_STEP_COUNTER, &set_val);
+
+#ifdef CONFIG_HPI_IMU_MOTION_WAKE
+        /* P3: arm BMI323 any-motion on INT1 (validation hook for P4 wear-state) */
+        if (sensor_trigger_set(imu_dev, &m_motion_trig, bmi323_motion_handler) < 0) {
+            LOG_WRN("BMI323 any-motion trigger registration failed");
+        } else {
+            LOG_INF("BMI323 any-motion wake enabled");
+        }
+#endif
     }
 
     device_init(max30001_dev);
@@ -806,7 +875,7 @@ void hw_module_init(void)
         LOG_INF("MAX30001 device found!");
         max30001_device_present = true;
 
-    k_sem_give(&sem_ecg_start);
+    k_event_post(&ecg_evt, EVT_ECG_HW_READY);
     }
 
     k_sleep(K_MSEC(100));
@@ -820,73 +889,17 @@ void hw_module_init(void)
     gpio_pin_set_dt(&dcdc_5v_en, 1);
     k_sleep(K_MSEC(100));
 
-    /* Path of the one-shot reboot-attempt marker stored in LFS */
-    const char *max32664c_reboot_marker = "/lfs/sys/max32664c_reboot_attempt";
-
     device_init(max32664c_dev);
     k_sleep(K_MSEC(100));
 
     if (!device_is_ready(max32664c_dev))
     {
+        /* MAX32664C probe failed. The old one-shot reboot-marker recovery (write a
+         * marker file, cold-reboot once to recover the I2C bus, then give up on the
+         * second boot) is removed — just mark the hub absent and continue booting. */
         LOG_ERR("MAX32664C device not present!");
-
-        /* Check if we've already attempted a reboot previously by checking the marker file */
-        int rc = fs_check_file_exists(max32664c_reboot_marker);
-        if (rc == 0)
-        {
-            /* Marker exists -> this is the second boot after an attempted reboot.
-             * Clear the marker and proceed without rebooting again. */
-            LOG_INF("MAX32664C probe failed after reboot attempt; clearing marker and continuing boot");
-            /* Try to remove the marker file using fs_unlink; retry a few times if it fails. */
-            int unlink_rc = -1;
-            const int max_unlink_retries = 3;
-            for (int i = 0; i < max_unlink_retries; i++)
-            {
-                unlink_rc = fs_unlink(max32664c_reboot_marker);
-                if (unlink_rc == 0)
-                {
-                    LOG_DBG("Reboot marker removed on attempt %d: %s", i + 1, max32664c_reboot_marker);
-                    break;
-                }
-                else
-                {
-                    LOG_DBG("Attempt %d: unlink returned %d, retrying...", i + 1, unlink_rc);
-                    k_sleep(K_MSEC(50));
-                }
-            }
-
-            /* Final verification: check whether the file still exists. */
-            int exists_after_unlink = fs_check_file_exists(max32664c_reboot_marker);
-            if (exists_after_unlink == 0)
-            {
-                LOG_WRN("Reboot marker still present after unlink attempts: %s", max32664c_reboot_marker);
-            }
-            else
-            {
-                LOG_DBG("Reboot marker cleared: %s", max32664c_reboot_marker);
-            }
-
-            max32664c_device_present = false;
-            hw_add_boot_msg("MAX32664C", false, true, false, 0);
-        }
-        else
-        {
-            LOG_INF("MAX32664C probe failed; creating reboot marker and rebooting to recover I2C bus");
-            uint8_t marker_data[1] = {1};
-            fs_write_buffer_to_file((char *)max32664c_reboot_marker, marker_data, sizeof(marker_data));
-            int exists = fs_check_file_exists(max32664c_reboot_marker);
-            if (exists != 0)
-            {
-                LOG_ERR("Failed to create reboot marker '%s' (rc=%d) - will not reboot to avoid loop", max32664c_reboot_marker, exists);
-                max32664c_device_present = false;
-                hw_add_boot_msg("MAX32664C", false, true, false, 0);
-            }
-            else
-            {
-                k_sleep(K_MSEC(100));
-                sys_reboot(SYS_REBOOT_COLD);
-            }
-        }
+        max32664c_device_present = false;
+        hw_add_boot_msg("MAX32664C", false, true, false, 0);
     }
     else
     {
@@ -1020,10 +1033,18 @@ void hw_module_init(void)
             }
         }
 
-        k_sem_give(&sem_ppg_finger_sm_start);
         /* Power down FI sensor after successful boot-time detection/self-test */
         hpi_hw_fi_sensor_off();
     }
+
+    /* Release the finger SMF thread's boot gate UNCONDITIONALLY — even when the
+     * MAX32664D is absent. Otherwise the thread blocks forever at its
+     * k_event_wait(EVT_FI_SM_START) and never reaches IDLE, so it can never even
+     * receive (let alone log) BPT-cal / SpO2 commands. With the hub missing, the
+     * CHECK_SENSOR state degrades gracefully (15 s timeout -> IDLE). This also
+     * makes the finger command path observable on the debug console, which shares
+     * USB lines with the finger sensor (they cannot both be connected). */
+    k_event_post(&fi_evt, EVT_FI_SM_START);
 
     // Confirm MCUBoot image if not already confirmed by app
     if (boot_is_img_confirmed())
@@ -1045,57 +1066,79 @@ void hw_module_init(void)
 
     // setup_pmic_callbacks();
 
-    /* Temperature sensor detection. Newer boards populate the AS6221 (0x48);
-     * older boards the MAX30208 (0x50, fallback 0x52). Probe each in order and
-     * use whichever responds. All report degrees C, so the rest of the app is
-     * agnostic to which one is fitted (see read_temp_f / temp_dev). */
+    /* Temperature sensor auto-detection across hardware revisions:
+     * older boards populate a MAX30208 (0x50 or 0x52), newer boards an
+     * AS6221 (0x48). Either is a pass — only report FAIL if none ACK. Probe
+     * order is silent on the POST; one line shows the part that won. Each
+     * node is deferred-init and its init does an I2C access, so
+     * device_is_ready() reflects a real bus ACK. */
     device_init(max30208a50_dev);
     k_sleep(K_MSEC(100));
+
     if (device_is_ready(max30208a50_dev))
     {
         temp_dev = max30208a50_dev;
-        LOG_INF("MAX30208 @0x50 found");
-        hw_add_boot_msg("MAX30208 @50", true, true, false, 0);
+        LOG_INF("Temp sensor: MAX30208 @0x50");
+        hw_add_boot_msg("MAX30208", true, true, false, 0);
     }
-
-    if (temp_dev == NULL)
+    else
     {
+        LOG_WRN("MAX30208 @0x50 not found, trying @0x52...");
         device_init(max30208a52_dev);
         k_sleep(K_MSEC(100));
+
         if (device_is_ready(max30208a52_dev))
         {
             temp_dev = max30208a52_dev;
-            LOG_INF("MAX30208 @0x52 found");
-            hw_add_boot_msg("MAX30208 @52", true, true, false, 0);
+            LOG_INF("Temp sensor: MAX30208 @0x52");
+            hw_add_boot_msg("MAX30208", true, true, false, 0);
         }
-    }
-
-    if (temp_dev == NULL)
-    {
-        device_init(as6221_dev);
-        k_sleep(K_MSEC(100));
-        if (device_is_ready(as6221_dev))
+        else
         {
-            temp_dev = as6221_dev;
-            LOG_INF("AS6221 @0x48 found");
-            hw_add_boot_msg("AS6221 @48", true, true, false, 0);
-        }
-    }
+            LOG_WRN("MAX30208 @0x52 not found, trying AS6221 @0x48...");
+            device_init(as6221_dev);
+            k_sleep(K_MSEC(100));
 
-    if (temp_dev == NULL)
-    {
-        LOG_ERR("No temperature sensor found (MAX30208/AS6221)");
-        hw_add_boot_msg("Temp sensor", false, true, false, 0);
+            if (device_is_ready(as6221_dev))
+            {
+                temp_dev = as6221_dev;
+                LOG_INF("Temp sensor: AS6221 @0x48");
+                hw_add_boot_msg("AS6221", true, true, false, 0);
+            }
+            else
+            {
+                temp_dev = NULL;
+                LOG_ERR("No temperature sensor found (MAX30208/AS6221)!");
+                hw_add_boot_msg("Temp sensor", false, true, false, 0);
+            }
+        }
     }
 
     hw_add_boot_msg("Boot complete !!", true, false, false, 0);
 
     k_sleep(K_MSEC(400));
 
+    /* RTC is deferred-init (rv@51). Bring it up before any get/set — including
+     * MCUmgr os datetime, which uses DT_ALIAS(rtc) the same device. */
+    if (rtc_dev != NULL && !device_is_ready(rtc_dev)) {
+        int r = device_init(rtc_dev);
+        if (r < 0) {
+            LOG_ERR("RTC device_init failed: %d", r);
+            hw_add_boot_msg("RTC", false, true, false, 0);
+        } else {
+            hw_add_boot_msg("RTC", true, true, false, 0);
+        }
+    }
+
     // Read RTC and initialize time synchronization (single RTC read at boot)
-    rtc_get_time(rtc_dev, &curr_time);
-    LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min, curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
-    hpi_sys_force_time_sync();
+    if (rtc_dev != NULL && device_is_ready(rtc_dev)) {
+        rtc_get_time(rtc_dev, &curr_time);
+        LOG_INF("RTC time: %d:%d:%d %d/%d/%d", curr_time.tm_hour, curr_time.tm_min,
+                curr_time.tm_sec, curr_time.tm_mon, curr_time.tm_mday, curr_time.tm_year);
+        hpi_sys_force_time_sync();
+    } else {
+        LOG_ERR("RTC not ready — system time will stay invalid until set");
+    }
 
     // npm_fuel_gauge_update(charger, vbus_connected);
 
@@ -1152,21 +1195,22 @@ bool sys_batt_charging = false;
 
 void hw_thread(void)
 {
-    uint32_t _steps = 0;
     double _temp_f = 0.0;
 
-   
-   
-
-    // Variables for tracking daily reset
+    // Daily step tracking. The BMI323 keeps a free-running 32-bit step counter;
+    // today's total is derived by differencing it against a baseline captured at
+    // boot and re-captured at local midnight. We deliberately do NOT reset the
+    // hardware counter periodically — that only loses the steps taken in the
+    // read->reset gap, and the 32-bit counter cannot realistically overflow.
     static int last_day = -1;
+    static uint32_t hw_steps_day_base = 0;
+    static bool step_base_valid = false;
 
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
 
     k_sem_give(&sem_hpi_sys_thread_start);
 
-    int sc_reset_counter = 0;
     for (;;)
     {
         // Read and publish battery level
@@ -1178,34 +1222,62 @@ void hw_thread(void)
         };
         zbus_chan_pub(&batt_chan, &batt_s, K_SECONDS(1));
 
-        // Check for low battery conditions using the battery module
+        // Check for low battery conditions using the battery module. While the
+        // low-battery screen is active, its live %/charging refresh is driven by
+        // the display SMF (hpi_disp_low_battery_update) off the batt_chan zbus.
         battery_monitor_conditions(sys_batt_level, sys_batt_charging, sys_batt_voltage);
-
-        // Update low battery screen if currently active
-        battery_update_low_battery_screen(sys_batt_level, sys_batt_charging, sys_batt_voltage);
 
         // Get current synced time and publish (no periodic RTC read needed —
         // offset-based time from boot sync is accurate to <2s/day)
         struct tm m_tm_time = hpi_sys_get_current_time();
         zbus_chan_pub(&sys_time_chan, &m_tm_time, K_SECONDS(1));
 
-        // Check if day has changed and reset step counter if needed
+        // Read the free-running hardware step counter (monotonic within a boot).
+        uint32_t hw_steps = acc_get_steps();
+
+        // Capture the baseline once, on the first read after boot. If the health
+        // store holds a step total from earlier *today* (a mid-day reboot), seed
+        // the baseline so today's count resumes from it instead of restarting at
+        // 0. A total from a previous day (device off across midnight) is ignored.
+        if (!step_base_valid)
+        {
+            uint32_t restored = 0;
+            struct hpi_hs_sample last_steps;
+            if (hpi_hs_get_latest(HPI_HS_T_STEPS, &last_steps) &&
+                last_steps.value > 0 && hpi_sys_ts_is_today(last_steps.ts_utc))
+            {
+                /* Health-store sample value is int32; a today's-total is
+                 * non-negative and well within uint32 range. */
+                restored = (uint32_t)last_steps.value;
+                LOG_INF("Restored today's step total from health store: %u", restored);
+            }
+            // Baseline such that (hw_steps - base) == restored.
+            hw_steps_day_base = (hw_steps >= restored) ? (hw_steps - restored) : hw_steps;
+            step_base_valid = true;
+        }
+
+        // Day rollover: re-baseline so today's count restarts at 0. No hardware
+        // reset — differencing against the new baseline is loss-free.
         if (last_day == -1)
         {
-            // Initialize on first run
             last_day = m_tm_time.tm_mday;
         }
         else if (last_day != m_tm_time.tm_mday)
         {
-            // Day has changed - reset daily step counter
             last_day = m_tm_time.tm_mday;
+            hw_steps_day_base = hw_steps;
             today_reset_steps();
-            LOG_INF("New day detected (%d), daily steps reset", m_tm_time.tm_mday);
+            LOG_INF("New day detected (%d), daily steps re-baselined", m_tm_time.tm_mday);
         }
 
-        // Read and publish steps
-        _steps = acc_get_steps();
-        // LOG_DBG("Inc. Steps: %d", _steps);
+        // Guard: if the hw counter fell below the baseline (a soft reset / power
+        // cycle zeroed it), re-baseline to avoid an unsigned wrap.
+        if (hw_steps < hw_steps_day_base)
+        {
+            hw_steps_day_base = hw_steps;
+        }
+
+        today_init_steps(hw_steps - hw_steps_day_base);
 
         struct hpi_steps_t steps_point = {
             .timestamp = hw_get_sys_time_ts(),
@@ -1213,39 +1285,13 @@ void hw_thread(void)
         };
         zbus_chan_pub(&steps_chan, &steps_point, K_SECONDS(4));
 
-        struct sensor_value set_val;
-        set_val.val1 = 1;
-
-        // Write to file Reset step counter every 60 seconds
-        if (sc_reset_counter >= 12)
-        {
-            today_add_steps(_steps);
-
-            struct hpi_steps_t tr_steps_point = {
-                .timestamp = hw_get_sys_time_ts(),
-                .steps = _steps,
-            };
-
-            if (_steps > 0)
-            {
-                k_msgq_put(&q_steps_trend, &tr_steps_point, K_NO_WAIT);
-            }
-
-            LOG_DBG("Resetting step counter");
-            sensor_attr_set(imu_dev, SENSOR_CHAN_ACCEL_XYZ, BMI323_HPI_ATTR_RESET_STEP_COUNTER, &set_val);
-            sc_reset_counter = 0;
-        }
-        else
-        {
-            sc_reset_counter++;
-        }
-
         // Read and publish temperature
         if (hpi_sys_get_device_on_skin() == true)
         {
             _temp_f = read_temp_f();
             struct hpi_temp_t temp = {
                 .temp_f = _temp_f,
+                .temp_c = (_temp_f - 32.0) / 1.8,   /* health store ingests degC */
                 .timestamp = hw_get_sys_time_ts(),
             };
             zbus_chan_pub(&temp_chan, &temp, K_SECONDS(1));

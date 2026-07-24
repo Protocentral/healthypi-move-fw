@@ -121,8 +121,35 @@ int hpi_user_settings_set_temp_unit(uint8_t temp_unit)
     if (temp_unit > 1) {
         return -EINVAL;
     }
-    
+
     return hpi_settings_save_single(SETTINGS_TEMP_UNIT_KEY, &temp_unit, sizeof(temp_unit));
+}
+
+/* P1-2: the sleep timeout was readable (and honoured by smf_display's sleep
+ * guard) but had no setter and no UI - the v2 settings screen now exposes it.
+ * Range matches hpi_settings_validate() in hpi_settings_store.c. */
+int hpi_user_settings_set_sleep_timeout(uint8_t sleep_timeout)
+{
+    if (sleep_timeout < 10 || sleep_timeout > 120) {
+        return -EINVAL;
+    }
+
+    return hpi_settings_save_single(SETTINGS_SLEEP_TIMEOUT_KEY, &sleep_timeout, sizeof(sleep_timeout));
+}
+
+int32_t hpi_user_settings_get_utc_offset(void)
+{
+    const struct hpi_user_settings *settings = hpi_settings_get_current();
+    return settings ? settings->utc_offset_sec : DEFAULT_UTC_OFFSET;
+}
+
+int hpi_user_settings_set_utc_offset(int32_t offset_sec)
+{
+    if (offset_sec < -12 * 3600 || offset_sec > 14 * 3600) {
+        return -EINVAL;
+    }
+
+    return hpi_settings_save_single(SETTINGS_UTC_OFFSET_KEY, &offset_sec, sizeof(offset_sec));
 }
 
 int hpi_user_settings_get_all(struct hpi_user_settings *settings)

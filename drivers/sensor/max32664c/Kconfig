@@ -1,11 +1,16 @@
 # Configuration options
 
-config SENSOR_MAX32664C
-	bool "MAX32664C Driver"
+# Renamed from SENSOR_MAX32664C in the NCS v3.3 migration: upstream added its own
+# "config SENSOR_MAX32664C" (zephyr/drivers/sensor/adi/max32664c). The _PC suffix
+# keeps this ProtoCentral out-of-tree driver's symbol distinct so enabling ours
+# never pulls in the upstream driver. Pairs with the "protocentral,max32664c"
+# devicetree compatible.
+config SENSOR_MAX32664C_PC
+	bool "MAX32664C Driver (ProtoCentral)"
 	default y
 	select I2C
 	help
-		Enable the driver for the Maxim MAX32664C sensor
+		Enable the ProtoCentral out-of-tree driver for the Maxim MAX32664C sensor
 
 module = MAX32664C
 module-str = max32664c

@@ -1,4 +1,3 @@
-
 /*
  * MAX30001 device async decoder
  * Protocentral Electronics Pvt Ltd
@@ -12,54 +11,59 @@ LOG_MODULE_REGISTER(MAX30001_DECODER, CONFIG_SENSOR_LOG_LEVEL);
 
 #define DT_DRV_COMPAT maxim_max30001
 
-static int max30001_decoder_get_frame_count(const uint8_t *buffer, enum sensor_channel channel,
-											size_t channel_idx, uint16_t *frame_count)
+/*
+ * NCS 3.2: the sensor decoder API takes `struct sensor_chan_spec` (channel type +
+ * index) instead of `enum sensor_channel` + a separate index argument.
+ *
+ * Note: these decoders are currently stubs. The application reads these sensors
+ * via the driver's own RTIO processing path, not the Zephyr sensor decoder API,
+ * so get_frame_count/get_size_info/decode are not exercised at runtime.
+ */
+
+static int max30001_decoder_get_frame_count(const uint8_t *buffer,
+					    struct sensor_chan_spec channel,
+					    uint16_t *frame_count)
 {
 	ARG_UNUSED(buffer);
 	ARG_UNUSED(channel);
-	ARG_UNUSED(channel_idx);
 
 	/* This sensor lacks a FIFO; there will always only be one frame at a time. */
 	*frame_count = 1;
 	return 0;
 }
 
-static int max30001_decoder_get_size_info(enum sensor_channel channel, size_t *base_size,
-										  size_t *frame_size)
+static int max30001_decoder_get_size_info(struct sensor_chan_spec channel, size_t *base_size,
+					  size_t *frame_size)
 {
-	switch (channel)
+	ARG_UNUSED(base_size);
+	ARG_UNUSED(frame_size);
+
+	switch (channel.chan_type)
 	{
 	case SENSOR_CHAN_MAGN_X:
 	case SENSOR_CHAN_MAGN_Y:
 	case SENSOR_CHAN_MAGN_Z:
 	case SENSOR_CHAN_MAGN_XYZ:
-		//*base_size = sizeof(struct sensor_three_axis_data);
-		//*frame_size = sizeof(struct sensor_three_axis_sample_data);
 		return 0;
 	default:
 		return -ENOTSUP;
 	}
 }
 
-static int max30001_decoder_decode(const uint8_t *buffer, enum sensor_channel channel,
-								   size_t channel_idx, uint32_t *fit,
-								   uint16_t max_count, void *data_out)
+static int max30001_decoder_decode(const uint8_t *buffer, struct sensor_chan_spec channel,
+				   uint32_t *fit, uint16_t max_count, void *data_out)
 {
-	const struct max30001_encoded_data *edata = (const struct max30001_encoded_data *)buffer;
-	const struct max30001_decoder_header *header = &edata->header;
+	ARG_UNUSED(buffer);
+	ARG_UNUSED(channel);
+	ARG_UNUSED(max_count);
+	ARG_UNUSED(data_out);
 
 	if (*fit != 0)
 	{
 		return 0;
 	}
 
-	printk("D ");
-	//printk("Num samples: %u\n", edata->samples[0].ir_sample);
-
-	/*switch (channel)
-	{
-	
-	}*/
+	return 0;
 }
 
 SENSOR_DECODER_API_DT_DEFINE() = {

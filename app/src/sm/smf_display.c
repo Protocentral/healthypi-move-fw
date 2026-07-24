@@ -28,6 +28,7 @@
  */
 
 #include <zephyr/kernel.h>
+#include "hpi_evt.h"
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/display.h>
@@ -38,11 +39,15 @@
 #include <display_sh8601.h>
 #include "hpi_common_types.h"
 #include "hw_module.h"
+#include "hpi_dfu.h"
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"
 #include "max32664_updater.h"
 #include "hpi_sys.h"
+#include "health/hpi_health_store.h"
 #include "hpi_user_settings_api.h"
-#include "recording_module.h"
+#include "hpi_watchdog.h"
+#include "ui/hpi_ui_subjects.h"
 
 LOG_MODULE_REGISTER(smf_display, LOG_LEVEL_DBG);
 
@@ -77,16 +82,11 @@ static uint32_t get_sleep_timeout_ms(void)
 K_MSGQ_DEFINE(q_plot_ecg, sizeof(struct hpi_ecg_bioz_sensor_data_t), 128, 1);
 K_MSGQ_DEFINE(q_plot_ppg_wrist, sizeof(struct hpi_ppg_wr_data_t), 32, 1);
 K_MSGQ_DEFINE(q_plot_ppg_fi, sizeof(struct hpi_ppg_fi_data_t), 32, 1);
-K_MSGQ_DEFINE(q_plot_hrv, sizeof(struct hpi_computed_hrv_t), 16, 1);
 K_MSGQ_DEFINE(q_plot_gsr, sizeof(struct hpi_gsr_sensor_data_t), 128, 1);
 K_MSGQ_DEFINE(q_disp_boot_msg, sizeof(struct hpi_boot_msg_t), 4, 1);
 
 K_SEM_DEFINE(sem_disp_ready, 0, 1);
-K_SEM_DEFINE(sem_ecg_complete, 0, 1);
-K_SEM_DEFINE(sem_ecg_complete_reset, 0, 1);
 K_SEM_DEFINE(sem_touch_wakeup, 0, 1);  // Kept for wakeup signaling
-K_SEM_DEFINE(sem_gsr_complete, 0, 1);
-K_SEM_DEFINE(sem_gsr_complete_reset, 0, 1);
 
 /**
  * @brief Signal touch wakeup from sleep state
@@ -109,13 +109,41 @@ static int last_batt_refresh = 0;
 static int last_time_refresh = 0;
 static int last_settings_refresh = 0;
 
-static int last_hr_trend_refresh = 0;
-static int last_spo2_trend_refresh = 0;
-static int last_today_trend_refresh = 0;
 static int last_temp_trend_refresh = 0;
 
-static int scr_to_change = SCR_HOME;
-K_SEM_DEFINE(sem_change_screen, 0, 1);
+/* True while sleep state is showing the AOD dim face (vs full panel blank). */
+static bool s_sleep_is_aod;
+/* True while the display SMF is in the SLEEP state (any sleep flavour). Used to
+ * wake the panel if a BLE OTA starts while asleep. */
+static bool s_display_asleep;
+/* True when HW AODMON is active (vs soft dim fallback). */
+static bool s_sleep_aod_hw;
+
+/* Screen-load inbox.
+ *
+ * This used to be a set of unlocked globals plus a binary semaphore: a caller
+ * wrote g_screen/g_arg1..4 from its own thread and gave the sem. Two things went
+ * wrong with that, and BLE pairing hit both. (1) The write was not atomic w.r.t.
+ * the display thread's read, so a request landing mid-draw could be rendered as a
+ * MIX of two requests -- e.g. the PAIR_CANCELLED event with the PAIR_REQUEST
+ * passkey still in arg2, i.e. a stale passkey shown as if live. (2) The sem is
+ * binary, so give;give;take coalesced silently and invisibly.
+ *
+ * Now the request travels as one unit through a msgq, so it can never tear, and
+ * the g_* state below is written ONLY by the display thread (which also lets the
+ * sleep-save read it without racing a producer). Coalescing still happens -- the
+ * newest request wins, as before -- but it is now deliberate and logged rather
+ * than an accident of the semaphore's depth. */
+struct hpi_scr_load_req_t
+{
+    int32_t screen;
+    enum scroll_dir scroll_dir;
+    uint32_t arg1;
+    uint32_t arg2;
+    uint32_t arg3;
+    uint32_t arg4;
+};
+K_MSGQ_DEFINE(q_scr_load, sizeof(struct hpi_scr_load_req_t), 8, 4);
 
 static const struct smf_state display_states[];
 
@@ -141,6 +169,10 @@ volatile bool screen_transition_in_progress = false;
 // Display screen variables
 static uint8_t m_disp_batt_level = 0;
 static bool m_disp_batt_charging = false;
+/* S3: whether the low-battery screen is currently the one we put up. The battery
+ * state itself is owned by battery_module (hw_is_low_battery()); this tracks what
+ * the display has reflected so we only load/dismiss on the edge. */
+static bool m_low_batt_shown = false;
 static struct tm m_disp_sys_time;
 
 // Battery change detection - only update UI when data actually changes
@@ -156,10 +188,12 @@ static int64_t m_disp_hr_updated_ts = 0;
 // @brief Spo2 Screen variables
 static uint8_t m_disp_spo2 = 0;
 static int64_t m_disp_spo2_last_refresh_ts;
+/* Uptime of the last SpO2 display update — age fallback when RTC is not yet
+ * VALID (health store drops those samples, but the hero still shows the value). */
+static uint32_t m_disp_spo2_last_uptime_ms;
 
 // @brief Today Screen variables
 static uint32_t m_disp_steps = 0;
-static uint16_t m_disp_kcals = 0;
 static uint16_t m_disp_active_time_s = 0;
 
 // @brief Temperature Screen variables
@@ -175,25 +209,36 @@ static uint8_t m_disp_bpt_progress = 0;
 // @brief ECG Screen variables
 static int m_disp_ecg_timer = 0;
 static uint16_t m_disp_ecg_hr = 0;
+static int64_t m_disp_ecg_hr_ts;          /* UTC of last non-zero ECG HR latch */
+static uint32_t m_disp_ecg_hr_uptime_ms;  /* uptime stamp for age fallback    */
+/* Latest ECG SMF status + progress (set by disp_ecg_stat_listener, publisher
+ * context) and the last values rendered into the inline monitor (display
+ * thread). A change in either drives hpi_ecg_monitor_update() from the LVGL
+ * thread so the monitor tracks the SMF phase (wait/stabilize/record/idle). */
+static atomic_t m_disp_ecg_status = ATOMIC_INIT(HPI_ECG_STATUS_IDLE);
+static int m_disp_ecg_status_synced = -1;
+/* Separate tracker for the sleep guard: the ECG status is flipped from the ECG
+ * SMF thread, so the end-of-measurement inactivity reset has to happen in the
+ * same place the sleep decision is taken, not in the render pass that follows it. */
+static int m_disp_ecg_sleep_synced = -1;
+static int m_disp_ecg_timer_synced = -1;
 static bool m_lead_on_off = false;
 
 // @brief GSR Screen variables
 static uint16_t m_disp_gsr_remaining = 30; // countdown timer (seconds remaining)
 static float m_disp_gsr_us = 0.0f;
+/* GSR SMF phase, mirroring the ECG monitor plumbing: the zbus listener stores it,
+ * the display thread renders the inline EDA monitor from the change edge and takes
+ * the sleep decision from it. */
+static atomic_t m_disp_gsr_status = ATOMIC_INIT(HPI_GSR_STATUS_IDLE);
+static atomic_t m_disp_gsr_contact = ATOMIC_INIT(0);
+static int m_disp_gsr_status_synced = -1;
+static int m_disp_gsr_remaining_synced = -1;
+static int m_disp_gsr_contact_synced = -1;
+static int m_disp_gsr_sleep_synced = -1;
 
-// @brief HRV Screen variables
-extern struct k_sem sem_hrv_eval_complete;
-extern struct k_sem sem_ecg_lead_timeout;  // Signaled when lead placement times out
-static int m_disp_hrv_timer = 0;
-
-extern struct k_sem sem_fi_bpt_cal_cancel;
-extern struct k_sem sem_finger_contact_timeout;
-extern struct k_sem sem_fi_spo2_est_cancel;
 
 
-// @brief Recording status variables (updated by ZBus listener, read by display thread)
-static struct hpi_recording_status_t m_disp_recording_status = {0};
-static bool m_disp_recording_status_updated = false;
 
 struct s_disp_object
 {
@@ -210,7 +255,9 @@ static uint32_t g_arg2 = 0;
 static uint32_t g_arg3 = 0;
 static uint32_t g_arg4 = 0;
 
-static uint8_t g_scr_parent = SCR_HOME;
+/* (g_scr_parent removed: it was assigned from arg1 on every load and never read
+ * once -- each screen tracks its own parent. Screens that need one take it in
+ * arg1, e.g. the pulldown shade's m_pulldown_parent.) */
 
 typedef void (*screen_draw_func_t)(enum scroll_dir, uint32_t, uint32_t, uint32_t, uint32_t);
 typedef void (*screen_gesture_down_func_t)(void);
@@ -224,53 +271,62 @@ typedef struct
 static int curr_screen = SCR_HOME;
 K_MUTEX_DEFINE(mutex_curr_screen);
 
+/* The carousel is the one screen whose draw takes only (scroll_dir): the tile is
+ * chosen from carousel_cur_tile, not from args. Every other entry is 5-arg, so it
+ * was stored uncast and called through the 5-arg pointer type -- formally UB, and
+ * it forced -Wno-error=incompatible-pointer-types over the whole library, which
+ * suppressed the same real diagnostic everywhere else. This shim adapts the arity
+ * instead, so the table is type-correct and the flag is gone. */
+static void draw_scr_carousel_entry(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2,
+                                    uint32_t arg3, uint32_t arg4)
+{
+    ARG_UNUSED(arg1);
+    ARG_UNUSED(arg2);
+    ARG_UNUSED(arg3);
+    ARG_UNUSED(arg4);
+
+    draw_scr_carousel(m_scroll_dir);
+}
+
 // Array of function pointers for screen drawing functions
 static const screen_func_table_entry_t screen_func_table[] = {
-    [SCR_HOME] = {draw_scr_home, NULL},
-    [SCR_HR] = {draw_scr_hr, NULL},
-    [SCR_SPO2] = {draw_scr_spo2, NULL},
-    [SCR_ECG] = {draw_scr_ecg, NULL},
-    [SCR_TEMP] = {draw_scr_temp, NULL},
-    [SCR_BPT] = {draw_scr_bpt, NULL},
-    [SCR_GSR] = {draw_scr_gsr, NULL},
-    [SCR_HRV] = {draw_scr_hrv, NULL},
-    [SCR_RECORDING] = {draw_scr_recording, NULL},
-    [SCR_SPL_RAW_PPG] = {draw_scr_spl_raw_ppg, gesture_down_scr_spl_raw_ppg},
-    [SCR_SPL_ECG_SCR2] = {draw_scr_ecg_scr2, gesture_down_scr_ecg_2},
+    [SCR_HOME] = {draw_scr_carousel_entry, NULL},   /* P6: home is now the tileview carousel (tile 0) */
+    /* P6: metric overviews are carousel tiles; route their table entries to it. */
+    [SCR_HR] = {draw_scr_carousel_entry, NULL},
+    [SCR_SPO2] = {draw_scr_carousel_entry, NULL},
+    [SCR_ECG] = {draw_scr_carousel_entry, NULL},
+    [SCR_TEMP] = {draw_scr_carousel_entry, NULL},
+    [SCR_BPT] = {draw_scr_carousel_entry, NULL},
+    [SCR_GSR] = {draw_scr_carousel_entry, NULL},
+    [SCR_HRV] = {draw_scr_carousel_entry, NULL},
+    /* Activity + Recovery are carousel tiles too, and were the only two metric
+     * ids missing here — hpi_load_scr_spl() validates against this table, so a
+     * deferred load of either was rejected as "Invalid screen" while the other
+     * seven worked. */
+    [SCR_ACTIVITY] = {draw_scr_carousel_entry, NULL},
+    [SCR_RECOVERY] = {draw_scr_carousel_entry, NULL},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
     [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
     [SCR_SPL_BPT_CAL_COMPLETE] = {draw_scr_bpt_cal_complete, gesture_down_scr_bpt_cal_complete},
-    [SCR_SPL_ECG_COMPLETE] = {draw_scr_ecg_complete, gesture_down_scr_ecg_complete},
-  //  [SCR_SPL_PLOT_HRV] = {draw_scr_hrv, NULL},
-    [SCR_SPL_HRV_EVAL_PROGRESS] = {draw_scr_spl_hrv_eval_progress, gesture_down_scr_spl_hrv_eval_progress},
-    [SCR_SPL_HRV_COMPLETE] = {draw_scr_spl_hrv_complete, gesture_down_scr_spl_hrv_complete},
-    //[SCR_SPL_HR_SCR2] = { draw_scr_hr_scr2, gesture_down_scr_hr_scr2 },
-    [SCR_SPL_SPO2_SCR2] = {draw_scr_spo2_scr2, gesture_down_scr_spo2_scr2},
     [SCR_SPL_SPO2_MEASURE] = {draw_scr_spo2_measure, gesture_down_scr_spo2_measure},
-    [SCR_SPL_SPO2_COMPLETE] = {draw_scr_spl_spo2_complete, gesture_down_scr_spl_spo2_complete},
-    [SCR_SPL_SPO2_TIMEOUT] = {draw_scr_spl_spo2_timeout, gesture_down_scr_spl_spo2_timeout},
-    [SCR_SPL_SPO2_CANCELLED] = {draw_scr_spl_spo2_cancelled, gesture_down_scr_spl_spo2_cancelled},
-    [SCR_SPL_PLOT_GSR] = {draw_scr_gsr_plot, gesture_down_scr_gsr_plot},
+    [SCR_SPL_SPO2_RESULT] = {draw_scr_spo2_result, gesture_down_scr_spo2_result},   /* P6 pilot */
     [SCR_SPL_GSR_COMPLETE] = {draw_scr_gsr_complete, gesture_down_scr_gsr_complete},
     [SCR_SPL_LOW_BATTERY] = {draw_scr_spl_low_battery, gesture_down_scr_spl_low_battery},
-    [SCR_SPL_SPO2_SELECT] = {draw_scr_spo2_select, gesture_down_scr_spo2_select},
     [SCR_SPL_SPO2_BPT_TIMEOUT] = {draw_scr_timeout, gesture_down_scr_timeout},
     [SCR_SPL_BPT_CAL_PROGRESS] = {draw_scr_bpt_cal_progress, gesture_down_scr_bpt_cal_progress},
     [SCR_SPL_BPT_FAILED] = {draw_scr_bpt_cal_failed, gesture_down_scr_bpt_cal_failed},
     [SCR_SPL_BPT_EST_COMPLETE] = {draw_scr_bpt_est_complete, gesture_down_scr_bpt_est_complete},
     [SCR_SPL_BPT_CAL_REQUIRED] = {draw_scr_bpt_cal_required, gesture_down_scr_bpt_cal_required},
 
-    [SCR_SPL_BLE] = {draw_scr_ble, NULL},
+    [SCR_SPL_BLE] = {draw_scr_ble, gesture_down_scr_ble},   /* P1-3 */
     [SCR_SPL_PULLDOWN] = {draw_scr_pulldown, gesture_down_scr_pulldown},
-    [SCR_SPL_DEVICE_USER_SETTINGS] = {draw_scr_device_user_settings, gesture_down_scr_device_user_settings},
+    /* Old device-user-settings menu + redundant selects removed (fields moved to
+     * the v2 settings screen). Height/Weight keep their roller pickers. */
     [SCR_SPL_HEIGHT_SELECT] = {draw_scr_height_select, gesture_down_scr_height_select},
     [SCR_SPL_WEIGHT_SELECT] = {draw_scr_weight_select, gesture_down_scr_weight_select},
-    [SCR_SPL_HAND_WORN_SELECT] = {draw_scr_hand_worn_select, gesture_down_scr_hand_worn_select},
-    [SCR_SPL_TIME_FORMAT_SELECT] = {draw_scr_time_format_select, gesture_down_scr_time_format_select},
-    [SCR_SPL_TEMP_UNIT_SELECT] = {draw_scr_temp_unit_select, gesture_down_scr_temp_unit_select},
-    [SCR_SPL_SLEEP_TIMEOUT_SELECT] = {draw_scr_sleep_timeout_select, gesture_down_scr_sleep_timeout_select},
-    
+    [SCR_SPL_SETTINGS] = {draw_scr_settings, gesture_down_scr_settings},         /* P6 v2 */
+
 };
 
 // Screen state persistence for sleep/wake cycles
@@ -319,17 +375,19 @@ int hpi_disp_reset_all_last_updated(void)
     m_disp_hr = 0;
     m_disp_spo2 = 0;
     m_disp_steps = 0;
-    m_disp_kcals = 0;
     m_disp_active_time_s = 0;
     m_disp_temp = 0;
     m_disp_bp_sys = 0;
     m_disp_bp_dia = 0;
     m_disp_ecg_hr = 0;
+    m_disp_ecg_hr_ts = 0;
+    m_disp_ecg_hr_uptime_ms = 0;
     m_disp_ecg_timer = 0;
     m_lead_on_off = false;  // Reset to "leads ON" state for fresh measurement start
 
     m_disp_hr_updated_ts = 0;
     m_disp_spo2_last_refresh_ts = 0;
+    m_disp_spo2_last_uptime_ms = 0;
     m_disp_temp_updated_ts = 0;
     m_disp_bp_last_refresh = 0;
     m_disp_bpt_status = 0;
@@ -348,7 +406,18 @@ static void hpi_disp_save_screen_state(void)
 {
     k_mutex_lock(&mutex_screen_sleep_state, K_FOREVER);
 
-    screen_sleep_state.saved_screen = hpi_disp_get_curr_screen();
+    /* The carousel is a single LVGL screen that pins curr_screen to SCR_HOME, so
+     * ask it which tile is actually showing - otherwise sleeping on any metric
+     * tile wakes back onto home. */
+    int cur = hpi_disp_get_curr_screen();
+    /* Never persist the transient low-battery warning as the restore target - on
+     * wake it is re-derived from the battery state (reconcile). Save home so a
+     * recovered wake lands somewhere sane. */
+    if (cur == SCR_SPL_LOW_BATTERY)
+    {
+        cur = SCR_HOME;
+    }
+    screen_sleep_state.saved_screen = (cur == SCR_HOME) ? hpi_carousel_curr_screen() : cur;
     screen_sleep_state.saved_scroll_dir = g_scroll_dir;
     screen_sleep_state.saved_arg1 = g_arg1;
     screen_sleep_state.saved_arg2 = g_arg2;
@@ -388,7 +457,7 @@ static void hpi_disp_restore_screen_state(void)
                 saved_screen, saved_scroll);
 
         // Check if this is a special screen (SCR_SPL_*) or a regular screen
-        // Regular screens: SCR_LIST_START < screen < SCR_LIST_END (e.g., SCR_HOME, SCR_TODAY, etc.)
+        // Regular screens: SCR_LIST_START < screen < SCR_LIST_END (e.g., SCR_HOME, SCR_HR, …)
         // Special screens: SCR_SPL_LIST_START <= screen (e.g., SCR_SPL_BOOT, SCR_SPL_PULLDOWN, etc.)
         if (saved_screen >= SCR_SPL_LIST_START && 
             saved_screen < ARRAY_SIZE(screen_func_table) &&
@@ -526,62 +595,28 @@ void disp_screen_event(lv_event_t *e)
     lv_event_code_t event_code = lv_event_get_code(e);
     // lv_obj_t *target = lv_event_get_target(e);
 
-    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_LEFT)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printf("Left at %d\n", curr_screen);
-
-        if ((curr_screen + 1) == SCR_LIST_END)
-        {
-            // Wrap around: go from last carousel screen back to HOME
-            printk("End of list, wrapping to HOME\n");
-            hpi_load_screen(SCR_HOME, SCROLL_LEFT);
-        }
-        else
-        {
-            printk("Loading screen %d\n", curr_screen + 1);
-            hpi_load_screen(curr_screen + 1, SCROLL_LEFT);
+    /* P6: on the tileview carousel (curr_screen == SCR_HOME), a L/R swipe steps
+     * one tile INSTANTLY (native scroll+snap is disabled - too slow/jagged on
+     * this SPI panel). Swipe left = next tile, right = previous. Vertical (down)
+     * still falls through to open the pulldown. */
+    if (event_code == LV_EVENT_GESTURE && curr_screen == SCR_HOME) {
+        lv_dir_t d = lv_indev_get_gesture_dir(lv_indev_get_act());
+        if (d == LV_DIR_LEFT || d == LV_DIR_RIGHT) {
+            lv_indev_wait_release(lv_indev_get_act());
+            hpi_carousel_step(d == LV_DIR_LEFT ? +1 : -1);
+            return;
         }
     }
 
-    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_RIGHT)
-    {
-        lv_indev_wait_release(lv_indev_get_act());
-        printf("Right at %d\n", curr_screen);
-
-        if (hpi_disp_get_curr_screen() == SCR_SPL_HR_SCR2)
-        {
-            hpi_load_screen(SCR_HR, SCROLL_LEFT);
-            return;
-        }
-
-        if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
-        {
-            hpi_load_screen(SCR_SPO2, SCROLL_LEFT);
-            return;
-        }
-
-        if (hpi_disp_get_curr_screen() == SCR_SPL_DEVICE_USER_SETTINGS)
-        {
-            // If we are in the device user settings screen, go back to the pull down screen
-            hpi_load_screen(SCR_HOME, SCROLL_RIGHT);
-            return;
-        }
-        if ((curr_screen - 1) == SCR_LIST_START)
-        {
-            // Wrap around: go from HOME back to last carousel screen (SCR_HRV or SCR_GSR)
-            printk("Start of list, wrapping to last screen\n");
-            // Find the last regular screen before SCR_LIST_END
-            int last_screen = SCR_LIST_END - 1;
-            hpi_load_screen(last_screen, SCROLL_RIGHT);
-        }
-        else
-        {
-            printk("Loading screen %d\n", curr_screen - 1);
-            hpi_load_screen(curr_screen - 1, SCROLL_RIGHT);
-        }
-    }
-    else if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
+    /* P0-4: L/R only steps the carousel, and only on SCR_HOME (handled above).
+     * On every other screen L/R is inert. The old handlers below walked screens
+     * by raw enum arithmetic (`hpi_load_screen(curr_screen ± 1)`), which on a
+     * special screen (id >= 50) jumped into unrelated SCR_SPL_* screens, and on
+     * a metric tile fought the tileview. To leave a metric/special screen, use
+     * swipe-down (its registered gesture_down handler, below). The one real back
+     * gesture that lived here - SCR_SPL_SPO2_MEASURE right-swipe -> SCR_SPO2 - is
+     * already covered by that screen's swipe-down (gesture_down_scr_spo2_measure). */
+    if (event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == LV_DIR_BOTTOM)
     {
         lv_indev_wait_release(lv_indev_get_act());
         printk("Down at %d\n", curr_screen);
@@ -590,8 +625,8 @@ void disp_screen_event(lv_event_t *e)
 
         if (screen == SCR_HOME)
         {
-            // If we are on the home screen, load the settings screen
-            // hpi_load_screen(SCR_SPL_PULLDOWN, SCROLL_DOWN);
+            /* leaving the carousel to the shade also cancels an in-progress ECG */
+            hpi_ecg_monitor_leave();
             hpi_load_scr_spl(SCR_SPL_PULLDOWN, SCROLL_DOWN, SCR_HOME, 0, 0, 0);
             return;
         }
@@ -614,14 +649,6 @@ void disp_screen_event(lv_event_t *e)
         {
             hpi_load_screen(SCR_HOME, SCROLL_UP);
         }
-        else if (curr_screen == SCR_SPL_DEVICE_USER_SETTINGS)
-        {
-            hpi_load_scr_spl(SCR_SPL_PULLDOWN, SCROLL_UP, 0, 0, 0, 0);
-        }
-        /*else if (hpi_disp_get_curr_screen() == SCR_HR)
-        {
-            hpi_load_scr_spl(SCR_SPL_HR_SCR2, SCROLL_DOWN, SCR_HR, 0, 0, 0);
-        }*/
     }
 }
 
@@ -634,9 +661,6 @@ static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
 extern const struct device *display_dev;
 extern const struct device *touch_dev;
 extern lv_obj_t *scr_bpt;
-#if defined(CONFIG_HPI_TODAY_SCREEN)
-extern lv_obj_t *scr_today;
-#endif
 
 extern struct k_sem sem_disp_smf_start;
 
@@ -647,24 +671,29 @@ extern struct k_msgq q_ecg_sample;
 extern struct k_msgq q_ppg_wrist_sample;
 extern struct k_msgq q_plot_ecg;
 extern struct k_msgq q_plot_ppg_wrist;
-extern struct k_msgq q_plot_hrv;
 extern struct k_msgq q_plot_gsr;
+
+/* R2 new-design waveforms (carousel monitors), fed real samples here. The SpO2
+ * tile has no waveform: its spot check runs on SCR_SPL_SPO2_MEASURE, which owns
+ * the only PPG plot in that flow and is fed via hpi_disp_spo2_plot_*. */
+extern lv_obj_t *g_hr_wave, *g_ecg_wave;
+extern bool g_ecg_active;                 /* spot check: gated on Start/Stop */
+#if defined(CONFIG_HPI_GSR_SCREEN)
+extern lv_obj_t *g_gsr_wave;              /* both live in scr_eda_monitor.c, */
+extern bool g_gsr_active;                 /* which A5 excludes when GSR is off */
+#endif
+void hpi_wave_monitor_push_eda(lv_obj_t *wm, int32_t raw);
+void hpi_wave_monitor_push_auto(lv_obj_t *wm, int32_t raw);
+void hpi_wave_monitor_push_ecg(lv_obj_t *wm, int32_t raw);
 
 extern struct k_sem sem_crown_key_pressed;
 
-extern struct k_sem sem_ecg_lead_on;
-extern struct k_sem sem_ecg_lead_off;
 
-extern struct k_sem sem_stop_one_shot_spo2;
 extern struct k_sem sem_spo2_complete;
-extern struct k_sem sem_spo2_cancel;
 
 // Note: sem_bpt_sensor_found was removed from smf_ppg_finger.c - extern removed
 
-extern struct k_sem sem_gsr_lead_on;
-extern struct k_sem sem_gsr_lead_off;
 
-static bool m_gsr_lead_off = false;
 
 
 static void st_display_init_entry(void *o)
@@ -703,13 +732,14 @@ static void st_display_splash_entry(void *o)
     splash_scr_start_time = k_uptime_get_32();
 }
 
-static void st_display_splash_run(void *o)
+static enum smf_state_result st_display_splash_run(void *o)
 {
     // Stay in this state for 2 seconds
     if ((k_uptime_get_32() - splash_scr_start_time) > 2000)
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_BOOT]);
     }
+    return SMF_EVENT_HANDLED;
 }
 
 static void st_display_boot_entry(void *o)
@@ -721,7 +751,7 @@ static void st_display_boot_entry(void *o)
     k_sem_give(&sem_disp_ready);
 }
 
-static void st_display_boot_run(void *o)
+static enum smf_state_result st_display_boot_run(void *o)
 {
     struct s_disp_object *s = (struct s_disp_object *)o;
 
@@ -772,6 +802,7 @@ static void st_display_boot_run(void *o)
     }
 
     // LOG_DBG("Display SM Boot Run");
+    return SMF_EVENT_HANDLED;
 }
 
 static void st_display_boot_exit(void *o)
@@ -803,7 +834,7 @@ static void st_display_progress_entry(void *o)
     hpi_disp_scr_update_progress(max32664_update_progress, "Starting...");
 }
 
-static void st_display_progress_run(void *o)
+static enum smf_state_result st_display_progress_run(void *o)
 {
     if (max32664_update_status == MAX32664_UPDATER_STATUS_IN_PROGRESS)
     {
@@ -871,6 +902,7 @@ static void st_display_progress_run(void *o)
         k_msleep(2000);
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
     }
+    return SMF_EVENT_HANDLED;
 }
 
 static void st_display_progress_exit(void *o)
@@ -897,14 +929,18 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
     }
     else if (hpi_disp_get_curr_screen() == SCR_SPL_BPT_CAL_PROGRESS)
     {
-        // Update calibration progress text
+        /* Cal screen shares the measure chrome: live PPG trace + ring/HR pill,
+         * plus POINT n/3 from the finger SMF's current cal index. */
+        hpi_disp_bpt_cal_draw_plotPPG(ppg_sensor_sample);
+
         if (k_uptime_get_32() - m_disp_bp_last_refresh > 1000)
         {
             m_disp_bp_last_refresh = k_uptime_get_32();
-            char progress_str[32];
-            snprintf(progress_str, sizeof(progress_str), "Calibrating... %d%%", ppg_sensor_sample.bpt_progress);
-            scr_bpt_cal_progress_update_text(progress_str);
-            LOG_INF("BPT Cal Progress: %d%%", ppg_sensor_sample.bpt_progress);
+            uint8_t st = 0, prog = 0, idx = 0;
+            bool run = false;
+            hpi_bpt_cal_status(&st, &prog, &idx, &run);
+            hpi_disp_bpt_cal_update_progress(idx, ppg_sensor_sample.bpt_progress);
+            LOG_INF("BPT Cal Progress: point %d, %d%%", idx, ppg_sensor_sample.bpt_progress);
         }
         lv_disp_trig_activity(NULL);
     }
@@ -912,39 +948,41 @@ static void hpi_disp_process_ppg_fi_data(struct hpi_ppg_fi_data_t ppg_sensor_sam
     {
      
         hpi_disp_spo2_plot_fi_ppg(ppg_sensor_sample);
-        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
+        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr, ppg_sensor_sample.spo2_confidence);
         lv_disp_trig_activity(NULL);
     }
 }
 
 static void hpi_disp_process_ppg_wr_data(struct hpi_ppg_wr_data_t ppg_sensor_sample)
 {
+    /* Feed the HR tile's monitor (auto-scaled raw wrist PPG). It is gated: P3
+     * put the HR waveform behind the tile's LIVE toggle - pushing samples into a
+     * hidden canvas would burn the autoscaler + an invalidate per sample for
+     * nothing. */
+    bool hr_live = hpi_hr_wave_is_live();
+    if (g_hr_wave && hr_live) {
+        for (int i = 0; i < ppg_sensor_sample.ppg_num_samples; i++) {
+            hpi_wave_monitor_push_auto(g_hr_wave, (int32_t)ppg_sensor_sample.raw_green[i]);
+        }
+    }
+
     if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE )
     {
         lv_disp_trig_activity(NULL);
         hpi_disp_spo2_plot_wrist_ppg(ppg_sensor_sample);
-        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr);
-    }
-    else if (hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
-    {
-        /* Forward samples to the raw PPG screen plotting function */
-        lv_disp_trig_activity(NULL);
-        hpi_disp_ppg_draw_plotPPG(ppg_sensor_sample);
-        /* Update the HR label on raw PPG screen if available */
-        hpi_ppg_disp_update_hr(ppg_sensor_sample.hr);
+        hpi_disp_spo2_update_progress(ppg_sensor_sample.spo2_valid_percent_complete, ppg_sensor_sample.spo2_state, ppg_sensor_sample.spo2, ppg_sensor_sample.hr, ppg_sensor_sample.spo2_confidence);
     }
 }
 
 static void hpi_disp_process_ecg_data(struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
-    {
-        hpi_ecg_disp_draw_plotECG(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
+    /* Feed the new-design ECG monitor while its spot check is running. */
+    if (g_ecg_wave && g_ecg_active) {
+        for (int i = 0; i < ecg_sensor_sample.ecg_num_samples; i++) {
+            hpi_wave_monitor_push_ecg(g_ecg_wave, ecg_sensor_sample.ecg_samples[i]);
+        }
     }
-    else if (hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
-    {
-        hpi_ecg_disp_draw_plotECG_hrv(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples, ecg_sensor_sample.ecg_lead_off);
-    }
+
     /*else if (hpi_disp_get_curr_screen() == SCR_PLOT_EDA)
     {
         hpi_eda_disp_draw_plotEDA(ecg_bioz_sensor_sample.bioz_sample, ecg_bioz_sensor_sample.bioz_num_samples, ecg_bioz_sensor_sample.bioz_lead_off);
@@ -982,19 +1020,24 @@ static float convert_raw_sample_to_uS(int32_t raw)
 
 static void hpi_disp_process_gsr_data(struct hpi_gsr_sensor_data_t gsr_sensor_sample)
 {
-    if (hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
-    {
-        // Call batched GSR plot function (bioz_samples contains multiple samples)
-        hpi_gsr_disp_draw_plotGSR(gsr_sensor_sample.bioz_samples, gsr_sensor_sample.bioz_num_samples, gsr_sensor_sample.bioz_lead_off != 0);
-        if (gsr_sensor_sample.bioz_num_samples > 0)
-        {
-            /* Use latest sample (same as ECG uses latest RR) */
-            int32_t raw = gsr_sensor_sample.bioz_samples[gsr_sensor_sample.bioz_num_samples - 1];
-
-            m_disp_gsr_us = convert_raw_sample_to_uS(raw);
-           // hpi_gsr_disp_update_us(m_disp_gsr_us);
+    /* Feed the inline EDA monitor while its spot check is running. Ungated by
+     * screen, exactly like the ECG trace: the tile owns the plot now, so gating
+     * on the old plot screen would starve it. Uses the EDA scaler - push_auto's
+     * envelope is tuned for pulsatile PPG and collapses on a slow tonic level. */
+#if defined(CONFIG_HPI_GSR_SCREEN)
+    if (g_gsr_wave && g_gsr_active) {
+        for (int i = 0; i < gsr_sensor_sample.bioz_num_samples; i++) {
+            hpi_wave_monitor_push_eda(g_gsr_wave, gsr_sensor_sample.bioz_samples[i]);
         }
-        
+    }
+#endif
+
+    if (gsr_sensor_sample.bioz_num_samples > 0)
+    {
+        /* Use latest sample (same as ECG uses latest RR) */
+        int32_t raw = gsr_sensor_sample.bioz_samples[gsr_sensor_sample.bioz_num_samples - 1];
+
+        m_disp_gsr_us = convert_raw_sample_to_uS(raw);
     }
 }
 
@@ -1002,14 +1045,37 @@ static void st_display_active_entry(void *o)
 {
     LOG_DBG("Display SM Active Entry");
 
-    if (hpi_disp_get_curr_screen() == SCR_SPL_BOOT)
+    int scr = hpi_disp_get_curr_screen();
+
+    /* ACTIVE means the SMF is handing control back to the user, so whatever is on
+     * the panel has to be something they can LEAVE. Force Home if it isn't.
+     *
+     * This was a real dead end, not a hypothetical: the MAX32664 hub-update
+     * failure paths (FILE_NOT_FOUND / FAILED, above) dwell on the error then
+     * transition straight to ACTIVE with curr_screen still SCR_SPL_PROGRESS. That
+     * screen is drawn *directly* by st_display_progress_entry(), is deliberately
+     * absent from screen_func_table (so its gesture_down is a NULL hole), and
+     * scr_progress.c has no button -- so "Update Failed" was unescapable until the
+     * sleep timeout. FILE_NOT_FOUND fires whenever the hub firmware is missing
+     * from LittleFS, i.e. on a fresh or erased external flash.
+     *
+     * Testing gesture_down rather than special-casing SCR_SPL_PROGRESS also hardens
+     * every future table-less screen. SCR_HOME is exempt: the carousel pins
+     * curr_screen to it and its gestures are handled specially. SCR_SPL_BOOT has no
+     * table entry either, so it still lands here exactly as before.
+     * The error dwell (k_msleep) already ran, so the user has seen the message. */
+    bool navigable = (scr == SCR_HOME) ||
+                     /* DFU modal is intentionally unescapable while an OTA runs;
+                      * hpi_disp_dfu_tick() returns to Home once it ends. */
+                     (scr == SCR_SPL_DFU && hpi_dfu_get_state() != HPI_DFU_IDLE) ||
+                     (scr >= 0 && scr < (int)ARRAY_SIZE(screen_func_table) &&
+                      screen_func_table[scr].gesture_down != NULL);
+
+    if (!navigable)
     {
+        LOG_DBG("Active entry on a screen with no way out (%d) - loading home", scr);
         hpi_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
     }
-    /*else
-    {
-        hpi_load_screen(hpi_disp_get_curr_screen(), SCROLL_NONE);
-    }*/
 }
 
 static void hpi_disp_update_screens(void)
@@ -1022,66 +1088,13 @@ static void hpi_disp_update_screens(void)
     
     switch (hpi_disp_get_curr_screen())
     {
-    case SCR_HOME:
-        if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
-        {
-            // Update home screen arcs with actual ZBus data
-            hpi_home_hr_update(m_disp_hr);
-            hpi_home_steps_update(m_disp_steps);
-            // Also update quick action buttons for consistency
-            ui_hr_button_update(m_disp_hr);
-            ui_steps_button_update(m_disp_steps);
-        }
-        break;
-    case SCR_TEMP:
-        if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
-        {
-            if (m_disp_temp > 0)
-            {
-                hpi_temp_disp_update_temp_f((double)m_disp_temp, m_disp_temp_updated_ts);
-            }
-            last_temp_trend_refresh = k_uptime_get_32();
-        }
-        break;
-    case SCR_GSR:
-#if defined(CONFIG_HPI_GSR_SCREEN)
-        if (k_uptime_get_32() - last_temp_trend_refresh > HPI_DISP_TEMP_REFRESH_INT)
-        {
-            uint16_t gsr_value = 0;
-            int64_t gsr_last_update = 0;
-            if (hpi_sys_get_last_gsr_update(&gsr_value, &gsr_last_update) == 0 && gsr_value > 0)
-            {
-                // Use integer-only function for flash optimization
-                hpi_gsr_disp_update_gsr_int(gsr_value, gsr_last_update);
-            }
-            last_temp_trend_refresh = k_uptime_get_32();
-        }
-#endif
-        break;
-    case SCR_HR:
-        if (m_disp_hr > 0)
-        {
-            hpi_disp_hr_update_hr(m_disp_hr, m_disp_hr_updated_ts);
-        }
-        last_hr_trend_refresh = k_uptime_get_32();
-        break;
-    case SCR_SPL_HR_SCR2:
-        if ((k_uptime_get_32() - last_hr_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
-        {
-            // hpi_disp_hr_load_trend();
-            last_hr_trend_refresh = k_uptime_get_32();
-        }
-        break;
-    case SCR_SPO2:
-        if ((k_uptime_get_32() - last_spo2_trend_refresh) > HPI_DISP_TRENDS_REFRESH_INT)
-        {
-            // hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_tm);
-            // hpi_disp_spo2_load_trend();
-            last_spo2_trend_refresh = k_uptime_get_32();
-        }
-        break;
+    /* SCR_HOME/HR/SpO2/ECG/Temp/BPT/HRV/GSR overview refresh removed in P6:
+     * those are now carousel tiles bound to lv_subjects (updated in
+     * hpi_disp_push_subjects), so no per-screen periodic refresh is needed. */
+    /* SCR_SPL_HR_SCR2 / SCR_SPO2 periodic trend-refresh cases removed with the
+     * legacy trend store (bodies were already no-ops). */
     case  SCR_SPL_BPT_MEASURE:
-        if(k_sem_take(&sem_finger_contact_timeout, K_NO_WAIT) == 0)
+        if(hpi_evt_consume(&fi_evt, EVT_FI_CONTACT_TIMEOUT))
         {
             LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to BPT home screen");
             hpi_load_screen(SCR_BPT, SCROLL_DOWN);
@@ -1089,7 +1102,7 @@ static void hpi_disp_update_screens(void)
         }
         break;
     case SCR_SPL_BPT_CAL_PROGRESS:
-         if(k_sem_take(&sem_fi_bpt_cal_cancel, K_NO_WAIT) == 0)
+         if(hpi_evt_consume(&fi_evt, EVT_FI_BPT_CAL_CANCEL))
          {
             hpi_bpt_abort();
             hpi_load_screen(SCR_BPT, SCROLL_NONE);
@@ -1099,7 +1112,7 @@ static void hpi_disp_update_screens(void)
         break;
     case SCR_SPL_SPO2_MEASURE:
 
-         if(k_sem_take(&sem_finger_contact_timeout, K_NO_WAIT) == 0)
+         if(hpi_evt_consume(&fi_evt, EVT_FI_CONTACT_TIMEOUT))
          {
             LOG_INF("DISPLAY THREAD: Finger contact timeout - returning to SpO2 home screen");
             hpi_load_screen(SCR_SPO2, SCROLL_DOWN);
@@ -1107,147 +1120,7 @@ static void hpi_disp_update_screens(void)
          }        
         lv_disp_trig_activity(NULL);
         break;
-    case SCR_SPL_HRV_EVAL_PROGRESS:
-        hpi_hrv_disp_update_timer(m_disp_ecg_timer);
-
-        // Check for lead placement timeout - return to HRV home screen
-        // (signaled by ECG SMF when user doesn't place leads within timeout)
-        if (k_sem_take(&sem_ecg_lead_timeout, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: Lead placement timeout - returning to HRV home screen");
-            unload_scr_hrv_eval_progress();
-            hpi_load_screen(SCR_HRV, SCROLL_DOWN);
-            hpi_disp_show_toast("Measurement cancelled\nNo leads detected", 3000);
-            break;
-        }
-
-        // Check for HRV evaluation complete - show completion screen
-        if (k_sem_take(&sem_hrv_eval_complete, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: HRV evaluation complete");
-            hpi_load_scr_spl(SCR_SPL_HRV_COMPLETE, SCROLL_UP, 0, 0, 0, 0);
-            break;
-        }
-
-        // Handle lead ON/OFF UI updates (signaled by ECG SMF)
-        // Note: State transitions are handled by the SMF, display just updates UI
-        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: HRV Lead ON - updating UI");
-            scr_hrv_lead_on_off_handler(false); // false = leads ON
-            m_lead_on_off = false;
-        }
-
-        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: HRV Lead OFF - updating UI");
-            scr_hrv_lead_on_off_handler(true); // true = leads OFF
-            m_lead_on_off = true;
-        }
-
-        lv_disp_trig_activity(NULL);
-        break;
-
-    case SCR_SPL_ECG_SCR2:
-        hpi_ecg_disp_update_hr(m_disp_ecg_hr);
-        hpi_ecg_disp_update_timer(m_disp_ecg_timer);
-
-        // Check for lead placement timeout - return to ECG home screen
-        // (signaled by ECG SMF when user doesn't place leads within timeout)
-        if (k_sem_take(&sem_ecg_lead_timeout, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: Lead placement timeout - returning to ECG home screen");
-            unload_scr_ecg_scr2();
-            hpi_load_screen(SCR_ECG, SCROLL_DOWN);
-            hpi_disp_show_toast("Measurement cancelled\nNo leads detected", 3000);
-            break;
-        }
-
-        // Check for ECG recording complete - show completion screen
-        if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: ECG recording complete");
-            hpi_load_scr_spl(SCR_SPL_ECG_COMPLETE, SCROLL_DOWN, SCR_SPL_PLOT_ECG, 0, 0, 0);
-            break;
-        }
-
-        // Handle lead ON/OFF UI updates (signaled by ECG SMF)
-        // Note: State transitions are handled by the SMF, display just updates UI
-        if (k_sem_take(&sem_ecg_lead_on, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: ECG Lead ON - updating UI");
-            scr_ecg_lead_on_off_handler(false); // false = leads ON
-            m_lead_on_off = false;
-        }
-
-        if (k_sem_take(&sem_ecg_lead_off, K_NO_WAIT) == 0)
-        {
-            LOG_INF("DISPLAY THREAD: ECG Lead OFF - updating UI");
-            scr_ecg_lead_on_off_handler(true); // true = leads OFF
-            m_lead_on_off = true;
-        }
-
-        lv_disp_trig_activity(NULL);
-        break;
-    case SCR_SPL_PLOT_GSR:
-#if defined(CONFIG_HPI_GSR_SCREEN)
-        // Update GSR countdown timer display (mirrors ECG pattern)
-        hpi_gsr_disp_update_us(m_disp_gsr_us);
-        hpi_gsr_disp_update_timer(m_disp_gsr_remaining);
-#endif
-        if (k_sem_take(&sem_gsr_complete_reset, K_NO_WAIT) == 0)
-        {
-            hpi_load_scr_spl(SCR_SPL_GSR_COMPLETE, SCROLL_DOWN, 0, 0, 0, 0);
-          //  hpi_load_screen(SCR_GSR, SCROLL_DOWN);
-        }
-        
-        if (k_sem_take(&sem_gsr_lead_on, K_NO_WAIT) == 0)
-        {
-           // LOG_DBG("DISPLAY THREAD: Processing GSR Lead ON semaphore");
-
-            // UI handler: hide error message, update icon, etc.
-            scr_gsr_lead_on_off_handler(false);   // false = lead ON
-
-            m_gsr_lead_off = false;
-        }
-
-        if (k_sem_take(&sem_gsr_lead_off, K_NO_WAIT) == 0)
-        {
-          //  LOG_DBG("DISPLAY THREAD: Processing GSR Lead OFF semaphore");
-
-            // UI handler: show 'Finger not placed' message
-            scr_gsr_lead_on_off_handler(true);    // true = lead OFF
-
-            m_gsr_lead_off = true;
-            bool is_gsr_active = hpi_data_is_gsr_record_active();
-
-            if (is_gsr_active)
-            {
-              //  LOG_DBG("DISPLAY THREAD: Lead disconnected - resetting GSR buffer");
-                hpi_data_reset_gsr_record_buffer();
-                hpi_gsr_reset_countdown_timer();
-            }
-        }
-
-        lv_disp_trig_activity(NULL);
-        break;
-    case SCR_SPL_RAW_PPG:
-        // Periodically check for signal timeout to show "No Signal" message
-        hpi_ppg_check_signal_timeout();
-        lv_disp_trig_activity(NULL);
-        break;
-    // case SCR_SPL_ECG_COMPLETE:
-    //     if (k_sem_take(&sem_ecg_complete_reset, K_NO_WAIT) == 0)
-    //     {
-    //         hpi_load_screen(SCR_ECG, SCROLL_UP);
-    //     }
-        break;
-    case SCR_SPL_SPO2_COMPLETE:
-        /*if (k_sem_take(&sem_spo2_complete, K_NO_WAIT) == 0)
-        {
-            hpi_disp_update_spo2(m_disp_spo2, m_disp_spo2_last_refresh_ts);
-        }*/
-        break;
+    /* SCR_SPL_ECG_SCR2 and SCR_SPL_RAW_PPG removed (legacy full-screen plots). */
     /*case SCR_SPL_FI_SENS_CHECK:
         if (k_sem_take(&sem_bpt_sensor_found, K_NO_WAIT) == 0)
         {
@@ -1256,20 +1129,6 @@ static void hpi_disp_update_screens(void)
         }
         if
         break;*/
-#if defined(CONFIG_HPI_TODAY_SCREEN)
-    case SCR_TODAY:
-        if ((k_uptime_get_32() - last_today_trend_refresh) > HPI_DISP_TODAY_REFRESH_INT)
-        {
-            // Only update if the screen has been properly initialized
-            // This prevents crashes during sleep/wake transitions
-            if (scr_today != NULL)
-            {
-                hpi_scr_today_update_all(m_disp_steps, m_disp_kcals, m_disp_active_time_s);
-                last_today_trend_refresh = k_uptime_get_32();
-            }
-        }
-        break;
-#endif
     case SCR_SPL_PULLDOWN:
         if (k_uptime_get_32() - last_settings_refresh > HPI_DISP_SETTINGS_REFRESH_INT)
         {
@@ -1282,34 +1141,79 @@ static void hpi_disp_update_screens(void)
     }
 }
 
+/* Callable from any thread (BLE, the sensor SMFs, LVGL callbacks). Deferred: the
+ * draw happens later on the display thread. Accepts special screens *and*
+ * carousel metric ids (SCR_BPT, SCR_HR, …) — the drain routes the latter through
+ * hpi_carousel_show() so they land on the right tile (P0-3). NOT interchangeable
+ * with hpi_load_screen(), which draws synchronously in the caller's context and
+ * is therefore only safe from the display thread. */
 void hpi_load_scr_spl(int m_screen, enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     LOG_DBG("Loading screen %d", m_screen);
 
-    if (m_screen >= 0 && m_screen < ARRAY_SIZE(screen_func_table) && screen_func_table[m_screen].draw != NULL)
-    {
-        g_screen = m_screen;
-        g_scroll_dir = m_scroll_dir;
-        g_scr_parent = arg1;
-        g_arg1 = arg1;
-        g_arg2 = arg2;
-        g_arg3 = arg3;
-        g_arg4 = arg4;
-
-        k_sem_give(&sem_change_screen);
-    }
-    else
+    if (m_screen < 0 || m_screen >= ARRAY_SIZE(screen_func_table) ||
+        screen_func_table[m_screen].draw == NULL)
     {
         LOG_ERR("Invalid screen: %d", m_screen);
+        return;
+    }
+
+    struct hpi_scr_load_req_t req = {
+        .screen = m_screen,
+        .scroll_dir = m_scroll_dir,
+        .arg1 = arg1,
+        .arg2 = arg2,
+        .arg3 = arg3,
+        .arg4 = arg4,
+    };
+
+    /* Depth 8 against one consumer that drains every tick; a full queue means the
+     * display thread is wedged, which is the watchdog's problem, not ours. Never
+     * block -- this is called from the BLE thread and from SMF run functions. */
+    if (k_msgq_put(&q_scr_load, &req, K_NO_WAIT) != 0)
+    {
+        LOG_ERR("Screen load queue full - dropped request for screen %d", m_screen);
     }
 }
 
-static void st_display_active_run(void *o)
+/* S3: the low-battery screen is owned by the display thread (LVGL is single-
+ * threaded). battery_module latches the state on hw_thread; here - in display
+ * context - we put the warning up or take it down on the edge. Returns the
+ * current low state. Safe to call every active tick and from the sleep-exit
+ * wake path. */
+static bool hpi_disp_reconcile_low_battery(void)
+{
+    bool low = hw_is_low_battery();
+    if (low == m_low_batt_shown)
+    {
+        return low;
+    }
+    m_low_batt_shown = low;
+
+    if (low)
+    {
+        hpi_load_scr_spl(SCR_SPL_LOW_BATTERY, SCROLL_NONE, m_disp_batt_level,
+                         m_disp_batt_charging, 0, 0);
+    }
+    else
+    {
+        /* Recovered (SoC rebounded, with or without a charger) - drop the
+         * warning and return home. */
+        hpi_disp_low_battery_cleanup();
+        hpi_load_screen(SCR_HOME, SCROLL_NONE);
+    }
+    return low;
+}
+
+static enum smf_state_result st_display_active_run(void *o)
 {
     struct hpi_ecg_bioz_sensor_data_t ecg_sensor_sample;
     struct hpi_gsr_sensor_data_t gsr_sensor_sample;
     struct hpi_ppg_wr_data_t ppg_sensor_sample;
     struct hpi_ppg_fi_data_t ppg_fi_sensor_sample;
+
+    /* S3: show/dismiss the low-battery warning on the edge (display context). */
+    hpi_disp_reconcile_low_battery();
 
     if (k_msgq_get(&q_plot_ppg_wrist, &ppg_sensor_sample, K_NO_WAIT) == 0)
     {
@@ -1331,8 +1235,10 @@ static void st_display_active_run(void *o)
     int gsr_processed_count = 0;
     while (k_msgq_get(&q_plot_gsr, &gsr_sensor_sample, K_NO_WAIT) == 0)
     {
+        /* No lv_disp_trig_activity() here: arriving sensor data is not user
+         * activity. The GSR sleep guard (st_display_active_run) keeps the screen
+         * up for the capture instead. */
         hpi_disp_process_gsr_data(gsr_sensor_sample);
-        lv_disp_trig_activity(NULL);
         gsr_processed_count++;
 
         if (gsr_processed_count >= 8)
@@ -1359,12 +1265,8 @@ static void st_display_active_run(void *o)
             // Track if any screen was actually updated
             bool ui_updated = false;
             
-            if ((hpi_disp_get_curr_screen() == SCR_HOME))
-            {
-                hpi_disp_home_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
-                ui_updated = true;
-            }
-            else if (hpi_disp_get_curr_screen() == SCR_SPL_PULLDOWN)
+            /* SCR_HOME battery is a subject-bound label now (subj_batt). */
+            if (hpi_disp_get_curr_screen() == SCR_SPL_PULLDOWN)
             {
                 hpi_disp_settings_update_batt_level(m_disp_batt_level, m_disp_batt_charging);
                 ui_updated = true;
@@ -1386,33 +1288,8 @@ static void st_display_active_run(void *o)
         last_batt_refresh = k_uptime_get_32();
     }
 
-    // Update Time
-    if (k_uptime_get_32() - last_time_refresh > HPI_DISP_TIME_REFR_INT)
-    {
-        last_time_refresh = k_uptime_get_32();
+    /* Time is subject-bound now (subj_time / subj_date) - no SCR_HOME refresh. */
 
-        // Home screen doesn't have a header display
-        if (hpi_disp_get_curr_screen() == SCR_HOME)
-        {
-            hpi_scr_home_update_time_date(m_disp_sys_time);
-        }
-    }
-
-    // Update recording status (from ZBus listener data)
-    if (m_disp_recording_status_updated)
-    {
-        m_disp_recording_status_updated = false;
-        int curr_screen = hpi_disp_get_curr_screen();
-
-        if (curr_screen == SCR_HOME)
-        {
-            hpi_scr_home_update_recording_status(&m_disp_recording_status);
-        }
-        else if (curr_screen == SCR_RECORDING)
-        {
-            hpi_scr_recording_update_status(&m_disp_recording_status);
-        }
-    }
 
     // Add button handlers
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
@@ -1422,14 +1299,6 @@ static void st_display_active_run(void *o)
         {
             // hpi_display_sleep_on();
         }
-        else if(hpi_disp_get_curr_screen() == SCR_SPL_RAW_PPG)
-        {
-            gesture_down_scr_spl_raw_ppg();
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_ECG_SCR2)
-        {
-            gesture_down_scr_ecg_2();
-        }
         else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
             gesture_down_scr_spo2_measure();
@@ -1438,35 +1307,87 @@ static void st_display_active_run(void *o)
         {
             gesture_down_scr_bpt_measure();
         }
-        else if(hpi_disp_get_curr_screen() == SCR_SPL_HRV_EVAL_PROGRESS)
-        {
-            gesture_down_scr_spl_hrv_eval_progress();
-        }
-        else if(hpi_disp_get_curr_screen() == SCR_SPL_PLOT_GSR)
-        {
-            gesture_down_scr_gsr_plot();
-        }
         else
         {
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
     }
 
-    if (k_sem_take(&sem_change_screen, K_NO_WAIT) == 0)
+    /* Drain the screen-load inbox. Only the newest request is drawn -- rebuilding a
+     * screen just to replace it in the same tick is wasted LVGL churn, and the older
+     * request is superseded by definition. This matches what the old binary sem did
+     * by accident; the difference is that each request is now internally consistent
+     * and a superseded one is counted rather than vanishing. */
+    struct hpi_scr_load_req_t req;
+    uint32_t superseded = 0;
+    bool have_req = false;
+
+    while (k_msgq_get(&q_scr_load, &req, K_NO_WAIT) == 0)
     {
-        LOG_DBG("Change Screen: %d", scr_to_change);
-        
+        if (have_req)
+        {
+            superseded++;
+        }
+        have_req = true;
+    }
+
+    if (have_req)
+    {
+        if (superseded > 0)
+        {
+            LOG_DBG("Change Screen: %u superseded request(s) skipped", superseded);
+        }
+        LOG_DBG("Change Screen: %d", req.screen);
+
         // CRITICAL: Set transition flag to block all screen updates
         screen_transition_in_progress = true;
-        
-        if (screen_func_table[g_screen].draw)
+
+        /* Publish to the display-thread-owned copy before drawing: the sleep-save
+         * path reads these to restore the screen on wake. */
+        g_screen = req.screen;
+        g_scroll_dir = req.scroll_dir;
+        g_arg1 = req.arg1;
+        g_arg2 = req.arg2;
+        g_arg3 = req.arg3;
+        g_arg4 = req.arg4;
+
+        /* Carousel metric ids (SCR_HOME / SCR_HR / SCR_BPT / …) must land on the
+         * matching tile. Their table entries are draw_scr_carousel_entry(), which
+         * takes only scroll_dir and redraws whatever carousel_cur_tile already
+         * was — so a deferred hpi_load_scr_spl(SCR_BPT, …) from the finger SMF
+         * (P0-3, smf_ppg_finger.c:686) would wake the wrong tile. Route those
+         * through hpi_carousel_show() on this display thread instead: deferred
+         * *and* correctly targeted. Specials still go through the table.
+         * Do NOT call hpi_load_screen() from the finger SMF — that draws
+         * synchronously in the caller's context (cross-thread LVGL). */
+        if (g_screen > SCR_LIST_START && g_screen < SCR_LIST_END)
         {
+            hpi_carousel_show(g_screen, g_scroll_dir);
+        }
+        else if (g_screen >= 0 && g_screen < (int)ARRAY_SIZE(screen_func_table) &&
+                 screen_func_table[g_screen].draw)
+        {
+            /* OOM guard: reclaim whatever is on the panel BEFORE building this
+             * screen. The carousel keeps every visited tile allocated (heavy
+             * ECG/PPG/HR waveform monitors), and layering e.g. Settings on top of
+             * it used to exhaust the LVGL pool — lv_malloc returns NULL and, in a
+             * release build where LV_ASSERT_MALLOC compiles away, the device
+             * hard-faults. This used to be a hpi_carousel_rebuild() *after* the
+             * draw, which never helped the peak and only covered one direction.
+             * hpi_scr_release_current() handles both (carousel -> its own
+             * teardown, special screen -> delete). */
+            hpi_scr_release_current();
+
             screen_func_table[g_screen].draw(g_scroll_dir, g_arg1, g_arg2, g_arg3, g_arg4);
         }
-        
+        else
+        {
+            LOG_ERR("Change Screen: no draw for screen %d; staying put", g_screen);
+        }
+
         // CRITICAL: Clear transition flag after screen is loaded
         screen_transition_in_progress = false;
-        
+
         lv_disp_trig_activity(NULL);
     }
 
@@ -1476,14 +1397,51 @@ static void st_display_active_run(void *o)
     // Get current sleep timeout based on user settings
     uint32_t sleep_timeout_ms = get_sleep_timeout_ms();
 
-    // Prevent sleep during low battery conditions, active recording, or if auto sleep is disabled
+    // Prevent sleep during active recording, an in-progress ECG measurement
+    // (STREAMING = wait/stabilize/record - the user is holding the electrodes
+    // and not touching the screen), the COMPLETE confirmation card, or if auto
+    // sleep is disabled.
+    // S4: low battery no longer inhibits sleep - pinning the AMOLED on while low
+    // just accelerated the drain. The display sleeps normally; the warning is
+    // re-shown on wake, and hw_thread still hits the 3.0 V shutdown while asleep.
+    int ecg_status = (int)atomic_get(&m_disp_ecg_status);
+
+    /* A spot check runs hands-off, so inactivity keeps climbing for its whole
+     * duration while the guard below holds sleep off. Restart the timer as the
+     * measurement leaves STREAMING, and again when the COMPLETE card closes, so
+     * neither the confirmation nor the idle view it returns to is dropped into
+     * an already expired timeout. This must precede the check: the status is set
+     * from the ECG SMF thread, so a reset in a later pass loses the race. */
+    if ((m_disp_ecg_sleep_synced == HPI_ECG_STATUS_STREAMING ||
+         m_disp_ecg_sleep_synced == HPI_ECG_STATUS_COMPLETE) &&
+        ecg_status != m_disp_ecg_sleep_synced) {
+        lv_disp_trig_activity(NULL);
+        inactivity_time = 0;
+    }
+    m_disp_ecg_sleep_synced = ecg_status;
+
+    /* Same story for the GSR spot check: fingers on the electrodes, nobody
+     * touching the screen. (Until now this was masked by the GSR plot queue
+     * calling lv_disp_trig_activity() on every sample batch.) */
+    int gsr_status = (int)atomic_get(&m_disp_gsr_status);
+    if (m_disp_gsr_sleep_synced == HPI_GSR_STATUS_STREAMING &&
+        gsr_status != m_disp_gsr_sleep_synced) {
+        lv_disp_trig_activity(NULL);
+        inactivity_time = 0;
+    }
+    m_disp_gsr_sleep_synced = gsr_status;
+
+    bool ecg_measuring = (ecg_status == HPI_ECG_STATUS_STREAMING ||
+                          ecg_status == HPI_ECG_STATUS_COMPLETE);
+    bool gsr_measuring = (gsr_status == HPI_GSR_STATUS_STREAMING);
     if (sleep_timeout_ms != UINT32_MAX &&
         inactivity_time > sleep_timeout_ms &&
-        !hw_is_low_battery() &&
-        !hpi_recording_is_active())
+        !ecg_measuring &&
+        !gsr_measuring)
     {
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_SLEEP]);
     }
+    return SMF_EVENT_HANDLED;
 }
 
 static void st_display_active_exit(void *o)
@@ -1491,20 +1449,72 @@ static void st_display_active_exit(void *o)
     LOG_DBG("Display SM Active Exit");
 }
 
+/*
+ * AOD brightness (0–255). Soft path writes normal-mode 0x51; HW path writes
+ * AOD bank 0x4A then AODMON. Not persisted into user brightness settings.
+ * Tunable after PPK — start conservative for readable dim glyphs.
+ */
+#define HPI_AOD_BRIGHTNESS_RAW  18
+
+/* Host loop sleep while AOD is showing (ms). Active UI uses 20 ms. */
+#define HPI_AOD_HOST_SLEEP_MS   200
+
 static void st_display_sleep_entry(void *o)
 {
     LOG_DBG("Display SM Sleep Entry");
+
+    s_display_asleep = true;
+
+    /* Drop any touch-wakeup left over from the ACTIVE state. The touch driver
+     * gives this semaphore on every press, but it is only taken here in SLEEP —
+     * so the last touch before the idle timeout was still sitting in it, and
+     * st_display_sleep_run() consumed it immediately and woke straight back up.
+     * The effect was that the watch took two full sleep timeouts to actually
+     * stay asleep after any interaction. */
+    k_sem_reset(&sem_touch_wakeup);
 
     // Save the current screen state before going to sleep
     hpi_disp_save_screen_state();
 
     /*
-     * Instead of cutting the display LDO (which may also power the touch
-     * controller on some hardware revisions), request the display driver to
-     * blank the panel (DISPOFF / SLPIN). This keeps the panel power rail
-     * enabled so the touch controller remains powered and can still report
-     * touches while the screen is off.
+     * Sleep modes from Settings "Always-on" (hpi_v2_aod_get / hpiui/aod):
+     *
+     *  AOD ON + CONFIG_HPI_SH8601_HW_AOD:
+     *    paint face → flush GRAM → sh8601_aod_enter (0x4A + AODMON 0x49).
+     *  AOD ON + HW AOD disabled or enter fails:
+     *    software dim of normal mode (display_set_brightness low).
+     *  AOD OFF:
+     *    full sleep — brightness 0 + DISPOFF + SLPIN (touch rail stays on).
      */
+    s_sleep_is_aod = hpi_v2_aod_get() != 0;
+    s_sleep_aod_hw = false;
+
+    if (s_sleep_is_aod) {
+        LOG_INF("Sleep: entering AOD face");
+        hpi_v2_aod_enter();
+        /* Push the face into GRAM before switching panel power mode. */
+        lv_task_handler();
+
+        if (display_dev && device_is_ready(display_dev)) {
+#if IS_ENABLED(CONFIG_HPI_SH8601_HW_AOD)
+            int aod_rc = sh8601_aod_enter(display_dev, HPI_AOD_BRIGHTNESS_RAW);
+
+            if (aod_rc == 0) {
+                s_sleep_aod_hw = true;
+                LOG_INF("Sleep: SH8601 HW AOD active");
+            } else {
+                LOG_WRN("Sleep: HW AOD enter failed (%d); soft dim fallback",
+                        aod_rc);
+                display_set_brightness(display_dev, HPI_AOD_BRIGHTNESS_RAW);
+            }
+#else
+            display_set_brightness(display_dev, HPI_AOD_BRIGHTNESS_RAW);
+            LOG_INF("Sleep: soft AOD (CONFIG_HPI_SH8601_HW_AOD=n)");
+#endif
+        }
+        return;
+    }
+
     display_set_brightness(display_dev, 0);
     if (display_dev && device_is_ready(display_dev))
     {
@@ -1519,14 +1529,14 @@ static void st_display_sleep_entry(void *o)
     }
 }
 
-static void st_display_sleep_run(void *o)
+static enum smf_state_result st_display_sleep_run(void *o)
 {
     // Check for crown button wakeup
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
         LOG_DBG("Crown key pressed in sleep state");
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
-        return;
+        return SMF_EVENT_HANDLED;
     }
 
     // Check for touch wakeup signaled by LVGL input event callback
@@ -1534,19 +1544,53 @@ static void st_display_sleep_run(void *o)
     {
         LOG_DBG("Touch detected via LVGL event - waking up");
         smf_set_state(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_ACTIVE]);
-        return;
+        return SMF_EVENT_HANDLED;
     }
+    return SMF_EVENT_HANDLED;
 }
 
 static void st_display_sleep_exit(void *o)
 {
-    LOG_DBG("Display SM Sleep Exit");
+    LOG_DBG("Display SM Sleep Exit (aod=%d hw=%d)",
+            (int)s_sleep_is_aod, (int)s_sleep_aod_hw);
+    s_display_asleep = false;
     /* Ensure the display power rail is enabled (no-op if already on) */
     hw_pwr_display_enable(true);
 
-    /* Bring the panel out of sleep and reinit the driver */
+    if (s_sleep_is_aod) {
+        /* Leave panel AOD mode before rebuilding UI at full brightness. */
+#if IS_ENABLED(CONFIG_HPI_SH8601_HW_AOD)
+        if (s_sleep_aod_hw && display_dev && device_is_ready(display_dev)) {
+            (void)sh8601_aod_exit(display_dev);
+        }
+#endif
+        s_sleep_aod_hw = false;
+
+        /* Design: tap-to-wake → Home. Load Home first, then free AOD face. */
+        hpi_disp_set_brightness(hpi_disp_get_brightness());
+
+        m_low_batt_shown = false;
+        hpi_disp_clear_saved_state();
+        hpi_carousel_show(SCR_HOME, SCROLL_NONE);
+        hpi_v2_aod_exit();
+        hpi_disp_reconcile_low_battery();
+
+        s_sleep_is_aod = false;
+        lv_task_handler();
+        k_msleep(5);
+        lv_disp_trig_activity(NULL);
+        return;
+    }
+
+    /* Full blank sleep: bring the panel out of SLPIN and reinit the driver.
+     * Also clear any leftover AOD state if something left aod_active set. */
     if (display_dev && device_is_ready(display_dev))
     {
+#if IS_ENABLED(CONFIG_HPI_SH8601_HW_AOD)
+        if (sh8601_aod_is_active(display_dev)) {
+            (void)sh8601_aod_exit(display_dev);
+        }
+#endif
         sh8601_transmit_cmd(display_dev, SH8601_C_SLPOUT, NULL, 0);
         k_msleep(10);
         sh8601_reinit(display_dev);
@@ -1562,12 +1606,19 @@ static void st_display_sleep_exit(void *o)
     device_init(touch_dev);
     k_msleep(10);
 
+    /* S4: the display now sleeps even while low battery, so re-derive the
+     * low-battery screen on wake. Reset the tracker first so reconcile re-fires;
+     * if still low it re-shows the warning, otherwise the restored screen stays. */
+    m_low_batt_shown = false;
+
     // Restore the saved screen state
     hpi_disp_restore_screen_state();
 
     // Clear the saved state after successful restoration
     hpi_disp_clear_saved_state();
-    
+
+    hpi_disp_reconcile_low_battery();
+
     // CRITICAL: Process LVGL tasks to ensure screen is fully rendered
     // This prevents race conditions where updates try to run before rendering completes
     lv_task_handler();
@@ -1611,6 +1662,225 @@ static const struct smf_state display_states[] = {
     [HPI_DISPLAY_STATE_ON] = SMF_CREATE_STATE(st_display_on_entry, NULL, NULL, NULL, NULL),
 };
 
+/* One-time boot restore of last-known values from the health store's persisted
+ * latest-per-type snapshot, so screens show the previous reading immediately
+ * after a reboot (instead of "--" until a fresh measurement). Live values from
+ * the disp_*_lis listeners override these as soon as they arrive. Fires once the
+ * store's durable snapshot is loaded (after the FS mount); a no-op on a device
+ * with no prior data. */
+static void hpi_disp_restore_last_from_store(void)
+{
+    struct hpi_hs_sample s, dia;
+    if (hpi_hs_get_latest(HPI_HS_T_HR, &s))         { m_disp_hr = s.value; }
+    if (hpi_hs_get_latest(HPI_HS_T_SPO2, &s)) {
+        m_disp_spo2 = s.value;
+        m_disp_spo2_last_refresh_ts = s.ts_utc;
+        /* uptime left 0 — age formats from UTC when the clock is valid */
+    }
+    /* stored skin_temp is degC*100; m_disp_temp drives the (degF) hero, so convert */
+    if (hpi_hs_get_latest(HPI_HS_T_SKIN_TEMP, &s))  { m_disp_temp = (s.value / 100.0f) * 1.8f + 32.0f; }
+    if (hpi_hs_get_latest(HPI_HS_T_ECG_HR, &s)) {
+        m_disp_ecg_hr = (uint16_t)s.value;
+        m_disp_ecg_hr_ts = s.ts_utc;
+        /* uptime 0 — age formats from UTC when the clock is valid */
+        hpi_ui_subj_set_ecg_hr(s.value);
+    }
+    if (hpi_hs_get_latest(HPI_HS_T_BP_SYS, &s) &&
+        hpi_hs_get_latest(HPI_HS_T_BP_DIA, &dia))   { hpi_ui_subj_set_bp(s.value, dia.value); }
+    if (hpi_hs_get_latest(HPI_HS_T_HRV_SDNN, &s))   { hpi_ui_subj_set_hrv_sdnn(s.value / 10); }
+    if (hpi_hs_get_latest(HPI_HS_T_EDA_SCR_RATE, &s)) { hpi_ui_subj_set_gsr(s.value); }
+    if (hpi_hs_get_latest(HPI_HS_T_STRESS, &s))     { hpi_ui_subj_set_stress(s.value); }
+}
+
+/* P6 step A: push the latest metric values into the UI subjects. Runs on the
+ * display (LVGL) thread only. The subjects notify their observers (bound labels)
+ * only when a value actually changed, so calling this every loop is cheap.
+ * During AOD sleep only time + HR are pushed (AOD face bindings). */
+/* One-shot: surface a recovered crash as a toast a few seconds after boot, so
+ * the fault reason/thread is visible without the console (which shares USB lines
+ * with the finger sensor). Display-thread only. */
+static void hpi_disp_maybe_report_crash(void)
+{
+    static bool crash_shown = false;
+    if (crash_shown || k_uptime_get() < 3000 || s_sleep_is_aod) {
+        return;
+    }
+    crash_shown = true;
+
+    uint32_t reason = 0, count = 0;
+    char thr[16] = {0};
+    if (hpi_crash_get_last(&reason, thr, sizeof(thr), &count)) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Recovered fault\nreason=%u thr=%s x%u",
+                 reason, thr, count);
+        LOG_ERR("%s", msg);
+        hpi_disp_show_toast(msg, 8000);
+    }
+}
+
+static void hpi_disp_push_subjects(void)
+{
+    hpi_disp_maybe_report_crash();
+
+    /* Restore persisted last-known values once, as soon as the store snapshot is
+     * available (has any HR/ECG history). */
+    static bool restored = false;
+    if (!restored) {
+        struct hpi_hs_sample tmp;
+        if (hpi_hs_get_latest(HPI_HS_T_HR, &tmp) || hpi_hs_get_latest(HPI_HS_T_ECG_HR, &tmp)) {
+            hpi_disp_restore_last_from_store();
+            restored = true;
+        }
+    }
+
+    if (s_sleep_is_aod) {
+        /* AOD face: time, date (via subj_time path), HR only — skip trends. */
+        hpi_ui_subj_set_hr(m_disp_hr);
+        hpi_ui_subj_set_time(m_disp_sys_time);
+        return;
+    }
+
+    hpi_ui_subj_set_hr(m_disp_hr);
+    hpi_ui_subj_set_spo2(m_disp_spo2);
+    hpi_ui_subj_set_ecg_hr(m_disp_ecg_hr);
+    hpi_ui_subj_set_steps((int)m_disp_steps);
+    hpi_ui_subj_set_activity((int)m_disp_steps);
+    hpi_ui_subj_set_batt(m_disp_batt_level, m_disp_batt_charging);
+    /* m_disp_temp is °F from the sensor path; convert for user unit (0=°C). */
+    {
+        float t_disp = m_disp_temp;
+        if (hpi_user_settings_get_temp_unit() == 0) {
+            t_disp = (t_disp - 32.0f) * (5.0f / 9.0f);
+        }
+        hpi_ui_subj_set_temp_x100((int)(t_disp * 100.0f));
+    }
+    hpi_ui_subj_set_time(m_disp_sys_time);
+
+    /* Derived (H2) metrics from the health-store summary cache (cheap: a locked
+     * struct copy, no I/O). Static buffer avoids growing the display-thread
+     * stack frame (already large with LVGL work). */
+    static struct hpi_hs_summary summ;
+    if (hpi_hs_summary(&summ) == 0) {
+        hpi_ui_subj_set_hr_resting(summ.hr_resting_valid ? summ.hr_resting : 0);
+        hpi_ui_subj_set_hr_min(summ.hr_min);
+        hpi_ui_subj_set_hr_max(summ.hr_max);
+        hpi_ui_subj_set_temp_dev_x100(summ.temp_dev_x100, summ.temp_dev_valid);
+        if (summ.hrv_rmssd_x10 > 0) {
+            /* Subject is ms integer; store holds ×10. */
+            hpi_ui_subj_set_hrv_sdnn(summ.hrv_rmssd_x10 / 10);
+        } else if (summ.hrv_sdnn_x10 > 0) {
+            hpi_ui_subj_set_hrv_sdnn(summ.hrv_sdnn_x10 / 10);
+        }
+        if (summ.stress_hrv_valid) {
+            hpi_ui_subj_set_stress(summ.stress_hrv);
+        } else if (summ.stress_valid) {
+            hpi_ui_subj_set_stress(summ.stress_last);
+        }
+        hpi_ui_subj_set_recovery(summ.readiness, summ.readiness_valid,
+                                 summ.readiness_warmup_pct);
+    }
+
+    /* P3: trend cache paint — early-outs if tile widgets are not mounted. */
+    hpi_hr_trend_refresh();
+    hpi_temp_trend_refresh();
+    hpi_spo2_trend_refresh();
+    hpi_ecg_trend_refresh();
+    hpi_stress_hrv_trend_refresh();
+}
+
+/* Fail an upload that goes quiet this long — the recovery path for the app
+ * dropping off mid-transfer (a raw BLE disconnect emits no DFU_STOPPED). During
+ * a healthy upload chunks arrive many times a second. Finalizing gets a longer
+ * grace: the app still has to send `os reset` to trigger the reboot/swap. */
+#define HPI_DFU_STALL_MS          10000
+#define HPI_DFU_FINALIZE_STALL_MS 30000
+
+/* Drive the DFU modal from hpi_dfu state (display/LVGL thread only). Runs every
+ * loop; a no-op in the common IDLE case. Owns the DFU screen lifecycle: shows it
+ * on ACTIVE, keeps the panel awake, paints the terminal phases, and returns Home
+ * when the update ends. Waking a sleeping panel is handled via sem_touch_wakeup. */
+static void hpi_disp_dfu_tick(void)
+{
+    static enum hpi_dfu_state last = HPI_DFU_IDLE;
+    static int64_t terminal_ts;
+    enum hpi_dfu_state st = hpi_dfu_get_state();
+
+    /* An OTA that begins while asleep must wake the panel to show progress. */
+    if (st != HPI_DFU_IDLE && last == HPI_DFU_IDLE && s_display_asleep) {
+        k_sem_give(&sem_touch_wakeup);
+    }
+
+    switch (st) {
+    case HPI_DFU_ACTIVE:
+        /* App dropped off mid-transfer? Fail out instead of hanging forever. */
+        if (hpi_dfu_ms_since_activity() > HPI_DFU_STALL_MS) {
+            LOG_WRN("DFU stalled %u ms (app dropped off) - failing",
+                    hpi_dfu_ms_since_activity());
+            hpi_dfu_set_state(HPI_DFU_FAILED);
+            break;
+        }
+        if (hpi_disp_get_curr_screen() != SCR_SPL_DFU) {
+            draw_scr_dfu();
+        }
+        hpi_disp_dfu_update(hpi_dfu_get_progress());
+        lv_disp_trig_activity(NULL);   /* never sleep mid-upload */
+        break;
+
+    case HPI_DFU_FINALIZING:
+        /* Upload done but no reset arrived (app dropped before `os reset`) —
+         * recover to normal rather than a permanent "Restarting...". */
+        if (hpi_dfu_ms_since_activity() > HPI_DFU_FINALIZE_STALL_MS) {
+            LOG_WRN("DFU finalize stalled - returning to normal");
+            hpi_dfu_set_state(HPI_DFU_FAILED);
+            break;
+        }
+        if (hpi_disp_get_curr_screen() != SCR_SPL_DFU) {
+            draw_scr_dfu();
+        }
+        hpi_disp_dfu_update(100);
+        hpi_disp_dfu_set_phase("UPDATE COMPLETE", "Restarting...", V2_GREEN);
+        lv_disp_trig_activity(NULL);   /* hold until MCUboot swaps on reboot */
+        break;
+
+    case HPI_DFU_LOW_BATTERY:
+        if (hpi_disp_get_curr_screen() != SCR_SPL_DFU) {
+            draw_scr_dfu();
+        }
+        hpi_disp_dfu_set_phase("CHARGE TO UPDATE",
+                               "Battery too low.\nConnect the charger.", R0_WARNING);
+        if (last != HPI_DFU_LOW_BATTERY) {
+            terminal_ts = k_uptime_get();
+        }
+        lv_disp_trig_activity(NULL);
+        if (k_uptime_get() - terminal_ts > 5000) {
+            hpi_dfu_set_state(HPI_DFU_IDLE);
+        }
+        break;
+
+    case HPI_DFU_FAILED:
+        if (last != HPI_DFU_FAILED) {
+            terminal_ts = k_uptime_get();
+            if (hpi_disp_get_curr_screen() == SCR_SPL_DFU) {
+                hpi_disp_dfu_set_phase("UPDATE FAILED", "Please try again.", R0_ERROR);
+            }
+        }
+        lv_disp_trig_activity(NULL);
+        if (k_uptime_get() - terminal_ts > 4000) {
+            hpi_dfu_set_state(HPI_DFU_IDLE);
+        }
+        break;
+
+    case HPI_DFU_IDLE:
+    default:
+        if (last != HPI_DFU_IDLE && hpi_disp_get_curr_screen() == SCR_SPL_DFU) {
+            hpi_load_screen(HPI_DEFAULT_START_SCREEN, SCROLL_NONE);
+        }
+        break;
+    }
+
+    last = st;
+}
+
 void smf_display_thread(void)
 {
     int ret;
@@ -1619,10 +1889,24 @@ void smf_display_thread(void)
 
     LOG_INF("Display SMF Thread Started");
 
+    hpi_ui_subjects_init();   /* P6 step A: create UI subjects before any screen binds */
+
     smf_set_initial(SMF_CTX(&s_disp_obj), &display_states[HPI_DISPLAY_STATE_INIT]);
+
+    /* Stall detection: a frozen UI is the most visible hang. Timeout is generous
+     * (10s) to cover the longest bounded display iterations (boot/progress
+     * screens). Registration is lazy - it succeeds once the watchdog is
+     * initialised after boot. (Sensor SMF threads are added in P2, once their
+     * run handlers no longer block internally.) */
+    int wdt_ch = -1;
 
     for (;;)
     {
+        if (wdt_ch < 0)
+        {
+            wdt_ch = hpi_watchdog_register("smf_display", 10000);
+        }
+
         ret = smf_run_state(SMF_CTX(&s_disp_obj));
         if (ret != 0)
         {
@@ -1630,8 +1914,63 @@ void smf_display_thread(void)
             break;
         }
 
+        hpi_disp_dfu_tick();        /* firmware-update modal (LVGL thread) */
+
+        hpi_disp_push_subjects();   /* P6 step A: refresh UI subjects (LVGL thread) */
+
+        /* Skip active-only monitors while AOD face is up (power + no widgets). */
+        if (!s_sleep_is_aod) {
+            /* Render the inline ECG monitor to the SMF phase on every change edge
+             * (LVGL thread - safe to touch widgets here). Tracks both status and the
+             * progress countdown so the monitor follows wait -> stabilize -> record
+             * and never drifts out of sync with the SMF. */
+            {
+                int ecg_status = (int)atomic_get(&m_disp_ecg_status);
+                int ecg_timer = m_disp_ecg_timer;
+                if (ecg_status != m_disp_ecg_status_synced ||
+                    ecg_timer != m_disp_ecg_timer_synced) {
+                    m_disp_ecg_status_synced = ecg_status;
+                    m_disp_ecg_timer_synced = ecg_timer;
+                    hpi_ecg_monitor_update(ecg_status, ecg_timer);
+                }
+            }
+
+#if defined(CONFIG_HPI_GSR_SCREEN)
+            /* Same for the inline EDA monitor: render the GSR SMF phase on every
+             * status / countdown / contact edge. */
+            {
+                int gsr_status = (int)atomic_get(&m_disp_gsr_status);
+                int gsr_contact = (int)atomic_get(&m_disp_gsr_contact);
+                int gsr_remaining = m_disp_gsr_remaining;
+                if (gsr_status != m_disp_gsr_status_synced ||
+                    gsr_remaining != m_disp_gsr_remaining_synced ||
+                    gsr_contact != m_disp_gsr_contact_synced) {
+                    m_disp_gsr_status_synced = gsr_status;
+                    m_disp_gsr_remaining_synced = gsr_remaining;
+                    m_disp_gsr_contact_synced = gsr_contact;
+                    hpi_eda_monitor_update(gsr_status, gsr_remaining, gsr_contact != 0);
+                }
+            }
+
+            /* GSR capture finished -> the v2 results screen owns the result view.
+             * Routed here rather than from the removed SCR_SPL_PLOT_GSR case, so an
+             * in-place capture on the carousel tile still lands on it. */
+            if (hpi_evt_consume(&ecg_evt, EVT_GSR_RESET)) {
+                hpi_load_scr_spl(SCR_SPL_GSR_COMPLETE, SCROLL_DOWN, 0, 0, 0, 0);
+            }
+#endif
+
+            /* Transient "leads off" warning when a spot check is aborted because
+             * contact was lost mid-measurement (SMF -> IDLE). */
+            if (hpi_evt_consume(&ecg_evt, EVT_ECG_LEADOFF_ABORT)) {
+                hpi_disp_show_toast("ECG leads off\nMeasurement cancelled", 2500);
+            }
+        }
+
         lv_task_handler();
-        k_msleep(20);
+        hpi_watchdog_feed(wdt_ch);
+        /* Throttle host loop during AOD to cut SPI/LVGL churn. */
+        k_msleep(s_sleep_is_aod ? HPI_AOD_HOST_SLEEP_MS : 20);
     }
 }
 
@@ -1667,17 +2006,46 @@ ZBUS_LISTENER_DEFINE(disp_hr_lis, disp_hr_listener);
 static void disp_spo2_listener(const struct zbus_channel *chan)
 {
     const struct hpi_spo2_point_t *hpi_spo2 = zbus_chan_const_msg(chan);
-    m_disp_spo2 = hpi_spo2->spo2;
-    m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
+    if (hpi_spo2->spo2 > 0) {
+        m_disp_spo2 = hpi_spo2->spo2;
+        m_disp_spo2_last_refresh_ts = hpi_spo2->timestamp;
+        m_disp_spo2_last_uptime_ms = k_uptime_get_32();
+    }
     // LOG_DBG("ZB Spo2: %d | Time: %lld", hpi_spo2->spo2, hpi_spo2->timestamp);
 }
 ZBUS_LISTENER_DEFINE(disp_spo2_lis, disp_spo2_listener);
+
+void hpi_disp_update_spo2(uint8_t spo2, int64_t ts_last_update)
+{
+    if (spo2 == 0) {
+        return;
+    }
+    m_disp_spo2 = spo2;
+    m_disp_spo2_last_refresh_ts = ts_last_update;
+    m_disp_spo2_last_uptime_ms = k_uptime_get_32();
+}
+
+bool hpi_disp_get_last_spo2(uint8_t *spo2, int64_t *ts_utc, uint32_t *uptime_ms)
+{
+    if (m_disp_spo2 == 0) {
+        return false;
+    }
+    if (spo2) {
+        *spo2 = m_disp_spo2;
+    }
+    if (ts_utc) {
+        *ts_utc = m_disp_spo2_last_refresh_ts;
+    }
+    if (uptime_ms) {
+        *uptime_ms = m_disp_spo2_last_uptime_ms;
+    }
+    return true;
+}
 
 static void disp_steps_listener(const struct zbus_channel *chan)
 {
     const struct hpi_steps_t *hpi_steps = zbus_chan_const_msg(chan);
     m_disp_steps = hpi_steps->steps;
-    m_disp_kcals = hpi_get_kcals_from_steps(m_disp_steps);
     // LOG_DBG("ZB Steps Walk : %d | Run: %d", hpi_steps->steps_walk, hpi_steps->steps_run);
 }
 ZBUS_LISTENER_DEFINE(disp_steps_lis, disp_steps_listener);
@@ -1687,7 +2055,6 @@ static void disp_temp_listener(const struct zbus_channel *chan)
     const struct hpi_temp_t *hpi_temp = zbus_chan_const_msg(chan);
     m_disp_temp = hpi_temp->temp_f;
     m_disp_temp_updated_ts = hpi_temp->timestamp;
-    LOG_DBG("ZB Temp: %.2f", hpi_temp->temp_f);
 }
 ZBUS_LISTENER_DEFINE(disp_temp_lis, disp_temp_listener);
 
@@ -1702,29 +2069,50 @@ static void disp_bpt_listener(const struct zbus_channel *chan)
 }
 ZBUS_LISTENER_DEFINE(disp_bpt_lis, disp_bpt_listener);
 
-static void disp_ecg_timer_listener(const struct zbus_channel *chan)
-{
-    const struct hpi_ecg_status_t *ecg_status = zbus_chan_const_msg(chan);
-    m_disp_ecg_timer = ecg_status->progress_timer;
-}
-ZBUS_LISTENER_DEFINE(disp_ec, disp_ecg_timer_listener);
+/* A6: disp_ec / disp_ecg_timer_listener removed — the listener was never added
+ * to any ZBUS_OBSERVERS list, and disp_ecg_stat_listener below already keeps
+ * m_disp_ecg_timer current from the same ecg_stat_chan message. */
 
 static void disp_ecg_stat_listener(const struct zbus_channel *chan)
 {
     const struct hpi_ecg_status_t *ecg_status = zbus_chan_const_msg(chan);
-    m_disp_ecg_hr = ecg_status->hr;
+    /* Never clear a latched last-session HR with a 0 payload: IDLE / leads-off
+     * status publishes carry hr=0, and overwriting here forced subj_ecg to
+     * "--" after every successful recording. */
+    if (ecg_status->hr > 0) {
+        m_disp_ecg_hr = ecg_status->hr;
+        m_disp_ecg_hr_uptime_ms = k_uptime_get_32();
+        /* Prefer the SMF's session timestamp on COMPLETE; else wall clock. */
+        if (ecg_status->status == HPI_ECG_STATUS_COMPLETE &&
+            ecg_status->ts_complete > 0) {
+            m_disp_ecg_hr_ts = ecg_status->ts_complete;
+        } else {
+            m_disp_ecg_hr_ts = hw_get_sys_time_ts();
+        }
+    }
     m_disp_ecg_timer = ecg_status->progress_timer;
+    atomic_set(&m_disp_ecg_status, ecg_status->status);
     // LOG_DBG("ZB ECG HR: %d", *ecg_hr);
 }
 ZBUS_LISTENER_DEFINE(disp_ecg_stat_lis, disp_ecg_stat_listener);
 
-static void disp_hrv_stat_listener(const struct zbus_channel *chan)
+bool hpi_disp_get_last_ecg_hr(uint16_t *hr, int64_t *ts_utc, uint32_t *uptime_ms)
 {
-    const struct hpi_hrv_status_t *hrv_status = zbus_chan_const_msg(chan);
-      m_disp_hrv_timer = hrv_status->remaining_s;
-    // m_disp_hrv_timer = hrv_status->progress_timer;
+    if (m_disp_ecg_hr == 0) {
+        return false;
+    }
+    if (hr) {
+        *hr = m_disp_ecg_hr;
+    }
+    if (ts_utc) {
+        *ts_utc = m_disp_ecg_hr_ts;
+    }
+    if (uptime_ms) {
+        *uptime_ms = m_disp_ecg_hr_uptime_ms;
+    }
+    return true;
 }
-ZBUS_LISTENER_DEFINE(disp_hrv_stat_lis, disp_hrv_stat_listener);
+
 
 #if defined(CONFIG_HPI_GSR_STRESS_INDEX)
 static void disp_gsr_stress_listener(const struct zbus_channel *chan)
@@ -1752,22 +2140,12 @@ static void disp_gsr_status_listener(const struct zbus_channel *chan)
     if (!status) return;
     // Store in display thread variable for periodic update (mirrors ECG pattern)
     m_disp_gsr_remaining = status->remaining_s;
+    atomic_set(&m_disp_gsr_status, status->status);
+    atomic_set(&m_disp_gsr_contact, status->contact ? 1 : 0);
 }
 ZBUS_LISTENER_DEFINE(disp_gsr_status_lis, disp_gsr_status_listener);
 #endif
 
-// Recording status listener - stores data for display thread to update UI
-// NOTE: Do NOT call LVGL functions here - LVGL is not thread-safe
-static void disp_recording_listener(const struct zbus_channel *chan)
-{
-    const struct hpi_recording_status_t *status = zbus_chan_const_msg(chan);
-    if (!status) return;
-
-    // Store status for display thread to process
-    m_disp_recording_status = *status;
-    m_disp_recording_status_updated = true;
-}
-ZBUS_LISTENER_DEFINE(disp_recording_lis, disp_recording_listener);
 
 #define SMF_DISPLAY_THREAD_STACK_SIZE 24576
 #define SMF_DISPLAY_THREAD_PRIORITY 5

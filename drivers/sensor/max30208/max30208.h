@@ -16,6 +16,11 @@
 
 #define MAX30208_CONVERT_T 0x01
 
+/* STATUS register (0x00) bit0 = TEMP_RDY: set when a one-shot conversion has
+ * completed and the sample is in the FIFO. Conversion is 15 ms typ / 50 ms max
+ * (MAX30208 datasheet) — poll this instead of a blind worst-case sleep. */
+#define MAX30208_STATUS_TEMP_RDY 0x01
+
 
 struct max30208_config
 {

@@ -123,6 +123,26 @@ int hpi_user_settings_set_time_format(uint8_t time_format);
 int hpi_user_settings_set_temp_unit(uint8_t temp_unit);
 
 /**
+ * @brief Set the display sleep timeout and save
+ * @param sleep_timeout Timeout in seconds (10-120)
+ * @return 0 on success, negative error code on failure
+ */
+int hpi_user_settings_set_sleep_timeout(uint8_t sleep_timeout);
+
+/**
+ * @brief Get the persisted UTC offset (seconds east of UTC; local = UTC + offset)
+ * @return Offset in seconds (DST-inclusive; set by the phone via HPI_HS SET_TZ)
+ */
+int32_t hpi_user_settings_get_utc_offset(void);
+
+/**
+ * @brief Set and persist the UTC offset
+ * @param offset_sec Seconds east of UTC (-12h..+14h)
+ * @return 0 on success, negative error code on failure
+ */
+int hpi_user_settings_set_utc_offset(int32_t offset_sec);
+
+/**
  * @brief Get a copy of all current settings
  * @param settings Pointer to settings structure to populate
  * @return 0 on success, negative error code on failure

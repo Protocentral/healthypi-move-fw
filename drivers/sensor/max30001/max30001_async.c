@@ -320,7 +320,8 @@ static int max30001_async_sample_fetch(const struct device *dev,
     return 0;
 }
 
-int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
+/* NCS 3.2: the RTIO sensor submit handler now returns void (was int). */
+void max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
 {
     struct max30001_data *data = dev->data;
 
@@ -338,7 +339,7 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         LOG_ERR("Failed to get a read buffer of size %u bytes", m_min_buf_len);
         rtio_iodev_sqe_err(iodev_sqe, ret);
-        return ret;
+        return;
     }
 
     if (data->chip_op_mode == MAX30001_OP_MODE_LON_DETECT)
@@ -364,21 +365,21 @@ int max30001_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe)
     {
         LOG_ERR("RTIO submit failed: ret=%d", ret);
         rtio_iodev_sqe_err(iodev_sqe, ret);
-        return ret;
+        return;
     }
 
     // Check if we have any data to return
     if (m_edata->chip_op_mode == MAX30001_OP_MODE_STREAM) {
         if (m_edata->num_samples_ecg == 0 && m_edata->num_samples_bioz == 0) {
             rtio_iodev_sqe_ok(iodev_sqe, 0);  // Return 0 bytes
-            return 0;
+            return;
         } else {
             rtio_iodev_sqe_ok(iodev_sqe, m_min_buf_len);  // Return actual data
-            return 0;
+            return;
         }
     }
 
     rtio_iodev_sqe_ok(iodev_sqe, 0);
 
-    return 0;
+    return;
 }

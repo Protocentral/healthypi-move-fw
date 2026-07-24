@@ -37,6 +37,7 @@
 #include <app_version.h>
 
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"   /* R0_TEXT_2 */
 
 LOG_MODULE_REGISTER(boot_module, LOG_LEVEL_WRN);
 
@@ -56,46 +57,51 @@ void draw_scr_boot(void)
     lv_obj_set_style_bg_color(scr_boot, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scr_boot, LV_OPA_COVER, LV_PART_MAIN);
 
-    // Main container with flex layout
+    /* Round 390×390: keep content inside the circular safe area. Horizontal
+     * pad ~52 px keeps left-aligned lines clear of the bezel at mid-height;
+     * top pad ~52 px keeps the title below the curved top edge. Cross-axis
+     * center so the log column sits on the diameter, not hard-left. */
     lv_obj_t *main_container = lv_obj_create(scr_boot);
     lv_obj_set_size(main_container, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_bg_opa(main_container, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(main_container, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(main_container, 20, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(main_container, 52, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(main_container, 52, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(main_container, 52, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(main_container, 48, LV_PART_MAIN);
+    lv_obj_clear_flag(main_container, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(main_container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(main_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(main_container, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(main_container, 12, LV_PART_MAIN);
 
-    // Title label
-    lv_obj_t *label_hpi = lv_label_create(main_container);
-    lv_label_set_text(label_hpi, "HealthyPi Move");
-    lv_obj_set_style_text_color(label_hpi, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_margin_bottom(label_hpi, 10, LV_PART_MAIN);
+    /* FW version only — short enough to sit on the round top without clipping. */
+    lv_obj_t *label_fw = lv_label_create(main_container);
+    lv_label_set_text(label_fw, "FW: " APP_VERSION_STRING);
+    lv_obj_set_style_text_font(label_fw, &HPI_FONT_LABEL, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_fw, lv_color_hex(0xF59E0B), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label_fw, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    // Version label
-    lv_obj_t *label_boot = lv_label_create(main_container);
-    lv_label_set_text(label_boot, "Booting v" APP_VERSION_STRING);
-    lv_obj_set_style_text_color(label_boot, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_margin_bottom(label_boot, 20, LV_PART_MAIN);
-
-    // Scrollable container for boot messages
+    /* Log column: width fits inside the mid-circle chord (~286 px available
+     * with 52 px side pads on 390). Fixed width keeps lines from spreading
+     * into the bezel as they get longer. */
     scroll_container = lv_obj_create(main_container);
-    lv_obj_set_size(scroll_container, LV_PCT(85), 220);
-    lv_obj_set_style_bg_color(scroll_container, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(scroll_container, LV_OPA_20, LV_PART_MAIN);
-    lv_obj_set_style_border_color(scroll_container, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_border_width(scroll_container, 1, LV_PART_MAIN);
-    lv_obj_set_style_border_opa(scroll_container, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(scroll_container, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(scroll_container, 10, LV_PART_MAIN);
-    lv_obj_set_scrollbar_mode(scroll_container, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_size(scroll_container, 280, 270);
+    lv_obj_set_style_bg_opa(scroll_container, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(scroll_container, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(scroll_container, 0, LV_PART_MAIN);
+    lv_obj_set_scrollbar_mode(scroll_container, LV_SCROLLBAR_MODE_OFF);
 
-    // Boot messages label inside scroll container
     label_boot_messages = lv_label_create(scroll_container);
     lv_label_set_text(label_boot_messages, "");
     lv_obj_set_width(label_boot_messages, LV_PCT(100));
     lv_obj_set_height(label_boot_messages, LV_SIZE_CONTENT);
     lv_label_set_long_mode(label_boot_messages, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_color(label_boot_messages, lv_color_white(), LV_PART_MAIN);
+    lv_label_set_recolor(label_boot_messages, true);
+    lv_obj_set_style_text_font(label_boot_messages, &HPI_FONT_LABEL, LV_PART_MAIN);
+    lv_obj_set_style_text_line_space(label_boot_messages, 6, LV_PART_MAIN);
+    /* R0_TEXT_2 for contrast on black; PASS/FAIL tags keep recolored emphasis. */
+    lv_obj_set_style_text_color(label_boot_messages, lv_color_hex(R0_TEXT_2), LV_PART_MAIN);
     lv_obj_align(label_boot_messages, LV_ALIGN_TOP_LEFT, 0, 0);
 
     hpi_disp_set_curr_screen(SCR_SPL_BOOT);
@@ -104,10 +110,12 @@ void draw_scr_boot(void)
 
 void scr_boot_add_status(const char *dev_label, bool status, bool show_status)
 {
-    char buf[64];
+    char buf[80];
     if (show_status)
     {
-        sprintf(buf, "%s: %s\n", dev_label, status ? "OK" : "FAIL");
+        /* "Device  ·  OK" / "Device  ·  FAIL" — proportional, no mono pad. */
+        sprintf(buf, "%s  \xC2\xB7  %s\n", dev_label,
+                status ? "#16A34A OK#" : "#DC2626 FAIL#");
     }
     else
     {
@@ -146,7 +154,8 @@ void scr_boot_add_status(const char *dev_label, bool status, bool show_status)
 void scr_boot_add_final(bool status)
 {
     char buf[64];
-    sprintf(buf, "\nCOMPLETE: %s\n", status ? "OK" : "FAIL");
+    sprintf(buf, "\n%s\n", status ? "#16A34A ALL CHECKS PASSED#"
+                                   : "#DC2626 CHECK FAILED#");
 
     // Get current text and append final message using static buffer
     const char *current_text = lv_label_get_text(label_boot_messages);

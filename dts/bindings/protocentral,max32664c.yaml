@@ -1,0 +1,29 @@
+# ProtoCentral Electronics (info@protocentral.com)
+# SPDX-License-Identifier: Apache-2.0
+
+description: MAX32664C I2C Device (ProtoCentral out-of-tree driver)
+
+# NCS v3.3 added an upstream binding+driver for "maxim,max32664c"
+# (zephyr/drivers/sensor/adi/max32664c) with a different property model and AFE
+# assumptions. To keep our hardware-validated out-of-tree driver, this binding
+# uses a distinct "protocentral,max32664c" compatible so the two never collide.
+compatible: "protocentral,max32664c"
+
+include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+    reset-gpios:
+      type: phandle-array
+      required: true
+      description: RESET pin.
+
+        The RESET pin of MAX32664C is active low.
+        If connected directly the MCU pin should be configured
+        as active low.
+
+    mfio-gpios:
+      type: phandle-array
+      required: true
+      description: MFIO pin.
+
+        Pin for MFIO control.

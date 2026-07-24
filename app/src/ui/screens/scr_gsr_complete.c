@@ -19,6 +19,8 @@
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"
+#include "ui/hpi_ui_subjects.h"
 #include "hw_module.h"
 #include "hpi_sys.h"
 
@@ -41,25 +43,6 @@ static struct hpi_gsr_stress_index_t stored_results = {0};
 
 // Color definitions
 #define COLOR_GSR_TEAL      0x00897B
-
-/**
- * @brief Get interpretation string for tonic level
- * Typical palmar GSR baseline: 2-20 uS
- */
-static const char* get_tonic_context(uint16_t tonic_level_x100)
-{
-    if (tonic_level_x100 < 200) {         // < 2 uS
-        return "Very Low";
-    } else if (tonic_level_x100 < 500) {  // 2-5 uS
-        return "Low";
-    } else if (tonic_level_x100 < 1000) { // 5-10 uS
-        return "Normal";
-    } else if (tonic_level_x100 < 1500) { // 10-15 uS
-        return "Elevated";
-    } else {                              // > 15 uS
-        return "High";
-    }
-}
 
 /**
  * @brief Get interpretation string for SCR frequency
@@ -88,117 +71,96 @@ static void scr_gsr_complete_gesture_cb(lv_event_t *e)
     }
 }
 
+static void scr_gsr_done_cb(lv_event_t *e)
+{
+    ARG_UNUSED(e);
+    hpi_load_screen(SCR_GSR, SCROLL_DOWN);
+}
+
+/* v2 EDA result (the v2 design system, EDA screen 8 "Result"): the
+ * SCR count in the teal hero, a teal TONIC pill (value + µS) with the SCR
+ * interpretation, and a DONE button. Data from the stored stress index. */
 void draw_scr_gsr_complete(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     LV_UNUSED(arg1); LV_UNUSED(arg2); LV_UNUSED(arg3); LV_UNUSED(arg4);
+    bool ready = stored_results.stress_data_ready;
+
+    /* Push the fresh result into the carousel EDA subject here (LVGL thread —
+     * the zbus update callback above must not touch LVGL). Without this the
+     * tile keeps its boot-restored value until the next reboot. Same unit as
+     * the boot restore path: SCR events/min (HPI_HS_T_EDA_SCR_RATE). */
+    if (ready) {
+        hpi_ui_subj_set_gsr(stored_results.peaks_per_minute);
+    }
 
     scr_gsr_complete = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(scr_gsr_complete, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(scr_gsr_complete, lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_gsr_complete, LV_OBJ_FLAG_SCROLLABLE);
 
-    /*
-     * GSR RESULTS LAYOUT FOR 390x390 ROUND AMOLED
-     * ============================================
-     * 2-metric layout (stress level hidden pending validation):
-     *   Top: y=60 (title)
-     *   Primary Row: y=120 (SCL and SCR side by side - larger)
-     *   Context: y=220 (interpretation text)
-     *   Bottom: y=290 (swipe instruction)
-     */
-
-    // TOP: Title at y=60
     lv_obj_t *label_title = lv_label_create(scr_gsr_complete);
-    lv_label_set_text(label_title, "GSR Results");
-    lv_obj_set_pos(label_title, 0, 60);
-    lv_obj_set_width(label_title, 390);
-    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+    lv_label_set_text(label_title, "SKIN RESPONSE");
+    lv_obj_align(label_title, LV_ALIGN_CENTER, 0, -128);
+    lv_obj_set_style_text_font(label_title, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(label_title, lv_color_hex(V2_MUTED2), 0);
+    lv_obj_set_style_text_letter_space(label_title, 2, 0);
 
-    // PRIMARY ROW: SCL and SCR side by side at y=120
-    lv_obj_t *cont_primary = lv_obj_create(scr_gsr_complete);
-    lv_obj_remove_style_all(cont_primary);
-    lv_obj_set_size(cont_primary, 340, 80);
-    lv_obj_set_pos(cont_primary, (390 - 340) / 2, 120);
-    lv_obj_set_style_bg_opa(cont_primary, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_flex_flow(cont_primary, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_primary, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-
-    /*
-    // Left metric: SCL (Skin Conductance Level)
-    lv_obj_t *cont_scl = lv_obj_create(cont_primary);
-    lv_obj_remove_style_all(cont_scl);
-    lv_obj_set_size(cont_scl, 160, 70);
-    lv_obj_set_style_bg_opa(cont_scl, LV_OPA_TRANSP, LV_PART_MAIN);
-
-    lv_obj_t *label_scl_title = lv_label_create(cont_scl);
-    lv_label_set_text(label_scl_title, "Tonic Level");
-    lv_obj_align(label_scl_title, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_add_style(label_scl_title, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_scl_title, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-
-    label_tonic_value = lv_label_create(cont_scl);
-    if (stored_results.stress_data_ready) {
-        lv_label_set_text_fmt(label_tonic_value, "%u.%02u uS",
-                               stored_results.tonic_level_x100 / 100,
-                               stored_results.tonic_level_x100 % 100);
+    /* SCR count hero (teal) */
+    label_scr_count_value = lv_label_create(scr_gsr_complete);
+    if (ready) {
+        lv_label_set_text_fmt(label_scr_count_value, "%u", stored_results.peaks_per_minute);
     } else {
-        lv_label_set_text(label_tonic_value, "-- uS");
+        lv_label_set_text(label_scr_count_value, "--");
     }
-    lv_obj_align(label_tonic_value, LV_ALIGN_TOP_MID, 0, 22);
-    lv_obj_add_style(label_tonic_value, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_tonic_value, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);   */
+    lv_obj_align(label_scr_count_value, LV_ALIGN_CENTER, 0, -52);
+    lv_obj_set_style_text_font(label_scr_count_value, &HPI_FONT_HERO, 0);
+    lv_obj_set_style_text_color(label_scr_count_value, lv_color_hex(V2_EDA), 0);
+    lv_obj_set_style_text_letter_space(label_scr_count_value, -1, 0);
 
-    // Right metric: SCR Rate
-    lv_obj_t *cont_scr = lv_obj_create(cont_primary);
-    lv_obj_remove_style_all(cont_scr);
-    lv_obj_set_size(cont_scr, 300, 70);
-    lv_obj_set_style_bg_opa(cont_scr, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_t *unit = lv_label_create(scr_gsr_complete);
+    lv_label_set_text(unit, "SCR / 30S");
+    lv_obj_align(unit, LV_ALIGN_CENTER, 0, 6);
+    lv_obj_set_style_text_font(unit, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(unit, lv_color_hex(V2_MUTED), 0);
+    lv_obj_set_style_text_letter_space(unit, 2, 0);
 
-    lv_obj_t *label_scr_title = lv_label_create(cont_scr);
-    lv_label_set_text(label_scr_title, "SCR ");
-    lv_obj_align(label_scr_title, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_add_style(label_scr_title, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_scr_title, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    /* teal pill: interpretation + tonic (SCL) value in µS */
+    lv_obj_t *pill = hpi_v2_pill(scr_gsr_complete, V2_EDA, V2_EDA_TINT_OPA);
+    lv_obj_align(pill, LV_ALIGN_CENTER, 0, 52);
+    lv_obj_set_style_pad_hor(pill, 16, 0);
 
-    label_scr_count_value = lv_label_create(cont_scr);
-    if (stored_results.stress_data_ready) {
-        lv_label_set_text_fmt(label_scr_count_value, "%u /30s",
-                               stored_results.peaks_per_minute);
+    lv_obj_t *pic = lv_label_create(pill);
+    lv_label_set_text(pic, SYM_WATER_DROP);
+    lv_obj_set_style_text_font(pic, &HPI_FONT_ICON, 0);
+    lv_obj_set_style_text_color(pic, lv_color_hex(V2_EDA), 0);
+
+    lv_obj_t *ptx = lv_label_create(pill);
+    if (ready) {
+        char buf[40];
+        snprintf(buf, sizeof(buf), "%s \xC2\xB7 %u.%02u \xC2\xB5S",
+                 get_scr_context(stored_results.peaks_per_minute),
+                 stored_results.tonic_level_x100 / 100,
+                 stored_results.tonic_level_x100 % 100);
+        lv_label_set_text(ptx, buf);
     } else {
-        lv_label_set_text(label_scr_count_value, "-- /30s");
+        lv_label_set_text(ptx, "NO DATA");
     }
-    lv_obj_align(label_scr_count_value, LV_ALIGN_TOP_MID, 0, 30);
-    lv_obj_add_style(label_scr_count_value, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_scr_count_value, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);
+    lv_obj_set_style_text_font(ptx, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(ptx, lv_color_hex(V2_LABEL), 0);
+    lv_obj_set_style_text_letter_space(ptx, 1, 0);
 
-    // CONTEXT: Interpretation text at y=220
-    lv_obj_t *label_context = lv_label_create(scr_gsr_complete);
-    if (stored_results.stress_data_ready) {
-        // lv_label_set_text_fmt(label_context, "%s  |  %s",
-        //                       get_tonic_context(stored_results.tonic_level_x100),
-        //                       get_scr_context(stored_results.peaks_per_minute));
-        lv_label_set_text(label_context,
-                  get_scr_context(stored_results.peaks_per_minute));
-    } else {
-        lv_label_set_text(label_context, "");
-    }
-    lv_obj_set_pos(label_context, 0, 220);
-    lv_obj_set_width(label_context, 390);
-    lv_obj_add_style(label_context, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_context, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_context, lv_color_hex(COLOR_GSR_TEAL), LV_PART_MAIN);
+    /* DONE button */
+    lv_obj_t *btn = hpi_btn_create_secondary(scr_gsr_complete);
+    lv_obj_set_size(btn, 160, 56);
+    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 128);
+    lv_obj_add_event_cb(btn, scr_gsr_done_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *blbl = lv_label_create(btn);
+    lv_label_set_text(blbl, "DONE");
+    lv_obj_center(blbl);
+    lv_obj_set_style_text_font(blbl, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(blbl, lv_color_hex(V2_VALUE), 0);
+    lv_obj_set_style_text_letter_space(blbl, 1, 0);
 
-    // BOTTOM: Swipe instruction at y=290
-    lv_obj_t *label_info = lv_label_create(scr_gsr_complete);
-    lv_label_set_text(label_info, "Swipe down to return");
-    lv_obj_set_pos(label_info, 0, 290);
-    lv_obj_set_width(label_info, 390);
-    lv_obj_add_style(label_info, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_info, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
-
-    // Add gesture handler
+    /* keep the swipe-down-to-return gesture as well */
     lv_obj_add_event_cb(scr_gsr_complete, scr_gsr_complete_gesture_cb, LV_EVENT_GESTURE, NULL);
 
     hpi_disp_set_curr_screen(SCR_SPL_GSR_COMPLETE);

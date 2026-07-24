@@ -7,8 +7,16 @@
 #include <zephyr/pm/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/drivers/gpio.h>
 
 #include "max30001.h"
+
+#ifdef CONFIG_MAX30001_TRIGGER
+/* EN_INT (0x02): route ECG-FIFO (EINT, bit23) + BioZ-FIFO (BINT, bit19) to the
+ * INTB pin, INTB_TYPE = open-drain NMOS with internal pullup (bits[1:0]=0b11),
+ * which matches the active-low `intb-gpios` wiring. */
+#define MAX30001_EN_INT_DRDY 0x880003
+#endif
 
 LOG_MODULE_REGISTER(SENSOR_MAX30001, CONFIG_MAX30001_LOG_LEVEL);
 
@@ -555,6 +563,88 @@ static int max30001_attr_set(const struct device *dev,
     return 0;
 }
 
+#ifdef CONFIG_MAX30001_TRIGGER
+/* INTB (DRDY) edge handler. Runs in GPIO-callback context; forwards to the
+ * app-registered handler which must only k_work_submit / k_sem_give. */
+static void max30001_intb_callback(const struct device *port,
+                                   struct gpio_callback *cb, uint32_t pins)
+{
+    ARG_UNUSED(port);
+    ARG_UNUSED(pins);
+    struct max30001_data *data = CONTAINER_OF(cb, struct max30001_data, intb_cb);
+
+    if (data->drdy_handler != NULL)
+    {
+        data->drdy_handler(data->dev);
+    }
+}
+
+/* Configure the INTB pin + route EINT/BINT to it. The GPIO interrupt itself
+ * stays masked until the app arms it via max30001_trigger_set_handler(). */
+static int max30001_trigger_init(const struct device *dev)
+{
+    const struct max30001_config *config = dev->config;
+    struct max30001_data *data = dev->data;
+    int ret;
+
+    data->dev = dev;
+    data->drdy_handler = NULL;
+
+    if (config->intb_gpio.port == NULL)
+    {
+        LOG_ERR("MAX30001 trigger enabled but no intb-gpios wired in DT");
+        return -ENOTSUP;
+    }
+    if (!gpio_is_ready_dt(&config->intb_gpio))
+    {
+        LOG_ERR("MAX30001 intb-gpios device not ready");
+        return -ENODEV;
+    }
+
+    ret = gpio_pin_configure_dt(&config->intb_gpio, GPIO_INPUT);
+    if (ret < 0)
+    {
+        LOG_ERR("MAX30001 intb pin configure failed: %d", ret);
+        return ret;
+    }
+
+    gpio_init_callback(&data->intb_cb, max30001_intb_callback, BIT(config->intb_gpio.pin));
+    ret = gpio_add_callback(config->intb_gpio.port, &data->intb_cb);
+    if (ret < 0)
+    {
+        LOG_ERR("MAX30001 intb add_callback failed: %d", ret);
+        return ret;
+    }
+
+    /* Route ECG-FIFO (EINT) + BioZ-FIFO (BINT) interrupts to the INTB pin. */
+    _max30001RegWrite(dev, EN_INT, MAX30001_EN_INT_DRDY);
+    k_sleep(K_MSEC(10));
+
+    LOG_INF("MAX30001 INTB (DRDY) trigger armed on %s pin %d",
+            config->intb_gpio.port->name, config->intb_gpio.pin);
+    return 0;
+}
+
+int max30001_trigger_set_handler(const struct device *dev,
+                                 void (*handler)(const struct device *dev))
+{
+    const struct max30001_config *config = dev->config;
+    struct max30001_data *data = dev->data;
+
+    if (config->intb_gpio.port == NULL)
+    {
+        return -ENOTSUP;
+    }
+
+    data->drdy_handler = handler;
+
+    /* INTB is active-low -> fire on the falling (to-active) edge. Draining the
+     * FIFO in the handler de-asserts INTB, re-arming the next edge. */
+    return gpio_pin_interrupt_configure_dt(&config->intb_gpio,
+        handler ? GPIO_INT_EDGE_TO_ACTIVE : GPIO_INT_DISABLE);
+}
+#endif /* CONFIG_MAX30001_TRIGGER */
+
 static int max30001_chip_init(const struct device *dev)
 {
     const struct max30001_config *config = dev->config;
@@ -772,6 +862,16 @@ static int max30001_chip_init(const struct device *dev)
     // For POWER DEBUG ONLY
     //_max30001RegWrite(dev, CNFG_GEN, 0x400000);
 
+#ifdef CONFIG_MAX30001_TRIGGER
+    /* Arm the INTB pin + EINT/BINT routing. On failure the app's poll timers are
+     * still available as a fallback, so a wiring problem degrades rather than
+     * bricks acquisition. */
+    if (max30001_trigger_init(dev) < 0)
+    {
+        LOG_WRN("MAX30001 INTB trigger init failed; acquisition falls back to polling");
+    }
+#endif
+
     LOG_DBG("\"%s\" OK", dev->name);
     return 0;
 }
@@ -820,6 +920,7 @@ static int max30001_pm_action(const struct device *dev, enum pm_device_action ac
         {                                                                 \
             .spi = SPI_DT_SPEC_INST_GET(                                  \
                 inst, MAX30001_SPI_OPERATION, 0),                         \
+            .intb_gpio = GPIO_DT_SPEC_INST_GET_OR(inst, intb_gpios, {0}), \
             .ecg_gain = DT_INST_PROP(inst, ecg_gain),                     \
             .bioz_gain = DT_INST_PROP(inst, bioz_gain),                   \
             .bioz_cgmag = DT_INST_PROP(inst, bioz_cgmag),                 \

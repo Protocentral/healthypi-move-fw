@@ -331,18 +331,24 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 
 	gpio_pin_set_dt(&config->mfio_gpio, 0);
 	k_sleep(K_USEC(300));
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	int wr_rc = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
 
 	k_sleep(K_MSEC(MAX32664_DEFAULT_CMD_DELAY));
 
 	// gpio_pin_set_dt(&config->mfio_gpio, 0);
 	k_sleep(K_USEC(300));
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	int rd_rc = i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(500));
 
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-	LOG_DBG("CMD: %x %x %x | RSP: %x %x %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
+	/* Distinguish "hub not on the bus" (I2C NAK/error) from "hub answered but the
+	 * payload is 0x00". Without this an unreachable hub and a hub reporting a zero
+	 * AFE id look identical to the caller. rd_buf[0] is the hub status byte. */
+	if (wr_rc != 0 || rd_rc != 0) {
+		LOG_WRN("MAX32664D I2C fail: wr_rc=%d rd_rc=%d (hub not responding on the bus)",
+			wr_rc, rd_rc);
+	}
 
 	memcpy(rsp, rd_buf, 3);
 

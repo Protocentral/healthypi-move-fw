@@ -54,12 +54,29 @@
 #include <zephyr/zbus/zbus.h>
 
 #include <time.h>
-#include <zephyr/posix/time.h>
 
 #include <nrfx_clock.h>
 #include <nrfx_spim.h>
 
 LOG_MODULE_REGISTER(hw_helpers);
+
+/* ============================ DO NOT DELETE ============================
+ * An audit (2026-07-16) found this file orphaned -- both functions have zero
+ * callers and (until now) no prototype in hw_helpers.h. That is accurate but
+ * misleading: this is working, measurement-gated P4 scaffolding, not rot.
+ *
+ * Halving the application core (128 -> 64 MHz) is a real power lever, and P4's
+ * remaining levers are all deferred to the PPK/measurement session (see
+ * docs/ARCHITECTURE_REWRITE_PLAN.md §0 P4) precisely because there is no way to
+ * judge them without current measurements. Same call as scr_aod.c: built,
+ * proposed, waiting on the rig -- keep it.
+ *
+ * When P4 picks this up: 64 MHz halves HFCLK, so anything deriving timing from it
+ * needs re-checking, notably the SPIM4 display link (see the commented
+ * nrf_spim_frequency_set/iftiming_set below -- they are the known follow-on, not
+ * decoration) and any peripheral running near its clock ceiling.
+ * =======================================================================
+ */
 
 void hpi_switch_cpu_64mhz(void)
 {

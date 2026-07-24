@@ -206,7 +206,11 @@
 	};
 
 	rtc_rv: rv@51 {
-		compatible = "microcrystal,rv8263";
+		/* Zephyr in-tree RV-8263-C8 driver (CONFIG_RTC_RV8263). Replaced the
+		 * out-of-tree drivers/rtc copy in 2026-07; upstream implements the same
+		 * RTC API plus alarms/clkout and already handles the BCD year/month
+		 * conversion correctly. */
+		compatible = "microcrystal,rv-8263-c8";
 		reg = <0x51>;
 		zephyr,deferred-init;
 	};
@@ -215,7 +219,8 @@
 		compatible = "bosch,bmi323hpi";
 		reg = <0x68>;
 		status = "okay";
-		int-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+		/* BMI323 INT1 is routed to nRF5340 P1.11 (schematic-confirmed). */
+		int-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 		zephyr,deferred-init;
 	};
 
@@ -249,7 +254,7 @@
 	zephyr,flash-buf-max-size = <8250>;
 
 	max32664c: max32664c@55 {
-		compatible = "maxim,max32664c";
+		compatible = "protocentral,max32664c";
 		reg = <0x55>;
 		reset-gpios = <&gpio1 8 GPIO_ACTIVE_HIGH>;
 		mfio-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
@@ -271,8 +276,10 @@
 		zephyr,deferred-init;
 	};
 
-	/* Newer boards populate the AS6221 (0x48) instead of the MAX30208.
-	 * Detected at runtime; only the populated sensor will init. */
+	/* AS6221 - temperature sensor on newer hardware revisions (older boards
+	 * populate a MAX30208 at 0x50/0x52 instead). hw_module.c probes MAX30208
+	 * first, then this, at boot and uses whichever is present. Handled by the
+	 * upstream TMP108 driver (ams,as6221 variant). */
 	as6221: as6221@48 {
 		compatible = "ams,as6221";
 		status = "okay";
@@ -324,8 +331,12 @@
 		t-enter-dpd = <30000>;
 		t-exit-dpd = <30000>;
 		jedec-id = [ ef 40 21  ];
+		/* Flash Deep-Power-Down (zephyr,pm-device-runtime-auto + global
+		 * CONFIG_PM_DEVICE_RUNTIME) was reverted — the global runtime-PM flag
+		 * left the deferred touch controller suspended after boot. Revisit at
+		 * the measurement session (see app/prj.conf note). */
 		status = "okay";
-		
+
 	};
 };
 
@@ -344,7 +355,11 @@
 		status = "okay";
 		reg = <0x0>;
 		spi-max-frequency = <DT_FREQ_M(4)>;
-		//intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
+		/* MAX30001 INTB (DRDY) confirmed routed to nRF5340 P1.09 (active low).
+		 * Enabled here so the pin is documented in DT; the driver does not yet
+		 * consume intb_gpio (still FIFO/status-polled) — trigger-driven reads
+		 * off this line are P3 (interrupt/RTIO acquisition) work. */
+		intb-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
 		//rtor-enabled;
 		//ecg-enabled;
 		bioz-enabled;
@@ -405,3 +420,14 @@ zephyr_udc0: &usbd {
 
 /* Include default memory partition configuration file */
 #include <nordic/nrf5340_cpuapp_partition.dtsi>
+
+/*
+ * Flash layout is owned by the Partition Manager (app/pm_static.yml), not by
+ * this file. The DTS partition block that lived here during the 3.4 rework was
+ * removed: Nordic documents nRF53 DFU with MCUboot in overwrite mode as the one
+ * configuration that still requires the Partition Manager (NCS migration guide
+ * 3.3, "the only exception that still requires the Partition Manager"), and
+ * without it MCUboot loses MCUBOOT_NRF53_MULTI_IMAGE_UPDATE — which is selected
+ * only from PM_EXTERNAL_FLASH_MCUBOOT_SECONDARY — and takes a net-core update
+ * path that cannot address an off-chip secondary slot.
+ */

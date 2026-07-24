@@ -35,6 +35,7 @@
 #include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"
 
 LOG_MODULE_REGISTER(scr_bpt_cal_failed, LOG_LEVEL_DBG);
 
@@ -63,6 +64,29 @@ static void scr_bpt_btn_measure_handler(lv_event_t *e)
 
 void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
+    /* P1-4: one screen, three failure paths - pick the copy from arg2 rather
+     * than telling a user whose *measurement* failed that their calibration did.
+     * arg1 is the parent screen (SCR_BPT at every call site). */
+    const char *fail_title;
+    const char *fail_info;
+
+    switch (arg2)
+    {
+    case BPT_FAIL_EST:
+        fail_title = "MEASUREMENT FAILED";
+        fail_info = "Your blood pressure measurement\nwas not successful.\nPlease try again.";
+        break;
+    case BPT_FAIL_SENSOR:
+        fail_title = "SENSOR ERROR";
+        fail_info = "The finger sensor did not respond.\nPlease try again.";
+        break;
+    case BPT_FAIL_CAL:
+    default:
+        fail_title = "CALIBRATION FAILED";
+        fail_info = "Your calibration was not successful.\nPlease try again.";
+        break;
+    }
+
     scr_bpt_cal_failed = lv_obj_create(NULL);
     // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_bpt_cal_failed, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -74,40 +98,43 @@ void draw_scr_bpt_cal_failed(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32
 
     // Error icon at top
     lv_obj_t *label_error = lv_label_create(scr_bpt_cal_failed);
+    /* No error/close glyph exists in any matsym bin, so this keeps LVGL's built-in
+     * symbol font (which renders from the default font, not a v2 bin). */
     lv_label_set_text(label_error, LV_SYMBOL_CLOSE);
     lv_obj_align(label_error, LV_ALIGN_TOP_MID, 0, 50);
-    lv_obj_set_style_text_color(label_error, lv_color_hex(0xFF5722), LV_PART_MAIN);  // Red/orange
-    lv_obj_set_style_text_font(label_error, &lv_font_montserrat_24, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_error, lv_color_hex(R0_ERROR), 0);
 
     // Screen title - properly positioned below icon
     lv_obj_t *label_title = lv_label_create(scr_bpt_cal_failed);
-    lv_label_set_text(label_title, "Calibration Failed");
+    lv_label_set_text(label_title, fail_title);
     lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 90);
-    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_font(label_title, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(label_title, lv_color_hex(R0_ERROR), 0);
+    lv_obj_set_style_text_letter_space(label_title, 1, 0);
 
     // Error message (centered)
     lv_obj_t *label_info = lv_label_create(scr_bpt_cal_failed);
     lv_label_set_long_mode(label_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(label_info, 300);
-    lv_label_set_text(label_info, "Your calibration was not successful.\nPlease try again.");
+    lv_label_set_text(label_info, fail_info);
     lv_obj_align(label_info, LV_ALIGN_CENTER, 0, 10);
-    lv_obj_add_style(label_info, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_info, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    lv_obj_set_style_text_font(label_info, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_align(label_info, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(label_info, lv_color_hex(V2_MUTED), 0);
 
     // BOTTOM ZONE: Action Button (consistent with other screens)
-    btn_bpt_measure = hpi_btn_create_primary(scr_bpt_cal_failed);
-    lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_btn_measure_handler, LV_EVENT_ALL, NULL);
-    lv_obj_set_size(btn_bpt_measure, 180, 50);  // Standard size matching other screens
-    lv_obj_align(btn_bpt_measure, LV_ALIGN_BOTTOM_MID, 0, -30);  // Standard bottom positioning
-    lv_obj_set_style_radius(btn_bpt_measure, 25, LV_PART_MAIN);
+    btn_bpt_measure = hpi_btn_create_secondary(scr_bpt_cal_failed);
+    lv_obj_add_event_cb(btn_bpt_measure, scr_bpt_btn_measure_handler, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_size(btn_bpt_measure, 160, 56);
+    lv_obj_align(btn_bpt_measure, LV_ALIGN_BOTTOM_MID, 0, -30);
 
     lv_obj_t *label_btn = lv_label_create(btn_bpt_measure);
-    lv_label_set_text(label_btn, LV_SYMBOL_OK " Close");
+    lv_label_set_text(label_btn, "CLOSE");
     lv_obj_center(label_btn);
-    // Note: Do not apply style_body_medium - LVGL symbols require default LVGL font
+    lv_obj_set_style_text_font(label_btn, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(label_btn, lv_color_hex(V2_VALUE), 0);
+    lv_obj_set_style_text_letter_space(label_btn, 1, 0);
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_FAILED);
     hpi_show_screen(scr_bpt_cal_failed, m_scroll_dir);

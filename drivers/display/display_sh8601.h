@@ -8,6 +8,9 @@
 #ifndef ZEPHYR_DRIVERS_DISPLAY_DISPLAY_SH8601_H_
 #define ZEPHYR_DRIVERS_DISPLAY_DISPLAY_SH8601_H_
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/sys/util.h>
@@ -126,5 +129,29 @@ int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd,
                         const void *tx_data, size_t tx_len);
 
 int sh8601_reinit(const struct device *dev);
+
+/**
+ * @brief Enter SH8601 native always-on (AOD) mode.
+ *
+ * Writes AOD brightness (0x4A) then AODMON (0x49). Panel keeps displaying
+ * GRAM at reduced power; do not combine with SLPIN/DISPOFF.
+ *
+ * @param brightness AOD brightness 0–255 (AOD register, not normal 0x51).
+ * @return 0 on success, negative errno otherwise.
+ */
+int sh8601_aod_enter(const struct device *dev, uint8_t brightness);
+
+/**
+ * @brief Leave AOD mode (AODMOFF 0x48) and restore last normal brightness.
+ */
+int sh8601_aod_exit(const struct device *dev);
+
+/**
+ * @brief Write AOD-mode brightness only (0x4A). Valid while AOD is active.
+ */
+int sh8601_aod_set_brightness(const struct device *dev, uint8_t brightness);
+
+/** @return true if the panel is currently in AOD mode. */
+bool sh8601_aod_is_active(const struct device *dev);
 
 #endif

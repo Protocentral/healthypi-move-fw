@@ -1,6 +1,6 @@
 /*
  * HealthyPi Move
- * 
+ *
  * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Protocentral Electronics
@@ -27,8 +27,17 @@
  * SOFTWARE.
  */
 
+/*
+ * BP measurement screen — v2 (the v2 design system §4 "Measuring").
+ * Pulsing blue dot + BLOOD PRESSURE header; MEASURING · KEEP STILL status;
+ * live PPG waveform (hpi_wave_monitor, auto-scaled); status pill built like the
+ * ECG monitor: 66 px progress ring (percent centered) + heart + live HR + BPM;
+ * CANCEL below. Fed by the display SMF via hpi_disp_bpt_draw_plotPPG /
+ * hpi_disp_bpt_update_progress; swipe-down or CANCEL post EVT_FI_BPT_EST_CANCEL.
+ */
 
 #include <zephyr/kernel.h>
+#include "hpi_evt.h"
 #include <lvgl.h>
 #include <stdio.h>
 #include <zephyr/logging/log.h>
@@ -36,167 +45,204 @@
 #include "hpi_common_types.h"
 #include "hw_module.h"
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"
 
 LOG_MODULE_REGISTER(scr_bpt_measure, LOG_LEVEL_DBG);
 lv_obj_t *scr_bpt_measure;
 
-static lv_obj_t *chart_bpt_ppg;
-static lv_chart_series_t *ser_bpt_ppg;
+/* ~3 s of finger PPG (100 SPS) spread across the 296 px trace. */
+#define BPT_WAVE_W   296
+#define BPT_WAVE_H    74
+#define BPT_WAVE_WIN 300
 
+static lv_obj_t *bpt_wave;
+static lv_obj_t *ring_progress;
+static lv_obj_t *label_ring_pct;
 static lv_obj_t *label_hr_bpm;
-static lv_obj_t *bar_bpt_progress;
-static lv_obj_t *label_progress;
 
-static float y_max_ppg = 0;
-static float y_min_ppg = 10000;
+/* The display thread keeps pointers to these widgets via the draw/update hooks.
+ * Null them on delete so a late sample can't write into freed objects. */
+static void bpt_measure_del(lv_event_t *e)
+{
+    ARG_UNUSED(e);
+    bpt_wave = NULL;
+    ring_progress = NULL;
+    label_ring_pct = NULL;
+    label_hr_bpm = NULL;
+}
 
-static float gx = 0;
+static void dot_opa_cb(void *var, int32_t v)
+{
+    lv_obj_set_style_bg_opa((lv_obj_t *)var, (lv_opa_t)v, 0);
+}
 
-// Externs
-extern lv_style_t style_lbl_orange;
-extern lv_style_t style_red_medium;
-extern lv_style_t style_white_medium;
-extern lv_style_t style_scr_black;
+static void bpt_cancel_cb(lv_event_t *e)
+{
+    ARG_UNUSED(e);
+    gesture_down_scr_bpt_measure();
+}
 
-extern struct k_sem sem_fi_bpt_est_cancel;
+/* Compact 66 px progress ring with the percent numeral centred (NUM_SM has no
+ * '%' glyph, so the ring shows the number alone — the ring is the "percent"). */
+static lv_obj_t *hpi_bpt_make_progress_ring(lv_obj_t *parent, lv_obj_t **out_pct)
+{
+    lv_obj_t *ring = lv_arc_create(parent);
+    lv_obj_set_size(ring, 66, 66);
+    lv_arc_set_rotation(ring, 270);
+    lv_arc_set_bg_angles(ring, 0, 360);
+    lv_arc_set_range(ring, 0, 100);
+    lv_arc_set_value(ring, 0);
+    lv_obj_set_style_arc_width(ring, 5, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(ring, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_arc_opa(ring, 26, LV_PART_MAIN);            /* ~10% track */
+    lv_obj_set_style_arc_width(ring, 5, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(ring, lv_color_hex(V2_BP), LV_PART_INDICATOR);
+    lv_obj_remove_style(ring, NULL, LV_PART_KNOB);
+    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *pct = lv_label_create(ring);
+    lv_label_set_text(pct, "0");
+    lv_obj_center(pct);
+    lv_obj_set_style_text_font(pct, &HPI_FONT_NUM_SM, 0);
+    lv_obj_set_style_text_color(pct, lv_color_hex(V2_VALUE), 0);
+    if (out_pct) {
+        *out_pct = pct;
+    }
+    return ring;
+}
+
+/* The pulsing-dot + header title row shared by the measure/cal chrome. Returns
+ * the row; the title text is set by the caller. */
+lv_obj_t *hpi_bpt_make_title_row(lv_obj_t *parent, const char *title)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(row, LV_ALIGN_CENTER, 0, -132);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 8, 0);
+
+    lv_obj_t *dot = lv_obj_create(row);
+    lv_obj_remove_style_all(dot);
+    lv_obj_set_size(dot, 8, 8);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(V2_BP), 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+
+    lv_obj_t *lbl = lv_label_create(row);
+    lv_label_set_text(lbl, title);
+    lv_obj_set_style_text_font(lbl, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(V2_LABEL), 0);
+    lv_obj_set_style_text_letter_space(lbl, 2, 0);
+
+    lv_anim_t an;
+    lv_anim_init(&an);
+    lv_anim_set_var(&an, dot);
+    lv_anim_set_exec_cb(&an, dot_opa_cb);
+    lv_anim_set_values(&an, 255, 90);
+    lv_anim_set_time(&an, 550);
+    lv_anim_set_playback_time(&an, 550);
+    lv_anim_set_repeat_count(&an, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&an);
+
+    return row;
+}
+
+/* Status pill: [ring+%] [heart] [HR] [BPM] on a soft chip. Publishes the ring,
+ * percent and HR labels to the caller-supplied out-pointers. */
+lv_obj_t *hpi_bpt_make_status_pill(lv_obj_t *parent, lv_obj_t **out_ring,
+                                   lv_obj_t **out_pct, lv_obj_t **out_hr)
+{
+    lv_obj_t *pill = lv_obj_create(parent);
+    lv_obj_remove_style_all(pill);
+    lv_obj_set_size(pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(pill, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(pill, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_opa(pill, 13, 0);                        /* ~5% chip */
+    lv_obj_set_style_radius(pill, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_pad_hor(pill, 14, 0);
+    lv_obj_set_style_pad_ver(pill, 8, 0);
+    lv_obj_set_flex_flow(pill, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(pill, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(pill, 10, 0);
+
+    lv_obj_t *ring = hpi_bpt_make_progress_ring(pill, out_pct);
+    if (out_ring) {
+        *out_ring = ring;
+    }
+
+    lv_obj_t *ic_hr = lv_label_create(pill);
+    lv_label_set_text(ic_hr, SYM_HR);
+    lv_obj_set_style_text_font(ic_hr, &HPI_FONT_ICON, 0);
+    lv_obj_set_style_text_color(ic_hr, lv_color_hex(V2_BP), 0);
+    lv_obj_set_style_pad_left(ic_hr, 4, 0);
+
+    lv_obj_t *hr = lv_label_create(pill);
+    lv_label_set_text(hr, "--");
+    lv_obj_set_style_text_font(hr, &HPI_FONT_VALUE, 0);
+    lv_obj_set_style_text_color(hr, lv_color_hex(V2_VALUE), 0);
+    if (out_hr) {
+        *out_hr = hr;
+    }
+
+    lv_obj_t *unit = lv_label_create(pill);
+    lv_label_set_text(unit, "BPM");
+    lv_obj_set_style_text_font(unit, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(unit, lv_color_hex(V2_MUTED), 0);
+
+    return pill;
+}
+
+/* Quiet text CANCEL control, same treatment as the ECG monitor. */
+lv_obj_t *hpi_bpt_make_cancel(lv_obj_t *parent, lv_event_cb_t cb)
+{
+    lv_obj_t *btn = lv_btn_create(parent);
+    lv_obj_remove_style_all(btn);
+    lv_obj_set_size(btn, 160, 48);
+    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 140);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, "CANCEL");
+    lv_obj_center(lbl);
+    lv_obj_set_style_text_font(lbl, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(V2_MUTED), 0);
+    lv_obj_set_style_text_letter_space(lbl, 2, 0);
+    return btn;
+}
 
 void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4)
 {
     scr_bpt_measure = lv_obj_create(NULL);
-    // AMOLED OPTIMIZATION: Pure black background for power efficiency
     lv_obj_set_style_bg_color(scr_bpt_measure, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_clear_flag(scr_bpt_measure, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(scr_bpt_measure, bpt_measure_del, LV_EVENT_DELETE, NULL);
 
-    // CIRCULAR AMOLED-OPTIMIZED BP MEASUREMENT SCREEN
-    // Display center: (195, 195), Usable radius: ~185px
-    // Blue/Purple theme for BP measurement consistency
+    /* header: pulsing dot + BLOOD PRESSURE */
+    hpi_bpt_make_title_row(scr_bpt_measure, "BLOOD PRESSURE");
 
-    // OUTER RING: BP Measurement Progress Arc (Radius 170-185px)
-    lv_obj_t *arc_bp_progress = lv_arc_create(scr_bpt_measure);
-    lv_obj_set_size(arc_bp_progress, 370, 370);  // 185px radius
-    lv_obj_center(arc_bp_progress);
-    lv_arc_set_range(arc_bp_progress, 0, 100);  // Progress range for measurement duration
-    
-    // Background arc: Full 270° track (gray)
-    lv_arc_set_bg_angles(arc_bp_progress, 135, 45);  // Full background arc
-    lv_arc_set_value(arc_bp_progress, 0);  // Start at 0, will be updated by progress
-    
-    // Style the progress arc - blue theme for BP measurement
-    lv_obj_set_style_arc_color(arc_bp_progress, lv_color_hex(0x333333), LV_PART_MAIN);    // Background track
-    lv_obj_set_style_arc_width(arc_bp_progress, 8, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc_bp_progress, lv_color_hex(0x4A90E2), LV_PART_INDICATOR);  // Blue progress
-    lv_obj_set_style_arc_width(arc_bp_progress, 6, LV_PART_INDICATOR);
-    lv_obj_remove_style(arc_bp_progress, NULL, LV_PART_KNOB);  // Remove knob
-    lv_obj_clear_flag(arc_bp_progress, LV_OBJ_FLAG_CLICKABLE);
-    
-    // Store reference for progress updates
-    bar_bpt_progress = arc_bp_progress;  // Reuse existing variable
+    /* status line */
+    lv_obj_t *status = lv_label_create(scr_bpt_measure);
+    lv_label_set_text(status, "MEASURING \xC2\xB7 KEEP STILL");
+    lv_obj_align(status, LV_ALIGN_CENTER, 0, -100);
+    lv_obj_set_style_text_font(status, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(status, lv_color_hex(V2_BP), 0);
+    lv_obj_set_style_text_letter_space(status, 1, 0);
 
-    // Screen title - properly positioned to avoid arc overlap
-    lv_obj_t *label_title = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_title, "Blood Pressure");
-    lv_obj_align(label_title, LV_ALIGN_TOP_MID, 0, 50);  // Moved down to avoid arc overlap
-    lv_obj_add_style(label_title, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_title, lv_color_white(), LV_PART_MAIN);
+    /* live PPG trace — auto-scaled monitor waveform */
+    bpt_wave = hpi_wave_monitor_create(scr_bpt_measure, BPT_WAVE_W, BPT_WAVE_H,
+                                       lv_color_hex(V2_BP));
+    lv_obj_align(bpt_wave, LV_ALIGN_CENTER, 0, -30);
+    hpi_wave_monitor_set_window(bpt_wave, BPT_WAVE_WIN);
 
-    // Status message below title
-    lv_obj_t *label_status = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_status, "Measuring...");
-    lv_obj_align(label_status, LV_ALIGN_TOP_MID, 0, 70);
-    lv_obj_add_style(label_status, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_status, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_status, lv_color_hex(0x4A90E2), LV_PART_MAIN);  // Blue accent
+    /* status pill: ring + heart + HR + BPM */
+    lv_obj_t *pill = hpi_bpt_make_status_pill(scr_bpt_measure, &ring_progress,
+                                              &label_ring_pct, &label_hr_bpm);
+    lv_obj_align(pill, LV_ALIGN_CENTER, 0, 58);
 
-    // Progress percentage (center top area)
-    label_progress = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_progress, "0%");
-    lv_obj_align(label_progress, LV_ALIGN_TOP_MID, 0, 105);
-    lv_obj_add_style(label_progress, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_progress, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_progress, lv_color_white(), LV_PART_MAIN);
-
-    // CENTRAL ZONE: PPG Chart (positioned in center area)
-    chart_bpt_ppg = lv_chart_create(scr_bpt_measure);
-    lv_obj_set_size(chart_bpt_ppg, 340, 100);  // Smaller chart for circular design
-    lv_obj_align(chart_bpt_ppg, LV_ALIGN_CENTER, 0, -10);  // Centered position
-    
-    // Configure chart type and fundamental properties
-    lv_chart_set_type(chart_bpt_ppg, LV_CHART_TYPE_LINE);
-    lv_chart_set_point_count(chart_bpt_ppg, ECG_DISP_WINDOW_SIZE);
-    lv_chart_set_update_mode(chart_bpt_ppg, LV_CHART_UPDATE_MODE_CIRCULAR);  // PPG-like behavior
-    
-    // Set Y-axis range for PPG data
-    lv_chart_set_range(chart_bpt_ppg, LV_CHART_AXIS_PRIMARY_Y, -5000, 5000);
-    
-    // Disable division lines for clean PPG display
-    lv_chart_set_div_line_count(chart_bpt_ppg, 0, 0);
-    
-    // Configure main chart background (transparent for AMOLED)
-    lv_obj_set_style_bg_opa(chart_bpt_ppg, LV_OPA_TRANSP, LV_PART_MAIN);  // Transparent background
-    lv_obj_set_style_border_width(chart_bpt_ppg, 0, LV_PART_MAIN);        // No border (matches SpO2)
-    lv_obj_set_style_outline_width(chart_bpt_ppg, 0, LV_PART_MAIN);       // No outline
-    lv_obj_set_style_pad_all(chart_bpt_ppg, 5, LV_PART_MAIN);             // Minimal padding
-    
-    // Create series for PPG data
-    ser_bpt_ppg = lv_chart_add_series(chart_bpt_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_CHART_AXIS_PRIMARY_Y);
-    
-    // Configure line series styling - orange theme matching SpO2/raw PPG screens
-    lv_obj_set_style_line_width(chart_bpt_ppg, 6, LV_PART_ITEMS);         // Thicker line matching SpO2
-    lv_obj_set_style_line_color(chart_bpt_ppg, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_ITEMS);
-    lv_obj_set_style_line_opa(chart_bpt_ppg, LV_OPA_COVER, LV_PART_ITEMS); // Full opacity for medical clarity
-    lv_obj_set_style_line_rounded(chart_bpt_ppg, false, LV_PART_ITEMS);   // Sharp lines for precision
-    
-    // Disable points completely
-    lv_obj_set_style_width(chart_bpt_ppg, 0, LV_PART_INDICATOR);          // No point width
-    lv_obj_set_style_height(chart_bpt_ppg, 0, LV_PART_INDICATOR);         // No point height
-    lv_obj_set_style_bg_opa(chart_bpt_ppg, LV_OPA_TRANSP, LV_PART_INDICATOR); // Transparent points
-    lv_obj_set_style_border_opa(chart_bpt_ppg, LV_OPA_TRANSP, LV_PART_INDICATOR); // No point borders
-    
-    // Performance optimizations for real-time PPG display
-    lv_obj_add_flag(chart_bpt_ppg, LV_OBJ_FLAG_IGNORE_LAYOUT);           // Skip layout calculations
-    lv_obj_clear_flag(chart_bpt_ppg, LV_OBJ_FLAG_SCROLLABLE);            // Disable scrolling
-    lv_obj_clear_flag(chart_bpt_ppg, LV_OBJ_FLAG_CLICK_FOCUSABLE);       // No focus events
-    
-    // Initialize chart with baseline values
-    lv_chart_set_all_value(chart_bpt_ppg, ser_bpt_ppg, 0);
-
-    // HR Container below chart (following design pattern)
-    lv_obj_t *cont_hr = lv_obj_create(scr_bpt_measure);
-    lv_obj_set_size(cont_hr, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_align(cont_hr, LV_ALIGN_CENTER, 0, 75);  // Below chart
-    lv_obj_set_style_bg_opa(cont_hr, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(cont_hr, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(cont_hr, 0, LV_PART_MAIN);
-    lv_obj_set_flex_flow(cont_hr, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(cont_hr, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    // Heart Icon
-    lv_obj_t *img_heart = lv_img_create(cont_hr);
-    lv_img_set_src(img_heart, &img_heart_48px);
-    lv_obj_set_style_img_recolor(img_heart, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
-    lv_obj_set_style_img_recolor_opa(img_heart, LV_OPA_COVER, LV_PART_MAIN);
-
-    // HR Value
-    label_hr_bpm = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_bpm, "--");
-    lv_obj_add_style(label_hr_bpm, &style_body_medium, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_hr_bpm, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_pad_left(label_hr_bpm, 8, LV_PART_MAIN);
-
-    // HR Unit
-    lv_obj_t *label_hr_unit = lv_label_create(cont_hr);
-    lv_label_set_text(label_hr_unit, "BPM");
-    lv_obj_add_style(label_hr_unit, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_hr_unit, lv_color_hex(COLOR_CRITICAL_RED), LV_PART_MAIN);
-
-    // Instructions at bottom
-    lv_obj_t *label_instructions = lv_label_create(scr_bpt_measure);
-    lv_label_set_text(label_instructions, "Hold Still");
-    lv_obj_align(label_instructions, LV_ALIGN_BOTTOM_MID, 0, -30);
-    lv_obj_add_style(label_instructions, &style_caption, LV_PART_MAIN);
-    lv_obj_set_style_text_align(label_instructions, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    lv_obj_set_style_text_color(label_instructions, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+    hpi_bpt_make_cancel(scr_bpt_measure, bpt_cancel_cb);
 
     hpi_disp_set_curr_screen(SCR_SPL_BPT_MEASURE);
     hpi_show_screen(scr_bpt_measure, m_scroll_dir);
@@ -204,87 +250,47 @@ void draw_scr_bpt_measure(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
 
 void hpi_disp_bpt_update_progress(int progress)
 {
-    if (label_progress == NULL || bar_bpt_progress == NULL)
-    {
+    if (label_ring_pct == NULL || ring_progress == NULL) {
         return;
     }
-
-    // Update arc progress (bar_bpt_progress is now the arc)
-    lv_arc_set_value(bar_bpt_progress, progress);
-    
-    // Update progress label
-    lv_label_set_text_fmt(label_progress, "%d%%", progress);
-
-    if (progress == 100)
-    {
-        // Measurement complete
-        // Future: Could add completion animations or state changes
+    if (progress < 0) {
+        progress = 0;
+    } else if (progress > 100) {
+        progress = 100;
     }
-}
-
-static void hpi_bpt_disp_do_set_scale(int disp_window_size)
-{
-    if (gx >= (disp_window_size))
-    {
-
-        lv_chart_set_range(chart_bpt_ppg, LV_CHART_AXIS_PRIMARY_Y, y_min_ppg, y_max_ppg);
-
-        gx = 0;
-
-        y_max_ppg = -900000;
-        y_min_ppg = 900000;
-    }
-}
-
-static void hpi_bpt_disp_add_samples(int num_samples)
-{
-    gx += num_samples;
+    lv_arc_set_value(ring_progress, progress);
+    lv_label_set_text_fmt(label_ring_pct, "%d", progress);
 }
 
 void hpi_disp_bpt_draw_plotPPG(struct hpi_ppg_fi_data_t ppg_sensor_sample)
 {
-    uint32_t *data_ppg = ppg_sensor_sample.raw_red;
+    if (bpt_wave == NULL || label_hr_bpm == NULL) {
+        return;   /* screen torn down between the msgq drain and this call */
+    }
 
+    uint32_t *data_ppg = ppg_sensor_sample.raw_red;
     uint16_t n_sample = ppg_sensor_sample.ppg_num_samples;
 
-    for (int i = 0; i < n_sample; i++)
-    {
-        float data_ppg_i = (float)(data_ppg[i] * 1.000); // * 0.100);
+    for (int i = 0; i < n_sample; i++) {
+        hpi_wave_monitor_push_auto(bpt_wave, (int32_t)data_ppg[i]);
+    }
 
-        if (data_ppg_i == 0)
-        {
-            return;
-        }
-
-        if (data_ppg_i < y_min_ppg)
-        {
-            y_min_ppg = data_ppg_i;
-        }
-
-        if (data_ppg_i > y_max_ppg)
-        {
-            y_max_ppg = data_ppg_i;
-        }
-
-        lv_chart_set_next_value(chart_bpt_ppg, ser_bpt_ppg, data_ppg_i);
-
-        if(ppg_sensor_sample.hr > 0)
-        {
-            lv_label_set_text_fmt(label_hr_bpm, "%d", ppg_sensor_sample.hr);
-        } else
-        {
-            lv_label_set_text_fmt(label_hr_bpm, "--");
-        }
-
-        hpi_bpt_disp_add_samples(1);
-        hpi_bpt_disp_do_set_scale(BPT_DISP_WINDOW_SIZE);
+    if (ppg_sensor_sample.hr > 0) {
+        lv_label_set_text_fmt(label_hr_bpm, "%d", ppg_sensor_sample.hr);
+    } else {
+        lv_label_set_text(label_hr_bpm, "--");
     }
 }
 
 void gesture_down_scr_bpt_measure(void)
 {
-    // Handle gesture down event
-    LOG_INF("Gesture Down on BPT Measure Screen - Cancelling Measurement, giving cancel semaphore");
-    k_sem_give(&sem_fi_bpt_est_cancel);
-    hpi_load_screen(SCR_BPT, SCROLL_DOWN);
+    LOG_INF("Cancel BPT measurement (swipe/CANCEL) - posting EVT_FI_BPT_EST_CANCEL");
+    k_event_post(&fi_evt, EVT_FI_BPT_EST_CANCEL);
+    /* Defer, not hpi_load_screen(): this runs inside LVGL input dispatch (swipe
+     * gesture or the CANCEL button), and this screen carries a live PPG wave
+     * monitor. Rebuilding synchronously here frees this screen and the child
+     * under the finger from within the event still walking it -- the same
+     * reboot the SpO2 measure screen hit. Queue it; the display loop draws it on
+     * a clean stack. */
+    hpi_load_scr_spl(SCR_BPT, SCROLL_DOWN, 0, 0, 0, 0);
 }
