@@ -540,7 +540,9 @@ static void build_home_minimal_tile(lv_obj_t *tile)
     lv_obj_t *vrow = lv_obj_create(tile);
     lv_obj_remove_style_all(vrow);
     lv_obj_set_size(vrow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_align(vrow, LV_ALIGN_CENTER, 0, 118);
+    /* +130: a clear glanceable gap below the date row (+72) so the vitals read
+     * as their own line, not a continuation of the date. */
+    lv_obj_align(vrow, LV_ALIGN_CENTER, 0, 130);
     lv_obj_set_flex_flow(vrow, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(vrow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(vrow, 22, 0);
@@ -551,7 +553,7 @@ static void build_home_minimal_tile(lv_obj_t *tile)
     home_hint = NULL;
     home_warn = lv_label_create(tile);
     lv_label_set_text(home_warn, "Set time from app");
-    lv_obj_align(home_warn, LV_ALIGN_CENTER, 0, 158);
+    lv_obj_align(home_warn, LV_ALIGN_CENTER, 0, 166);
     lv_obj_set_style_text_color(home_warn, lv_color_hex(R0_WARNING), LV_PART_MAIN);
     lv_obj_set_style_text_font(home_warn, &HPI_FONT_LABEL, LV_PART_MAIN);
     lv_subject_add_observer_obj(&subj_time, home_timevalid_cb, tile, NULL);

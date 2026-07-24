@@ -177,21 +177,31 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     lv_obj_set_style_text_letter_space(hdr, 4, 0);
     lv_obj_align(hdr, LV_ALIGN_TOP_MID, 20, 40);
 
-    /* P1-2: the back chip was a click-less label - it looked actionable and did
-     * nothing. Give it a real hit area (>=44 px per the v2 touch-target rule)
-     * and route it to the same place as the swipe-down gesture. */
+    /* Back chip = the reliable exit. Swipe-down (gesture_down_scr_settings) is
+     * ALSO wired, but the scrollable list below captures every vertical drag as a
+     * scroll (LVGL claims any ver-scrollable under the finger), so the swipe never
+     * reaches the screen -- the chip and the crown button are the exits that work.
+     * Give it a visible circular surface + hairline border so it reads as a
+     * button rather than a bare glyph, plus a >=44px hit area. */
     lv_obj_t *back = lv_obj_create(scr_settings);
     lv_obj_remove_style_all(back);
     lv_obj_set_size(back, 48, 48);
-    lv_obj_align(back, LV_ALIGN_TOP_LEFT, 22, 26);
+    lv_obj_align(back, LV_ALIGN_TOP_LEFT, 18, 24);
     lv_obj_clear_flag(back, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(back, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_radius(back, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(back, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_opa(back, 24, 0);            /* ~9% soft surface */
+    lv_obj_set_style_border_width(back, 1, 0);
+    lv_obj_set_style_border_color(back, lv_color_hex(0x3A4247), 0);
+    lv_obj_set_style_border_opa(back, LV_OPA_COVER, 0);
+    lv_obj_set_ext_click_area(back, 8);              /* forgiving touch target */
     lv_obj_add_event_cb(back, back_chip_cb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *back_ic = lv_label_create(back);
     lv_label_set_text(back_ic, SYM_BACK);
     lv_obj_set_style_text_font(back_ic, &HPI_FONT_ICON, 0);
-    lv_obj_set_style_text_color(back_ic, lv_color_hex(0xC7CED1), 0);
+    lv_obj_set_style_text_color(back_ic, lv_color_hex(0xEEF1F2), 0);
     lv_obj_center(back_ic);
 
     /* scrollable list */
@@ -205,6 +215,12 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     lv_obj_set_style_pad_bottom(list, 70, 0);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    /* The SH8601 is SPI-bound (~74 ms per full frame), so momentum throw and
+     * elastic rubber-band -- both multi-frame animations -- feel slow and draggy.
+     * Track the finger 1:1 and stop on release instead, exactly as the carousel
+     * tileview does for the same panel. */
+    lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_MOMENTUM);
+    lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
 
     make_row(list, SYM_BRIGHT_6,  0x8B9498, "Brightness",   ROW_BRIGHT, true);
     make_row(list, SYM_AOD,       0x8B9498, "Always-on",    ROW_AOD,    true);
@@ -226,5 +242,11 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
 
 void gesture_down_scr_settings(void)
 {
-    hpi_carousel_show(SCR_HOME, SCROLL_DOWN);
+    /* Defer, not hpi_carousel_show(): this is reached from the back chip's
+     * LV_EVENT_CLICKED (and, where it fires, the swipe gesture), i.e. from inside
+     * LVGL input dispatch. Rebuilding the carousel synchronously there tears down
+     * this screen -- including the back chip whose click is still being walked --
+     * from within its own event. Queue it and let the display loop draw it on a
+     * clean stack (same fix as the SpO2/BP measure screens). */
+    hpi_load_scr_spl(SCR_HOME, SCROLL_DOWN, 0, 0, 0, 0);
 }
