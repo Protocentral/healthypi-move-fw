@@ -117,7 +117,57 @@ static void row_click_cb(lv_event_t *e)
 static void back_chip_cb(lv_event_t *e)
 {
     ARG_UNUSED(e);
-    gesture_down_scr_settings();   /* same exit as the swipe-down gesture */
+    gesture_down_scr_settings();   /* same exit as the pull-to-dismiss gesture */
+}
+
+/* --- pull-to-dismiss -------------------------------------------------------
+ * A swipe-down cannot reach the screen's gesture: LVGL claims any vertical drag
+ * over a ver-scrollable list as scrolling, so indev_gesture bails. Instead watch
+ * the finger on the list -- a sustained downward drag WHILE the list is already
+ * at the top means "close". It cannot fire mid-list: scrolling into the list
+ * moves scroll_y > 0, which resets the accumulator. Elastic-independent, so it
+ * works with momentum/elastic off (kept off for a snappy list on this SPI panel).
+ */
+#define SETTINGS_PULL_DISMISS_PX 70
+static int  s_pull_accum;
+static bool s_pull_at_top;
+
+static void list_pressed_cb(lv_event_t *e)
+{
+    lv_obj_t *list = lv_event_get_current_target(e);
+    s_pull_at_top = (lv_obj_get_scroll_y(list) <= 0);
+    s_pull_accum = 0;
+}
+
+static void list_pressing_cb(lv_event_t *e)
+{
+    lv_obj_t *list = lv_event_get_current_target(e);
+    lv_indev_t *indev = lv_indev_active();
+    if (indev == NULL) {
+        return;
+    }
+    if (lv_obj_get_scroll_y(list) > 0) {   /* scrolled into the list -> not a dismiss */
+        s_pull_accum = 0;
+        s_pull_at_top = false;
+        return;
+    }
+    lv_point_t v;
+    lv_indev_get_vect(indev, &v);
+    s_pull_accum += v.y;                    /* +down / -up; an up-move cancels a pull */
+    if (s_pull_accum < 0) {
+        s_pull_accum = 0;
+    }
+}
+
+static void list_released_cb(lv_event_t *e)
+{
+    ARG_UNUSED(e);
+    bool dismiss = s_pull_at_top && (s_pull_accum >= SETTINGS_PULL_DISMISS_PX);
+    s_pull_accum = 0;
+    s_pull_at_top = false;
+    if (dismiss) {
+        gesture_down_scr_settings();
+    }
 }
 
 static lv_obj_t *make_row(lv_obj_t *list, const char *icon, uint32_t icon_col,
@@ -128,6 +178,9 @@ static lv_obj_t *make_row(lv_obj_t *list, const char *icon, uint32_t icon_col,
     lv_obj_set_width(row, lv_pct(100));
     lv_obj_set_height(row, LV_SIZE_CONTENT);
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    /* Bubble press events to the list so pull-to-dismiss sees the drag even when
+     * the finger starts on a (clickable) row. */
+    lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_set_style_radius(row, 20, 0);
     lv_obj_set_style_bg_color(row, lv_color_hex(V2_CHIP_BG), 0);
     lv_obj_set_style_bg_opa(row, V2_CHIP_OPA, 0);
@@ -169,40 +222,40 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     lv_obj_set_style_bg_opa(scr_settings, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_clear_flag(scr_settings, LV_OBJ_FLAG_SCROLLABLE);
 
-    /* header: back chip + SETTINGS title */
-    lv_obj_t *hdr = lv_label_create(scr_settings);
-    lv_label_set_text(hdr, "SETTINGS");
-    lv_obj_set_style_text_font(hdr, &HPI_FONT_LABEL, 0);
-    lv_obj_set_style_text_color(hdr, lv_color_hex(V2_LABEL), 0);
-    lv_obj_set_style_text_letter_space(hdr, 4, 0);
-    lv_obj_align(hdr, LV_ALIGN_TOP_MID, 20, 40);
-
-    /* Back chip = the reliable exit. Swipe-down (gesture_down_scr_settings) is
-     * ALSO wired, but the scrollable list below captures every vertical drag as a
-     * scroll (LVGL claims any ver-scrollable under the finger), so the swipe never
-     * reaches the screen -- the chip and the crown button are the exits that work.
-     * Give it a visible circular surface + hairline border so it reads as a
-     * button rather than a bare glyph, plus a >=44px hit area. */
+    /* Header = the visible, reliable exit. The old back chip was aligned
+     * TOP_LEFT (18,24) -- that corner is OUTSIDE the round panel (at y~24 the
+     * visible width is only ~x[101..289]), so it never appeared on screen. A
+     * round watch has to keep controls near the centre line, so the exit is now a
+     * centred "< SETTINGS" pill: a real tappable button, obviously the way back,
+     * and fully on-screen. (Swipe-down is also wired via gesture_down_scr_settings
+     * and now works as pull-to-dismiss, below; the crown button exits too.) */
     lv_obj_t *back = lv_obj_create(scr_settings);
     lv_obj_remove_style_all(back);
-    lv_obj_set_size(back, 48, 48);
-    lv_obj_align(back, LV_ALIGN_TOP_LEFT, 18, 24);
+    lv_obj_set_size(back, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_align(back, LV_ALIGN_TOP_MID, 0, 30);
     lv_obj_clear_flag(back, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(back, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_flex_flow(back, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(back, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(back, 8, 0);
+    lv_obj_set_style_pad_hor(back, 18, 0);
+    lv_obj_set_style_pad_ver(back, 8, 0);
     lv_obj_set_style_radius(back, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(back, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_bg_opa(back, 24, 0);            /* ~9% soft surface */
-    lv_obj_set_style_border_width(back, 1, 0);
-    lv_obj_set_style_border_color(back, lv_color_hex(0x3A4247), 0);
-    lv_obj_set_style_border_opa(back, LV_OPA_COVER, 0);
-    lv_obj_set_ext_click_area(back, 8);              /* forgiving touch target */
+    lv_obj_set_ext_click_area(back, 10);             /* forgiving touch target */
     lv_obj_add_event_cb(back, back_chip_cb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t *back_ic = lv_label_create(back);
     lv_label_set_text(back_ic, SYM_BACK);
     lv_obj_set_style_text_font(back_ic, &HPI_FONT_ICON, 0);
     lv_obj_set_style_text_color(back_ic, lv_color_hex(0xEEF1F2), 0);
-    lv_obj_center(back_ic);
+
+    lv_obj_t *hdr = lv_label_create(back);
+    lv_label_set_text(hdr, "SETTINGS");
+    lv_obj_set_style_text_font(hdr, &HPI_FONT_LABEL, 0);
+    lv_obj_set_style_text_color(hdr, lv_color_hex(V2_LABEL), 0);
+    lv_obj_set_style_text_letter_space(hdr, 3, 0);
 
     /* scrollable list */
     lv_obj_t *list = lv_obj_create(scr_settings);
@@ -221,6 +274,11 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
      * tileview does for the same panel. */
     lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_MOMENTUM);
     lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLL_ELASTIC);
+    /* pull-to-dismiss: a downward drag while already at the top closes Settings */
+    lv_obj_add_event_cb(list, list_pressed_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(list, list_pressing_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(list, list_released_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(list, list_released_cb, LV_EVENT_PRESS_LOST, NULL);
 
     make_row(list, SYM_BRIGHT_6,  0x8B9498, "Brightness",   ROW_BRIGHT, true);
     make_row(list, SYM_AOD,       0x8B9498, "Always-on",    ROW_AOD,    true);
