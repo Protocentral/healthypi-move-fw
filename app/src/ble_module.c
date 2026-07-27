@@ -295,7 +295,21 @@ void ble_ecg_notify(int32_t *ecg_data, uint8_t len)
 
 	// LOG_DBG("ECG Not len %d", len);
 
-	bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[2], &out_data, len * 4);
+	/* ECG streams at 128 sps in batches of 8, so this fires ~16x/s and is the
+	 * first thing to starve when the BLE TX pool is momentarily empty (MCUmgr
+	 * or a health-store sync sharing the connection interval). The return used
+	 * to be discarded, which made the app's intermittent live plot invisible
+	 * from the device side — count the drops so it is diagnosable. -ENOTCONN /
+	 * -EINVAL just mean nobody is subscribed; those are not drops. */
+	int err = bt_gatt_notify(NULL, &hpi_ecg_gsr_service.attrs[2], &out_data, len * 4);
+	if (err && err != -ENOTCONN && err != -EINVAL)
+	{
+		static uint32_t ecg_notify_drops;
+		if ((++ecg_notify_drops % 50) == 0)
+		{
+			LOG_WRN("ECG notify dropped %u batches (last err %d)", ecg_notify_drops, err);
+		}
+	}
 }
 
 void ble_gsr_notify(int32_t *gsr_data, uint8_t len)

@@ -50,16 +50,24 @@ struct metric_desc {
     int action;   /* SCR_SPL_* to open on tap, or -1 */
 };
 
+/* `accent` is read ONLY by build_metric_tile() below, and populate_metric_tile()
+ * returns into a dedicated monitor for every metric except M_RECOVERY (and M_GSR
+ * when CONFIG_HPI_GSR_SCREEN is off). So most of these values never render — but
+ * they were a second, off-palette color set (rose/emerald/amber-400/violet-400/
+ * green-400, i.e. raw Tailwind) that disagreed with the live screens and kept
+ * getting copied. Every entry now names the token its live screen actually uses.
+ * (Accent-following screens call hpi_accent_rgb() at build time; V2_ACCENT is the
+ * default and the only value valid in a static initializer.) */
 static const struct metric_desc metrics[M_COUNT] = {
-    [M_HR]       = {"HR",   0xFF4D6D, "BPM",  -1},
-    [M_ECG]      = {"ECG",  0x34D399, "BPM",  -1},
+    [M_HR]       = {"HR",   V2_ACCENT, "BPM",  -1},
+    [M_ECG]      = {"ECG",  HPI_ECG_ACCENT, "BPM",  -1},   /* see theme header: pending retheme */
     [M_SPO2]     = {"SpO2", V2_SPO2, "%",    -1},   /* v2 idle tile owns the source toggle + START */
-    [M_TEMP]     = {"Temp", 0xFBBF24, "",     -1},
-    [M_ACTIVITY] = {"Activity", 0x16A34A, "", -1},
-    [M_HRV]      = {"HRV",  0xA78BFA, "ms",   -1},   /* continuous PPG HRV/stress: no tap-to-measure */
+    [M_TEMP]     = {"Temp", V2_ACCENT, "",     -1},
+    [M_ACTIVITY] = {"Activity", V2_GREEN, "", -1},
+    [M_HRV]      = {"HRV",  V2_INDIGO, "ms",   -1},   /* continuous PPG HRV/stress: no tap-to-measure */
     [M_BPT]      = {"BP",   V2_BP,  "mmHg", -1},   /* v2 idle tile owns MEASURE */
     [M_GSR]      = {"EDA",  V2_EDA, "uS",   -1},   /* v2 idle tile owns MEASURE */
-    [M_RECOVERY] = {"Recovery", 0x4ADE80, "", -1}, /* H6 readiness 0..100 + warm-up caption */
+    [M_RECOVERY] = {"Recovery", V2_GREEN, "", -1}, /* H6 readiness 0..100 + warm-up caption */
 };
 
 /* idx -> subject (see hpi_ui_subjects.c) */
@@ -176,7 +184,11 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
     lv_obj_t *val = lv_label_create(tile);
     lv_label_set_text(val, "--");
     lv_obj_align(val, LV_ALIGN_CENTER, 0, -18);
-    lv_obj_add_style(val, &style_numeric_large, LV_PART_MAIN);   /* Inter 80 hero */
+    /* style_numeric_large is rubik_500_32, NOT the 88 px hero bin the handoff
+     * specifies for a metric's primary value. Only M_RECOVERY renders through
+     * here, and its layout has not been designed yet; revisit with that tile.
+     * (The comment here used to say "Inter 80 hero" — that font is long gone.) */
+    lv_obj_add_style(val, &style_numeric_large, LV_PART_MAIN);
     lv_obj_set_style_text_color(val, lv_color_hex(metrics[idx].accent), LV_PART_MAIN);
     if (idx == M_BPT) {
         lv_obj_set_style_text_font(val, &FONT_HERO_DUAL, LV_PART_MAIN);  /* "120/80" */
@@ -187,7 +199,7 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
         lv_obj_t *unit = lv_label_create(tile);
         lv_label_set_text(unit, metrics[idx].unit);
         lv_obj_align(unit, LV_ALIGN_CENTER, 0, 34);
-        lv_obj_set_style_text_color(unit, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+        lv_obj_set_style_text_color(unit, lv_color_hex(V2_MUTED), LV_PART_MAIN);
         lv_obj_set_style_text_font(unit, &FONT_UNIT, LV_PART_MAIN);
     }
 
@@ -195,7 +207,7 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
         lv_obj_t *hint = lv_label_create(tile);
         lv_label_set_text(hint, "tap to measure");
         lv_obj_align(hint, LV_ALIGN_CENTER, 0, 120);
-        lv_obj_set_style_text_color(hint, lv_color_hex(0x5A5A62), LV_PART_MAIN);
+        lv_obj_set_style_text_color(hint, lv_color_hex(V2_MUTED), LV_PART_MAIN);
         lv_obj_set_style_text_font(hint, &FONT_CAPTION, LV_PART_MAIN);
     }
 
@@ -205,7 +217,7 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
     if (idx == M_RECOVERY) {
         lv_obj_t *sub = lv_label_create(tile);
         lv_obj_align(sub, LV_ALIGN_CENTER, 0, 64);
-        lv_obj_set_style_text_color(sub, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_MAIN);
+        lv_obj_set_style_text_color(sub, lv_color_hex(V2_MUTED), LV_PART_MAIN);
         lv_obj_set_style_text_font(sub, &FONT_CAPTION, LV_PART_MAIN);
         hpi_ui_bind_label(sub, &subj_recovery_sub);
     }
@@ -400,7 +412,9 @@ static void build_home_tile(lv_obj_t *tile)
     lv_obj_t *time = lv_label_create(trow);
     lv_label_set_text(time, "00:00");
     lv_obj_set_style_text_font(time, &R0_FONT_HERO, 0);
-    lv_obj_set_style_text_color(time, lv_color_white(), 0);
+    /* V2_VALUE (#f4f6f7), not pure white: the handoff specifies the digital face
+     * time as the same hero value color every other screen uses. */
+    lv_obj_set_style_text_color(time, lv_color_hex(V2_VALUE), 0);
     hpi_ui_bind_label(time, &subj_time);
 
     lv_obj_t *ampm = lv_label_create(trow);

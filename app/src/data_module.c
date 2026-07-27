@@ -566,9 +566,14 @@ void data_thread(void)
             processed_data = true;
             if (settings_send_ble_enabled)
             {
-
+                /* ECG only. This used to ALSO push the very same ecg_samples
+                 * buffer out of ble_gsr_notify(), i.e. ECG data on the BioZ
+                 * characteristic — wrong payload, and it doubled ECG-rate
+                 * notification traffic, so a momentarily empty BLE TX pool
+                 * dropped ECG batches and the app's live plot went patchy.
+                 * The BioZ characteristic has its own correct feed from
+                 * q_bioz_sample below. */
                 ble_ecg_notify(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples);
-                ble_gsr_notify(ecg_sensor_sample.ecg_samples, ecg_sensor_sample.ecg_num_samples);
             }
             if (settings_plot_enabled)
             {

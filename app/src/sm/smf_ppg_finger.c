@@ -371,6 +371,15 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
                 {
                     // BPT Calibration done
                     LOG_INF("BPT Calibration Done");
+                    /* Clear the in-flight flag on the SAME edge that completes the
+                     * point. It used to be cleared only on bpt_status 2/6 above,
+                     * but the point actually ends HERE, on progress == 100, which
+                     * immediately stops the hub and the sampling loop. If the hub's
+                     * terminal status byte landed in a report that arrived after
+                     * that, it was never decoded, s_cal_run stayed set forever, and
+                     * every later CAL_POINT returned -EBUSY -- the app's "no option
+                     * to continue to the third point", intermittent by nature. */
+                    atomic_set(&s_cal_run, 0);
                     k_sem_give(&sem_bpt_cal_complete);
                     m_cal_hr = edata->hr;
                 }
@@ -778,6 +787,9 @@ static enum smf_state_result st_ppg_fing_bpt_cal_run(void *o)
 static void st_ppg_fing_bpt_cal_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Done Entry");
+    /* Backstop: reaching this state means the point is over by every route, so
+     * the next hpi_bpt_cal_point() must not be able to see a stale -EBUSY. */
+    atomic_set(&s_cal_run, 0);
     hpi_load_scr_spl(SCR_SPL_BPT_CAL_COMPLETE, SCROLL_NONE, SCR_BPT, 0, 0, 0);
     hpi_hw_fi_sensor_off();
 }

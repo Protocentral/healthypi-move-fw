@@ -16,7 +16,8 @@
  * transient leads-off phase here).
  *
  * Layout matches the SpO2 idle/measure spacing (header / hero / CTA, and during
- * measure: title -> hint -> wave/progress -> CANCEL) with ECG green accents.
+ * measure: title -> hint -> wave/progress -> CANCEL), themed on the user accent
+ * (Signal Amber by default) per the v2 handoff's ECG section.
  */
 
 #include <zephyr/kernel.h>
@@ -33,12 +34,22 @@
 
 #define ECG_REC_SECS 30
 
-/* ECG trace / accent = medical green (carousel tile accent). Amber/warning for
- * attention phases; success green for completion. */
-#define ECG_ACCENT        0x34D399
-#define ECG_ON_ACCENT     0x062016   /* dark text on solid START fill */
-#define ECG_STAB_ACCENT   R0_ACCENT  /* Signal Amber — hold-still attention */
-#define ECG_WARN_ACCENT   R0_WARNING
+/* v2 handoff: the ECG screen is an ACCENT screen — trace stroke, pulsing dot,
+ * RECORDING text and countdown ring all in the accent. Follows the user's accent
+ * selection at build time, as HR and Temp do (hpi_r0_theme.h HPI_ECG_ACCENT is
+ * the default, for the carousel's static table).
+ *
+ * Was an off-palette mint 0x34D399 with a matching dark-green on-accent. */
+#define ECG_ACCENT        (hpi_accent_rgb())
+#define ECG_ON_ACCENT     R0_ON_ACCENT  /* dark text on the solid accent START fill */
+/* Coaching lines ("PLACE FINGERS" / "HOLD STILL") are instructions, not identity.
+ * They used to be Signal Amber, which read as a second accent while the screen
+ * itself was mint; now that the screen IS amber, painting them the same color
+ * would flatten it into one block. The handoff sets the equivalent line —
+ * `Keep still` in the recording pill — to the muted gray #7f888c.
+ * (Was ECG_COACH; renamed because it is no longer an accent.) */
+#define ECG_COACH         V2_MUTED2
+#define ECG_WARN_ACCENT   R0_ERROR   /* leads-off is an error, not a warning tint */
 
 /* SpO2-measure plot size so the round face stays open. */
 #define ECG_WAVE_W  296
@@ -109,10 +120,13 @@ static void apply_view(enum ecg_view v)
     set_hidden(s_count, v != EV_REC);
     set_hidden(s_cancel_btn, idle || v == EV_DONE);
 
-    /* Recording reuses the hint line for a quiet status under the title. */
+    /* Recording reuses the hint line for a quiet status under the title. Muted,
+     * like every other coaching line: the accent during recording is carried by
+     * the pulsing dot, the trace and the progress ring (handoff: `RECORDING` in
+     * accent, `Keep still` in #7f888c). */
     if (v == EV_REC && s_hint) {
         set_hidden(s_hint, false);
-        set_hint(SYM_DO_NOT_TOUCH, "HOLD STILL", ECG_ACCENT);
+        set_hint(SYM_DO_NOT_TOUCH, "HOLD STILL", ECG_COACH);
         set_hidden(s_hint_ic, true);   /* text alone under the pulsing title */
     }
 }
@@ -137,7 +151,7 @@ static void ecg_start_cb(lv_event_t *e)
         hpi_wave_monitor_reset(g_ecg_wave);
     }
     g_ecg_active = true;
-    set_hint(SYM_SENSORS, "PLACE FINGERS", ECG_STAB_ACCENT);
+    set_hint(SYM_SENSORS, "PLACE FINGERS", ECG_COACH);
     apply_view(EV_WAIT);
 }
 
@@ -287,13 +301,13 @@ void hpi_ecg_monitor_update(int status, int progress_timer)
     }
 
     if (progress_timer == (int)HPI_ECG_UI_WAIT_LEADS) {
-        set_hint(SYM_SENSORS, "PLACE FINGERS", ECG_STAB_ACCENT);
+        set_hint(SYM_SENSORS, "PLACE FINGERS", ECG_COACH);
         apply_view(EV_WAIT);
     } else if (progress_timer == (int)HPI_ECG_UI_LEADS_OFF) {
         set_hint(SYM_WARNING, "LEADS OFF", ECG_WARN_ACCENT);
         apply_view(EV_LEADOFF);
     } else if (progress_timer > ECG_REC_SECS) {
-        set_hint(SYM_DO_NOT_TOUCH, "HOLD STILL", ECG_STAB_ACCENT);
+        set_hint(SYM_DO_NOT_TOUCH, "HOLD STILL", ECG_COACH);
         if (s_phase_big) {
             lv_label_set_text_fmt(s_phase_big, "%d", progress_timer - ECG_REC_SECS);
         }
@@ -347,13 +361,7 @@ void hpi_ecg_monitor_into(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(s_start_btn, LV_OPA_COVER, 0);
     lv_obj_add_event_cb(s_start_btn, ecg_start_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *brow = lv_obj_create(s_start_btn);
-    lv_obj_remove_style_all(brow);
-    lv_obj_set_size(brow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_center(brow);
-    lv_obj_set_flex_flow(brow, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(brow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(brow, 8, 0);
+    lv_obj_t *brow = hpi_btn_row_create(s_start_btn, 8);
 
     lv_obj_t *bic = lv_label_create(brow);
     lv_label_set_text(bic, SYM_PLAY);
@@ -414,12 +422,12 @@ void hpi_ecg_monitor_into(lv_obj_t *parent)
     s_hint_ic = lv_label_create(hrow);
     lv_label_set_text(s_hint_ic, SYM_SENSORS);   /* matsym_24 — touch_app is only in matsym_28 */
     lv_obj_set_style_text_font(s_hint_ic, &HPI_FONT_ICON, 0);
-    lv_obj_set_style_text_color(s_hint_ic, lv_color_hex(ECG_STAB_ACCENT), 0);
+    lv_obj_set_style_text_color(s_hint_ic, lv_color_hex(ECG_COACH), 0);
 
     s_hint = lv_label_create(hrow);
     lv_label_set_text(s_hint, "PLACE FINGERS");
     lv_obj_set_style_text_font(s_hint, &HPI_FONT_LABEL, 0);
-    lv_obj_set_style_text_color(s_hint, lv_color_hex(ECG_STAB_ACCENT), 0);
+    lv_obj_set_style_text_color(s_hint, lv_color_hex(ECG_COACH), 0);
     lv_obj_set_style_text_letter_space(s_hint, 1, 0);
 
     /* stabilizing numeral — center of the open plot slot, breathing opacity */
@@ -427,7 +435,9 @@ void hpi_ecg_monitor_into(lv_obj_t *parent)
     lv_label_set_text(s_phase_big, "5");
     lv_obj_align(s_phase_big, LV_ALIGN_CENTER, 0, -8);
     lv_obj_set_style_text_font(s_phase_big, &HPI_FONT_HERO, 0);
-    lv_obj_set_style_text_color(s_phase_big, lv_color_hex(ECG_STAB_ACCENT), 0);
+    /* Accent, not ECG_COACH: this is the focal 88 px value during stabilization,
+     * not an instruction line — muting it would dim the biggest thing on screen. */
+    lv_obj_set_style_text_color(s_phase_big, lv_color_hex(ECG_ACCENT), 0);
     lv_obj_set_style_text_letter_space(s_phase_big, -2, 0);
     lv_obj_add_flag(s_phase_big, LV_OBJ_FLAG_HIDDEN);
     {
