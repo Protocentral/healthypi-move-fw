@@ -304,7 +304,6 @@ static const screen_func_table_entry_t screen_func_table[] = {
      * deferred load of either was rejected as "Invalid screen" while the other
      * seven worked. */
     [SCR_ACTIVITY] = {draw_scr_carousel_entry, NULL},
-    [SCR_RECOVERY] = {draw_scr_carousel_entry, NULL},
     [SCR_SPL_FI_SENS_WEAR] = {draw_scr_fi_sens_wear, gesture_down_scr_fi_sens_wear},
     [SCR_SPL_FI_SENS_CHECK] = {draw_scr_fi_sens_check, gesture_down_scr_fi_sens_check},
     [SCR_SPL_BPT_MEASURE] = {draw_scr_bpt_measure, gesture_down_scr_bpt_measure},
@@ -1776,8 +1775,6 @@ static void hpi_disp_push_subjects(void)
         } else if (summ.stress_valid) {
             hpi_ui_subj_set_stress(summ.stress_last);
         }
-        hpi_ui_subj_set_recovery(summ.readiness, summ.readiness_valid,
-                                 summ.readiness_warmup_pct);
     }
 
     /* P3: trend cache paint — early-outs if tile widgets are not mounted. */

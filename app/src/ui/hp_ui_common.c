@@ -567,7 +567,6 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ACTIVITY:
     case SCR_HRV:
     case SCR_GSR:
-    case SCR_RECOVERY:
         hpi_carousel_show(m_screen, m_scroll_dir);
         break;
     default:

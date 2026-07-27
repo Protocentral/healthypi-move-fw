@@ -28,20 +28,22 @@ lv_obj_t *scr_carousel = NULL;
 static lv_obj_t *carousel_tv = NULL;
 
 /* Lazy tile content: empty tile shells are always created; monitor widgets are
- * populated on first visit. Building all 9 heavy tiles at once OOM'd LVGL
+ * populated on first visit. Building every heavy tile at once OOM'd LVGL
  * (lv_draw_label ASSERT_MALLOC) after the placeholder fill-in. */
-static lv_obj_t *carousel_tiles[1 + 9]; /* home + M_COUNT (max 9 metrics) */
+static lv_obj_t *carousel_tiles[1 + 8]; /* home + M_COUNT metrics */
 static uint16_t carousel_built_mask;   /* bit 0 = home, bit (i+1) = metric i */
 
 /* home (watch face) widgets */
 static lv_obj_t *home_hint = NULL;
 static lv_obj_t *home_warn = NULL;
 
-/* metric tiles — v2 handoff swipe order:
- * Home · HR · ECG · SpO2 · BP · Temp · Activity · Stress · EDA · Recovery.
- * Recovery (H6 readiness) is appended after the handoff's 9 — a placeholder tile
- * pending a dedicated design. */
-enum { M_HR, M_ECG, M_SPO2, M_BPT, M_TEMP, M_ACTIVITY, M_HRV, M_GSR, M_RECOVERY, M_COUNT };
+/* metric tiles — the v2 handoff swipe order:
+ * Home · HR · ECG · SpO2 · BP · Temp · Activity · Stress · EDA.
+ * A Recovery tile (H6 readiness) used to be appended here as an undesigned
+ * placeholder; removed until it has a design. The readiness score itself is
+ * still computed in the health store and shipped to the app over HS sync —
+ * only the on-watch tile is gone. */
+enum { M_HR, M_ECG, M_SPO2, M_BPT, M_TEMP, M_ACTIVITY, M_HRV, M_GSR, M_COUNT };
 
 struct metric_desc {
     const char *title;
@@ -51,11 +53,12 @@ struct metric_desc {
 };
 
 /* `accent` is read ONLY by build_metric_tile() below, and populate_metric_tile()
- * returns into a dedicated monitor for every metric except M_RECOVERY (and M_GSR
- * when CONFIG_HPI_GSR_SCREEN is off). So most of these values never render — but
- * they were a second, off-palette color set (rose/emerald/amber-400/violet-400/
- * green-400, i.e. raw Tailwind) that disagreed with the live screens and kept
- * getting copied. Every entry now names the token its live screen actually uses.
+ * returns into a dedicated monitor for every metric — so with the Recovery tile
+ * gone, the only way to reach it is M_GSR with CONFIG_HPI_GSR_SCREEN off. These
+ * values are therefore effectively unrendered, but they were a second,
+ * off-palette color set (rose/emerald/amber-400/violet-400/green-400, i.e. raw
+ * Tailwind) that disagreed with the live screens and kept getting copied.
+ * Every entry now names the token its live screen actually uses.
  * (Accent-following screens call hpi_accent_rgb() at build time; V2_ACCENT is the
  * default and the only value valid in a static initializer.) */
 static const struct metric_desc metrics[M_COUNT] = {
@@ -67,14 +70,12 @@ static const struct metric_desc metrics[M_COUNT] = {
     [M_HRV]      = {"HRV",  V2_INDIGO, "ms",   -1},   /* continuous PPG HRV/stress: no tap-to-measure */
     [M_BPT]      = {"BP",   V2_BP,  "mmHg", -1},   /* v2 idle tile owns MEASURE */
     [M_GSR]      = {"EDA",  V2_EDA, "uS",   -1},   /* v2 idle tile owns MEASURE */
-    [M_RECOVERY] = {"Recovery", V2_GREEN, "", -1}, /* H6 readiness 0..100 + warm-up caption */
 };
 
 /* idx -> subject (see hpi_ui_subjects.c) */
 static lv_subject_t *const metric_subj[M_COUNT] = {
     [M_HR] = &subj_hr, [M_SPO2] = &subj_spo2, [M_ECG] = &subj_ecg, [M_TEMP] = &subj_temp,
     [M_ACTIVITY] = &subj_steps, [M_BPT] = &subj_bp, [M_HRV] = &subj_hrv, [M_GSR] = &subj_gsr,
-    [M_RECOVERY] = &subj_recovery,
 };
 
 extern lv_style_t style_numeric_large;
@@ -185,8 +186,8 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
     lv_label_set_text(val, "--");
     lv_obj_align(val, LV_ALIGN_CENTER, 0, -18);
     /* style_numeric_large is rubik_500_32, NOT the 88 px hero bin the handoff
-     * specifies for a metric's primary value. Only M_RECOVERY renders through
-     * here, and its layout has not been designed yet; revisit with that tile.
+     * specifies for a metric's primary value. Only the GSR-disabled fallback
+     * reaches this path now, so fixing it is deferred with that build variant.
      * (The comment here used to say "Inter 80 hero" — that font is long gone.) */
     lv_obj_add_style(val, &style_numeric_large, LV_PART_MAIN);
     lv_obj_set_style_text_color(val, lv_color_hex(metrics[idx].accent), LV_PART_MAIN);
@@ -209,17 +210,6 @@ static void populate_metric_tile(lv_obj_t *tile, int idx)
         lv_obj_align(hint, LV_ALIGN_CENTER, 0, 120);
         lv_obj_set_style_text_color(hint, lv_color_hex(V2_MUTED), LV_PART_MAIN);
         lv_obj_set_style_text_font(hint, &FONT_CAPTION, LV_PART_MAIN);
-    }
-
-    /* Recovery needs ~a week of sleep baselines before it can score — show the
-     * warm-up progress ("learning baseline N%") instead of a bare "--" so a new
-     * wearer knows the tile is working, not broken. Empty once a score exists. */
-    if (idx == M_RECOVERY) {
-        lv_obj_t *sub = lv_label_create(tile);
-        lv_obj_align(sub, LV_ALIGN_CENTER, 0, 64);
-        lv_obj_set_style_text_color(sub, lv_color_hex(V2_MUTED), LV_PART_MAIN);
-        lv_obj_set_style_text_font(sub, &FONT_CAPTION, LV_PART_MAIN);
-        hpi_ui_bind_label(sub, &subj_recovery_sub);
     }
 }
 
@@ -622,7 +612,6 @@ static int carousel_tile_for_screen(int scr)
     case SCR_BPT:  return M_BPT + 1;
     case SCR_HRV:  return M_HRV + 1;
     case SCR_GSR:  return M_GSR + 1;
-    case SCR_RECOVERY: return M_RECOVERY + 1;
     default:       return 0; /* SCR_HOME */
     }
 }
@@ -642,7 +631,6 @@ int hpi_carousel_curr_screen(void)
     case M_BPT:  return SCR_BPT;
     case M_HRV:  return SCR_HRV;
     case M_GSR:  return SCR_GSR;
-    case M_RECOVERY: return SCR_RECOVERY;
     default:     return SCR_HOME;
     }
 }

@@ -105,7 +105,6 @@ enum hpi_disp_screens
     SCR_BPT,
     SCR_HRV,
     SCR_GSR,
-    SCR_RECOVERY,   /* H6 readiness/recovery carousel tile (placeholder) */
     //SCR_HRV,
     SCR_LIST_END,
     // Should not go here
