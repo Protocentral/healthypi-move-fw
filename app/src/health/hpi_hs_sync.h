@@ -52,7 +52,22 @@ enum hpi_hs_cmd_id {
      * notify char if re-added). Calibration is a fixed 3 points (idx 0..2). */
     HPI_HS_CMD_BPT_CAL_ENTER  = 8,  /* WRITE {}                     → {rc}          */
     HPI_HS_CMD_BPT_CAL_POINT  = 9,  /* WRITE {sys:u8,dia:u8,idx:u8} → {rc}          */
-    HPI_HS_CMD_BPT_CAL_STATUS = 10, /* READ  {} → {st:u8,prog:u8,idx:u8,run:bool}   */
+    HPI_HS_CMD_BPT_CAL_STATUS = 10, /* READ  {} → {st:u8,prog:u8,idx:u8,run:bool,
+                                     *            done:u8,cal:u8}
+                                     * idx  = the point the DEVICE is measuring.
+                                     * done = points the device has COMPLETED this
+                                     *        session (0..3), monotonic. Advance the
+                                     *        UI on this. Do NOT infer completion
+                                     *        from (prog==100 && !run): prog latches
+                                     *        at 100 until the next CAL_POINT, so
+                                     *        that pair is identical for "point 1
+                                     *        just finished" and "point 2 just
+                                     *        finished", and polling it twice skips
+                                     *        a point.
+                                     * cal  = bitmask of vectors STORED on the
+                                     *        device (bit n = point n; 0x7 = fully
+                                     *        calibrated). Survives reboot — this is
+                                     *        how a client knows BP is set up.      */
     HPI_HS_CMD_BPT_CAL_END    = 11, /* WRITE {}                     → {rc}          */
 };
 

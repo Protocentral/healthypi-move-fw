@@ -388,12 +388,19 @@ static int hs_h_bpt_status(struct smp_streamer *ctxt)
     uint8_t st = 0, prog = 0, idx = 0;
     bool run = false;
     hpi_bpt_cal_status(&st, &prog, &idx, &run);
-    LOG_DBG("HS BPT_CAL_STATUS (cmd 10) -> st=%u prog=%u idx=%u run=%d",
-            st, prog, idx, run);
+    /* `done` and `cal` are additive keys; a client that does not know them just
+     * ignores them. See hw_module.h for why a client must not infer completion
+     * from (prog == 100 && !run) — that pair is ambiguous across points. */
+    uint8_t done = hpi_bpt_cal_points_done();
+    uint8_t cal  = hpi_bpt_cal_vectors();
+    LOG_DBG("HS BPT_CAL_STATUS (cmd 10) -> st=%u prog=%u idx=%u run=%d done=%u cal=0x%02x",
+            st, prog, idx, run, done, cal);
     bool ok = zcbor_tstr_put_lit(zse, "st")   && zcbor_uint32_put(zse, st)   &&
               zcbor_tstr_put_lit(zse, "prog") && zcbor_uint32_put(zse, prog) &&
               zcbor_tstr_put_lit(zse, "idx")  && zcbor_uint32_put(zse, idx)  &&
-              zcbor_tstr_put_lit(zse, "run")  && zcbor_bool_put(zse, run);
+              zcbor_tstr_put_lit(zse, "run")  && zcbor_bool_put(zse, run)    &&
+              zcbor_tstr_put_lit(zse, "done") && zcbor_uint32_put(zse, done) &&
+              zcbor_tstr_put_lit(zse, "cal")  && zcbor_uint32_put(zse, cal);
     return ok ? MGMT_ERR_EOK : MGMT_ERR_EMSGSIZE;
 }
 
