@@ -33,11 +33,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* nPM1300 CHARGER.BCHGCHARGESTATUS register bitmasks */
+/* nPM1300 CHARGER.BCHGCHARGESTATUS register bitmasks.
+ *
+ * NOTE bit 0 is BATTERYDETECTED, which is set whenever a cell is present — i.e.
+ * always, on this product. It is deliberately absent from the list below (the
+ * Nordic npm13xx_fuel_gauge sample starts at BIT(1) for the same reason), so
+ * NEVER test the raw register for "is it charging": use CHARGING_MASK. */
 #define NPM1300_CHG_STATUS_COMPLETE_MASK BIT(1)
 #define NPM1300_CHG_STATUS_TRICKLE_MASK	 BIT(2)
 #define NPM1300_CHG_STATUS_CC_MASK	 BIT(3)
 #define NPM1300_CHG_STATUS_CV_MASK	 BIT(4)
+
+/* "On the charger": actively charging in any phase, or terminated-but-plugged.
+ * This is what the UI icon and the over-discharge gate mean by `charging`. */
+#define NPM1300_CHG_STATUS_CHARGING_MASK                                        \
+	(NPM1300_CHG_STATUS_COMPLETE_MASK | NPM1300_CHG_STATUS_TRICKLE_MASK |   \
+	 NPM1300_CHG_STATUS_CC_MASK | NPM1300_CHG_STATUS_CV_MASK)
 
 /*
  * Battery thresholds — single source of truth for both the boot check and the
