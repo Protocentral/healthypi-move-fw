@@ -182,6 +182,16 @@ void hpi_hs_ack(uint32_t acked_seq);
  * cannot race it. */
 void hpi_hs_flush_now(void);
 
+/* Close every open epoch and push the ring + the latest-per-type snapshot to
+ * flash, right now. Call from the deliberate power-off / reboot paths: the
+ * store thread only persists /lfs/hs/lat on the ~5 minute summary cadence, and
+ * a cumulative daily total (steps, active energy) sitting in an unemitted 60 s
+ * epoch is otherwise lost on shutdown — the watch then resumes today's count
+ * from a stale value. Safe from any thread (serialized against the store
+ * thread's own file work). NOT for the fatal-error or watchdog paths: those
+ * must not touch the filesystem. */
+void hpi_hs_shutdown_flush(void);
+
 #if defined(CONFIG_HPI_HS_SYNTH)
 /* TEST ONLY: discard the durable log and restart it at a clean segment boundary.
  * seq is NEVER rewound (it is rounded up), so even a test wipe cannot collide with

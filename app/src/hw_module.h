@@ -55,7 +55,22 @@ void hpi_bpt_abort(void);
 int  hpi_bpt_cal_enter(void);
 int  hpi_bpt_cal_point(uint8_t sys, uint8_t dia, uint8_t idx);
 int  hpi_bpt_cal_end(void);
+/* `idx` is the point the DEVICE is measuring (it used to echo back the index the
+ * client last requested, which told the client nothing it did not already know). */
 void hpi_bpt_cal_status(uint8_t *st, uint8_t *prog, uint8_t *idx, bool *run);
+
+/* Points completed by the device in this calibration session, 0..3. Monotonic
+ * within a session. Clients should advance their UI on THIS, not on the
+ * (prog == 100 && !run) pair: prog latches at 100 when a point finishes and
+ * stays there until the next CAL_POINT, so consecutive polls in that window are
+ * indistinguishable and a client that advances per-poll skips a point. */
+uint8_t hpi_bpt_cal_points_done(void);
+
+/* Bitmask of calibration vectors stored in /lfs/sys (bit n = point n); 0x7 means
+ * fully calibrated. Survives reboot, RAM-cached so it is safe on the SMP thread.
+ * This is what tells the phone whether BP is set up on this watch — previously
+ * nothing reported that at all, so the app could only ever show "BP Not Set". */
+uint8_t hpi_bpt_cal_vectors(void);
 
 void hpi_hw_pmic_off(void);
 

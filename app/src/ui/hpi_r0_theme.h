@@ -110,6 +110,20 @@ LV_FONT_DECLARE(matsym_fp_72);       /* fingerprint (BPT sensor-wear hero)   */
 #define V2_EDA        0x2FBDA8  /* EDA / GSR teal                        */
 #define V2_EDA_TINT_OPA 33      /* ~13% teal tint pill                   */
 
+/* ECG identity color. The handoff puts the ECG screen on the ACCENT (trace
+ * stroke, pulsing dot, RECORDING text, countdown ring); it was drawn in an
+ * off-palette mint 0x34D399 until the retheme. This constant is the DEFAULT
+ * accent, for the carousel's static metric table which cannot call a function;
+ * scr_ecg_monitor.c uses hpi_accent_rgb() so ECG follows the user's accent
+ * choice the same way HR and Temp do.
+ *
+ * Still outstanding from the handoff's ECG section: the faint amber plot grid
+ * (rgba(245,158,11,.09), 15 px cells). hpi_wave_monitor_create() draws a trace
+ * on flat black with no grid at all, for every waveform — SpO2, BP and EDA each
+ * specify their own grid tint too — so that is one widget feature for the layout
+ * pass, not part of this color swap. */
+#define HPI_ECG_ACCENT V2_ACCENT
+
 /* v2 measurement-flow icon font (BPT sensor-wear). BP/EDA heroes now share the
  * standard HPI_FONT_HERO (rubik_500_88, which carries '-' '/' ':' for --, sys/dia
  * and time) — no separate mid-size hero bin. */

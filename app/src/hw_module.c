@@ -358,6 +358,9 @@ static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
             break;
         case INPUT_KEY_HOME:
             LOG_INF("Extra Key Pressed");
+            /* Deliberate reboot: get today's counters onto flash first, or the
+             * step/kcal total resumes from a snapshot up to 5 minutes stale. */
+            hpi_hs_shutdown_flush();
             sys_reboot(SYS_REBOOT_COLD);
             // printk("Entering Ship Mode\n");
             // regulator_parent_ship_mode(regulators);
@@ -370,6 +373,11 @@ static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
 
 void hpi_hw_pmic_off(void)
 {
+    /* The single funnel for every deliberate power-off (settings shade, low
+     * battery, boot abort). Persist the health store before the rail drops so
+     * today's step / active-energy totals survive to the next boot. */
+    hpi_hs_shutdown_flush();
+
     LOG_INF("Entering Ship Mode");
     k_msleep(1000);
     regulator_parent_ship_mode(regulators);
@@ -1205,6 +1213,15 @@ void hw_thread(void)
     static int last_day = -1;
     static uint32_t hw_steps_day_base = 0;
     static bool step_base_valid = false;
+    /* Steps already counted today BEFORE this boot, restored from the health
+     * store. Kept as a separate additive term rather than folded into
+     * hw_steps_day_base: bosch_bmi323_init() soft-resets the chip (CMD 0xDEAF)
+     * on every boot, so the hardware counter reads ~0 at the first sample and
+     * the baseline would have to go NEGATIVE to represent the restored total.
+     * It is unsigned, so the old `(hw_steps >= restored) ? hw_steps - restored
+     * : hw_steps` always took the else branch and silently threw the restored
+     * value away -- today's steps reset to 0 on every restart. */
+    static uint32_t today_steps_carry = 0;
 
     k_sem_take(&sem_hw_thread_start, K_FOREVER);
     LOG_INF("HW Thread starting");
@@ -1251,8 +1268,11 @@ void hw_thread(void)
                 restored = (uint32_t)last_steps.value;
                 LOG_INF("Restored today's step total from health store: %u", restored);
             }
-            // Baseline such that (hw_steps - base) == restored.
-            hw_steps_day_base = (hw_steps >= restored) ? (hw_steps - restored) : hw_steps;
+            // Carry the restored total additively and baseline on whatever the
+            // (freshly reset) hardware counter reads now, so today's total is
+            // carry + (hw_steps - base) regardless of how the two compare.
+            today_steps_carry = restored;
+            hw_steps_day_base = hw_steps;
             step_base_valid = true;
         }
 
@@ -1266,6 +1286,7 @@ void hw_thread(void)
         {
             last_day = m_tm_time.tm_mday;
             hw_steps_day_base = hw_steps;
+            today_steps_carry = 0;   /* yesterday's carry must not survive midnight */
             today_reset_steps();
             LOG_INF("New day detected (%d), daily steps re-baselined", m_tm_time.tm_mday);
         }
@@ -1277,7 +1298,7 @@ void hw_thread(void)
             hw_steps_day_base = hw_steps;
         }
 
-        today_init_steps(hw_steps - hw_steps_day_base);
+        today_init_steps(today_steps_carry + (hw_steps - hw_steps_day_base));
 
         struct hpi_steps_t steps_point = {
             .timestamp = hw_get_sys_time_ts(),

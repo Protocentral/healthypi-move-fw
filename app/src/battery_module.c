@@ -47,9 +47,10 @@ static const struct battery_model battery_model = {
 #include "battery_profile_200.inc"
 };
 
-// Static variables for fuel gauge operation
-static float max_charge_current;
-static float term_charge_current;
+/* Static variables for fuel gauge operation.
+ * (File-scope max_charge_current / term_charge_current removed: locals of the
+ * same name in battery_fuel_gauge_init() shadowed them, so the statics were
+ * never written and the compiler warned they were unused.) */
 static int64_t ref_time;
 
 // Low battery state tracking
@@ -78,16 +79,44 @@ static int npm_read_sensors(const struct device *charger,
         return ret;
     }
 
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_VOLTAGE, &value);
+    /* Every channel's status is checked. These four reads all shared one
+     * `struct sensor_value` and discarded the return, so a channel that failed
+     * left the previous channel's number in `value` and it was silently used as
+     * the next quantity — a failing TEMP read would have fed the fuel gauge the
+     * BATTERY VOLTAGE as a temperature (~3.9, i.e. just under the model's 5 degC
+     * floor), and a failing current read would have fed it the temperature.
+     * Both are plausible-looking numbers, so nothing downstream could tell.
+     *
+     * (All four channels are supported on this board's configuration today —
+     * thermistor-ohms = 10000 is enum index 1, so GAUGE_TEMP does not return
+     * -ENOTSUP — so this is a latent trap rather than an active fault. It costs
+     * nothing to close.) */
+    ret = sensor_channel_get(charger, SENSOR_CHAN_GAUGE_VOLTAGE, &value);
+    if (ret < 0) {
+        LOG_ERR("Charger: GAUGE_VOLTAGE read failed (%d)", ret);
+        return ret;
+    }
     *voltage = (float)value.val1 + ((float)value.val2 / 1000000);
 
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_TEMP, &value);
+    ret = sensor_channel_get(charger, SENSOR_CHAN_GAUGE_TEMP, &value);
+    if (ret < 0) {
+        LOG_ERR("Charger: GAUGE_TEMP read failed (%d)", ret);
+        return ret;
+    }
     *temp = (float)value.val1 + ((float)value.val2 / 1000000);
 
-    sensor_channel_get(charger, SENSOR_CHAN_GAUGE_AVG_CURRENT, &value);
+    ret = sensor_channel_get(charger, SENSOR_CHAN_GAUGE_AVG_CURRENT, &value);
+    if (ret < 0) {
+        LOG_ERR("Charger: GAUGE_AVG_CURRENT read failed (%d)", ret);
+        return ret;
+    }
     *current = (float)value.val1 + ((float)value.val2 / 1000000);
 
-    sensor_channel_get(charger, SENSOR_CHAN_NPM13XX_CHARGER_STATUS, &value);
+    ret = sensor_channel_get(charger, SENSOR_CHAN_NPM13XX_CHARGER_STATUS, &value);
+    if (ret < 0) {
+        LOG_ERR("Charger: CHARGER_STATUS read failed (%d)", ret);
+        return ret;
+    }
     *chg_status = value.val1;
 
     return 0;
@@ -203,7 +232,13 @@ int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
     float voltage;
     float current;
     float temp;
-    float soc;
+    /* Seed from the caller's previous reading, so a failed process() below holds
+     * the last good value instead of publishing whatever was on the stack. This
+     * used to be an uninitialised `float soc;` whose value was written only on
+     * success, while the return code was discarded — a persistently failing
+     * process() therefore reported a stale, plausible-looking percentage
+     * forever, with nothing in the log to say so. */
+    float soc = (float)*batt_level;
     float tte;
     float ttf;
     float delta;
@@ -244,17 +279,50 @@ int battery_fuel_gauge_update(const struct device *charger, bool vbus_connected,
     current = -current; // Invert current sign for nrf_fuel_gauge lib
 
     /* Process fuel gauge data. NCS 3.4 API: results returned via out-params
-     * (soc/tte/ttf) with an int status, not the previous by-value returns. */
-    (void)nrf_fuel_gauge_process(voltage, current, temp, delta, &soc, NULL);
+     * (soc/tte/ttf) with an int status, not the previous by-value returns.
+     *
+     * The status is checked, not discarded: if the library rejects a sample —
+     * an out-of-range temperature is the usual reason, the model is only
+     * characterised over .temps = {5, 25, 45} degC — it leaves `soc` untouched,
+     * and a stuck percentage is otherwise completely silent. Report at WRN,
+     * rate-limited, and hold the previous reading. */
+    ret = nrf_fuel_gauge_process(voltage, current, temp, delta, &soc, NULL);
+    if (ret < 0)
+    {
+        static uint32_t fg_err_count;
+        if ((fg_err_count++ % 60u) == 0u)
+        {
+            LOG_WRN("Fuel gauge rejected sample (%d), SoC held at %u%% "
+                    "[V=%.3f I=%.3f T=%.2f dt=%.1f] — %u so far",
+                    ret, (unsigned)soc, (double)voltage, (double)current,
+                    (double)temp, (double)delta, fg_err_count);
+        }
+    }
     (void)nrf_fuel_gauge_tte_get(&tte);
     (void)nrf_fuel_gauge_ttf_get(&ttf);
 
-    // LOG_DBG("V: %.3f, I: %.3f, T: %.2f, SoC: %.2f, TTE: %.0f, TTF: %.0f, Charge status: %d",
-    //          (double)voltage, (double)current, (double)temp, (double)soc, (double)tte, (double)ttf, chg_status);
+    /* Periodic trace so a field report of a frozen/implausible percentage can be
+     * diagnosed from a log instead of guessed at. ~every 5 min at the hw thread's
+     * 5 s cadence. */
+    {
+        static uint32_t fg_log_count;
+        if ((fg_log_count++ % 60u) == 0u)
+        {
+            LOG_INF("Batt V=%.3f I=%.3f T=%.2f SoC=%.1f%% TTE=%.0f TTF=%.0f chg=0x%02x",
+                    (double)voltage, (double)current, (double)temp, (double)soc,
+                    (double)tte, (double)ttf, chg_status);
+        }
+    }
 
     // Update return values
     *batt_level = (uint8_t)soc;
-    *batt_charging = chg_status;
+    /* Mask, do NOT assign the raw register: bit 0 is BATTERYDETECTED and is set
+     * whenever a cell is present, so `*batt_charging = chg_status` was always
+     * true. That pinned the charging icon on AND — far worse — made the
+     * over-discharge guard in battery_evaluate() (`!charging && voltage <=
+     * HPI_BATTERY_SHUTDOWN_VOLTAGE`) unreachable, so the cell could be run below
+     * its floor with no ship-mode cutoff. */
+    *batt_charging = (chg_status & NPM1300_CHG_STATUS_CHARGING_MASK) != 0;
     *batt_voltage = voltage; // Return the battery voltage
 
     // Update internal state for external access

@@ -44,21 +44,12 @@
 #define DISP_SLEEP_TIME_MS 10000
 #define DISPLAY_DEFAULT_BRIGHTNESS 50
 
-// Modern AMOLED-optimized color palette
-#define COLOR_SURFACE_DARK    0x1C1C1E
-#define COLOR_SURFACE_MEDIUM  0x2C2C2E
-#define COLOR_SURFACE_LIGHT   0x3C3C3E
-#define COLOR_PRIMARY_BLUE    0x007AFF
-#define COLOR_SUCCESS_GREEN   0x34C759
-#define COLOR_WARNING_AMBER   0xFF9500
-#define COLOR_CRITICAL_RED    0xFF3B30
-#define COLOR_TEXT_SECONDARY  0xE5E5E7
-
-// Darker button background colors (better contrast with white text on AMOLED)
-#define COLOR_BTN_GREEN       0x1B5E20  // Dark green for start/action buttons
-#define COLOR_BTN_RED         0xB71C1C  // Dark red for stop/danger buttons
-#define COLOR_BTN_PURPLE      0x4A148C  // Dark purple for HRV buttons
-#define COLOR_BTN_BLUE        0x0D47A1  // Dark blue for BP buttons
+/* The COLOR_* palette that used to live here (iOS system blue/green/amber/red,
+ * near-white COLOR_TEXT_SECONDARY, and the dark COLOR_BTN_* fills) was a third
+ * color system competing with the v2 design handoff, and it was duplicated
+ * verbatim in hp_ui_common.c. All of it is unused now -- use the V2_ and R0_
+ * tokens in ui/hpi_r0_theme.h. The three neutral surface greys the legacy button
+ * styles still need are defined locally in hp_ui_common.c. */
 
 #define DISP_WINDOW_SIZE_EDA 250
 #define PPG_DISP_WINDOW_SIZE 256 // To be verified
@@ -114,7 +105,6 @@ enum hpi_disp_screens
     SCR_BPT,
     SCR_HRV,
     SCR_GSR,
-    SCR_RECOVERY,   /* H6 readiness/recovery carousel tile (placeholder) */
     //SCR_HRV,
     SCR_LIST_END,
     // Should not go here
@@ -229,6 +219,8 @@ lv_obj_t *hpi_btn_create(lv_obj_t *parent);
 lv_obj_t *hpi_btn_create_primary(lv_obj_t *parent);
 lv_obj_t *hpi_btn_create_secondary(lv_obj_t *parent);
 lv_obj_t *hpi_btn_create_icon(lv_obj_t *parent);
+/* Centred, non-clickable icon+label row inside a button (see hp_ui_common.c). */
+lv_obj_t *hpi_btn_row_create(lv_obj_t *btn, int32_t pad_column);
 
 // Boot Screen functions
 void draw_scr_splash(void);

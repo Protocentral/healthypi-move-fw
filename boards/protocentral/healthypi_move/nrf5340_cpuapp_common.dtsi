@@ -187,7 +187,19 @@
 
 		npm_pmic_charger: charger {
 			compatible = "nordic,npm1300-charger";
-			term-microvolt = <4150000>;
+			/* 4.2 V, matching the top of the fuel-gauge model's voltage axis
+			 * (battery_profile_*.inc param_2 runs 2.79 -> 4.2 V, so the model
+			 * calls 4.2 V "100%"). At the previous 4.15 V the cell was never
+			 * charged to what the gauge considers full, so SoC plateaued around
+			 * 95% and never reached 100% — the reported "stuck at 95%".
+			 *
+			 * This is the standard Li-Ion termination and gives full rated
+			 * capacity; the trade is shorter cycle life than a reduced-voltage
+			 * charge. Revisit alongside the pending nPM PowerUP characterisation
+			 * of the actual 300 mAh cell: if that model is generated against a
+			 * lower termination, this must move back to match it. */
+			term-microvolt = <4200000>;
+			/* JEITA warm-temperature termination — deliberately left lower. */
 			term-warm-microvolt = <4000000>;
 			current-microamp = <200000>;
 			dischg-limit-microamp = <1000000>;

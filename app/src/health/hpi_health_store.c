@@ -30,6 +30,7 @@
 #include "hpi_common_types.h"
 #include "hpi_dfu.h"     /* hpi_dfu_is_active() — /lfs shares the OTA's QSPI die */
 #include "hpi_sys.h"
+#include "hpi_user_profile.h"   /* hpi_get_kcals_from_steps() for the energy epoch */
 #include "hw_module.h"   /* hpi_hw_get_last_motion_s() for the LOW_MOTION quality tag */
 
 LOG_MODULE_REGISTER(hpi_health_store, LOG_LEVEL_INF);
@@ -797,6 +798,34 @@ void hpi_hs_flush_now(void)
     }
 }
 
+/* Serializes the store thread's periodic file work against a shutdown flush
+ * arriving on another thread. Everything below the DFU gate in hpi_hs_thread()
+ * and the whole of hpi_hs_shutdown_flush() run under it. */
+static K_MUTEX_DEFINE(s_io_lock);
+
+void hpi_hs_shutdown_flush(void)
+{
+    if (!s_storage_ready) {
+        return;
+    }
+
+    k_mutex_lock(&s_io_lock, K_FOREVER);
+
+    /* Close the open epochs FIRST. Steps and active energy are HS_EK_COUNTER
+     * types on a 60 s window, so at any instant up to a minute of the day's
+     * total exists only inside an unemitted epoch. Emitting updates s_latest,
+     * which is what hs_persist_latest() writes and what the hw thread reads back
+     * at the next boot to resume today's step count. */
+    hpi_hs_epoch_flush_all(hw_get_sys_time_ts());
+
+    hs_flush();            /* ring -> segment files (+ the seq cursor in meta) */
+    hs_persist_latest();   /* /lfs/hs/lat: the last-known value per type        */
+    s_latest_dirty = false;
+
+    k_mutex_unlock(&s_io_lock);
+    LOG_INF("health store flushed for shutdown");
+}
+
 /* ---- Query over the durable log (H2) ------------------------------------
  * Iterate samples of `type` in [from,to] passing q_require: all retained
  * segment files, then the unflushed ring tail (deduped by seq). Serialized by
@@ -1447,6 +1476,10 @@ static void hpi_hs_thread(void)
             continue;
         }
 
+        /* Held across all of this cycle's file work so a shutdown flush on
+         * another thread cannot interleave with it (see s_io_lock). */
+        k_mutex_lock(&s_io_lock, K_FOREVER);
+
         /* HS-2 P1: close any epoch whose window has elapsed. Without this an epoch
          * stays open forever once its signal stops (watch taken off mid-window). */
         if (hpi_sys_is_time_valid()) {
@@ -1476,6 +1509,8 @@ static void hpi_hs_thread(void)
             hs_recompute_summary();
             hs_recompute_trends();
         }
+
+        k_mutex_unlock(&s_io_lock);
     }
 }
 
@@ -1582,7 +1617,19 @@ static void hs_steps_listener(const struct zbus_channel *chan)
          * a monotonic ramp is not). The aggregator force-closes the window on a
          * DECREASE, so the local-midnight reset (8000 -> 0) still emits the day's
          * final total instead of swallowing it. */
-        hpi_hs_epoch_steps((int32_t)m->steps, hs_quality(), hw_get_sys_time_ts());
+        int64_t ts = hw_get_sys_time_ts();
+        hpi_hs_epoch_steps((int32_t)m->steps, hs_quality(), ts);
+
+        /* Active energy rides the same edge. hpi_hs_epoch_energy() previously had
+         * NO callers anywhere, so HPI_HS_T_ACTIVE_ENERGY was never recorded:
+         * hpi_hs_summary().energy_today_kcal was permanently 0 and the app had no
+         * kcal series at all — the watch only derived kcal from steps at display
+         * time, which is why calories died with the step total on a restart.
+         * Same cumulative-daily semantics as steps, so the COUNTER epoch and the
+         * midnight force-close-on-decrease apply unchanged. */
+        uint32_t st = m->steps > 65535u ? 65535u : m->steps;
+        hpi_hs_epoch_energy((int32_t)hpi_get_kcals_from_steps((uint16_t)st),
+                            hs_quality(), ts);
     }
 }
 ZBUS_LISTENER_DEFINE(hs_steps_lis, hs_steps_listener);
@@ -1590,8 +1637,29 @@ ZBUS_LISTENER_DEFINE(hs_steps_lis, hs_steps_listener);
 static void hs_bpt_listener(const struct zbus_channel *chan)
 {
     const struct hpi_bpt_t *m = zbus_chan_const_msg(chan);
-    /* record a spot check only when a measurement completes */
-    if (m->status == 2 && m->progress == 100) {
+
+    /* Record a spot check when the measurement completes.
+     *
+     * The gate used to also require status == 2. That is the same assumption
+     * about the hub's terminal status byte that stranded BPT calibration
+     * (smf_ppg_finger.c): the finger SMF treats progress == 100 as completion
+     * and stops the hub there, so a status 2 arriving in a later report is
+     * never seen — and then NO BP sample was ever written, leaving the app's
+     * BP trend (and its export) empty. Completion is progress == 100 with a
+     * plausible reading; a zero sys/dia is the hub saying it has no result.
+     *
+     * progress stays at 100 for the few reports still in flight after the stop,
+     * so latch the edge — otherwise one measurement lands as several identical
+     * samples. Reset when a new measurement starts (progress drops). */
+    static bool s_bp_recorded;
+
+    if (m->progress < 100) {
+        s_bp_recorded = false;
+        return;
+    }
+
+    if (!s_bp_recorded && m->sys > 0 && m->dia > 0) {
+        s_bp_recorded = true;
         int64_t ts = hw_get_sys_time_ts();
         uint8_t q = hs_quality() | HPI_HS_Q_MANUAL;
         hpi_hs_record(HPI_HS_T_BP_SYS, m->sys, q, ts);

@@ -378,13 +378,7 @@ void hpi_eda_monitor_into(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(s_measure_btn, 41, 0);   /* ~16% tint */
     lv_obj_add_event_cb(s_measure_btn, eda_measure_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *brow = lv_obj_create(s_measure_btn);
-    lv_obj_remove_style_all(brow);
-    lv_obj_set_size(brow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_center(brow);
-    lv_obj_set_flex_flow(brow, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(brow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(brow, 8, 0);
+    lv_obj_t *brow = hpi_btn_row_create(s_measure_btn, 8);
 
     lv_obj_t *bic = lv_label_create(brow);
     lv_label_set_text(bic, SYM_PLAY);

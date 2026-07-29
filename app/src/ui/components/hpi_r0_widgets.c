@@ -403,10 +403,16 @@ void hpi_wave_monitor_push_linear(lv_obj_t *obj, int32_t raw)
     float norm = ((float)(raw - wm->lin_lo) / (float)span - 0.5f) * 2.0f * WM_LIN_FILL;
     hpi_wave_monitor_push(obj, norm);
 
-    /* v2 rescaled every window/4 samples to keep the range steady but responsive */
-    int period = wm->n / 4;
-    if (period < 8) {
-        period = 8;
+    /* Rescale period must span at least a full cardiac cycle. v2 used window/4,
+     * which on the 100 sps finger stream came to 0.32 s — SHORTER than one beat,
+     * so each window's min/max collapsed onto a fragment of a single pulse. The
+     * range then tracked that fragment, the following samples fell far outside
+     * it, and hpi_wave_monitor_push() clamped them to the plot edges: a flat-top,
+     * flat-bottom SQUARE WAVE. window/2 with a 64-sample floor keeps at least
+     * ~0.6 s (finger) / ~2 s (wrist) of signal behind every range decision. */
+    int period = wm->n / 2;
+    if (period < 64) {
+        period = 64;
     }
     if (++wm->lin_n >= period) {
         wave_lin_rescale(wm);

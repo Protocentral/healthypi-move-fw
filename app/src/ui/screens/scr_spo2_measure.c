@@ -33,10 +33,14 @@
 
 LOG_MODULE_REGISTER(hpi_disp_scr_spo2_measure, LOG_LEVEL_DBG);
 
-/* Wrist PPG streams ~64 sps; the finger hub is slower — show a comparable ~2 s
- * of signal across the 296 px plot for each. */
-#define SPO2_WAVE_WINDOW_WR  100
-#define SPO2_WAVE_WINDOW_FI  128
+/* Window = seconds of signal shown across the 296 px plot, so it MUST track each
+ * source's real sample rate (data_module.c: HS_PPG_WRIST_RATE_HZ 25,
+ * HS_PPG_FINGER_RATE_HZ 100). The finger is 4x FASTER than the wrist, not
+ * "slower" as the old comment claimed: at 128 samples it swept in 1.28 s — about
+ * one beat — which is the "PPG finger plot is too fast" report. 300 @ 100 sps
+ * matches scr_bpt_measure's trace, which is the one users confirmed looks right. */
+#define SPO2_WAVE_WINDOW_WR  100   /*  25 sps -> 4.0 s */
+#define SPO2_WAVE_WINDOW_FI  300   /* 100 sps -> 3.0 s */
 
 /* Keep in step with the wrist SMF's publish gate (smf_ppg_wrist.c): a reading
  * it will not store is not a reading we may show. */

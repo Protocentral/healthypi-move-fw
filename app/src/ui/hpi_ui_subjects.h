@@ -24,16 +24,11 @@
  * level, so its observer can colour-code). */
 extern lv_subject_t subj_hr, subj_spo2, subj_ecg, subj_temp, subj_bp,
                     subj_hrv, subj_gsr, subj_steps, subj_time, subj_ampm, subj_date, subj_batt,
-                    subj_stress, subj_act, subj_sec, subj_recovery;
+                    subj_stress, subj_act, subj_sec;
 
 /* Derived (H2) subjects: resting HR, today HR min/max, skin-temp deviation vs
  * baseline. Fed from the health-store summary cache via hpi_disp_push_subjects. */
 extern lv_subject_t subj_hr_resting, subj_hr_min, subj_hr_max, subj_temp_dev;
-
-/* Recovery tile caption: "learning baseline N%" while the readiness baselines
- * are still forming, empty once a valid score is shown (same idea as
- * subj_temp_dev's "baseline forming"). */
-extern lv_subject_t subj_recovery_sub;
 
 /* 0/1 — home/status battery icon tint (nPM1300 charging flag). */
 extern lv_subject_t subj_batt_charging;
@@ -53,10 +48,6 @@ void hpi_ui_subj_set_hrv_sdnn(int sdnn);
 void hpi_ui_subj_set_gsr(int gsr);
 void hpi_ui_subj_set_steps(int steps);
 void hpi_ui_subj_set_stress(int level);
-/* H6 readiness/recovery, 0..100; valid=false -> hero shows "--" and the caption
- * subject shows "learning baseline N%" from warmup_pct (0..100, how much of the
- * required baseline data has accrued — see hpi_hs_summary.readiness_warmup_pct). */
-void hpi_ui_subj_set_recovery(int32_t score, bool valid, int warmup_pct);
 void hpi_ui_subj_set_activity(int steps);   /* formats "X.X MI . N KCAL" */
 void hpi_ui_subj_set_batt(int level, bool charging);
 void hpi_ui_subj_set_time(struct tm t);

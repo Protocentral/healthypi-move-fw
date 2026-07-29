@@ -185,13 +185,7 @@ void draw_scr_spo2_result(enum scroll_dir m_scroll_dir, uint32_t arg1, uint32_t 
     lv_obj_set_style_bg_opa(btn_again, 41, 0);   /* ~16% accent tint */
     lv_obj_add_event_cb(btn_again, spo2_result_again_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *arow_in = lv_obj_create(btn_again);
-    lv_obj_remove_style_all(arow_in);
-    lv_obj_set_size(arow_in, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_center(arow_in);
-    lv_obj_set_flex_flow(arow_in, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(arow_in, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(arow_in, 7, 0);
+    lv_obj_t *arow_in = hpi_btn_row_create(btn_again, 7);
 
     lv_obj_t *aic = lv_label_create(arow_in);
     lv_label_set_text(aic, SYM_REFRESH);

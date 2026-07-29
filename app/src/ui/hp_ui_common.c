@@ -44,20 +44,22 @@
 #include "hw_module.h"
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"
 
 #include <display_sh8601.h>
 
 LOG_MODULE_REGISTER(display_common, LOG_LEVEL_DBG);
 
-// Modern AMOLED-optimized color palette
+/* Neutral dark surfaces for the legacy button styles below. The hued members of
+ * this set (iOS system blue/green/amber/red and the near-white COLOR_TEXT_SECONDARY)
+ * were a third palette competing with the v2 handoff and have been retired --
+ * every call site now uses a V2_ or R0_ token from hpi_r0_theme.h. These three
+ * greys stay because the handoff models the same surfaces as white-at-low-opacity
+ * overlays rather than opaque fills; converting them is a rendering change, not a
+ * token swap, so it belongs with the wider layout pass. */
 #define COLOR_SURFACE_DARK    0x1C1C1E
 #define COLOR_SURFACE_MEDIUM  0x2C2C2E
 #define COLOR_SURFACE_LIGHT   0x3C3C3E
-#define COLOR_PRIMARY_BLUE    0x007AFF
-#define COLOR_SUCCESS_GREEN   0x34C759
-#define COLOR_WARNING_AMBER   0xFF9500
-#define COLOR_CRITICAL_RED    0xFF3B30
-#define COLOR_TEXT_SECONDARY  0xE5E5E7
 
 // LVGL Styles
 static lv_style_t style_btn;
@@ -144,7 +146,7 @@ void display_init_styles(void)
 
     // Label Red
     lv_style_init(&style_red_medium);
-    lv_style_set_text_color(&style_red_medium, lv_palette_main(LV_PALETTE_RED));
+    lv_style_set_text_color(&style_red_medium, lv_color_hex(R0_ERROR));
     lv_style_set_text_font(&style_red_medium, &manrope_700_22);
 
     // Label White 14
@@ -178,17 +180,17 @@ void display_init_styles(void)
     lv_style_set_margin_all(&style_btn_black, 6);
     /* Orange outline to make the button stand out */
     lv_style_set_outline_width(&style_btn_black, 3);
-    lv_style_set_outline_color(&style_btn_black, lv_color_hex(0xFF9900));
+    lv_style_set_outline_color(&style_btn_black, lv_color_hex(V2_ACCENT));
     lv_style_set_outline_opa(&style_btn_black, LV_OPA_COVER);
     lv_style_set_outline_pad(&style_btn_black, 2);
 
     lv_style_init(&style_btn_black_pressed);
-    lv_style_set_bg_color(&style_btn_black_pressed, lv_color_hex(0x222222));
-    lv_style_set_bg_opa(&style_btn_black_pressed, LV_OPA_COVER);
+    lv_style_set_bg_color(&style_btn_black_pressed, lv_color_hex(V2_CHIP_BG));
+    lv_style_set_bg_opa(&style_btn_black_pressed, 20);   /* white @ ~8%: handoff pressed surface */
     lv_style_set_text_color(&style_btn_black_pressed, lv_color_white());
     /* Keep pressed state outlined as well (slightly thinner) */
     lv_style_set_outline_width(&style_btn_black_pressed, 2);
-    lv_style_set_outline_color(&style_btn_black_pressed, lv_color_hex(0xFF9900));
+    lv_style_set_outline_color(&style_btn_black_pressed, lv_color_hex(V2_ACCENT));
     lv_style_set_outline_opa(&style_btn_black_pressed, LV_OPA_COVER);
     /* Keep same increased padding and external margin on pressed state */
     lv_style_set_pad_top(&style_btn_black_pressed, 20);
@@ -205,7 +207,7 @@ void display_init_styles(void)
     lv_style_set_bg_color(&style_btn_primary, lv_color_hex(COLOR_SURFACE_MEDIUM));
     lv_style_set_bg_opa(&style_btn_primary, LV_OPA_COVER);
     lv_style_set_border_width(&style_btn_primary, 1);
-    lv_style_set_border_color(&style_btn_primary, lv_color_hex(COLOR_PRIMARY_BLUE));
+    lv_style_set_border_color(&style_btn_primary, lv_color_hex(V2_SPO2));
     lv_style_set_border_opa(&style_btn_primary, LV_OPA_COVER);
     lv_style_set_radius(&style_btn_primary, 24);
     lv_style_set_text_color(&style_btn_primary, lv_color_white());
@@ -219,7 +221,7 @@ void display_init_styles(void)
     lv_style_set_margin_all(&style_btn_primary, 8);
     /* Subtle shadow for depth */
     lv_style_set_shadow_width(&style_btn_primary, 8);
-    lv_style_set_shadow_color(&style_btn_primary, lv_color_hex(COLOR_PRIMARY_BLUE));
+    lv_style_set_shadow_color(&style_btn_primary, lv_color_hex(V2_SPO2));
     lv_style_set_shadow_opa(&style_btn_primary, LV_OPA_20);
     lv_style_set_shadow_spread(&style_btn_primary, 0);
     lv_style_set_shadow_ofs_x(&style_btn_primary, 0);
@@ -229,7 +231,7 @@ void display_init_styles(void)
     lv_style_set_bg_color(&style_btn_primary_pressed, lv_color_hex(COLOR_SURFACE_DARK));
     lv_style_set_bg_opa(&style_btn_primary_pressed, LV_OPA_COVER);
     lv_style_set_border_width(&style_btn_primary_pressed, 2);
-    lv_style_set_border_color(&style_btn_primary_pressed, lv_color_hex(COLOR_PRIMARY_BLUE));
+    lv_style_set_border_color(&style_btn_primary_pressed, lv_color_hex(V2_SPO2));
     lv_style_set_text_color(&style_btn_primary_pressed, lv_color_white());
     /* Keep same increased padding for pressed state */
     lv_style_set_pad_top(&style_btn_primary_pressed, 24);
@@ -284,7 +286,7 @@ void display_init_styles(void)
     lv_style_set_text_font(&style_body_medium, &manrope_700_22); /* Standard body text */
 
     lv_style_init(&style_caption);
-    lv_style_set_text_color(&style_caption, lv_color_hex(COLOR_TEXT_SECONDARY));
+    lv_style_set_text_color(&style_caption, lv_color_hex(V2_MUTED2));
     lv_style_set_text_font(&style_caption, &manrope_700_22); /* Small labels and captions - increased to 24px minimum for small display readability */
 
     /* Initialize numeric display styles */
@@ -381,6 +383,35 @@ lv_obj_t *hpi_btn_create_secondary(lv_obj_t *parent)
     }
     lv_obj_add_style(btn, &style_btn_secondary, LV_PART_MAIN | LV_STATE_DEFAULT);
     return btn;
+}
+
+/* Centred icon+label row INSIDE a button.
+ *
+ * Must not be a plain lv_obj_create(): lv_obj_constructor() sets CLICKABLE,
+ * CLICK_FOCUSABLE and SCROLLABLE on every object, and lv_obj_remove_style_all()
+ * clears styles, not flags. A clickable child sitting dead centre over the
+ * button swallows the press, and LV_EVENT_CLICKED does NOT bubble unless
+ * LV_OBJ_FLAG_EVENT_BUBBLE is set -- so the button's own handler never ran for
+ * any tap that landed on the icon or the label, i.e. almost every tap. Only the
+ * button's outer margin worked: the "Measure/Start needs 3-4 taps" report.
+ * SCROLLABLE is dropped for the same reason -- a few px of finger drag inside
+ * the row turned the press into a scroll and lost the click as well.
+ */
+lv_obj_t *hpi_btn_row_create(lv_obj_t *btn, int32_t pad_column)
+{
+    lv_obj_t *row = lv_obj_create(btn);
+    if (!row) {
+        return NULL;
+    }
+    lv_obj_remove_style_all(row);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_CLICK_FOCUSABLE |
+                            LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_center(row);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, pad_column, 0);
+    return row;
 }
 
 /* Helper to create a modern icon button */
@@ -536,7 +567,6 @@ void hpi_load_screen(int m_screen, enum scroll_dir m_scroll_dir)
     case SCR_ACTIVITY:
     case SCR_HRV:
     case SCR_GSR:
-    case SCR_RECOVERY:
         hpi_carousel_show(m_screen, m_scroll_dir);
         break;
     default:

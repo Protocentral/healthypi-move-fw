@@ -32,6 +32,7 @@
 #include <zephyr/smf.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
+#include <zephyr/fs/fs.h>
 #include <errno.h>
 
 LOG_MODULE_REGISTER(smf_ppg_finger, LOG_LEVEL_DBG);
@@ -182,10 +183,38 @@ static volatile uint8_t s_cal_st   = 0;      /* latest bpt_status (see HPI_HS_AP
 static volatile uint8_t s_cal_prog = 0;      /* latest bpt_progress 0..100         */
 static atomic_t s_cal_run = ATOMIC_INIT(0);  /* a cal point is in flight           */
 
+/* Device-owned calibration progress.
+ *
+ * `st`/`prog` alone cannot tell a client WHICH point they describe: prog latches
+ * at 100 when a point finishes and stays there until the next CAL_POINT request,
+ * so "point 1 just finished" and "point 2 just finished" are byte-identical
+ * responses. A client that advances its UI on (prog == 100 && !run) therefore
+ * advances once per poll in that window and skips a point.
+ *
+ * s_cal_points_done is monotonic within a calibration session and is the
+ * authoritative answer to "how many points has the DEVICE completed" — immune to
+ * poll timing. s_cal_dev_idx is the point the device is actually measuring, as
+ * opposed to sf_obj.bpt_cal_curr_index, which only echoed back whatever index
+ * the client last asked for. */
+static volatile uint8_t s_cal_points_done = 0;  /* 0..3, completed this session   */
+static volatile uint8_t s_cal_dev_idx     = 0;  /* point the device is running    */
+
+/* Bitmask of calibration vectors present in /lfs/sys (bit n = bpt_cal_n).
+ * Cached in RAM: the accessor is called from the SMP thread, which must not do
+ * filesystem I/O. Seeded by a scan at finger-SMF startup and updated whenever a
+ * vector is written, so it survives reboot and answers "is this watch
+ * calibrated" without touching flash on the query path. */
+static volatile uint8_t s_cal_vec_mask = 0;
+
+#define HPI_BPT_CAL_POINTS 3
+#define HPI_BPT_CAL_ALL_VECTORS ((1u << HPI_BPT_CAL_POINTS) - 1u)
+
 int hpi_bpt_cal_enter(void)
 {
     /* Idempotent: entering cal mode while already in it just re-arms. */
     LOG_INF("hpi_bpt_cal_enter: posting EVT_BPT_ENTER_CAL");
+    s_cal_points_done = 0;   /* a new session starts at zero completed points */
+    s_cal_dev_idx = 0;
     k_event_post(&fi_evt, EVT_BPT_ENTER_CAL);
     return 0;
 }
@@ -223,8 +252,47 @@ void hpi_bpt_cal_status(uint8_t *st, uint8_t *prog, uint8_t *idx, bool *run)
 {
     if (st)   { *st   = s_cal_st; }
     if (prog) { *prog = s_cal_prog; }
-    if (idx)  { *idx  = sf_obj.bpt_cal_curr_index; }
+    /* The DEVICE's point, not an echo of the client's last request. */
+    if (idx)  { *idx  = s_cal_dev_idx; }
     if (run)  { *run  = atomic_get(&s_cal_run) != 0; }
+}
+
+/* Points the device has completed in this calibration session, 0..3. Monotonic
+ * within a session — the unambiguous signal a client should advance its UI on,
+ * instead of inferring completion from the latched prog/run pair. */
+uint8_t hpi_bpt_cal_points_done(void)
+{
+    return s_cal_points_done;
+}
+
+/* Bitmask of calibration vectors stored on the device (bit n = point n).
+ * HPI_BPT_CAL_ALL_VECTORS (0x7) means fully calibrated. Survives reboot — this
+ * is what answers "is BP set up on this watch", which nothing previously
+ * reported to the phone at all. RAM-cached; safe to call from the SMP thread. */
+uint8_t hpi_bpt_cal_vectors(void)
+{
+    return s_cal_vec_mask;
+}
+
+/* Re-scan /lfs/sys for stored calibration vectors. Blocking FS I/O — call only
+ * from the finger SMF thread, never from the SMP/BLE handlers. */
+static void hpi_bpt_cal_rescan_vectors(void)
+{
+    uint8_t mask = 0;
+
+    for (int i = 0; i < HPI_BPT_CAL_POINTS; i++) {
+        char path[32];
+        struct fs_dirent ent;
+
+        snprintf(path, sizeof(path), "/lfs/sys/bpt_cal_%d", i);
+        if (fs_stat(path, &ent) == 0 && ent.size >= CAL_VECTOR_SIZE) {
+            mask |= BIT(i);
+        }
+    }
+
+    s_cal_vec_mask = mask;
+    LOG_INF("BPT cal vectors present: 0x%02x (%s)", mask,
+            (mask == HPI_BPT_CAL_ALL_VECTORS) ? "calibrated" : "not calibrated");
 }
 
 
@@ -371,6 +439,17 @@ static void sensor_ppg_finger_decode(uint8_t *buf, uint32_t buf_len, uint8_t m_p
                 {
                     // BPT Calibration done
                     LOG_INF("BPT Calibration Done");
+                    /* NOTE: s_cal_run is deliberately NOT cleared here. The hub
+                     * reports 100% before the device is ready for another point —
+                     * it still has to stop sampling (1 s), fetch and write the cal
+                     * vector to LittleFS, show the complete screen and dwell 2 s.
+                     * Clearing here (as an earlier fix did, to cure a stall where
+                     * the flag was only cleared on a terminal status byte that
+                     * sometimes arrived after sampling stopped) opened a ~3 s
+                     * window where a client saw "idle" and fired the next point
+                     * early. The flag is now cleared in st_ppg_fi_cal_wait_entry(),
+                     * which is reached on every path and is exactly when the device
+                     * can accept a new point. */
                     k_sem_give(&sem_bpt_cal_complete);
                     m_cal_hr = edata->hr;
                 }
@@ -567,6 +646,7 @@ static void hpi_bpt_fetch_cal_vector(uint8_t *bpt_cal_vector_buf, uint8_t l_cal_
     snprintf(cal_file_name, sizeof(cal_file_name), "/lfs/sys/bpt_cal_%d", l_cal_index);
 
     fs_write_buffer_to_file(cal_file_name, bpt_cal_vector_buf, CAL_VECTOR_SIZE);
+    s_cal_vec_mask |= BIT(l_cal_index);
 }
 
 void hpi_bpt_abort(void)
@@ -693,6 +773,11 @@ static void st_ppg_fi_cal_wait_entry(void *o)
     k_event_clear(&fi_evt, EVT_BPT_EXIT_CAL);
     k_event_clear(&fi_evt, EVT_FI_BPT_CAL_CANCEL);
     LOG_DBG("PPG Finger SM BPT Calibration Wait Entry");
+    /* Ready for a point: this is the ONLY place the in-flight flag clears on the
+     * success path, so `run == false` now means "send the next point" rather than
+     * "the hub hit 100% but the device is still busy". Reached unconditionally
+     * from CAL_DONE, so a completed point can never leave the flag stuck. */
+    atomic_set(&s_cal_run, 0);
     hpi_load_scr_spl(SCR_SPL_BPT_CAL_PROGRESS, SCROLL_NONE, SCR_BPT, 0, 0, 0);
 
     // Start the timeout timer
@@ -739,6 +824,7 @@ static void st_ppg_fing_bpt_cal_entry(void *o)
     LOG_INF("Step 1: Enabling finger sensor power");
     hpi_hw_fi_sensor_on();    // Power ON
     k_msleep(1000);           // Stabilize
+    s_cal_dev_idx = m_cal_index;   /* the point the DEVICE is now measuring */
     LOG_INF("Step 2: Starting BPT calibration with index=%d sys=%d dia=%d", m_cal_index, m_cal_sys, m_cal_dia);
     hw_bpt_start_cal(m_cal_index, m_cal_sys, m_cal_dia);
     k_msleep(100); // Short delay to ensure sensor is processing the start command before we begin sampling
@@ -778,6 +864,16 @@ static enum smf_state_result st_ppg_fing_bpt_cal_run(void *o)
 static void st_ppg_fing_bpt_cal_done_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Done Entry");
+    /* The point is complete and its vector has been written. Count it and refresh
+     * the stored-vector mask so BPT_CAL_STATUS reports both immediately. s_cal_run
+     * stays SET until CAL_WAIT is entered — the device is not ready for the next
+     * point until then (this state dwells 2 s). */
+    if (s_cal_points_done < HPI_BPT_CAL_POINTS) {
+        s_cal_points_done++;
+    }
+    hpi_bpt_cal_rescan_vectors();
+    LOG_INF("BPT cal point %u complete (%u/%u done)", s_cal_dev_idx,
+            s_cal_points_done, HPI_BPT_CAL_POINTS);
     hpi_load_scr_spl(SCR_SPL_BPT_CAL_COMPLETE, SCROLL_NONE, SCR_BPT, 0, 0, 0);
     hpi_hw_fi_sensor_off();
 }
@@ -893,6 +989,13 @@ static enum smf_state_result st_ppg_fing_bpt_est_fail_run(void *o)
 static void st_ppg_fing_bpt_cal_fail_entry(void *o)
 {
     LOG_DBG("PPG Finger SM BPT Calibration Fail Entry");
+    /* Release the in-flight flag. This state has no run-handler transitions and
+     * nothing else clears the flag on the way in, so a failed point would leave
+     * every later CAL_POINT returning -EBUSY — the same stall that stranded app
+     * calibration after point 2, just on the failure path. (Only reachable from
+     * bpt_cal_timeout_handler() today, whose timer start is commented out, so
+     * this is currently latent.) */
+    atomic_set(&s_cal_run, 0);
     hpi_load_scr_spl(SCR_SPL_BPT_FAILED, SCROLL_NONE, SCR_BPT, BPT_FAIL_CAL, 0, 0);
     hpi_hw_fi_sensor_off();
 }
@@ -1233,6 +1336,11 @@ static void smf_ppg_finger_thread(void)
     // k_timer_start(&tmr_ppg_fi_sampling, K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS), K_MSEC(PPG_FI_SAMPLING_INTERVAL_MS));
 
     LOG_INF("PPG Finger SMF Thread starting");
+
+    /* Seed the stored-calibration mask so BPT_CAL_STATUS can answer "is this
+     * watch calibrated" from the first query after boot, without the SMP thread
+     * ever touching the filesystem. */
+    hpi_bpt_cal_rescan_vectors();
 
     /* P2: task-watchdog coverage. Tick kept (finger has time-based contact/BPT
      * states); worst-case in-handler settle sleep is ~2 s, under the 10 s WDT. */

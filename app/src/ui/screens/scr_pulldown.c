@@ -84,7 +84,7 @@ static void hpi_show_shutdown_mbox(void)
 
     lv_obj_t *label = lv_label_create(dialog);
     lv_label_set_text(label, "Shutdown?");
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(V2_VALUE), 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 38);
 
     lv_obj_t *btn_cont = lv_obj_create(dialog);

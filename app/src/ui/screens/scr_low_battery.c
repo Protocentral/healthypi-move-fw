@@ -37,6 +37,7 @@ LOG_MODULE_REGISTER(scr_low_battery, LOG_LEVEL_DBG);
 
 #include "hpi_common_types.h"
 #include "ui/move_ui.h"
+#include "ui/hpi_r0_theme.h"
 #include "hw_module.h"
 
 lv_obj_t *scr_low_battery;
@@ -104,7 +105,7 @@ void draw_scr_spl_low_battery(enum scroll_dir m_scroll_dir, uint32_t arg1, uint3
          * matsym bin carries a charging bolt either. The word + green already say it. */
         lv_label_set_text(label_charging, "Charging...");
         lv_obj_add_style(label_charging, &style_white_medium, 0);
-        lv_obj_set_style_text_color(label_charging, lv_color_hex(0x00FF00), 0); // Green color for charging
+        lv_obj_set_style_text_color(label_charging, lv_color_hex(V2_GREEN), 0);   /* design-system green, not pure 0x00FF00 */
     } else {
         label_charging = NULL;
     }
@@ -130,7 +131,7 @@ void hpi_disp_low_battery_update(uint8_t battery_level, bool is_charging)
                 label_charging = lv_label_create(parent);
                 lv_label_set_text(label_charging, "Charging...");   /* see draw: no bolt glyph in manrope */
                 lv_obj_add_style(label_charging, &style_white_medium, 0);
-                lv_obj_set_style_text_color(label_charging, lv_color_hex(0x00FF00), 0); // Green color for charging
+                lv_obj_set_style_text_color(label_charging, lv_color_hex(V2_GREEN), 0);   /* design-system green, not pure 0x00FF00 */
             }
         } else {
             // Update existing charging label
