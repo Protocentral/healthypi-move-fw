@@ -18,7 +18,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    container: ghcr.io/zephyrproject-rtos/ci:v0.26.2 
+    # Zephyr 4.4 (NCS 3.4) sets PYTHON_MINIMUM_REQUIRED 3.12 and needs Zephyr
+    # SDK 1.0.1 (zephyr/SDK_VERSION). The old v0.26.2 image ships Python 3.10.6,
+    # so cmake configure failed at find_package(Python3) before compiling a single
+    # file. v0.29.3 is the newest image carrying SDK 1.0.1 (added in v0.29.1;
+    # v0.29.2/.3 are patches on the same SDK).
+    container: ghcr.io/zephyrproject-rtos/ci:v0.29.3
     env:
       CMAKE_PREFIX_PATH: /opt/toolchains
     steps:
