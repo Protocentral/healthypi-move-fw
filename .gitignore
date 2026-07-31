@@ -79,3 +79,6 @@ twister-out*/
 
 # Internal planning / release docs — kept in the tree, never published
 /docs/internal/
+
+# Internal working notes (test plans, handoffs) — local only, never committed
+/internal/
