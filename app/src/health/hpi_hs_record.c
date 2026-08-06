@@ -434,6 +434,46 @@ int hpi_hs_rec_get(uint32_t id, uint32_t off, uint8_t *buf, size_t len, bool *eo
     return rd;
 }
 
+int hpi_hs_rec_delete_all(void)
+{
+    k_mutex_lock(&s_rec_lock, K_FOREVER);
+
+    /* A capture in flight owns an open file handle and will keep appending to it.
+     * Unlinking underneath it would leave a writer pointed at a deleted inode and
+     * a header that never lands, so refuse outright rather than half-erase. The
+     * caller surfaces this as "stop recording first". */
+    for (size_t i = 0; i < HS_REC_MAX_ACTIVE; i++) {
+        if (s_active[i].in_use) {
+            k_mutex_unlock(&s_rec_lock);
+            LOG_WRN("rec: erase refused - record %u still capturing",
+                    (unsigned)s_active[i].id);
+            return -EBUSY;
+        }
+    }
+
+    int n = 0;
+    for (size_t i = 0; i < s_index_n; i++) {
+        char path[40];
+        rec_path(path, sizeof(path), s_index[i].id);
+        if (fs_unlink(path) == 0) {
+            n++;
+        }
+        /* The QSPI erase behind each unlink can block for milliseconds. */
+        k_yield();
+    }
+    s_index_n = 0;
+
+    /* s_next_id is deliberately NOT reset. Record ids must stay unique for the
+     * lifetime of the unit: the phone keys its local copies on id, and reusing
+     * one after an erase would make a fresh capture collide with a row the app
+     * already has. Same reasoning as seq in the sample log. */
+    rec_persist_meta();
+
+    k_mutex_unlock(&s_rec_lock);
+    LOG_WRN("rec: erased %d record(s); next id stays %u", n, (unsigned)s_next_id);
+    return n;
+}
+
 int hpi_hs_rec_ack(uint32_t id)
 {
     k_mutex_lock(&s_rec_lock, K_FOREVER);

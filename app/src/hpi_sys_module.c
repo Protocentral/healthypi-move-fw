@@ -48,6 +48,7 @@
 #include "hw_module.h"
 #include "hpi_user_settings_api.h"  /* utc offset get/set + persistence */
 #include "hpi_dfu.h"      /* DFU system-mode state + progress */
+#include "hpi_storage_migrate.h" /* one-shot pre-3.0 storage purge */
 #include "ui/move_ui.h"  /* hpi_disp_restore_brightness() */
 
 /* Refuse to start an OTA below this SoC% unless on charger — overwrite-only DFU
@@ -473,6 +474,16 @@ void hpi_sys_thread(void)
     hpi_disp_restore_brightness();
     /* step total is owned + initialized by hw_thread (restores today's count
      * from the health store, or starts at 0); no reset here (would race it). */
+
+    /* One-shot storage migration (drops the pre-3.0 trend/recording tree on a
+     * unit upgraded from 2.x). Deliberately here and not in fs_module_init():
+     * that runs on the boot critical path, and unlinking thousands of files on
+     * the external QSPI die takes seconds. No-op once stamped. */
+    ret = hpi_storage_migrate_run();
+    if (ret == -EAGAIN)
+    {
+        LOG_INF("Storage migration deferred (DFU active); will retry next boot");
+    }
 
     // Thread now just sleeps - all saves happen immediately via settings subsystem
     while (1)

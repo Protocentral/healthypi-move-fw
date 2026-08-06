@@ -29,6 +29,7 @@
 #include "health/hpi_health_store.h"
 #include "health/hpi_hs_record.h"
 #include "hpi_sys.h"   /* hpi_sys_set_utc_offset() */
+#include "hpi_storage_migrate.h" /* hpi_storage_erase_health_data() */
 #include "hw_module.h" /* hpi_bpt_cal_* (BPT calibration control, group v2) */
 #if defined(CONFIG_HPI_HS_SYNTH)
 #include "health/hpi_hs_synth.h"
@@ -308,6 +309,54 @@ static int hs_h_set_tz(struct smp_streamer *ctxt)
     return ok ? MGMT_ERR_EOK : MGMT_ERR_EMSGSIZE;
 }
 
+/* ERASE (write): {"confirm":"ERASE"} -> {rc, head, oldest}
+ *
+ * The user-facing "delete everything on the watch". Wipes the durable sample log,
+ * every bulk record and any pre-3.0 leftovers; leaves settings, the user profile
+ * and BPT calibration alone.
+ *
+ * The confirm string is mandatory and compared exactly. This is irreversible and
+ * reachable by anything that can open an SMP session, so it must not be one
+ * malformed CBOR map (or one mis-dispatched command id) away from firing — an
+ * absent or wrong `confirm` is -EINVAL, and there is no default.
+ *
+ * Runs synchronously on the SMP thread. Unlike SYNTH it does not need a worker:
+ * an erase is a bounded number of unlinks (retention caps records at HS_REC_MAX
+ * and segments at HS_MAX_SEGS), and the client genuinely wants to know it
+ * finished before it clears its own cursor.
+ *
+ * The response repeats the post-erase head/oldest so a client can reset its
+ * cursor without a follow-up HELLO. Note seq does NOT go back to zero — it rounds
+ * up to the next segment boundary, so `oldest > head` is the expected "store is
+ * empty" answer afterwards. */
+static int hs_h_erase(struct smp_streamer *ctxt)
+{
+    zcbor_state_t *zsd = ctxt->reader->zs;
+    zcbor_state_t *zse = ctxt->writer->zs;
+    struct zcbor_string confirm = {0};
+    size_t decoded;
+    struct zcbor_map_decode_key_val dk[] = {
+        ZCBOR_MAP_DECODE_KEY_DECODER("confirm", zcbor_tstr_decode, &confirm),
+    };
+
+    if (zcbor_map_decode_bulk(zsd, dk, ARRAY_SIZE(dk), &decoded) != 0) {
+        return MGMT_ERR_EINVAL;
+    }
+    if (confirm.value == NULL || confirm.len != 5 ||
+        memcmp(confirm.value, "ERASE", 5) != 0) {
+        LOG_WRN("HS ERASE (cmd 12) rejected - missing/!= \"ERASE\" confirm");
+        return MGMT_ERR_EINVAL;
+    }
+
+    LOG_WRN("HS ERASE (cmd 12) accepted - erasing all health data");
+    int rc = hpi_storage_erase_health_data();
+
+    bool ok = zcbor_tstr_put_lit(zse, "rc")     && zcbor_int32_put(zse, rc) &&
+              zcbor_tstr_put_lit(zse, "head")   && zcbor_uint32_put(zse, hpi_hs_head_seq()) &&
+              zcbor_tstr_put_lit(zse, "oldest") && zcbor_uint32_put(zse, hpi_hs_oldest_seq());
+    return ok ? MGMT_ERR_EOK : MGMT_ERR_EMSGSIZE;
+}
+
 #if defined(CONFIG_HPI_HS_SYNTH)
 /* SYNTH (write, TEST BUILDS ONLY): {days, wipe} -> {rc}
  *
@@ -421,6 +470,7 @@ static const struct mgmt_handler hpi_hs_handlers[] = {
     [HPI_HS_CMD_RECORDS] = { hs_h_records, NULL },
     [HPI_HS_CMD_ACK]     = { NULL,         hs_h_ack },
     [HPI_HS_CMD_SET_TZ]  = { NULL,         hs_h_set_tz },
+    [HPI_HS_CMD_ERASE]   = { NULL,         hs_h_erase },
     [HPI_HS_CMD_BPT_CAL_ENTER]  = { NULL,          hs_h_bpt_enter },
     [HPI_HS_CMD_BPT_CAL_POINT]  = { NULL,          hs_h_bpt_point },
     [HPI_HS_CMD_BPT_CAL_STATUS] = { hs_h_bpt_status, NULL },

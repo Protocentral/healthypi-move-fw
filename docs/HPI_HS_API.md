@@ -1,6 +1,6 @@
 # HealthyPi Move — Health Store API (`HPI_HS`)
 
-> **Status: live contract (schema v1 / group v2).** This is the **only** supported
+> **Status: live contract (schema v1 / group v3).** This is the **only** supported
 > device↔app history and bulk-record sync path. The legacy BLE framed Command
 > Service (`LOG_*` / `RECORDING_*` file pull, SOF `0x0A 0xFA`) is **removed** from
 > firmware. Companion headers: `app/src/health/hpi_hs_types.h` (schema),
@@ -29,7 +29,7 @@ uses Python `smpclient`.
 
 - `HPI_HS_SCHEMA_VERSION` (currently **1**) — meaning/unit/scale of sample types
   and the wire sample layout. Bumps only on a **breaking** change.
-- `HPI_HS_GROUP_VERSION` (currently **2**) — the command-set shape.
+- `HPI_HS_GROUP_VERSION` (currently **3**) — the command-set shape.
 
 Both are returned by `HELLO`. **Adding a new metric type id is not breaking** —
 old clients skip unknown ids. Renumbering/reusing an id or changing a type's
@@ -100,7 +100,7 @@ device already drops non-`VALID` samples before storing.
 All are SMP **READ** except `ACK`, `SET_TZ` and the BPT-cal writes (**WRITE**). Group `0x1000`.
 
 ### `HELLO` (cmd 0, read)
-`req {}` → `rsp { "schema":1, "group":2, "dev":"healthypi-move", "uid":"<hex>", "head":<uint>, "oldest":<uint>, "types":<uint> }`
+`req {}` → `rsp { "schema":1, "group":3, "dev":"healthypi-move", "uid":"<hex>", "head":<uint>, "oldest":<uint>, "types":<uint> }`
 Handshake: check `schema`/`group`, note `head` (newest seq).
 
 - **`uid`** — per-unit id (hex of the SoC device id). **Key your sample store on
@@ -216,6 +216,37 @@ boundaries; it never rewrites the RTC or shifts sample timestamps.
   travel). Compute it with `DateTime.now().timeZoneOffset.inSeconds` (Dart), which
   already tracks DST.
 - No RTC rewrite on DST — just re-send the new offset.
+
+### `ERASE` (cmd 12, write, group v3) — delete all health data on the device
+
+`req { "confirm":"ERASE" }` → `rsp { "rc":0, "head":<uint>, "oldest":<uint> }`
+
+Erases **everything the device stores about the user's health**: the durable
+sample log, every bulk record in the RECORDS tier, and any files left over from
+pre-3.0 firmware. Settings, the user profile and BPT calibration are **kept** —
+this is "delete my data", not a factory reset.
+
+- **`confirm` is mandatory** and compared byte-for-byte against `"ERASE"`. A bare
+  `{}`, a missing key or any other string is rejected with `-EINVAL` and nothing
+  is touched. An irreversible command reachable by anything that can open an SMP
+  session should not be one malformed CBOR map away from firing.
+- **`seq` is not rewound.** It rounds **up** to the next segment boundary, exactly
+  as a layout migration does, so a seq the client has already stored can never be
+  reused by a later sample. Expect `oldest > head` afterwards — the documented
+  "store is empty" answer (§`HELLO`).
+- The response repeats the post-erase `head`/`oldest` so a client can reset its
+  cursor without a second `HELLO`. A client that does nothing still recovers:
+  `resumeCursor()` jumps a stale cursor forward on the next connect.
+- `rc` is `-EBUSY` when a DFU is in progress or a capture is still running
+  (stop the recording first — unlinking under an open writer would strand it).
+- Erasing does **not** touch the copy already synced to the phone. That is a
+  separate, client-side action.
+
+The same erase is reachable **without a phone** from the watch itself:
+*Settings › Erase data*, confirmed by a second tap on the row.
+
+Firmware older than group v3 has no cmd 12 and answers `-EINVAL`; treat that as
+"not supported" and point the user at the on-watch path.
 
 ### BPT calibration (cmds 8–11, group v2) — finger blood-pressure cal
 Replaces the removed BLE Command Service verbs `0x60/0x61/0x62`. Calibration is a

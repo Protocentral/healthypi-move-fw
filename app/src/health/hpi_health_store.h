@@ -192,10 +192,20 @@ void hpi_hs_flush_now(void);
  * must not touch the filesystem. */
 void hpi_hs_shutdown_flush(void);
 
+/* Discard the durable sample log and restart it at a clean segment boundary.
+ *
+ * seq is NEVER rewound (it is rounded UP to the next segment), so a wipe cannot
+ * collide with rows the app has already stored under the same (device, seq) key.
+ * The app sees the jump through HELLO.oldest and resumes from there.
+ *
+ * This is the engine behind the user-facing erase (Settings > Erase Data on the
+ * watch, HPI_HS_CMD_ERASE from the phone) — call hpi_storage_erase_health_data()
+ * for that rather than this directly, so the bulk record tier goes with it. */
+void hpi_hs_wipe_all(void);
+
 #if defined(CONFIG_HPI_HS_SYNTH)
-/* TEST ONLY: discard the durable log and restart it at a clean segment boundary.
- * seq is NEVER rewound (it is rounded up), so even a test wipe cannot collide with
- * rows the app has already stored. */
+/* TEST ONLY alias of hpi_hs_wipe_all(), kept so the SYNTH path reads as the test
+ * hook it is. */
 void hpi_hs_test_wipe(void);
 #endif
 

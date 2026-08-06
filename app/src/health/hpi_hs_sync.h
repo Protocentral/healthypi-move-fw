@@ -26,7 +26,7 @@
 
 /* Group protocol version (command set shape). Distinct from
  * HPI_HS_SCHEMA_VERSION (sample/type meaning). Both are returned by HELLO. */
-#define HPI_HS_GROUP_VERSION   2   /* v2: BPT calibration cmds 8-11 */
+#define HPI_HS_GROUP_VERSION   3   /* v3: ERASE cmd 12 */
 
 /* Command ids within the group. Permanent; append only. */
 enum hpi_hs_cmd_id {
@@ -69,6 +69,26 @@ enum hpi_hs_cmd_id {
                                      *        calibrated). Survives reboot — this is
                                      *        how a client knows BP is set up.      */
     HPI_HS_CMD_BPT_CAL_END    = 11, /* WRITE {}                     → {rc}          */
+
+    HPI_HS_CMD_ERASE   = 12, /* WRITE {"confirm":"ERASE"} → {rc, head, oldest}
+                              * Erase ALL health data on the device: the durable
+                              * sample log, every bulk record, and any pre-3.0
+                              * leftovers. Settings, the user profile and BPT
+                              * calibration survive — this is "delete my data",
+                              * not a factory reset.
+                              *
+                              * The confirm string is required and must match
+                              * exactly; a bare {} is rejected with -EINVAL. A
+                              * destructive, irreversible command reachable over
+                              * an open SMP transport should not be one malformed
+                              * CBOR map away from firing.
+                              *
+                              * seq is NOT rewound — it rounds UP to the next
+                              * segment, so ids/seqs never collide with rows a
+                              * client already stored. The response carries the
+                              * post-erase head/oldest so the client can reset its
+                              * cursor without a second HELLO. -EBUSY if a DFU or
+                              * a capture is in flight.                          */
 };
 
 /*

@@ -66,4 +66,10 @@ int hpi_hs_rec_get(uint32_t id, uint32_t off, uint8_t *buf, size_t len, bool *eo
  * -ENOENT. An open (still-capturing) record is not droppable → -EBUSY. */
 int hpi_hs_rec_ack(uint32_t id);
 
+/* Drop EVERY closed record and its file. Returns the number deleted, or -EBUSY if
+ * a capture is still in flight (stop it first — unlinking under an open writer
+ * would strand the handle). Record ids are not rewound; see the implementation.
+ * Used by the user-facing erase, not by retention. */
+int hpi_hs_rec_delete_all(void);
+
 #endif /* HPI_HS_RECORD_H */

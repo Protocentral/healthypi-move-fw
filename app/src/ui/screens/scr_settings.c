@@ -19,6 +19,7 @@
 #include "ui/hpi_r0_theme.h"
 #include "hpi_user_settings_api.h"
 #include "ble_module.h"
+#include "hpi_storage_migrate.h"
 
 static lv_obj_t *scr_settings;
 
@@ -28,7 +29,41 @@ static lv_obj_t *scr_settings;
  * in hpi_v2_widgets.c (still loaded/saved) so re-adding the row is one line once
  * a real battery-saver policy exists. */
 enum row_id { ROW_BRIGHT, ROW_AOD, ROW_FACE, ROW_UNITS, ROW_TIMEFMT, ROW_ACCENT, ROW_MOTIF,
-              ROW_SLEEP, ROW_HEIGHT, ROW_WEIGHT, ROW_HAND, ROW_BT, ROW_ABOUT };
+              ROW_SLEEP, ROW_HEIGHT, ROW_WEIGHT, ROW_HAND, ROW_BT, ROW_ABOUT, ROW_ERASE };
+
+/* ---- "Erase data": the only on-watch way to delete stored health data -------
+ *
+ * Confirmed by a second tap on the same row rather than by a dedicated
+ * confirmation screen. A 390 px round display has room for one clear question,
+ * and the alternative costs a new SCR_SPL_* id, a draw function and a screen-table
+ * entry for a control used approximately once in a device's life. The row arms
+ * for ERASE_ARM_TICKS and disarms itself, so a stray tap while scrolling cannot
+ * carry over.
+ *
+ * The erase itself is submitted to the system workqueue, NOT run here: it unlinks
+ * every segment and record file on the external QSPI flash, which takes long
+ * enough to stall the display thread and trip its task watchdog. The row polls
+ * for completion and reports DONE / FAILED. */
+enum erase_ui { ERASE_IDLE = 0, ERASE_ARMED, ERASE_RUNNING, ERASE_DONE, ERASE_FAILED };
+
+#define ERASE_TICK_MS    250
+#define ERASE_ARM_TICKS  24   /* ~6 s to think again */
+#define ERASE_HOLD_TICKS 12   /* ~3 s showing the outcome */
+
+static enum erase_ui s_erase_ui;
+static lv_obj_t     *s_erase_val;    /* value label of the erase row (NULL when torn down) */
+static lv_timer_t   *s_erase_timer;
+static int           s_erase_ticks;
+static atomic_t      s_erase_busy = ATOMIC_INIT(0);
+static atomic_t      s_erase_rc   = ATOMIC_INIT(0);
+
+static void erase_work_fn(struct k_work *w)
+{
+    ARG_UNUSED(w);
+    atomic_set(&s_erase_rc, (atomic_val_t)hpi_storage_erase_health_data());
+    atomic_set(&s_erase_busy, 0);
+}
+static K_WORK_DEFINE(s_erase_work, erase_work_fn);
 
 static const char *const accent_name[4] = {"AMBER", "BLUE", "GREEN", "INDIGO"};
 
@@ -74,8 +109,93 @@ static void row_refresh(lv_obj_t *val, enum row_id id)
     case ROW_BT:     row_val(val, hpi_ble_is_connected() ? "CONNECTED" : "ON",
                              hpi_ble_is_connected()); break;
     case ROW_ABOUT:  row_val(val, "FW " APP_VERSION_STRING, false); break;
+    case ROW_ERASE:
+        switch (s_erase_ui) {
+        case ERASE_ARMED:   lv_label_set_text(val, "SURE?");   break;
+        case ERASE_RUNNING: lv_label_set_text(val, "..."); break;
+        case ERASE_DONE:    lv_label_set_text(val, "DONE");    break;
+        case ERASE_FAILED:  lv_label_set_text(val, "FAILED");  break;
+        default:            lv_label_set_text(val, "ERASE");   break;
+        }
+        /* Red whenever it is armed or has failed — this is the one row on the
+         * screen where a mis-tap costs the user data. */
+        lv_obj_set_style_text_color(val, lv_color_hex(
+            (s_erase_ui == ERASE_ARMED || s_erase_ui == ERASE_FAILED) ? 0xE05A5A : V2_MUTED2), 0);
+        break;
     default: break;
     }
+}
+
+/* Drives both the arm countdown and the completion poll. One timer, because the
+ * two states are mutually exclusive and a second lv_timer would be one more thing
+ * to cancel on screen teardown. */
+static void erase_tick_cb(lv_timer_t *t)
+{
+    if (s_erase_val == NULL) {
+        lv_timer_del(t);
+        s_erase_timer = NULL;
+        return;
+    }
+
+    switch (s_erase_ui) {
+    case ERASE_ARMED:
+        if (++s_erase_ticks >= ERASE_ARM_TICKS) {
+            s_erase_ui = ERASE_IDLE;   /* disarm: the user moved on */
+            break;
+        }
+        return;
+
+    case ERASE_RUNNING:
+        if (atomic_get(&s_erase_busy)) {
+            return;                    /* still unlinking */
+        }
+        s_erase_ui = (atomic_get(&s_erase_rc) == 0) ? ERASE_DONE : ERASE_FAILED;
+        s_erase_ticks = 0;
+        row_refresh(s_erase_val, ROW_ERASE);
+        return;
+
+    case ERASE_DONE:
+    case ERASE_FAILED:
+        if (++s_erase_ticks < ERASE_HOLD_TICKS) {
+            return;
+        }
+        s_erase_ui = ERASE_IDLE;
+        break;
+
+    default:
+        break;
+    }
+
+    row_refresh(s_erase_val, ROW_ERASE);
+    lv_timer_del(t);
+    s_erase_timer = NULL;
+}
+
+static void erase_row_clicked(lv_obj_t *val)
+{
+    switch (s_erase_ui) {
+    case ERASE_IDLE:
+        s_erase_ui = ERASE_ARMED;
+        s_erase_ticks = 0;
+        break;
+
+    case ERASE_ARMED:
+        /* Confirmed. Hand the work off and let the tick report the outcome. */
+        s_erase_ui = ERASE_RUNNING;
+        s_erase_ticks = 0;
+        atomic_set(&s_erase_busy, 1);
+        atomic_set(&s_erase_rc, 0);
+        k_work_submit(&s_erase_work);
+        break;
+
+    default:
+        return;   /* running or showing a result — ignore taps */
+    }
+
+    if (s_erase_timer == NULL) {
+        s_erase_timer = lv_timer_create(erase_tick_cb, ERASE_TICK_MS, NULL);
+    }
+    row_refresh(val, ROW_ERASE);
 }
 
 static void row_click_cb(lv_event_t *e)
@@ -106,12 +226,30 @@ static void row_click_cb(lv_event_t *e)
     case ROW_HAND:   hpi_user_settings_set_hand_worn(hpi_user_settings_get_hand_worn() ? 0 : 1); break;
     case ROW_HEIGHT: hpi_load_scr_spl(SCR_SPL_HEIGHT_SELECT, SCROLL_UP, SCR_SPL_SETTINGS, 0, 0, 0); return;
     case ROW_WEIGHT: hpi_load_scr_spl(SCR_SPL_WEIGHT_SELECT, SCROLL_UP, SCR_SPL_SETTINGS, 0, 0, 0); return;
+    case ROW_ERASE:  erase_row_clicked(val); return;
     default: return;   /* bt/about not clickable here */
     }
     row_refresh(val, id);
     if (rebuild) {
         hpi_carousel_rebuild();   /* new face/accent/units on next home show */
     }
+}
+
+/* Screen teardown: drop the erase timer and forget the label it writes to.
+ *
+ * A submitted erase is deliberately NOT cancelled — it is already deleting files
+ * and stopping half-way would leave the store in a worse state than either
+ * finishing or never starting. It runs to completion on the workqueue and logs
+ * its own result; only the UI goes away. */
+static void settings_deleted_cb(lv_event_t *e)
+{
+    ARG_UNUSED(e);
+    if (s_erase_timer != NULL) {
+        lv_timer_del(s_erase_timer);
+        s_erase_timer = NULL;
+    }
+    s_erase_val = NULL;
+    s_erase_ui = ERASE_IDLE;
 }
 
 static void back_chip_cb(lv_event_t *e)
@@ -221,6 +359,10 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     lv_obj_set_style_bg_color(scr_settings, lv_color_hex(0x0E1114), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scr_settings, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_clear_flag(scr_settings, LV_OBJ_FLAG_SCROLLABLE);
+    /* The erase row's timer outlives the screen otherwise, and its next tick would
+     * write through a freed label. Leaving on a swipe/crown press is the NORMAL way
+     * out of this screen, so this is the common path, not an edge case. */
+    lv_obj_add_event_cb(scr_settings, settings_deleted_cb, LV_EVENT_DELETE, NULL);
 
     /* Header = the visible, reliable exit. The old back chip was aligned
      * TOP_LEFT (18,24) -- that corner is OUTSIDE the round panel (at y~24 the
@@ -293,6 +435,10 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     make_row(list, SYM_HAND,      0x8B9498, "Hand worn",    ROW_HAND,   true);
     make_row(list, SYM_BLUETOOTH, 0x6FB3CC, "Bluetooth",    ROW_BT,     false);
     make_row(list, SYM_INFO,      0x8B9498, "About",        ROW_ABOUT,  false);
+    /* Last on purpose: the user has to scroll past everything else to reach it. */
+    s_erase_ui = ERASE_IDLE;
+    lv_obj_t *erase_row = make_row(list, SYM_WARNING, 0xE05A5A, "Erase data", ROW_ERASE, true);
+    s_erase_val = lv_obj_get_child(erase_row, -1);   /* the value label make_row added last */
 
     hpi_disp_set_curr_screen(SCR_SPL_SETTINGS);
     hpi_show_screen(scr_settings, m_scroll_dir);

@@ -782,14 +782,10 @@ static void hs_flush(void)
     }
 }
 
-#if defined(CONFIG_HPI_HS_SYNTH)
-void hpi_hs_test_wipe(void)
-{
-    if (s_storage_ready) {
-        hs_migrate_layout(HS_LAYOUT_VER);   /* deletes every segment; seq moves forward only */
-    }
-}
-#endif
+/* hpi_hs_wipe_all() / hpi_hs_test_wipe() live further down, right after
+ * hs_migrate_layout() — they are thin wrappers over it and C wants it defined
+ * first. (They used to sit here and compiled only because the whole block was
+ * #if'd out in a release build.) */
 
 void hpi_hs_flush_now(void)
 {
@@ -1370,6 +1366,23 @@ static void hs_migrate_layout(uint16_t from_ver)
     LOG_WRN("hs: log restarted at seq %u (segment %u); older samples are gone",
             (unsigned)s_base_seq, (unsigned)s_seg_index);
 }
+
+void hpi_hs_wipe_all(void)
+{
+    if (s_storage_ready) {
+        /* Same machinery as a layout migration, for the same reason: every
+         * segment goes and seq restarts at a clean boundary WITHOUT rewinding,
+         * so no seq the app has already stored can ever be reused. */
+        hs_migrate_layout(HS_LAYOUT_VER);
+    }
+}
+
+#if defined(CONFIG_HPI_HS_SYNTH)
+void hpi_hs_test_wipe(void)
+{
+    hpi_hs_wipe_all();
+}
+#endif
 
 int hpi_hs_storage_init(void)
 {
