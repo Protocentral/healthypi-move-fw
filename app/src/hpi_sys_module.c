@@ -485,10 +485,15 @@ void hpi_sys_thread(void)
         LOG_INF("Storage migration deferred (DFU active); will retry next boot");
     }
 
-    // Thread now just sleeps - all saves happen immediately via settings subsystem
+    /* Settings saves happen immediately via the settings subsystem, so there is
+     * no periodic work here. The thread stays alive as the storage-maintenance
+     * worker: hpi_storage_service() blocks on the erase request semaphore, so an
+     * idle system costs exactly what k_sleep(K_FOREVER) used to. See
+     * hpi_storage_migrate.c for why the erase lands on this thread rather than a
+     * dedicated workqueue or the (cooperative, shared) system workqueue. */
     while (1)
     {
-        k_sleep(K_FOREVER);
+        hpi_storage_service(K_FOREVER);
     }
 }
 
@@ -501,7 +506,18 @@ static void sys_sys_time_list(const struct zbus_channel *chan)
 ZBUS_LISTENER_DEFINE(sys_sys_time_lis, sys_sys_time_list);
 
 
-#define HPI_SYS_THREAD_STACKSIZE 2048
+/* 3 KB, not 2 KB: this thread now does filesystem work -- the one-shot pre-3.0
+ * purge at boot and every user-requested erase -- and the littlefs call chain
+ * behind fs_opendir/fs_readdir/fs_unlink dominates its stack use. 2 KB was sized
+ * for the init work above (mgmt callback registration, a couple of snprintf'd
+ * date strings) and is not a safe budget for that.
+ *
+ * The number is a starting point, not a measurement: hpi_storage_service() logs
+ * k_thread_stack_space_get() straight after the deepest FS work it ever does, so
+ * tune this from that log on a unit that actually has files to delete. Costs
+ * 1 KB of the ~11 KB of app-core RAM still free -- which is also why the erase
+ * reuses this thread instead of getting a workqueue and a second stack. */
+#define HPI_SYS_THREAD_STACKSIZE 3072
 #define HPI_SYS_THREAD_PRIORITY 5
 
 K_THREAD_DEFINE(hpi_sys_thread_id, HPI_SYS_THREAD_STACKSIZE, hpi_sys_thread, NULL, NULL, NULL, HPI_SYS_THREAD_PRIORITY, 0, 0);

@@ -359,3 +359,99 @@ int hpi_storage_erase_health_data(void)
     }
     return 0;
 }
+
+/* ---- erase dispatch ------------------------------------------------------
+ *
+ * An erase unlinks every segment and record file on the external QSPI die and
+ * takes seconds. The two callers that want one -- the Settings row (display
+ * thread) and HPI_HS_CMD_ERASE (SMP thread) -- must not be the thread that does
+ * it: the display thread would blow its task watchdog, and the SMP thread would
+ * be doing littlefs I/O on a stack sized for CBOR.
+ *
+ * It runs on hpi_sys_thread instead of a dedicated workqueue, for two reasons.
+ * App-core RAM is at ~97.5% with about 11 KB free, so a new thread stack is the
+ * most expensive way to buy this; and hpi_sys_thread already exists, is
+ * preemptible at priority 5, and otherwise sleeps forever once init is done.
+ * The system workqueue is the wrong home for the same job -- it is cooperative
+ * by default and shared with BLE, sensor and settings work, so parking a
+ * multi-second erase there stalls all of it.
+ */
+static K_SEM_DEFINE(s_erase_req, 0, 1);
+static atomic_t s_erase_state = ATOMIC_INIT(HPI_STORAGE_ERASE_IDLE);
+static atomic_t s_erase_rc    = ATOMIC_INIT(0);
+
+void hpi_storage_erase_submit(void)
+{
+    /* IDLE or DONE -> PENDING. Accepting DONE matters: there are two independent
+     * consumers of a result (the Settings row and HPI_HS_CMD_ERASE) and neither
+     * is guaranteed to be present, so requiring an ack before the next submit
+     * would let an unobserved DONE wedge the erase path permanently.
+     *
+     * PENDING/RUNNING is dropped -- a second erase would only repeat idempotent
+     * work, and re-queueing one mid-run is how the old k_work_submit path ended
+     * up reporting the first erase's result for the second. */
+    if (!atomic_cas(&s_erase_state, HPI_STORAGE_ERASE_IDLE, HPI_STORAGE_ERASE_PENDING) &&
+        !atomic_cas(&s_erase_state, HPI_STORAGE_ERASE_DONE, HPI_STORAGE_ERASE_PENDING)) {
+        LOG_WRN("storage: erase already queued or running - ignoring request");
+        return;
+    }
+    atomic_set(&s_erase_rc, 0);
+    k_sem_give(&s_erase_req);
+}
+
+int hpi_storage_erase_state(void)
+{
+    return (int)atomic_get(&s_erase_state);
+}
+
+int hpi_storage_erase_result(void)
+{
+    return (int)atomic_get(&s_erase_rc);
+}
+
+void hpi_storage_erase_ack(void)
+{
+    /* Advisory only -- submit() clears a stale DONE by itself, so nothing depends
+     * on this being called. It just returns the row to "ERASE" once the outcome
+     * has been shown. Only the terminal state is clearable: acking a
+     * PENDING/RUNNING erase would let a second submit through mid-run.
+     *
+     * hpi_storage_erase_result() deliberately survives the ack, so whichever of
+     * the two consumers acks first does not blind the other to the outcome. */
+    atomic_cas(&s_erase_state, HPI_STORAGE_ERASE_DONE, HPI_STORAGE_ERASE_IDLE);
+}
+
+void hpi_storage_service(k_timeout_t timeout)
+{
+    if (k_sem_take(&s_erase_req, timeout) != 0) {
+        return;
+    }
+
+    atomic_set(&s_erase_state, HPI_STORAGE_ERASE_RUNNING);
+    int rc = hpi_storage_erase_health_data();
+    atomic_set(&s_erase_rc, rc);
+    atomic_set(&s_erase_state, HPI_STORAGE_ERASE_DONE);
+
+    /* Report the stack high-water mark right after the deepest filesystem work
+     * this thread ever does. This is the number that justifies
+     * HPI_SYS_THREAD_STACKSIZE -- it cannot be derived statically (the littlefs
+     * call chain dominates it), so measure it on a unit that actually has files
+     * to delete and size the stack from the log rather than from a guess.
+     *
+     * Both symbols are required: zephyr/kernel/thread.c:940 gates
+     * z_impl_k_thread_stack_space_get() on the pair, and THREAD_STACK_INFO alone
+     * (which this build already sets) compiles the call but fails to link.
+     * Neither is on in a normal build -- add CONFIG_INIT_STACKS=y temporarily
+     * when tuning the stack, then take it back out. */
+#if defined(CONFIG_INIT_STACKS) && defined(CONFIG_THREAD_STACK_INFO)
+    size_t unused = 0;
+    if (k_thread_stack_space_get(k_current_get(), &unused) == 0) {
+        LOG_INF("storage: erase done (rc %d); hpi_sys_thread stack unused %u B",
+                rc, (unsigned)unused);
+    } else {
+        LOG_INF("storage: erase done (rc %d)", rc);
+    }
+#else
+    LOG_INF("storage: erase done (rc %d)", rc);
+#endif
+}

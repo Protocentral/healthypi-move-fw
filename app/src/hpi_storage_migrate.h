@@ -22,6 +22,7 @@
 #ifndef HPI_STORAGE_MIGRATE_H
 #define HPI_STORAGE_MIGRATE_H
 
+#include <zephyr/kernel.h>
 #include <stdint.h>
 
 /* Bump when the on-flash layout changes in a way that needs a one-shot fixup.
@@ -51,7 +52,49 @@ int hpi_storage_migrate_run(void);
  * This is the user-facing "erase data" action, reachable from the watch's own
  * Settings screen and from the phone over HPI_HS_CMD_ERASE. Returns 0 on success
  * or -EBUSY when a DFU is in progress.
+ *
+ * BLOCKS FOR SECONDS -- it unlinks every segment and record file on the external
+ * QSPI die. Do not call it from the display thread (task watchdog) or the SMP
+ * thread (littlefs I/O on a stack sized for CBOR). Use hpi_storage_erase_submit()
+ * from those; this is the worker body, and hpi_storage_service() is its only
+ * in-tree caller.
  */
 int hpi_storage_erase_health_data(void);
+
+/* ---- erase dispatch ------------------------------------------------------
+ *
+ * Submit from any thread; the erase itself runs on hpi_sys_thread. See the
+ * comment in hpi_storage_migrate.c for why that thread and not a dedicated
+ * workqueue (app-core RAM is at ~97.5%) nor the system workqueue (cooperative
+ * and shared with BLE/sensor/settings work).
+ *
+ * Lifecycle: IDLE --submit--> PENDING --service--> RUNNING --> DONE --ack--> IDLE.
+ * A submit while not IDLE is dropped: a second erase would only repeat
+ * idempotent work.
+ */
+enum hpi_storage_erase_state {
+    HPI_STORAGE_ERASE_IDLE = 0,
+    HPI_STORAGE_ERASE_PENDING,
+    HPI_STORAGE_ERASE_RUNNING,
+    HPI_STORAGE_ERASE_DONE,
+};
+
+/* Queue an erase. Non-blocking, safe from the display and SMP threads. */
+void hpi_storage_erase_submit(void);
+
+/* Current enum hpi_storage_erase_state. */
+int hpi_storage_erase_state(void);
+
+/* Return value of the last completed erase (0, or a negative errno). Only
+ * meaningful once the state reads HPI_STORAGE_ERASE_DONE. */
+int hpi_storage_erase_result(void);
+
+/* Clear a DONE back to IDLE once the result has been consumed. A no-op in any
+ * other state, so it cannot let a second submit through mid-run. */
+void hpi_storage_erase_ack(void);
+
+/* Serve one queued erase, waiting up to `timeout` for one to arrive. Called from
+ * hpi_sys_thread's idle loop and nowhere else. */
+void hpi_storage_service(k_timeout_t timeout);
 
 #endif /* HPI_STORAGE_MIGRATE_H */

@@ -40,10 +40,15 @@ enum row_id { ROW_BRIGHT, ROW_AOD, ROW_FACE, ROW_UNITS, ROW_TIMEFMT, ROW_ACCENT,
  * for ERASE_ARM_TICKS and disarms itself, so a stray tap while scrolling cannot
  * carry over.
  *
- * The erase itself is submitted to the system workqueue, NOT run here: it unlinks
- * every segment and record file on the external QSPI flash, which takes long
- * enough to stall the display thread and trip its task watchdog. The row polls
- * for completion and reports DONE / FAILED. */
+ * The erase itself is handed to hpi_sys_thread, NOT run here: it unlinks every
+ * segment and record file on the external QSPI flash, which takes long enough to
+ * stall the display thread and trip its task watchdog. The row polls for
+ * completion and reports DONE / FAILED.
+ *
+ * The run state lives in the storage module, not here. This screen is created and
+ * destroyed as the user navigates, and the erase outlives it -- keeping "is one
+ * running?" in a screen-local atomic meant a teardown lost track of it and a
+ * re-entry could submit a second one on top of the first. */
 enum erase_ui { ERASE_IDLE = 0, ERASE_ARMED, ERASE_RUNNING, ERASE_DONE, ERASE_FAILED };
 
 #define ERASE_TICK_MS    250
@@ -54,16 +59,6 @@ static enum erase_ui s_erase_ui;
 static lv_obj_t     *s_erase_val;    /* value label of the erase row (NULL when torn down) */
 static lv_timer_t   *s_erase_timer;
 static int           s_erase_ticks;
-static atomic_t      s_erase_busy = ATOMIC_INIT(0);
-static atomic_t      s_erase_rc   = ATOMIC_INIT(0);
-
-static void erase_work_fn(struct k_work *w)
-{
-    ARG_UNUSED(w);
-    atomic_set(&s_erase_rc, (atomic_val_t)hpi_storage_erase_health_data());
-    atomic_set(&s_erase_busy, 0);
-}
-static K_WORK_DEFINE(s_erase_work, erase_work_fn);
 
 static const char *const accent_name[4] = {"AMBER", "BLUE", "GREEN", "INDIGO"};
 
@@ -145,14 +140,20 @@ static void erase_tick_cb(lv_timer_t *t)
         }
         return;
 
-    case ERASE_RUNNING:
-        if (atomic_get(&s_erase_busy)) {
-            return;                    /* still unlinking */
+    case ERASE_RUNNING: {
+        int st = hpi_storage_erase_state();
+        if (st == HPI_STORAGE_ERASE_PENDING || st == HPI_STORAGE_ERASE_RUNNING) {
+            return;                    /* still queued or unlinking */
         }
-        s_erase_ui = (atomic_get(&s_erase_rc) == 0) ? ERASE_DONE : ERASE_FAILED;
+        /* DONE, or already acked by the other consumer (a phone-issued ERASE).
+         * Test for "not still working" rather than for DONE specifically: the
+         * result outlives the ack, so either way it is readable here. */
+        s_erase_ui = (hpi_storage_erase_result() == 0) ? ERASE_DONE : ERASE_FAILED;
         s_erase_ticks = 0;
+        hpi_storage_erase_ack();
         row_refresh(s_erase_val, ROW_ERASE);
         return;
+    }
 
     case ERASE_DONE:
     case ERASE_FAILED:
@@ -183,9 +184,7 @@ static void erase_row_clicked(lv_obj_t *val)
         /* Confirmed. Hand the work off and let the tick report the outcome. */
         s_erase_ui = ERASE_RUNNING;
         s_erase_ticks = 0;
-        atomic_set(&s_erase_busy, 1);
-        atomic_set(&s_erase_rc, 0);
-        k_work_submit(&s_erase_work);
+        hpi_storage_erase_submit();
         break;
 
     default:
@@ -438,12 +437,12 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     /* Last on purpose: the user has to scroll past everything else to reach it.
      *
      * Re-entering the screen while a submitted erase is STILL RUNNING must not
-     * reset the row to IDLE: the work item is on the queue either way, and an
-     * IDLE row invites a second confirm that re-submits it (k_work_submit
-     * re-queues a running item) -- after which the first completion clears
-     * s_erase_busy and the row reports DONE with a stale rc while the second
-     * erase is still going. Pick the state up from the worker instead. */
-    s_erase_ui = atomic_get(&s_erase_busy) ? ERASE_RUNNING : ERASE_IDLE;
+     * reset the row to IDLE: an IDLE row invites a second confirm, and the user
+     * would then be watching a row that reports the wrong erase. The storage
+     * module owns the run state precisely because it outlives this screen, so
+     * pick the row state up from there. */
+    s_erase_ui = (hpi_storage_erase_state() == HPI_STORAGE_ERASE_IDLE)
+                     ? ERASE_IDLE : ERASE_RUNNING;
     s_erase_ticks = 0;
     lv_obj_t *erase_row = make_row(list, SYM_WARNING, 0xE05A5A, "Erase data", ROW_ERASE, true);
     s_erase_val = lv_obj_get_child(erase_row, -1);   /* the value label make_row added last */

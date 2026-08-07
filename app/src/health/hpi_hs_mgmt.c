@@ -29,7 +29,7 @@
 #include "health/hpi_health_store.h"
 #include "health/hpi_hs_record.h"
 #include "hpi_sys.h"   /* hpi_sys_set_utc_offset() */
-#include "hpi_storage_migrate.h" /* hpi_storage_erase_health_data() */
+#include "hpi_storage_migrate.h" /* hpi_storage_erase_submit() + state/result */
 #include "hw_module.h" /* hpi_bpt_cal_* (BPT calibration control, group v2) */
 #if defined(CONFIG_HPI_HS_SYNTH)
 #include "health/hpi_hs_synth.h"
@@ -320,15 +320,26 @@ static int hs_h_set_tz(struct smp_streamer *ctxt)
  * malformed CBOR map (or one mis-dispatched command id) away from firing — an
  * absent or wrong `confirm` is -EINVAL, and there is no default.
  *
- * Runs synchronously on the SMP thread. Unlike SYNTH it does not need a worker:
- * an erase is a bounded number of unlinks (retention caps records at HS_REC_MAX
- * and segments at HS_MAX_SEGS), and the client genuinely wants to know it
- * finished before it clears its own cursor.
+ * Synchronous from the client's point of view -- it does not answer until the
+ * erase has finished, because the client clears its own cursor off this response
+ * -- but the work runs on hpi_sys_thread, not here. The SMP thread's stack is
+ * sized for CBOR encode/decode, not for the littlefs call chain behind a few
+ * hundred unlinks, so this waits on the result rather than producing it.
+ *
+ * ERASE_WAIT_MS bounds that wait. It is generous because the erase is bounded but
+ * not fast: retention caps records at HS_REC_MAX and segments at HS_MAX_SEGS, and
+ * each unlink is a QSPI erase. On a timeout the erase is NOT cancelled -- it is
+ * already deleting files and stopping half way is worse than either outcome -- so
+ * the client is told -EINPROGRESS and should re-HELLO to pick up the new cursor.
+ * Note the client's OWN transport timeout is likely shorter than this; that is a
+ * client-side setting, and either way the erase completes.
  *
  * The response repeats the post-erase head/oldest so a client can reset its
  * cursor without a follow-up HELLO. Note seq does NOT go back to zero — it rounds
  * up to the next segment boundary, so `oldest > head` is the expected "store is
  * empty" answer afterwards. */
+#define ERASE_WAIT_MS 30000
+#define ERASE_POLL_MS 100
 static int hs_h_erase(struct smp_streamer *ctxt)
 {
     zcbor_state_t *zsd = ctxt->reader->zs;
@@ -349,7 +360,29 @@ static int hs_h_erase(struct smp_streamer *ctxt)
     }
 
     LOG_WRN("HS ERASE (cmd 12) accepted - erasing all health data");
-    int rc = hpi_storage_erase_health_data();
+    hpi_storage_erase_submit();
+
+    /* Poll rather than block on a semaphore: the erase is a single-slot job, so
+     * there is no queue to wait on, and a coarse poll keeps the SMP thread out of
+     * the storage module's internals. */
+    int rc = -EINPROGRESS;
+    for (int waited_ms = 0; waited_ms < ERASE_WAIT_MS; waited_ms += ERASE_POLL_MS) {
+        int st = hpi_storage_erase_state();
+        if (st != HPI_STORAGE_ERASE_PENDING && st != HPI_STORAGE_ERASE_RUNNING) {
+            /* DONE, or already acked by the Settings row if the user happened to
+             * be on that screen. The result outlives the ack, so it is readable
+             * either way -- testing for DONE specifically would time out here on
+             * a race that actually succeeded. */
+            rc = hpi_storage_erase_result();
+            hpi_storage_erase_ack();
+            break;
+        }
+        k_sleep(K_MSEC(ERASE_POLL_MS));
+    }
+    if (rc == -EINPROGRESS) {
+        LOG_WRN("HS ERASE (cmd 12) still running after %d ms - answering "
+                "-EINPROGRESS; the erase continues", ERASE_WAIT_MS);
+    }
 
     bool ok = zcbor_tstr_put_lit(zse, "rc")     && zcbor_int32_put(zse, rc) &&
               zcbor_tstr_put_lit(zse, "head")   && zcbor_uint32_put(zse, hpi_hs_head_seq()) &&
