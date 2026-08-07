@@ -1374,7 +1374,26 @@ void hpi_hs_wipe_all(void)
          * segment goes and seq restarts at a clean boundary WITHOUT rewinding,
          * so no seq the app has already stored can ever be reused. */
         hs_migrate_layout(HS_LAYOUT_VER);
+
+        /* hs_migrate_layout() deletes only the SEGMENTS (name[0] == 's'). The
+         * latest-per-type snapshot is a separate file and would otherwise
+         * survive the erase -- and it holds precisely the values the user sees:
+         * last HR, SpO2, skin temp, BP, HRV, EDA, stress, steps, energy. It is
+         * restored at boot (hpi_hs_storage_init) and served to the watch faces
+         * and to SUMMARY, so leaving it behind means "erase my data" visibly
+         * does not. HS_META stays: it carries the seq cursor, which must never
+         * rewind. */
+        (void)fs_unlink(HS_LATEST);
     }
+
+    /* RAM copy goes regardless of whether storage came up: hpi_hs_get_latest()
+     * reads these directly, so clearing the file alone would keep serving the
+     * erased values until the next reboot. hs_persist_latest() skips the write
+     * when nothing is present, so the unlink above is not undone. */
+    k_mutex_lock(&s_lock, K_FOREVER);
+    memset(s_latest, 0, sizeof(s_latest));
+    memset(s_have_latest, 0, sizeof(s_have_latest));
+    k_mutex_unlock(&s_lock);
 }
 
 #if defined(CONFIG_HPI_HS_SYNTH)

@@ -31,13 +31,19 @@ struct rev_file {
 };
 
 /* The pre-3.0 directory tree, from the fs_module.c that shipped before the NCS
- * 3.4 rework. `lfs/hrv` has no leading slash on purpose: the old
- * hpi_init_fs_struct() had that typo (it created "/lfs/hrv" only via a later
- * repair path), so a unit may carry either spelling. fs_opendir on a missing
- * path just returns -ENOENT and we move on. */
+ * 3.4 rework. fs_opendir on a missing path returns -ENOENT and we move on, so
+ * listing a directory a given unit never had costs nothing.
+ *
+ * There is deliberately NO "lfs/hrv" entry for the old hpi_init_fs_struct()
+ * typo (it called fs_mkdir("lfs/hrv"), without the leading slash). Zephyr's fs
+ * layer rejects any relative path up front -- fs_mkdir and fs_opendir both
+ * return -EINVAL and log "invalid directory name!!" -- so that mkdir never
+ * created anything and no unit can carry that spelling. Listing it would only
+ * produce a spurious ERR+WRN pair on every migrating unit. The repair path in
+ * the same file created the real "/lfs/hrv", which is covered below. */
 static const char *const s_legacy_dirs[] = {
     "/lfs/trhr", "/lfs/trspo2", "/lfs/trtemp", "/lfs/trsteps", "/lfs/trbpt",
-    "/lfs/ecg",  "/lfs/gsr",    "/lfs/hrv",    "/lfs/log",     "lfs/hrv",
+    "/lfs/ecg",  "/lfs/gsr",    "/lfs/hrv",    "/lfs/log",
 };
 
 /* Static, not stack: hpi_sys_thread runs on 2 KB and a struct fs_dirent alone is
@@ -73,6 +79,7 @@ static int purge_dir(const char *path)
     struct fs_dir_t dir;
     int total = 0;
     bool saw_subdir = false;
+    bool saw_longname = false;
 
     for (;;) {
         int n = 0;
@@ -98,41 +105,69 @@ static int purge_dir(const char *path)
                 saw_subdir = true;
                 continue;
             }
-            strncpy(s_batch[n], s_ent.name, NAME_MAX_L - 1);
-            s_batch[n][NAME_MAX_L - 1] = '\0';
+            /* Skip rather than truncate. A truncated name builds a path that
+             * names a DIFFERENT file (or none), so unlinking it is either wrong
+             * or a no-op that gets re-collected on the next pass. No pre-3.0
+             * file comes close to this -- the old trends.c named files by their
+             * day-start timestamp -- so this is a guard, not a code path. */
+            if (strlen(s_ent.name) >= NAME_MAX_L) {
+                LOG_ERR("storage: name too long in %s - leaving it", path);
+                saw_longname = true;
+                continue;
+            }
+            strcpy(s_batch[n], s_ent.name);
             n++;
         }
         fs_closedir(&dir);
 
         if (n == 0) {
-            break; /* no files left — every pass makes progress, so this ends */
+            break; /* nothing left to collect */
         }
+
+        /* Deletions actually made this pass. The loop reopens the directory from
+         * the start each time, so it only terminates if every pass removes at
+         * least one of the names it collected. Anything that leaves a collected
+         * entry in place -- a truncated name, an unlink that reports -ENOENT --
+         * would otherwise re-collect it forever. Count real removals only, and
+         * bail on a pass that achieves none. */
+        int deleted = 0;
 
         for (int i = 0; i < n; i++) {
             char full[128];
             int len = snprintf(full, sizeof(full), "%s/%s", path, s_batch[i]);
             if (len < 0 || len >= (int)sizeof(full)) {
-                /* Cannot happen with the fixed dir list above, but unlinking a
-                 * TRUNCATED path would delete the wrong file. Skip loudly. */
+                /* Unlinking a TRUNCATED path would delete the wrong file. Skip it;
+                 * the zero-progress guard below ends the loop if that is all we
+                 * had. (Also reachable if a name was truncated into s_batch.) */
                 LOG_ERR("storage: path too long under %s - skipping", path);
                 continue;
             }
             rc = fs_unlink(full);
-            if (rc < 0 && rc != -ENOENT) {
+            if (rc < 0) {
+                /* -ENOENT included: the name came straight out of readdir, so it
+                 * means the entry did not match what we built (a truncated name),
+                 * not that the work is done. Treating it as success is what used
+                 * to spin this loop forever. */
                 LOG_WRN("unlink %s: %d", full, rc);
-                /* Give up on this directory rather than rescanning forever: a
-                 * file we cannot remove would be re-collected on every pass. */
+                /* Give up on this directory rather than rescanning forever. */
                 return total;
             }
             total++;
+            deleted++;
             /* Yield between unlinks: an erase on the external QSPI die can block
              * for milliseconds and the display thread must keep running. */
             k_yield();
         }
+
+        if (deleted == 0) {
+            LOG_ERR("storage: no progress purging %s - stopping", path);
+            return total;
+        }
     }
 
-    if (saw_subdir) {
-        LOG_WRN("storage: %s has subdirectories - leaving it in place", path);
+    if (saw_subdir || saw_longname) {
+        LOG_WRN("storage: %s still has entries this purge will not touch - "
+                "leaving the directory in place", path);
         return total;
     }
 
@@ -194,6 +229,17 @@ static uint64_t lfs_free_bytes(void)
     return (uint64_t)st.f_bfree * st.f_frsize;
 }
 
+/* Bytes freed between two lfs_free_bytes() readings, in KB, for logging.
+ *
+ * The subtraction needs the guard: lfs_free_bytes() returns 0 when fs_statvfs
+ * fails, so a failed SECOND reading makes (after - before) underflow uint64 and
+ * print ~18 exabytes -- which is exactly the number a field investigation reads
+ * months later when trying to work out where the storage went. */
+static unsigned reclaimed_kb(uint64_t before, uint64_t after)
+{
+    return (after > before) ? (unsigned)((after - before) / 1024u) : 0u;
+}
+
 static int purge_legacy_tree(void)
 {
     int files = 0;
@@ -248,7 +294,7 @@ int hpi_storage_migrate_run(void)
 
     if (files > 0) {
         LOG_WRN("storage: removed %d pre-3.0 file(s), reclaimed %u KB",
-                files, (unsigned)((after - before) / 1024u));
+                files, reclaimed_kb(before, after));
     }
 
     rc = rev_write(HPI_STORAGE_REV);
@@ -297,9 +343,19 @@ int hpi_storage_erase_health_data(void)
 
     LOG_WRN("storage: erased %d record(s)%s, reclaimed %u KB",
             recs, (legacy > 0) ? " + pre-3.0 leftovers" : "",
-            (unsigned)((after - before) / 1024u));
+            reclaimed_kb(before, after));
 
-    /* Stamp the revision: the legacy tree is provably gone now. */
-    (void)rev_write(HPI_STORAGE_REV);
+    /* Stamp the revision ONLY if the legacy sweep actually completed. It returns
+     * -EAGAIN when a DFU starts mid-erase (the entry check above passed, but an
+     * OTA can begin at any point during a multi-second erase). Stamping then
+     * would record "pre-3.0 tree is gone" over a tree that is still there, and
+     * because the stamp is what makes the migration idempotent, no later boot
+     * would ever look again. */
+    if (legacy >= 0) {
+        (void)rev_write(HPI_STORAGE_REV);
+    } else {
+        LOG_WRN("storage: legacy sweep deferred (%d) - rev left unstamped so the "
+                "next boot retries it", legacy);
+    }
     return 0;
 }

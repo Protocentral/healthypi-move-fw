@@ -75,6 +75,32 @@ static void rec_path(char *buf, size_t n, uint32_t id)
     snprintf(buf, n, HS_REC_DIR "/r%06u", (unsigned)id);
 }
 
+/* True only for a record payload file: 'r' followed by nothing but digits.
+ *
+ * The exclusion that matters is HS_REC_META ("rmeta"), which lives in the same
+ * directory and ALSO starts with 'r'. It persists s_next_id, and deleting it
+ * would rewind record ids after an erase -- letting a fresh capture collide with
+ * a row the phone already holds, which is the one thing the id cursor exists to
+ * prevent. A prefix test alone would take it out. */
+static bool rec_name_is_record(const char *name)
+{
+    if (name[0] != 'r' || name[1] == '\0') {
+        return false;
+    }
+    for (const char *p = name + 1; *p != '\0'; p++) {
+        if (*p < '0' || *p > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Scratch for the erase sweep: record basenames are "r" + 6 digits, so 16 bytes
+ * is ample. Sized to HS_REC_MAX; the sweep loops until a pass finds nothing, so a
+ * directory holding more than that still drains. Static because it is carried
+ * across a closedir, and only ever touched under s_rec_lock. */
+static char s_sweep[HS_REC_MAX][16];
+
 /* Persist the id cursor so RECORDS ids never reuse across a full retention wipe. */
 static void rec_persist_meta(void)
 {
@@ -143,12 +169,16 @@ int hpi_hs_rec_storage_init(void)
 
     static uint8_t iobuf[HS_REC_IO_CHUNK];
     while (fs_readdir(&dir, &ent) == 0 && ent.name[0] != '\0') {
-        if (ent.type != FS_DIR_ENTRY_FILE || ent.name[0] != 'r') {
-            continue;   /* skip rmeta (starts 'r' but len differs) handled below */
+        /* Same predicate the erase sweep uses, so "is this a record file?" has
+         * exactly one definition in this file. It excludes rmeta, which also
+         * starts with 'r'. Stricter than the sscanf below on its own: that would
+         * accept a trailing-garbage name like "r000123x" on a partial match. */
+        if (ent.type != FS_DIR_ENTRY_FILE || !rec_name_is_record(ent.name)) {
+            continue;
         }
         unsigned idv = 0;
         if (sscanf(ent.name, "r%06u", &idv) != 1 || idv == 0) {
-            continue;   /* not a record file (e.g. rmeta) */
+            continue;
         }
 
         char path[40];
@@ -451,16 +481,61 @@ int hpi_hs_rec_delete_all(void)
         }
     }
 
+    /* Sweep the DIRECTORY, not s_index. The index holds at most HS_REC_MAX (24)
+     * entries and boot recovery fills it from an unsorted readdir, so any file
+     * beyond the 24th is absent from it -- walking the index would leave those
+     * orphans on flash and still report success. "Erase everything" has to mean
+     * the directory. */
     int n = 0;
-    for (size_t i = 0; i < s_index_n; i++) {
-        char path[40];
-        rec_path(path, sizeof(path), s_index[i].id);
-        if (fs_unlink(path) == 0) {
-            n++;
+    for (;;) {
+        struct fs_dir_t dir;
+        struct fs_dirent ent;
+        size_t k = 0;
+
+        fs_dir_t_init(&dir);
+        if (fs_opendir(&dir, HS_REC_DIR) != 0) {
+            break;   /* -ENOENT on a unit that never captured anything */
         }
-        /* The QSPI erase behind each unlink can block for milliseconds. */
-        k_yield();
+        /* Collect names first and close the handle before unlinking any of them:
+         * LittleFS gives no ordering guarantee for readdir across a concurrent
+         * remove, so unlinking with the handle open can silently skip entries. */
+        while (k < ARRAY_SIZE(s_sweep) &&
+               fs_readdir(&dir, &ent) == 0 && ent.name[0] != '\0') {
+            if (ent.type != FS_DIR_ENTRY_FILE || !rec_name_is_record(ent.name)) {
+                continue;
+            }
+            /* Skip rather than truncate: a truncated name resolves to a
+             * DIFFERENT file, and unlinking that would delete the wrong record.
+             * Unreachable for "r" + up to 10 digits, so this is a guard. */
+            if (strlen(ent.name) >= sizeof(s_sweep[0])) {
+                LOG_ERR("rec: name too long in " HS_REC_DIR " - leaving it");
+                continue;
+            }
+            strcpy(s_sweep[k], ent.name);
+            k++;
+        }
+        fs_closedir(&dir);
+
+        if (k == 0) {
+            break;   /* nothing left that matches -- every pass deletes, so this ends */
+        }
+
+        for (size_t i = 0; i < k; i++) {
+            char path[40];
+            if (snprintf(path, sizeof(path), HS_REC_DIR "/%s", s_sweep[i]) >= (int)sizeof(path)) {
+                continue;   /* unreachable for "r" + digits; never unlink a truncated path */
+            }
+            if (fs_unlink(path) != 0) {
+                /* Give up rather than re-collect the same file on every pass. */
+                LOG_WRN("rec: unlink %s failed - stopping sweep", path);
+                goto swept;
+            }
+            n++;
+            /* The QSPI erase behind each unlink can block for milliseconds. */
+            k_yield();
+        }
     }
+swept:
     s_index_n = 0;
 
     /* s_next_id is deliberately NOT reset. Record ids must stay unique for the

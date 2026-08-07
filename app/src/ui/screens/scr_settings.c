@@ -435,10 +435,31 @@ void draw_scr_settings(enum scroll_dir m_scroll_dir, uint32_t a1, uint32_t a2, u
     make_row(list, SYM_HAND,      0x8B9498, "Hand worn",    ROW_HAND,   true);
     make_row(list, SYM_BLUETOOTH, 0x6FB3CC, "Bluetooth",    ROW_BT,     false);
     make_row(list, SYM_INFO,      0x8B9498, "About",        ROW_ABOUT,  false);
-    /* Last on purpose: the user has to scroll past everything else to reach it. */
-    s_erase_ui = ERASE_IDLE;
+    /* Last on purpose: the user has to scroll past everything else to reach it.
+     *
+     * Re-entering the screen while a submitted erase is STILL RUNNING must not
+     * reset the row to IDLE: the work item is on the queue either way, and an
+     * IDLE row invites a second confirm that re-submits it (k_work_submit
+     * re-queues a running item) -- after which the first completion clears
+     * s_erase_busy and the row reports DONE with a stale rc while the second
+     * erase is still going. Pick the state up from the worker instead. */
+    s_erase_ui = atomic_get(&s_erase_busy) ? ERASE_RUNNING : ERASE_IDLE;
+    s_erase_ticks = 0;
     lv_obj_t *erase_row = make_row(list, SYM_WARNING, 0xE05A5A, "Erase data", ROW_ERASE, true);
     s_erase_val = lv_obj_get_child(erase_row, -1);   /* the value label make_row added last */
+
+    /* U+F083 (warning) is NOT in matsym_26, which make_row uses for every row
+     * icon -- it exists only in matsym_24. LVGL drops a missing glyph silently,
+     * so without this override the one row where the icon carries the "this is
+     * destructive" signal renders blank. Override the icon label (child 0) only.
+     * The proper fix is to add 0xF083 to the matsym_26 range in
+     * fonts/convert_fonts.sh and regenerate, but lv_font_conv is not currently
+     * available in this workspace. */
+    lv_obj_set_style_text_font(lv_obj_get_child(erase_row, 0), &HPI_FONT_ICON, 0);
+
+    if (s_erase_ui == ERASE_RUNNING && s_erase_timer == NULL) {
+        s_erase_timer = lv_timer_create(erase_tick_cb, ERASE_TICK_MS, NULL);
+    }
 
     hpi_disp_set_curr_screen(SCR_SPL_SETTINGS);
     hpi_show_screen(scr_settings, m_scroll_dir);
