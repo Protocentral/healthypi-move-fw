@@ -77,5 +77,8 @@ twister-out*/
 .claude/scratch/
 .claude/settings.local.json
 
-# Internal planning / release docs — kept in the tree, never published
+# Internal planning / release docs — kept in the tree, never published.
+# /internal/ is the canonical location for planning, design and scratch docs;
+# /docs/internal/ predates it and still holds the v3 release + DTS migration plans.
+/internal/
 /docs/internal/
