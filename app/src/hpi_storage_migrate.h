@@ -28,6 +28,12 @@
 /* Bump when the on-flash layout changes in a way that needs a one-shot fixup.
  *
  *   1 — drop the pre-3.0 trend / recording / log tree.
+ *
+ * The stamp is a NUMBER, not a done/not-done flag, so steps compose: each is
+ * guarded by the revision that introduced it and runs only on units below it.
+ * When adding one, append a new number here and a matching `if (rev < N)` block
+ * in hpi_storage_migrate_run() -- never extend an existing step, because every
+ * unit already stamped at that revision has passed it and will never re-run it.
  */
 #define HPI_STORAGE_REV 1
 
@@ -93,8 +99,21 @@ int hpi_storage_erase_result(void);
  * other state, so it cannot let a second submit through mid-run. */
 void hpi_storage_erase_ack(void);
 
-/* Serve one queued erase, waiting up to `timeout` for one to arrive. Called from
- * hpi_sys_thread's idle loop and nowhere else. */
+/* Serve whatever jobs are queued, waiting up to `timeout` for one to arrive.
+ * Called from hpi_sys_thread's idle loop and nowhere else. */
 void hpi_storage_service(k_timeout_t timeout);
+
+#if defined(CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+/* TEST ONLY. Queue a synthetic pre-3.0 tree build (see
+ * hpi_storage_legacy_synth.h) on the same thread as the erase, since it creates
+ * a few hundred files and must not run on the SMP thread. Pass 0 for the
+ * default file count. */
+void hpi_storage_legacy_synth_submit(uint32_t files_per_dir);
+
+/* TEST ONLY. Delete the migration stamp so the next boot re-runs every step.
+ * This is what makes the synthetic fixture testable; there is no legitimate
+ * release-build reason to re-run a one-shot fixup. */
+int hpi_storage_rev_clear(void);
+#endif
 
 #endif /* HPI_STORAGE_MIGRATE_H */

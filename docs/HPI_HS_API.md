@@ -157,6 +157,27 @@ baseline and sync-at-scale can be tested without wearing the watch for a week.
   measurement.
 - **The command does not exist in a release build** (`CONFIG_HPI_HS_SYNTH=n`).
 
+### `LEGACY_SYNTH` (cmd 13, write) — **TEST BUILDS ONLY**
+`req { "files":<uint> }` → `rsp { "rc":0, "files":N }`
+
+Builds the directory tree a watch upgraded from pre-3.0 firmware carries
+(`/lfs/trhr`, `/lfs/trspo2`, … `/lfs/log`) and clears the migration stamp, so the
+one-shot purge can be exercised on a bench unit that was flashed with 3.x and
+never had one. **Reboot afterwards** — the purge runs at startup.
+
+- **Returns immediately.** Creating a few hundred files takes seconds and runs on
+  `hpi_sys_thread`, the same thread as `ERASE`.
+- `files` is per directory (0 = default 12, clamped to 1..64). More than 8 is
+  worth using: the purge's batch is 8, so that is what exercises its multi-pass
+  loop.
+- One directory (`/lfs/log`) additionally gets **a name too long for the purge's
+  batch buffer** and **a stray subdirectory**. Expected outcome: every other
+  directory disappears; `/lfs/log` is emptied of what can be removed and then
+  **left in place with a warning**. A run that deletes `/lfs/log` or that never
+  finishes is a regression.
+- **The command does not exist in a release build**
+  (`CONFIG_HPI_STORAGE_LEGACY_SYNTH=n`), where it answers `-ENOTSUP`.
+
 ### `SUMMARY` (cmd 3, read)
 `req {}` → today-summary + baselines (resting HR, today HR min/avg/max, overnight
 SpO₂, temp Δ vs baseline + nights, HRV vs baseline, HRV-stress `stress_hrv`/

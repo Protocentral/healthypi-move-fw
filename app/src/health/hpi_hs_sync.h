@@ -89,6 +89,21 @@ enum hpi_hs_cmd_id {
                               * post-erase head/oldest so the client can reset its
                               * cursor without a second HELLO. -EBUSY if a DFU or
                               * a capture is in flight.                          */
+
+    HPI_HS_CMD_LEGACY_SYNTH = 13, /* WRITE {files} → {rc, files}
+                                   * TEST BUILDS ONLY (CONFIG_HPI_STORAGE_LEGACY_
+                                   * SYNTH); absent from release, where it answers
+                                   * -ENOTSUP like any unimplemented id.
+                                   *
+                                   * Builds the directory tree a watch upgraded
+                                   * from 2.x carries and clears the migration
+                                   * stamp, so the one-shot purge can be exercised
+                                   * on a bench unit flashed with 3.x that never
+                                   * had one. Reboot afterwards to run the purge.
+                                   *
+                                   * Returns immediately; the build runs on
+                                   * hpi_sys_thread (a few hundred file creates
+                                   * must not happen on the SMP thread).         */
 };
 
 /*

@@ -97,6 +97,28 @@ config HPI_HS_SYNTH
 	  Every sample it writes carries HPI_HS_Q_SYNTHETIC so fabricated data can
 	  never be mistaken for a real measurement. MUST BE OFF IN RELEASE BUILDS.
 
+config HPI_STORAGE_LEGACY_SYNTH
+	bool "Synthetic pre-3.0 storage tree (TEST ONLY)"
+	default n
+	help
+	  Builds the directory tree a watch upgraded from 2.x carries
+	  (/lfs/trhr, /lfs/trspo2, ... /lfs/log), so the one-shot purge in
+	  hpi_storage_migrate.c can be exercised on a bench unit that was flashed
+	  with 3.x and never had one.
+
+	  Without this there is no way to test that purge at all, which is how a
+	  batch of defects survived into review: a forward-progress bug in the
+	  directory walker, a name-truncation hazard, and a revision stamped over a
+	  tree that was still there. All three need a real tree to show up.
+
+	  It also plants the two entries the walker has to cope with rather than
+	  choke on -- a name too long for its batch buffer, and a stray
+	  subdirectory -- and clears the migration stamp so the next boot purges.
+
+	  Triggered by the HPI_HS LEGACY_SYNTH MCUmgr command (id 13) over BLE, not
+	  at boot: a fixture rebuilt on every boot would race the purge it exists to
+	  test. The command does not exist in a release image.
+
 config HPI_HS_SYNTH_RTC_BOOTSTRAP
 	bool "Set the RTC to a fixed test date if it is invalid (TEST ONLY)"
 	default y

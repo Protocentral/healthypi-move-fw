@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "hpi_storage_migrate.h"
+#include "hpi_storage_legacy_synth.h"
 #include "hpi_dfu.h"
 #include "health/hpi_health_store.h"
 #include "health/hpi_hs_record.h"
@@ -216,6 +217,25 @@ static int rev_write(uint16_t rev)
     return (rc == (int)sizeof(rf)) ? 0 : -EIO;
 }
 
+#if defined(CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+int hpi_storage_rev_clear(void)
+{
+    /* Unstamping is the only way to make the migration run a second time on a
+     * unit that has already been through it, which is what makes the synthetic
+     * fixture testable at all. Test builds only -- in a release image there is no
+     * legitimate reason to re-run a one-shot fixup, and exposing a way to do it
+     * would mean an unstamped unit rescanning nine directories every boot. */
+    int rc = fs_unlink(REV_FILE);
+    if (rc == -ENOENT) {
+        return 0;   /* already absent -- the next boot will migrate regardless */
+    }
+    if (rc < 0) {
+        LOG_ERR("storage: could not clear %s: %d", REV_FILE, rc);
+    }
+    return rc;
+}
+#endif
+
 /* Free bytes on the LittleFS volume, or 0 if it cannot be read. Used only to
  * report what a purge reclaimed — this is the answer to "where did my storage
  * go?" when a field unit is investigated months later. */
@@ -267,14 +287,19 @@ int hpi_storage_migrate_run(void)
     uint16_t rev = 0;
     int rc = rev_read(&rev);
 
-    if (rc == 0 && rev >= HPI_STORAGE_REV) {
+    /* A read failure means "treat as never stamped": -ENOENT on a fresh unit or
+     * one upgraded from pre-3.0, -EINVAL on a stamp that did not survive. Both
+     * want every step re-run, and every step is idempotent, so 0 is the safe
+     * floor. */
+    if (rc < 0) {
+        rev = 0;
+    }
+
+    if (rev >= HPI_STORAGE_REV) {
         LOG_DBG("storage rev %u - up to date", (unsigned)rev);
         return 0;
     }
 
-    /* -ENOENT means "never stamped", which is both a fresh unit and every unit
-     * upgraded from pre-3.0. Both want the same thing: run the purge (a no-op on
-     * a fresh unit, since none of those directories exist) and stamp. */
     LOG_INF("storage: migrating rev %u -> %u", (unsigned)rev, HPI_STORAGE_REV);
 
     if (hpi_dfu_is_active()) {
@@ -284,7 +309,26 @@ int hpi_storage_migrate_run(void)
 
     k_mutex_lock(&s_purge_lock, K_FOREVER);
     uint64_t before = lfs_free_bytes();
-    int files = purge_legacy_tree();
+
+    /* ---- one-shot steps, applied in order --------------------------------
+     *
+     * Each step is guarded by the revision it introduces, so a unit that has
+     * already had step 1 gets only step 2 when HPI_STORAGE_REV moves to 2.
+     *
+     * Add the next fixup as its own `if (rev < 2) { ... }` block below and bump
+     * HPI_STORAGE_REV. Do NOT fold new work into an existing step: every unit
+     * already stamped at that revision has passed it and will never run it
+     * again, so the new work would silently skip exactly the fleet that needs
+     * it. This is the whole reason the stamp is a number and not a flag. */
+
+    int files = 0;
+
+    /* rev < 1: drop the pre-3.0 trend / recording / log tree. A no-op on a fresh
+     * unit, since none of those directories exist. */
+    if (rev < 1) {
+        files = purge_legacy_tree();
+    }
+
     uint64_t after = lfs_free_bytes();
     k_mutex_unlock(&s_purge_lock);
 
@@ -360,25 +404,39 @@ int hpi_storage_erase_health_data(void)
     return 0;
 }
 
-/* ---- erase dispatch ------------------------------------------------------
+/* ---- job dispatch --------------------------------------------------------
  *
- * An erase unlinks every segment and record file on the external QSPI die and
- * takes seconds. The two callers that want one -- the Settings row (display
- * thread) and HPI_HS_CMD_ERASE (SMP thread) -- must not be the thread that does
- * it: the display thread would blow its task watchdog, and the SMP thread would
- * be doing littlefs I/O on a stack sized for CBOR.
+ * Long filesystem jobs run here, on hpi_sys_thread. An erase unlinks every
+ * segment and record file on the external QSPI die and takes seconds; the two
+ * callers that want one -- the Settings row (display thread) and
+ * HPI_HS_CMD_ERASE (SMP thread) -- must not be the thread that does it. The
+ * display thread would blow its task watchdog, and the SMP thread would be doing
+ * littlefs I/O on a stack sized for CBOR.
  *
  * It runs on hpi_sys_thread instead of a dedicated workqueue, for two reasons.
- * App-core RAM is at ~97.5% with about 11 KB free, so a new thread stack is the
+ * App-core RAM is at ~97.5% with about 10 KB free, so a new thread stack is the
  * most expensive way to buy this; and hpi_sys_thread already exists, is
  * preemptible at priority 5, and otherwise sleeps forever once init is done.
  * The system workqueue is the wrong home for the same job -- it is cooperative
  * by default and shared with BLE, sensor and settings work, so parking a
  * multi-second erase there stalls all of it.
+ *
+ * One semaphore signals "something to do" and a bitmask says what. The semaphore
+ * is capped at 1, which is correct here rather than lossy: the mask is cleared
+ * and every set bit serviced in one wake-up, so two submits between wake-ups
+ * both run. A submit landing after the clear leaves the count at 1 and is picked
+ * up on the next pass.
  */
-static K_SEM_DEFINE(s_erase_req, 0, 1);
+#define JOB_ERASE        BIT(0)
+#define JOB_LEGACY_SYNTH BIT(1)
+
+static K_SEM_DEFINE(s_job_req, 0, 1);
+static atomic_t s_jobs        = ATOMIC_INIT(0);
 static atomic_t s_erase_state = ATOMIC_INIT(HPI_STORAGE_ERASE_IDLE);
 static atomic_t s_erase_rc    = ATOMIC_INIT(0);
+#if defined(CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+static atomic_t s_synth_files = ATOMIC_INIT(0);   /* argument for the queued synth */
+#endif
 
 void hpi_storage_erase_submit(void)
 {
@@ -396,7 +454,8 @@ void hpi_storage_erase_submit(void)
         return;
     }
     atomic_set(&s_erase_rc, 0);
-    k_sem_give(&s_erase_req);
+    atomic_or(&s_jobs, JOB_ERASE);
+    k_sem_give(&s_job_req);
 }
 
 int hpi_storage_erase_state(void)
@@ -421,9 +480,35 @@ void hpi_storage_erase_ack(void)
     atomic_cas(&s_erase_state, HPI_STORAGE_ERASE_DONE, HPI_STORAGE_ERASE_IDLE);
 }
 
+#if defined(CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+void hpi_storage_legacy_synth_submit(uint32_t files_per_dir)
+{
+    atomic_set(&s_synth_files, (atomic_val_t)files_per_dir);
+    atomic_or(&s_jobs, JOB_LEGACY_SYNTH);
+    k_sem_give(&s_job_req);
+}
+#endif
+
 void hpi_storage_service(k_timeout_t timeout)
 {
-    if (k_sem_take(&s_erase_req, timeout) != 0) {
+    if (k_sem_take(&s_job_req, timeout) != 0) {
+        return;
+    }
+
+    /* Clear and service every set bit in one pass -- see the note on the
+     * semaphore cap above. */
+    atomic_val_t jobs = atomic_clear(&s_jobs);
+
+#if defined(CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+    /* Before the erase, so a single wake-up carrying both bits builds the
+     * fixture and then wipes it, which is the order that makes sense if anyone
+     * ever asks for both. */
+    if (jobs & JOB_LEGACY_SYNTH) {
+        (void)hpi_storage_legacy_synth_run((uint32_t)atomic_get(&s_synth_files));
+    }
+#endif
+
+    if (!(jobs & JOB_ERASE)) {
         return;
     }
 

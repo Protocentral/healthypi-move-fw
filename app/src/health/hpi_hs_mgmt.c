@@ -390,6 +390,39 @@ static int hs_h_erase(struct smp_streamer *ctxt)
     return ok ? MGMT_ERR_EOK : MGMT_ERR_EMSGSIZE;
 }
 
+#if defined(CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+/* LEGACY_SYNTH (write, TEST BUILDS ONLY): {files} -> {rc, files}
+ *
+ * Builds the directory tree a watch upgraded from 2.x carries and clears the
+ * migration stamp, so the one-shot purge in hpi_storage_migrate.c can be
+ * exercised on a bench unit that was flashed with 3.x and never had one. Reboot
+ * afterwards to run the purge.
+ *
+ * Returns immediately: creating a few hundred files takes seconds and is queued
+ * onto hpi_sys_thread, for the same reason the erase is. `files` is per
+ * directory and clamped by the generator; 0 means "use the default".
+ *
+ * Absent from a release build, where the dispatcher answers -ENOTSUP. */
+static int hs_h_legacy_synth(struct smp_streamer *ctxt)
+{
+    zcbor_state_t *zsd = ctxt->reader->zs;
+    zcbor_state_t *zse = ctxt->writer->zs;
+    uint32_t files = 0;   /* 0 -> generator default */
+    size_t decoded;
+    struct zcbor_map_decode_key_val dk[] = {
+        ZCBOR_MAP_DECODE_KEY_DECODER("files", zcbor_uint32_decode, &files),
+    };
+    (void)zcbor_map_decode_bulk(zsd, dk, ARRAY_SIZE(dk), &decoded);   /* optional */
+
+    LOG_WRN("HS LEGACY_SYNTH (cmd 13) - queueing a synthetic pre-3.0 tree");
+    hpi_storage_legacy_synth_submit(files);
+
+    bool ok = zcbor_tstr_put_lit(zse, "rc")    && zcbor_int32_put(zse, 0) &&
+              zcbor_tstr_put_lit(zse, "files") && zcbor_uint32_put(zse, files);
+    return ok ? MGMT_ERR_EOK : MGMT_ERR_EMSGSIZE;
+}
+#endif
+
 #if defined(CONFIG_HPI_HS_SYNTH)
 /* SYNTH (write, TEST BUILDS ONLY): {days, wipe} -> {rc}
  *
@@ -510,6 +543,9 @@ static const struct mgmt_handler hpi_hs_handlers[] = {
     [HPI_HS_CMD_BPT_CAL_END]    = { NULL,          hs_h_bpt_end },
 #if defined(CONFIG_HPI_HS_SYNTH)
     [HPI_HS_CMD_SYNTH]   = { NULL,         hs_h_synth },
+#endif
+#if defined(CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+    [HPI_HS_CMD_LEGACY_SYNTH] = { NULL,    hs_h_legacy_synth },
 #endif
 };
 

@@ -31,6 +31,11 @@ if(NOT CONFIG_HPI_HS_SYNTH)
   list(FILTER app_sources EXCLUDE REGEX ".*/src/health/hpi_hs_synth\\.c$")
 endif()
 
+# Same for the synthetic pre-3.0 storage tree (the migration test fixture).
+if(NOT CONFIG_HPI_STORAGE_LEGACY_SYNTH)
+  list(FILTER app_sources EXCLUDE REGEX ".*/src/hpi_storage_legacy_synth\\.c$")
+endif()
+
 # CONFIG_HPI_GSR_SCREEN=n promises "GSR source files are excluded" (app/Kconfig).
 # Until now nothing enforced it, so the =n build still compiled the screens and
 # only failed later, at link, on the runtime hooks. Exclude the two GSR-only
