@@ -367,11 +367,19 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             {
                 ppg_sensor_sample.hr = edata->hr;
                 ppg_sensor_sample.spo2 = edata->spo2;
-                ppg_sensor_sample.rtor = edata->rtor;
-                /* P3: the hub reports a confidence for the R-R interval and this was
-                 * never copied -- the field existed in hpi_ppg_wr_data_t and was always
-                 * zero. Without it the HRV gate cannot reject a bad beat. */
-                ppg_sensor_sample.rtor_confidence = edata->rtor_confidence;
+                // ppg_sensor_sample.rtor = edata->rtor;
+                for(int a = 0; a < _n_samples; a++)
+                {
+                    if(edata->rtor[a] > 0)
+                    {
+                        ppg_sensor_sample.rtor = edata->rtor[a];
+                        /* P3: the hub reports a confidence for the R-R interval and this was
+                        * never copied -- the field existed in hpi_ppg_wr_data_t and was always
+                        * zero. Without it the HRV gate cannot reject a bad beat. */
+                        ppg_sensor_sample.rtor_confidence= edata->rtor_confidence[a];
+                        break; // Use the first valid R-R interval for this sample batch
+                    }
+                }
                 ppg_sensor_sample.scd_state = edata->scd_state;
                 ppg_sensor_sample.hr_confidence = edata->hr_confidence;
                 ppg_sensor_sample.spo2_confidence = edata->spo2_confidence;

@@ -60,7 +60,7 @@ static void stress_apply_band(int v)
      * the no-data state rendered as a missing-glyph box. "--" is also what every
      * other screen uses for "nothing measured yet". */
     const char *word = "BALANCED";
-    if (v <= 0) {
+    if (v < 0) {
         word = "--";
     } else if (v >= 70) {
         word = "HIGH";
@@ -75,7 +75,7 @@ static void stress_score_cb(lv_observer_t *ob, lv_subject_t *s)
     lv_obj_t *lbl = lv_observer_get_target_obj(ob);
     int v = lv_subject_get_int(s);
     if (lbl) {
-        if (v > 0) {
+        if (v >= 0) {
             lv_label_set_text_fmt(lbl, "%d", v);
         } else {
             lv_label_set_text(lbl, "--");
@@ -256,7 +256,7 @@ void hpi_stress_monitor_into(lv_obj_t *parent)
 
     {
         int v = lv_subject_get_int(&subj_stress);
-        if (v > 0) {
+        if (v >= 0) {
             lv_label_set_text_fmt(score, "%d", v);
             lv_arc_set_value(g, v > 100 ? 100 : v);
         }

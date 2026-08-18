@@ -37,9 +37,12 @@ static const struct hpi_hs_type_info s_types[] = {
     {HPI_HS_T_HRV_LFHF,      "hrv_lfhf",     "ratio",  100, D, true,  "",                             ""},
     {HPI_HS_T_HRV_MEAN_RR,   "hrv_mean_rr",  "ms",     1,   D, true,  "",                             ""},
     {HPI_HS_T_HRV_COVERAGE,  "hrv_coverage", "%",      1,   D, true,  "",                             ""},
+    {HPI_HS_T_HRV_NPAIRS,     "hrv_npairs",   "count",  1,   D, true,  "",                             ""},
+    {HPI_HS_T_HRV_NBEATS,     "hrv_nbeats",   "count",  1,   D, true,  "",                             ""},
     {HPI_HS_T_EDA_SCL,       "eda_scl",      "uS",     100, D, false, "",                             ""},
     {HPI_HS_T_EDA_SCR_RATE,  "eda_scr_rate", "/min",   1,   D, false, "",                             ""},
-    {HPI_HS_T_STRESS,        "stress",       "index",  1,   D, true,  "",                             ""},
+    {HPI_HS_T_STRESS_EDA,    "stress_eda",   "index",  1,   D, true,  "",                             ""},
+    {HPI_HS_T_STRESS_HRV,    "stress_hrv",   "index",  1,   D, true,  "",                             ""},
 };
 
 #undef D

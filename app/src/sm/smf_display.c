@@ -1688,7 +1688,9 @@ static void hpi_disp_restore_last_from_store(void)
         hpi_hs_get_latest(HPI_HS_T_BP_DIA, &dia))   { hpi_ui_subj_set_bp(s.value, dia.value); }
     if (hpi_hs_get_latest(HPI_HS_T_HRV_SDNN, &s))   { hpi_ui_subj_set_hrv_sdnn(s.value / 10); }
     if (hpi_hs_get_latest(HPI_HS_T_EDA_SCR_RATE, &s)) { hpi_ui_subj_set_gsr(s.value); }
-    if (hpi_hs_get_latest(HPI_HS_T_STRESS, &s))     { hpi_ui_subj_set_stress(s.value); }
+    //if (hpi_hs_get_latest(HPI_HS_T_STRESS, &s))     { hpi_ui_subj_set_stress(s.value); }
+    if (hpi_hs_get_latest(HPI_HS_T_STRESS_HRV, &s)) {hpi_ui_subj_set_stress(s.value);}
+    else {hpi_ui_subj_set_stress(-1);}
 }
 
 /* P6 step A: push the latest metric values into the UI subjects. Runs on the
@@ -1770,10 +1772,20 @@ static void hpi_disp_push_subjects(void)
         } else if (summ.hrv_sdnn_x10 > 0) {
             hpi_ui_subj_set_hrv_sdnn(summ.hrv_sdnn_x10 / 10);
         }
-        if (summ.stress_hrv_valid) {
-            hpi_ui_subj_set_stress(summ.stress_hrv);
-        } else if (summ.stress_valid) {
-            hpi_ui_subj_set_stress(summ.stress_last);
+        // if (summ.stress_hrv_valid) {
+        //     hpi_ui_subj_set_stress(summ.stress_hrv);
+        // } else if (summ.stress_valid) {
+        //     hpi_ui_subj_set_stress(summ.stress_last);
+        // }
+        if (summ.stress_hrv_valid && summ.stress_last_ts > 0) {
+            int64_t age_s = hw_get_sys_time_ts() - summ.stress_last_ts;
+            if (age_s <= 3600) {
+                hpi_ui_subj_set_stress(summ.stress_hrv);
+            } else {
+                hpi_ui_subj_set_stress(-1);
+            }
+        } else {
+            hpi_ui_subj_set_stress(-1);
         }
     }
 

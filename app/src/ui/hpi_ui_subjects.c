@@ -50,7 +50,7 @@ void hpi_ui_subjects_init(void)
     lv_subject_init_string(&subj_date, date_cur, date_prv, SUBJ_STR_LEN, "---  --- --");
     lv_subject_init_int(&subj_batt, 0);
     lv_subject_init_int(&subj_batt_charging, 0);
-    lv_subject_init_int(&subj_stress, 0);
+    lv_subject_init_int(&subj_stress, -1);
     lv_subject_init_int(&subj_sec, 0);   /* current second 0..59 (minimal-face seconds bar) */
     lv_subject_init_string(&subj_act, act_cur, act_prv, sizeof(act_cur), "--");
     lv_subject_init_string(&subj_hr_resting, hr_resting_cur, hr_resting_prv,

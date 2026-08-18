@@ -257,8 +257,8 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 
 static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
                                         uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint8_t *spo2_valid_percent_complete, uint8_t *spo2_low_quality,
-                                        uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor,
-                                        uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
+                                        uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t rtor[32],
+                                        uint8_t rtor_conf[32], uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -335,9 +335,9 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
                 uint16_t rtor_val = (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 rtor_val |= (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 5 + MAX32664C_SENSOR_DATA_OFFSET];
 
-                *rtor = (rtor_val / 10);
+                rtor[i] = (rtor_val / 10);
 
-                *rtor_conf = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 6 + MAX32664C_SENSOR_DATA_OFFSET];
+                rtor_conf[i] = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 6 + MAX32664C_SENSOR_DATA_OFFSET];
 
                 *spo2_conf = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 10 + MAX32664C_SENSOR_DATA_OFFSET];
 
@@ -412,7 +412,7 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
         rc = max32664c_async_sample_fetch(dev, m_edata->green_samples, m_edata->ir_samples, m_edata->red_samples,
                                           &m_edata->num_samples, &m_edata->spo2, &m_edata->spo2_confidence, &m_edata->spo2_valid_percent_complete,
                                           &m_edata->spo2_low_quality, &m_edata->spo2_excessive_motion, &m_edata->spo2_low_pi, &m_edata->spo2_state,
-                                          &m_edata->hr, &m_edata->hr_confidence, &m_edata->rtor, &m_edata->rtor_confidence, &m_edata->scd_state,
+                                          &m_edata->hr, &m_edata->hr_confidence, m_edata->rtor, m_edata->rtor_confidence, &m_edata->scd_state,
                                           &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode);
     }
     else if (data->op_mode == MAX32664C_OP_MODE_RAW)

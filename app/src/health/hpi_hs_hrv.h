@@ -53,10 +53,12 @@
  * The hub REPEATS its last R-R on every FIFO sample until a new beat arrives, so this
  * is called far more often than the heart beats; the module de-duplicates. */
 void hpi_hs_hrv_feed(uint16_t rtor_ms, uint8_t rtor_conf, bool on_skin, bool still,
-                     int64_t ts_utc);
+                     int64_t ts_utc, int64_t now_ms);
 
 /* Close any window whose time has elapsed. Without this a partial window sits open
  * forever once the wearer takes the watch off mid-window. */
 void hpi_hs_hrv_tick(int64_t now_utc);
+void hpi_hs_hrv_rr_record_start(void);
+void hpi_hs_hrv_rr_record_stop(void);
 
 #endif /* HPI_HS_HRV_H */

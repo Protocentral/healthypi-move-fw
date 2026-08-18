@@ -160,10 +160,9 @@ struct max32664c_encoded_data
 	uint8_t spo2_excessive_motion;
 	uint8_t spo2_low_pi;
 	uint8_t spo2_state;
-	
-	uint16_t rtor;
-	uint8_t rtor_confidence;
 
+	uint16_t rtor[32];
+	uint8_t rtor_confidence[32];
 	uint8_t scd_state;
 
 	// Extended algo mode only

@@ -77,13 +77,17 @@ enum hpi_hs_type {
                                       * NOT optional: without it a client cannot tell a
                                       * clean 5 minutes from a noisy one, and will plot
                                       * motion artefacts as a physiological trend. */
+    HPI_HS_T_HRV_NPAIRS = 0x55,
+    HPI_HS_T_HRV_NBEATS = 0x56,
 
     /* electrodermal / stress (0x60..) — no standard HK/HC type */
     HPI_HS_T_EDA_SCL        = 0x60,  /* tonic level (SCL), uS x100             */
     HPI_HS_T_EDA_SCR_RATE   = 0x61,  /* SCR peaks per minute                   */
-    HPI_HS_T_STRESS         = 0x62,  /* composite stress index 0..100 (derived)*/
+    HPI_HS_T_STRESS_EDA     = 0x62,  /* composite stress index 0..100 (derived)*/
+    HPI_HS_T_STRESS_HRV     = 0x63,  /* HRV-derived stress index 0..100 (derived) */
 
-    HPI_HS_T__COUNT_HINT    = 0x63,  /* not a type; keep ids below this compact */
+
+    HPI_HS_T__COUNT_HINT    = 0x64,  /* not a type; keep ids below this compact */
 };
 
 /* Aggregation semantics for query-time statistics. */

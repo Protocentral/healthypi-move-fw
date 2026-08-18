@@ -124,6 +124,8 @@ struct hpi_hs_summary {
     /* P3: RMSSD is the headline HRV metric and the basis of the stress score. */
     int32_t  hrv_rmssd_x10; int32_t hrv_rmssd_base_x10;
     uint16_t hrv_baseline_windows;   /* 5-min windows behind the baseline        */
+    uint32_t hrv_rmssd_pairs;
+    uint16_t hrv_wins;
 
     /* HRV-derived stress, 0..100, scored against the user's OWN baseline (an absolute
      * HRV number means nothing across people). `stress_hrv_valid` is false until the
@@ -146,6 +148,8 @@ struct hpi_hs_summary {
     uint32_t energy_today_kcal;
 
     int32_t  stress_last;   bool stress_valid;       /* 0..100                 */
+
+    int64_t stress_last_ts;  /* UTC seconds of the last stress sample (EDA or HRV) */
 };
 
 int hpi_hs_summary(struct hpi_hs_summary *out);
