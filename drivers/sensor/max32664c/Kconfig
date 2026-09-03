@@ -8,6 +8,7 @@
 config SENSOR_MAX32664C_PC
 	bool "MAX32664C Driver (ProtoCentral)"
 	default y
+	depends on DT_HAS_PROTOCENTRAL_MAX32664C_ENABLED
 	select I2C
 	help
 		Enable the ProtoCentral out-of-tree driver for the Maxim MAX32664C sensor

@@ -3,6 +3,7 @@
 config SENSOR_MAX32664D
 	bool "MAX32664D Driver"
 	default y
+	depends on DT_HAS_MAXIM_MAX32664_ENABLED
 	select I2C
 	help
 		Enable the driver for the Maxim MAX32664D sensor

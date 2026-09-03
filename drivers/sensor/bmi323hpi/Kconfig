@@ -5,6 +5,7 @@
 config SENSOR_BMI323_HPI
 	bool "BMI323 measurement unit"
 	default y
+	depends on DT_HAS_BOSCH_BMI323HPI_ENABLED
 	select I2C
 	help
 		Enable driver for BMI323 IMU sensor.

@@ -3,6 +3,7 @@
 config SENSOR_MAX30001
 	bool "MAX30001 Driver"
 	default y
+	depends on DT_HAS_MAXIM_MAX30001_ENABLED
 	select SPI
 	help
 	  Enable the driver for the Maxim MAX30001 ECG and Bioimpedance
