@@ -80,6 +80,8 @@ static struct k_mutex s_lock;
 #define HS_FLUSH_MS       10000         /* durable flush cadence          */
 #define HS_LATEST_N       HPI_HS_T__COUNT_HINT   /* index by type id (small, sparse) */
 
+/* Minimum number of HRV windows required to calculate a baseline */
+#define HRV_BASELINE_MIN_WINDOWS   20
 /* Bumped when the on-flash segment LAYOUT changes (not the wire schema, which is
  * HPI_HS_SCHEMA_VERSION and is the app's contract). Layout 1 = variable-length
  * segments; 2 = fixed 448-record segments; 3 = fixed 4480-record segments (P6
@@ -94,6 +96,7 @@ struct hs_meta {
     uint32_t seg_index;   /* current (open) segment index      */
     uint32_t base_seq;    /* lowest seq that can exist in a segment file      */
 };
+int32_t raw_rmssd = 0; /* Latest Rmssd pooled value for displaying */
 
 static struct hpi_hs_sample s_latest[HS_LATEST_N];
 static bool     s_have_latest[HS_LATEST_N];
@@ -1031,6 +1034,8 @@ struct hs_sum_acc {
     uint32_t rmsb_n;                                    /* number of RMSSD windows in 7-day baseline */ 
 
     int32_t rms_last;  int64_t  rms_last_ts;          /* most recent RMSSD window */
+    int32_t rmssd_pool_last; int64_t  rmssd_pool_last_ts;     /* most recent RMSSD window in the 7-day baseline */
+    int32_t rmssd_pairs;
 
     /* For temporary rmssd storage because rmssd and pairs are processed separately */
     int32_t pending_rmssd;
@@ -1134,19 +1139,6 @@ static void hs_sum_feed(struct hs_sum_acc *a, const struct hpi_hs_sample *s)
         break;
 
     case HPI_HS_T_HRV_RMSSD:
-        // if (in_day)  { a->rms_sum  += s->value; a->rms_n++; }
-        // /* H6 readiness: today's NIGHTLY RMSSD (sleep-gated), vs the sleep baseline. */
-        // if (in_day && hs_ts_in_sleep_window(ts, a->tz_off)) {
-        //     a->rms_sleep_sum += s->value; a->rms_sleep_n++;
-        // }
-        // /* Nightly baseline for the stress score: sleep-gated. rms_last (the CURRENT
-        //  * window the score is measured against) is NOT gated — stress is "where am
-        //  * I NOW versus my own nightly normal", not "on average today". */
-        // if (in_week && hs_ts_in_sleep_window(ts, a->tz_off)) { a->rmsb_sum += s->value; a->rmsb_n++; }
-        // if (in_week && ts >= a->rms_last_ts) {
-        //     a->rms_last = s->value;
-        //     a->rms_last_ts = ts;
-        // }
         
         a->pending_rmssd = s->value;
         a->pending_rmssd_ts = ts;
@@ -1179,17 +1171,27 @@ static void hs_sum_feed(struct hs_sum_acc *a, const struct hpi_hs_sample *s)
         * fixed-point scale (ms² × 100).
         */
         uint64_t dd2 = (uint64_t)a->pending_rmssd * (uint64_t)a->pending_rmssd * pairs;
+
+        if (in_day && (a->rmssd_pool_last_ts == 0 || ts > a->rmssd_pool_last_ts))
+        {
+            /* Current rmssd */
+            a->rmssd_pool_last = dd2;
+            a->rmssd_pool_last_ts = ts;
+            a->rmssd_pairs = pairs;
+        }
+
         if(in_day) {
             a->rms_sum_dd2 += dd2;
             a->rms_pairs += pairs;
             a->rms_n++;
         }
-        if(in_week && hs_ts_in_sleep_window(ts, a->tz_off)) {
+        if(in_base) {
             a->rmsb_sum_dd2 += dd2;
             a->rmsb_pairs += pairs;
             a->rmsb_n++;
         }   
         a->pending_rmssd_valid = false;
+        LOG_INF("RMSSD window: ts=%lld, now=%lld, day_from=%lld, pairs=%u",ts, a->now, a->day_from, pairs);
         break;
 
     default:
@@ -1285,6 +1287,10 @@ static void hs_recompute_summary(void)
     LOG_DBG("summary: scanned %u segment(s), skipped %u (outside the 7-day window)",
             scanned, skipped);
 
+    LOG_INF("Today's RMSSD windows: %u",a.rms_n);
+
+    LOG_INF("Baseline RMSSD windows: %u",a.rmsb_n);
+
     /* ---- derive ---- */
     struct hpi_hs_summary sum;
     memset(&sum, 0, sizeof(sum));
@@ -1347,27 +1353,45 @@ static void hs_recompute_summary(void)
      * "where am I now versus my own normal", not "where was I on average today". */
     if(a.rms_pairs > 0) {
         uint64_t mean_dd2 = a.rms_sum_dd2 / a.rms_pairs;
-        int32_t  rmssd_raw = (int32_t)hs_isqrt(mean_dd2);
         sum.hrv_rmssd_x10 = (int32_t)hs_isqrt(mean_dd2);
     }
     if(a.rmsb_pairs > 0) {
         uint64_t mean_dd2 = a.rmsb_sum_dd2 / a.rmsb_pairs;
-        int32_t  rmssd_base_raw = (int32_t)hs_isqrt(mean_dd2);
         sum.hrv_rmssd_base_x10 = (int32_t)hs_isqrt(mean_dd2);
+        sum.hrv_rmssd_base_valid = (a.rmsb_n >= HRV_BASELINE_MIN_WINDOWS) ? true : false;       
     }
+    /* for exactly latest window(5min) */
+    if(a.rmssd_pairs > 0)
+    {
+        uint64_t mean_dd2 = a.rmssd_pool_last / a.rmssd_pairs;
+        sum.hrv_rmssd_current_x10 = (int32_t)hs_isqrt(mean_dd2);
+        raw_rmssd = sum.hrv_rmssd_current_x10;
+        sum.hrv_rmssd_valid = true;
+        sum.hrv_rmssd_last_ts = a.rmssd_pool_last_ts;  
+    }
+    /* Deviation of current pooled RMSSD from personal baseline (ms x10, signed */
+    if (sum.hrv_rmssd_valid && sum.hrv_rmssd_base_valid) {
+        sum.hrv_rmssd_dev_x10 = sum.hrv_rmssd_current_x10 - sum.hrv_rmssd_base_x10;
+        sum.hrv_rmssd_dev_valid = true;
+    } else {
+        sum.hrv_rmssd_dev_valid = false;
+    }
+
     sum.hrv_rmssd_pairs = a.rms_pairs;
     sum.hrv_wins = (uint16_t)MIN(a.rms_n, (uint32_t)UINT16_MAX);
     sum.hrv_baseline_windows =  (uint16_t)MIN(a.rmsb_n, (uint32_t)UINT16_MAX);
 
+    LOG_INF("rms_last=%d, baseline=%d, rms_pairs=%u, rmsb_pairs=%u", a.rms_last, sum.hrv_rmssd_base_x10, a.rms_pairs, a.rmsb_pairs);
     int32_t rms_last_corrected = hpi_hs_rmssd_dejitter(a.rms_last, CONFIG_HPI_HS_HRV_JITTER_SIGMA_MS_X10);
-    int32_t stress = hpi_hs_stress_from_hrv(a.rms_last, sum.hrv_rmssd_base_x10, a.rmsb_pairs);
+    int32_t hrv_rmssd_base_corrected = hpi_hs_rmssd_dejitter(sum.hrv_rmssd_base_x10, CONFIG_HPI_HS_HRV_JITTER_SIGMA_MS_X10);
+    int32_t stress = hpi_hs_stress_from_hrv(rms_last_corrected, hrv_rmssd_base_corrected, a.rmsb_n);
     /* Stale HRV is not current stress. If the newest window is older than an hour the
      * wearer has been moving or off-skin, and yesterday's number must not be presented
      * as now. */
     if (stress >= 0 && (now - a.rms_last_ts) <= 3600) {
         sum.stress_hrv = stress;
         sum.stress_hrv_valid = true;
-
+        sum.stress_last_ts = a.rms_last_ts;
         /* Record it so it trends and syncs. NOT flagged MANUAL -- that bit distinguishes
          * this continuous score from the EDA spot check, which still records its own
          * HPI_HS_T_STRESS sample and is left completely untouched. */

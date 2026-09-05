@@ -150,6 +150,13 @@ struct hpi_hs_summary {
     int32_t  stress_last;   bool stress_valid;       /* 0..100                 */
 
     int64_t stress_last_ts;  /* UTC seconds of the last stress sample (EDA or HRV) */
+
+    int32_t  hrv_rmssd_dev_x10;      /* NEW: signed deviation, ms x10, current pooled vs baseline */
+    bool     hrv_rmssd_valid;        /* NEW: pooled current RMSSD has data */
+    bool     hrv_rmssd_base_valid;   /* NEW: baseline has data */
+    bool     hrv_rmssd_dev_valid;    /* NEW: both sides valid, dev is meaningful */
+    uint32_t hrv_rmssd_current_x10;
+    uint32_t hrv_rmssd_last_ts;      /* NEW: ts of most recent pooled sample, for age/recency */
 };
 
 int hpi_hs_summary(struct hpi_hs_summary *out);
@@ -225,5 +232,4 @@ int hpi_hs_storage_init(void);
 /* Latest recorded sample of a type (RAM cache, restored from flash at boot).
  * Returns false if none exists yet. Used for boot-restore of on-screen values. */
 bool hpi_hs_get_latest(uint8_t type, struct hpi_hs_sample *out);
-
 #endif /* HPI_HEALTH_STORE_H */

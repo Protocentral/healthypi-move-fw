@@ -236,8 +236,8 @@ static int m_disp_gsr_status_synced = -1;
 static int m_disp_gsr_remaining_synced = -1;
 static int m_disp_gsr_contact_synced = -1;
 static int m_disp_gsr_sleep_synced = -1;
-
-
+static int m_disp_rmssd = -1;
+extern bool ecg_cancellation;
 
 
 struct s_disp_object
@@ -299,6 +299,7 @@ static const screen_func_table_entry_t screen_func_table[] = {
     [SCR_BPT] = {draw_scr_carousel_entry, NULL},
     [SCR_GSR] = {draw_scr_carousel_entry, NULL},
     [SCR_HRV] = {draw_scr_carousel_entry, NULL},
+    //[SCR_RECOVERY] = {draw_scr_carousel_entry, NULL},
     /* Activity + Recovery are carousel tiles too, and were the only two metric
      * ids missing here — hpi_load_scr_spl() validates against this table, so a
      * deferred load of either was rejected as "Invalid screen" while the other
@@ -391,6 +392,7 @@ int hpi_disp_reset_all_last_updated(void)
     m_disp_bp_last_refresh = 0;
     m_disp_bpt_status = 0;
     m_disp_bpt_progress = 0;
+    m_disp_rmssd = 0;
 
     return 0;
 }
@@ -588,7 +590,11 @@ void hpi_disp_show_toast(const char *message, uint32_t duration_ms)
 
     LOG_INF("Toast displayed: %s (duration: %d ms)", message, duration_ms);
 }
-
+extern bool g_ecg_active;  
+#if defined(CONFIG_HPI_GSR_SCREEN)
+extern lv_obj_t *g_gsr_wave;              /* both live in scr_eda_monitor.c, */
+extern bool g_gsr_active;                 /* which A5 excludes when GSR is off */
+#endif
 void disp_screen_event(lv_event_t *e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -624,8 +630,18 @@ void disp_screen_event(lv_event_t *e)
 
         if (screen == SCR_HOME)
         {
+            if(g_gsr_active && !g_ecg_active)
+            {
+                hpi_eda_monitor_leave();
+                return;
+
+            }
             /* leaving the carousel to the shade also cancels an in-progress ECG */
-            hpi_ecg_monitor_leave();
+            if(g_ecg_active)
+            {
+                hpi_ecg_monitor_leave();
+                return;
+            }
             hpi_load_scr_spl(SCR_SPL_PULLDOWN, SCROLL_DOWN, SCR_HOME, 0, 0, 0);
             return;
         }
@@ -676,11 +692,11 @@ extern struct k_msgq q_plot_gsr;
  * tile has no waveform: its spot check runs on SCR_SPL_SPO2_MEASURE, which owns
  * the only PPG plot in that flow and is fed via hpi_disp_spo2_plot_*. */
 extern lv_obj_t *g_hr_wave, *g_ecg_wave;
-extern bool g_ecg_active;                 /* spot check: gated on Start/Stop */
-#if defined(CONFIG_HPI_GSR_SCREEN)
-extern lv_obj_t *g_gsr_wave;              /* both live in scr_eda_monitor.c, */
-extern bool g_gsr_active;                 /* which A5 excludes when GSR is off */
-#endif
+// extern bool g_ecg_active;                 /* spot check: gated on Start/Stop */
+// #if defined(CONFIG_HPI_GSR_SCREEN)
+// extern lv_obj_t *g_gsr_wave;              /* both live in scr_eda_monitor.c, */
+// extern bool g_gsr_active;                 /* which A5 excludes when GSR is off */
+// #endif
 void hpi_wave_monitor_push_eda(lv_obj_t *wm, int32_t raw);
 void hpi_wave_monitor_push_auto(lv_obj_t *wm, int32_t raw);
 void hpi_wave_monitor_push_ecg(lv_obj_t *wm, int32_t raw);
@@ -1294,11 +1310,8 @@ static enum smf_state_result st_display_active_run(void *o)
     if (k_sem_take(&sem_crown_key_pressed, K_NO_WAIT) == 0)
     {
         lv_disp_trig_activity(NULL);
-        if (hpi_disp_get_curr_screen() == SCR_HOME)
-        {
-            // hpi_display_sleep_on();
-        }
-        else if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
+
+        if (hpi_disp_get_curr_screen() == SCR_SPL_SPO2_MEASURE)
         {
             gesture_down_scr_spo2_measure();
         }
@@ -1306,7 +1319,19 @@ static enum smf_state_result st_display_active_run(void *o)
         {
             gesture_down_scr_bpt_measure();
         }
-        else
+        else if(hpi_disp_get_curr_screen() == SCR_SPL_FI_SENS_CHECK)
+        {
+            gesture_down_scr_fi_sens_check();
+        }
+        else if(g_ecg_active)
+        {
+            k_event_post(&ecg_evt, EVT_ECG_CANCEL);
+        }
+        else if(g_gsr_active)
+        {
+            k_event_post(&ecg_evt, EVT_GSR_CANCEL);
+        }
+        else 
         {
             hpi_load_screen(SCR_HOME, SCROLL_NONE);
         }
@@ -1660,7 +1685,8 @@ static const struct smf_state display_states[] = {
     [HPI_DISPLAY_STATE_SLEEP] = SMF_CREATE_STATE(st_display_sleep_entry, st_display_sleep_run, st_display_sleep_exit, NULL, NULL),
     [HPI_DISPLAY_STATE_ON] = SMF_CREATE_STATE(st_display_on_entry, NULL, NULL, NULL, NULL),
 };
-
+extern int32_t raw_rmssd;
+extern int32_t hpi_stress_hrv_base_x10;
 /* One-time boot restore of last-known values from the health store's persisted
  * latest-per-type snapshot, so screens show the previous reading immediately
  * after a reboot (instead of "--" until a fresh measurement). Live values from
@@ -1686,7 +1712,13 @@ static void hpi_disp_restore_last_from_store(void)
     }
     if (hpi_hs_get_latest(HPI_HS_T_BP_SYS, &s) &&
         hpi_hs_get_latest(HPI_HS_T_BP_DIA, &dia))   { hpi_ui_subj_set_bp(s.value, dia.value); }
-    if (hpi_hs_get_latest(HPI_HS_T_HRV_SDNN, &s))   { hpi_ui_subj_set_hrv_sdnn(s.value / 10); }
+    if (hpi_hs_get_latest(HPI_HS_T_HRV_RMSSD, &s))
+    {
+        raw_rmssd = s.value;
+        m_disp_rmssd = s.value;
+        hpi_ui_subj_set_hrv_rmssd(m_disp_rmssd / 10);
+        hpi_ui_subj_set_hrv_rmssd_age(s.ts_utc); 
+    }
     if (hpi_hs_get_latest(HPI_HS_T_EDA_SCR_RATE, &s)) { hpi_ui_subj_set_gsr(s.value); }
     //if (hpi_hs_get_latest(HPI_HS_T_STRESS, &s))     { hpi_ui_subj_set_stress(s.value); }
     if (hpi_hs_get_latest(HPI_HS_T_STRESS_HRV, &s)) {hpi_ui_subj_set_stress(s.value);}
@@ -1745,6 +1777,15 @@ static void hpi_disp_push_subjects(void)
     hpi_ui_subj_set_spo2(m_disp_spo2);
     hpi_ui_subj_set_ecg_hr(m_disp_ecg_hr);
     hpi_ui_subj_set_steps((int)m_disp_steps);
+    if (raw_rmssd > 0) {
+            m_disp_rmssd = raw_rmssd;
+            hpi_ui_subj_set_hrv_rmssd(m_disp_rmssd / 10);
+           // LOG_INF("Raw rmssd in display %d and m_disp_rmssd: %d",raw_rmssd, m_disp_rmssd);
+    }
+    else
+    {
+        hpi_ui_subj_set_hrv_rmssd(-1);
+    }
     hpi_ui_subj_set_activity((int)m_disp_steps);
     hpi_ui_subj_set_batt(m_disp_batt_level, m_disp_batt_charging);
     /* m_disp_temp is °F from the sensor path; convert for user unit (0=°C). */
@@ -1766,17 +1807,22 @@ static void hpi_disp_push_subjects(void)
         hpi_ui_subj_set_hr_min(summ.hr_min);
         hpi_ui_subj_set_hr_max(summ.hr_max);
         hpi_ui_subj_set_temp_dev_x100(summ.temp_dev_x100, summ.temp_dev_valid);
-        if (summ.hrv_rmssd_x10 > 0) {
-            /* Subject is ms integer; store holds ×10. */
-            hpi_ui_subj_set_hrv_sdnn(summ.hrv_rmssd_x10 / 10);
-        } else if (summ.hrv_sdnn_x10 > 0) {
-            hpi_ui_subj_set_hrv_sdnn(summ.hrv_sdnn_x10 / 10);
+        if(summ.hrv_rmssd_dev_valid)
+        {
+            int32_t dx10 = summ.hrv_rmssd_dev_x10;
+            int32_t dev_ms = (dx10 >= 0) ? (dx10 + 5) / 10 : -((-dx10 + 5) / 10);
+            hpi_ui_subj_set_hrv_rmssd_deviation(dev_ms, true);
         }
-        // if (summ.stress_hrv_valid) {
-        //     hpi_ui_subj_set_stress(summ.stress_hrv);
-        // } else if (summ.stress_valid) {
-        //     hpi_ui_subj_set_stress(summ.stress_last);
-        // }
+        else
+        {
+            hpi_ui_subj_set_hrv_rmssd_deviation(0, false);
+
+        }
+        if (summ.hrv_rmssd_valid) {
+            uint32_t now = hw_get_sys_time_ts();
+            uint32_t age_s = (uint32_t)(now - summ.hrv_rmssd_last_ts) * 1000; ;
+            hpi_ui_subj_set_hrv_rmssd_age(age_s);
+        }
         if (summ.stress_hrv_valid && summ.stress_last_ts > 0) {
             int64_t age_s = hw_get_sys_time_ts() - summ.stress_last_ts;
             if (age_s <= 3600) {

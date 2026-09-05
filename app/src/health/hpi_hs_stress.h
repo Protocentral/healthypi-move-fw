@@ -34,8 +34,8 @@
  * it is a guess. ~20 windows is roughly 100 minutes of valid, still, on-skin HRV --
  * realistically one decent night. Below it, report nothing rather than a number the
  * user would reasonably believe. */
-// #define HPI_HS_STRESS_MIN_BASELINE_WINDOWS  20
-#define HPI_HS_STRESS_MIN_BASELINE_PAIRS    600
+#define HPI_HS_STRESS_MIN_BASELINE_WINDOWS  20
+//#define HPI_HS_STRESS_MIN_BASELINE_PAIRS    600
 
 /* Map RMSSD against the user's own baseline onto 0..100.
  *
@@ -54,7 +54,7 @@ static inline int32_t hpi_hs_stress_from_hrv(int32_t rmssd_x10, int32_t baseline
                                              uint32_t baseline_pairs)
 {
     if (rmssd_x10 <= 0 || baseline_x10 <= 0 ||
-        baseline_pairs < HPI_HS_STRESS_MIN_BASELINE_PAIRS) {
+        baseline_pairs < HPI_HS_STRESS_MIN_BASELINE_WINDOWS) {
         return -1;
     }
 

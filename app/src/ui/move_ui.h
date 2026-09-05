@@ -104,6 +104,7 @@ enum hpi_disp_screens
     SCR_ACTIVITY,   /* P0-1: names the Activity carousel tile for sleep/wake save+restore */
     SCR_BPT,
     SCR_HRV,
+    //SCR_RECOVERY,
     SCR_GSR,
     //SCR_HRV,
     SCR_LIST_END,
@@ -349,8 +350,10 @@ void gesture_down_scr_pulldown(void);
 void gesture_down_scr_bpt_cal_required(void);
 #if defined(CONFIG_HPI_GSR_SCREEN)
 void gesture_down_scr_gsr_complete(void);
+void gesture_down_scr_gsr_monitor(void);
 #else
 static inline void gesture_down_scr_gsr_complete(void) { }
+static inline void gesture_down_scr_gsr_monitor(void) { }
 #endif
 
 /* The shared PPG chart autoscale helper (hpi_ppg_autoscale.c) was removed with

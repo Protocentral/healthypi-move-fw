@@ -23,7 +23,7 @@ LOG_MODULE_REGISTER(hpi_hs_hrv, LOG_LEVEL_INF);
 #if defined(CONFIG_HPI_HS_HRV_WINDOW_S)
 #define HRV_WINDOW_S    CONFIG_HPI_HS_HRV_WINDOW_S
 #else
-#define HRV_WINDOW_S    600     /* Task-Force short-term HRV window */
+#define HRV_WINDOW_S    300     /* Task-Force short-term HRV window */
 #endif
 #if defined(CONFIG_HPI_HS_HRV_MIN_PAIRS)
 #define HRV_MIN_PAIRS   CONFIG_HPI_HS_HRV_MIN_PAIRS
@@ -35,22 +35,23 @@ LOG_MODULE_REGISTER(hpi_hs_hrv, LOG_LEVEL_INF);
 #else
 #define HRV_MIN_COVERAGE 50
 #endif
-#define HRV_MIN_CONF 70
-
+#define HRV_MIN_CONF 50
+#define HRV_SDNN60_CHUNK_MS 60000 /* 60sec */
 
 /* Physiological plausibility: 40..200 bpm. Same clamp the ECG HRV path uses. */
 #define RR_MIN_MS   300
 #define RR_MAX_MS   2000
 
 #define ADJ_TOL_MS 200   /* floor above the relative band — covers the 160ms poll quantisation */
-// extern int s_hrv_rid;
-// extern int rr_check;
+
 #if defined(CONFIG_HPI_HS_HRV_RR_RECORD)
 
-#define RR_RUN_MAX_BEATS 256
+#define RR_RUN_MAX_BEATS 512
 struct rr_run_header {
     uint32_t t_start_ms;
     uint16_t n_beats;
+    uint32_t t_stop_ms;
+    uint32_t total_sum;
 };
 
 static int s_rr_rid = 0;
@@ -58,93 +59,28 @@ static uint16_t s_run_rr[RR_RUN_MAX_BEATS];
 static uint8_t  s_run_conf[RR_RUN_MAX_BEATS];
 static uint16_t s_run_n;
 static int64_t  s_run_start_ms;
-static void rr_record_dump(int rid)
-{
-    if (rid <= 0) {
-        return;
-    }
-
-    /* static, not stack-local: this runs on whatever thread calls stop(), and
-     * this codebase has already been bitten once by a large local buffer
-     * overflowing a shallow thread stack (see the ppg_ctrl_thread note
-     * elsewhere in this project). */
-    static uint8_t stage[1024];
-    size_t   have = 0;   /* bytes currently buffered but not yet parsed */
-    uint32_t off  = 0;   /* read offset into the record on flash        */
-    bool     eof  = false;
-    int      run_idx = 0;
-    int      total_beats = 0;
-
-    LOG_INF("===== RR run-record dump (record %d) =====", rid);
-
-    while (!eof) {
-        int rd = hpi_hs_rec_get((uint32_t)rid, off, &stage[have], sizeof(stage) - have, &eof);
-        if (rd < 0) {
-            LOG_ERR("rr dump: rec_get failed: %d", rd);
-            break;
-        }
-        have += rd;
-        off  += rd;
-
-        /* Parse every complete run block currently sitting in stage[] */
-        size_t parsed = 0;
-        while (have - parsed >= sizeof(struct rr_run_header)) {
-            struct rr_run_header hdr;
-            memcpy(&hdr, &stage[parsed], sizeof(hdr));
-
-            size_t block_len = sizeof(hdr) +
-                (size_t)hdr.n_beats * (sizeof(uint16_t) + sizeof(uint8_t));
-
-            if (have - parsed < block_len) {
-                break;   /* header's here, payload isn't fully buffered yet - wait for more */
-            }
-
-            const uint16_t *rr   = (const uint16_t *)&stage[parsed + sizeof(hdr)];
-            const uint8_t  *conf = &stage[parsed + sizeof(hdr) + hdr.n_beats * sizeof(uint16_t)];
-
-            LOG_INF("--- run %d: start=%u ms, n_beats=%u ---", run_idx, hdr.t_start_ms, hdr.n_beats);
-            k_msleep(5);   /* don't flood the log */
-            for (int i = 0; i < hdr.n_beats; i++) {
-                LOG_INF("  [%d] rr=%u ms conf=%u", i, rr[i], conf[i]);
-                k_msleep(10);   /* don't flood the log */
-            }
-
-            total_beats += hdr.n_beats;
-            run_idx++;
-            parsed += block_len;
-        }
-
-        if (parsed > 0) {
-            memmove(stage, &stage[parsed], have - parsed);   /* keep leftover partial bytes */
-            have -= parsed;
-        }
-        if (rd == 0) {
-            break;   /* nothing more available - avoid spinning */
-        }
-    }
-
-    LOG_INF("===== RR dump end: %d runs, %d total beats =====", run_idx, total_beats);
-}
+static int64_t  s_run_stop_ms;
+static uint32_t s_total;
 
 static void rr_run_flush(void)
 {
     if (s_run_n == 0 || s_rr_rid <= 0) {
         s_run_n = 0;
+        s_total = 0;
         return;
     }
     static uint8_t block[sizeof(struct rr_run_header) + RR_RUN_MAX_BEATS * (sizeof(uint16_t) + sizeof(uint8_t))];
-    struct rr_run_header hdr = { .t_start_ms = (uint32_t)s_run_start_ms, .n_beats = s_run_n };
+    struct rr_run_header hdr = { .t_start_ms = (uint32_t)s_run_start_ms, .n_beats = s_run_n, .t_stop_ms = (uint32_t)s_run_stop_ms, .total_sum = s_total};
     size_t off = 0;
     memcpy(&block[off], &hdr, sizeof(hdr));                        off += sizeof(hdr);
     memcpy(&block[off], s_run_rr, s_run_n * sizeof(uint16_t));     off += s_run_n * sizeof(uint16_t);
     memcpy(&block[off], s_run_conf, s_run_n * sizeof(uint8_t));    off += s_run_n * sizeof(uint8_t);
-
     hpi_hs_rec_append((uint32_t)s_rr_rid, block, off);
-    s_run_n = 0;
+    s_run_n = 0; s_total = 0;
 }
 void hpi_hs_hrv_rr_record_start(void)
 {
-    s_run_n = 0;
+    s_run_n = 0; s_total = 0;
     s_rr_rid = hpi_hs_rec_start(HPI_HS_SIG_HRV_RR, HPI_HS_SFMT_U16, 1, 1);
     if (s_rr_rid <= 0) {
         LOG_ERR("RR raw rec_start failed: %d", s_rr_rid);
@@ -159,10 +95,22 @@ void hpi_hs_hrv_rr_record_stop(void)
         int rid = s_rr_rid;          /* save it - s_rr_rid gets reset below */
         hpi_hs_rec_stop((uint32_t)s_rr_rid);
         s_rr_rid = 0;
-         rr_record_dump(rid);
     }
 }
 #endif
+
+struct hs_sdnn60_acc {
+    /* the in-progress chunk, within the CURRENT unbroken run */
+    uint32_t chunk_n;
+    int64_t  chunk_sum_rr;
+    int64_t  chunk_sum_rr2;
+    int64_t  chunk_beat_ms;
+
+    /* completed 60s chunks, pooled as RMS of their SDNNs */
+    double   sum_sdnn2;
+    uint32_t n_chunks;
+};
+
 struct hrv_win {
     bool     open;
     int64_t  win;          /* wall-clock window index = ts / HRV_WINDOW_S */
@@ -181,6 +129,8 @@ struct hrv_win {
     uint16_t last_seen;    /* de-dup: the hub repeats its last R-R        */
     uint16_t last_seen_valid; /* true if last_seen is a valid ACCEPTED beat   */
 
+    struct hs_sdnn60_acc sdnn60; 
+
     #if defined(CONFIG_HPI_HS_HRV_LOSS_LOG)
     uint16_t rej_zero;
     uint16_t rej_conf;
@@ -189,9 +139,12 @@ struct hrv_win {
     uint16_t rej_range;
     #endif
 };
-
 static struct hrv_win s_w;
 static K_MUTEX_DEFINE(s_hrv_lock);
+
+static void hs_sdnn60_run_break(struct hs_sdnn60_acc *a);
+static void hs_sdnn60_feed(struct hs_sdnn60_acc *a, uint16_t rtor_ms);
+static double hs_sdnn60_result(const struct hs_sdnn60_acc *a);
 
 /* Emit the window. Caller holds the lock. */
 static void hrv_emit(void)
@@ -218,12 +171,10 @@ static void hrv_emit(void)
     int64_t ts_end = (s_w.win + 1) * (int64_t)HRV_WINDOW_S;
 
     double mean = (double)s_w.sum_rr / (double)s_w.n;
-    double var  = ((double)s_w.sum_rr2 / (double)s_w.n) - (mean * mean);
-    if (var < 0.0) {
-        var = 0.0;   /* float noise */
-    }
-    double sdnn  = sqrt(var);
     double rmssd = sqrt((double)s_w.sum_dd2 / (double)s_w.n_dd);
+
+    double sdnn60 = hs_sdnn60_result(&s_w.sdnn60);
+    bool   sdnn60_valid = (sdnn60 >= 0.0);
 
     /* The window is by construction still + on-skin + high-confidence: say so, so
      * downstream baselines can filter on it. (HPI_HS_Q_LOW_MOTION had no producer at
@@ -231,7 +182,7 @@ static void hrv_emit(void)
     uint8_t q = HPI_HS_Q_VALID | HPI_HS_Q_ON_SKIN | HPI_HS_Q_LOW_MOTION | HPI_HS_Q_HIGH_CONF;
 
     hpi_hs_record(HPI_HS_T_HRV_RMSSD,    (int32_t)(rmssd * 10.0), q, ts_end);  /* ms x10 */
-    hpi_hs_record(HPI_HS_T_HRV_SDNN,     (int32_t)(sdnn  * 10.0), q, ts_end);  /* ms x10 */
+    hpi_hs_record(HPI_HS_T_HRV_SDNN,     (int32_t)(sdnn60  * 10.0), q, ts_end);  /* ms x10 */
     hpi_hs_record(HPI_HS_T_HRV_MEAN_RR,  (int32_t)mean,           q, ts_end);  /* ms     */
     hpi_hs_record(HPI_HS_T_HRV_NPAIRS,   (int32_t)s_w.n_dd,        q, ts_end); /* count   */
     hpi_hs_record(HPI_HS_T_HRV_NBEATS,   (int32_t)s_w.n,           q, ts_end); /* count   */
@@ -239,11 +190,11 @@ static void hrv_emit(void)
 
     #if defined(CONFIG_HPI_HS_HRV_LOSS_LOG)
     LOG_INF("hrv: n=%u pairs=%u rmssd=%.1f sdnn=%.1f meanRR=%.0fms "
-    "(~%.0f bpm) covergae = %d reject: zero=%u conf=%u motion=%u skin=%u range=%u", s_w.n, s_w.n_dd, rmssd, sdnn, mean, 60000.0 / mean, coverage, s_w.rej_zero,
+    "(~%.0f bpm) covergae = %d reject: zero=%u conf=%u motion=%u skin=%u range=%u", s_w.n, s_w.n_dd, rmssd, sdnn60, mean, 60000.0 / mean, coverage, s_w.rej_zero,
         s_w.rej_conf, s_w.rej_motion, s_w.rej_skin, s_w.rej_range);
     #else
     LOG_INF("hrv: n=%u pairs=%u rmssd=%.1f sdnn=%.1f meanRR=%.0fms (~%.0f bpm) coverage = %d", 
-        s_w.n, s_w.n_dd, rmssd, sdnn, mean, 60000.0 / mean, coverage);
+        s_w.n, s_w.n_dd, rmssd, sdnn60, mean, 60000.0 / mean, coverage);
     #endif
 
     s_w.open = false;
@@ -264,7 +215,7 @@ void hpi_hs_hrv_feed(uint16_t rtor_ms, uint8_t rtor_conf, bool on_skin, bool sti
     /* ---- the gate ----
      * Motion destroys PRV. A permissive gate does not yield "more HRV data", it yields
      * a plausible-looking trend built from artefacts -- worse than no trend. */
-    bool accept = (rtor_ms >= RR_MIN_MS) && (rtor_ms <= RR_MAX_MS) && on_skin && still;
+    bool accept = (rtor_ms >= RR_MIN_MS) && (rtor_ms <= RR_MAX_MS) && (on_skin) && (still) && (rtor_conf >= HRV_MIN_CONF);
 
     if (!accept) {
         /* A rejected beat BREAKS THE CHAIN. RMSSD is the RMS of SUCCESSIVE
@@ -351,22 +302,34 @@ void hpi_hs_hrv_feed(uint16_t rtor_ms, uint8_t rtor_conf, bool on_skin, bool sti
     else
     {
         s_w.n_runs++;
+        hs_sdnn60_run_break(&s_w.sdnn60);
     }
-    // #if defined(CONFIG_HPI_HS_HRV_RR_RECORD)
-    // if (!adjacent) {
-    //     rr_run_flush();              /* previous run just ended */
-    //     s_run_start_ms = now_ms;     /* this beat starts a new run */
-    // }
-    // if (s_run_n < RR_RUN_MAX_BEATS) {
-    //     s_run_rr[s_run_n]   = rtor_ms;
-    //     s_run_conf[s_run_n] = rtor_conf;
-    //     s_run_n++;
-    // } else {
-    //     rr_run_flush();
-    //     s_run_start_ms = now_ms;
-    //     s_run_rr[0] = rtor_ms;  s_run_conf[0] = rtor_conf;  s_run_n = 1;
-    // }
-    // #endif
+    hs_sdnn60_feed(&s_w.sdnn60, rtor_ms); 
+
+    #if defined(CONFIG_HPI_HS_HRV_RR_RECORD)
+    if (!adjacent) {
+        if(s_run_n > 0)
+        {
+            s_run_stop_ms = s_w.last_update_ms;
+            rr_run_flush();              /* previous run just ended */
+        }
+        s_run_start_ms = now_ms;     /* this beat starts a new run */
+    }
+    if (s_run_n < RR_RUN_MAX_BEATS) {
+        s_run_rr[s_run_n]   = rtor_ms;
+        s_run_conf[s_run_n] = rtor_conf;
+        s_run_n++;
+        s_total += rtor_ms;
+        s_run_stop_ms = now_ms;
+    } else {
+        int64_t keep_start = s_run_start_ms;
+        rr_run_flush();
+        s_run_start_ms = keep_start;
+        s_run_rr[0] = rtor_ms;  s_run_conf[0] = rtor_conf;  s_run_n = 1;
+        s_total = rtor_ms;
+        s_run_stop_ms = now_ms;
+    }
+    #endif
     s_w.prev_rr    = rtor_ms;
     s_w.prev_valid = true;
     s_w.last_update_ms = now_ms;
@@ -381,4 +344,53 @@ void hpi_hs_hrv_tick(int64_t now_utc)
         hrv_emit();   /* the wearer took the watch off mid-window; do not leak it */
     }
     k_mutex_unlock(&s_hrv_lock);
+}
+
+/* A run just broke (adjacent == false). Discard only the in-progress chunk —
+ * it was cut short mid-run, so it gets no partial credit. Completed chunks
+ * already pooled are untouched. */
+static void hs_sdnn60_run_break(struct hs_sdnn60_acc *a)
+{
+    a->chunk_n = 0;
+    a->chunk_sum_rr = 0;
+    a->chunk_sum_rr2 = 0;
+    a->chunk_beat_ms = 0;
+}
+
+/* Feed one ACCEPTED beat — call for every beat, whether it continues a run
+ * or is the first beat of a fresh one (hs_sdnn60_run_break, if needed, must
+ * be called BEFORE this for the same beat). */
+static void hs_sdnn60_feed(struct hs_sdnn60_acc *a, uint16_t rtor_ms)
+{
+    a->chunk_n++;
+    a->chunk_sum_rr  += rtor_ms;
+    a->chunk_sum_rr2 += (int64_t)rtor_ms * rtor_ms;
+    a->chunk_beat_ms += rtor_ms;
+
+    if (a->chunk_beat_ms >= HRV_SDNN60_CHUNK_MS) {
+        double mean = (double)a->chunk_sum_rr / (double)a->chunk_n;
+        double var  = ((double)a->chunk_sum_rr2 / (double)a->chunk_n) - (mean * mean);
+        if (var < 0.0) {
+            var = 0.0;   /* float noise */
+        }
+        double sdnn = sqrt(var);
+
+        a->sum_sdnn2 += sdnn * sdnn;
+        a->n_chunks++;
+
+        a->chunk_n = 0;
+        a->chunk_sum_rr = 0;
+        a->chunk_sum_rr2 = 0;
+        a->chunk_beat_ms = 0;
+    }
+}
+
+/* Returns the pooled SDNN60 in ms, or -1.0 if no chunk ever completed
+ * (legitimate — e.g. the whole window was fragmented into runs under 60s). */
+static double hs_sdnn60_result(const struct hs_sdnn60_acc *a)
+{
+    if (a->n_chunks == 0) {
+        return -1.0;
+    }
+    return sqrt(a->sum_sdnn2 / (double)a->n_chunks);
 }
