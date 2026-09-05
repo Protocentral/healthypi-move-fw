@@ -841,9 +841,12 @@ void data_thread(void)
 #else
                 bool still = true;   /* stillness gate disabled */
 #endif
-                hpi_hs_hrv_feed(ppg_wr_sensor_sample.rtor,
-                                ppg_wr_sensor_sample.rtor_confidence,
-                                on_skin, still, hw_get_sys_time_ts());
+                if(ppg_wr_sensor_sample.rtor > 0)
+                {
+                    hpi_hs_hrv_feed(ppg_wr_sensor_sample.rtor,
+                                    ppg_wr_sensor_sample.rtor_confidence,
+                                    on_skin, still, hw_get_sys_time_ts(), k_uptime_get());
+                }
             }
 
             if (ppg_wr_sensor_sample.scd_state == HPI_PPG_SCD_ON_SKIN)

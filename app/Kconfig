@@ -170,6 +170,13 @@ config HPI_HS_HRV_MIN_COVERAGE
 	  Coverage = the share of the window actually backed by accepted beats. A window
 	  below this is too sparse for its RMSSD to mean anything, so it is discarded
 	  rather than stored as a misleading data point.
+config HPI_HS_HRV_MIN_PAIRS
+	int "Minimum accepted beat pairs before a window is emitted"
+	default 10
+	help
+	  RMSSD is computed from the differences between successive beats. A window with
+	  fewer than this number of pairs is too sparse for its RMSSD to mean anything,
+	  so it is discarded rather than stored as a misleading data point.
 
 config HPI_HS_EPOCH_SPREAD_LOG
 	bool "Log within-epoch spread (max-min) for epoch-length validation"
@@ -178,7 +185,36 @@ config HPI_HS_EPOCH_SPREAD_LOG
 	  Prints n/mean/min/max/spread as each epoch closes. This is the measurement
 	  that validates the epoch lengths above against real wear rather than
 	  assumption. Leave off in production.
+config HPI_HS_HRV_RR_RECORD
+    bool "Enable raw HRV RR recording"
+    default n
+    help
+      Store accepted HRV RR intervals as run-structured research data.
+      Intended for research/debug builds only.
+      Disabled by default because continuous RR recording generates
+      significant storage traffic.
+config HPI_HS_HRV_LOSS_LOG
+	bool "Enable HRV rejection loss logging"
+    default n
+    help
+      Enable per-window HRV rejection counters for bench debugging.
+      The counters report rejected samples due to zero RTOR, low
+      confidence, motion, no skin contact, or invalid RR range.
+      This is bench telemetry only and is not stored as a health metric.
+config HPI_HS_HRV_JITTER_SIGMA_MS_X10
+    int "Beat-timing jitter sigma (ms x10) for RMSSD de-jittering"
+    default 0
+    help
+      Measured beat-timing jitter standard deviation (sigma), in tenths of a
+      millisecond. Used by hpi_hs_rmssd_dejitter() to subtract the noise
+      floor: RMSSD_obs^2 = RMSSD_phys^2 + 6*sigma^2.
 
+      Default 0 DISABLES correction entirely — this is the shipping default.
+      Do not enable except with the sigma value produced by the REF-2 field
+      experiment (see docs/STRESS_HRV_HANDOFF_REV2.md, H3).
+
+      Measurement date: <fill in once REF-2 has run>
+      Firmware SHA:     <fill in once REF-2 has run>
 endmenu
 
 # --- NCS v3.3 migration shim ---------------------------------------------

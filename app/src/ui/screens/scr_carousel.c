@@ -75,7 +75,7 @@ static const struct metric_desc metrics[M_COUNT] = {
 /* idx -> subject (see hpi_ui_subjects.c) */
 static lv_subject_t *const metric_subj[M_COUNT] = {
     [M_HR] = &subj_hr, [M_SPO2] = &subj_spo2, [M_ECG] = &subj_ecg, [M_TEMP] = &subj_temp,
-    [M_ACTIVITY] = &subj_steps, [M_BPT] = &subj_bp, [M_HRV] = &subj_hrv, [M_GSR] = &subj_gsr,
+    [M_ACTIVITY] = &subj_steps, [M_BPT] = &subj_bp, [M_HRV] = &subj_rmssd, [M_GSR] = &subj_gsr,
 };
 
 extern lv_style_t style_numeric_large;

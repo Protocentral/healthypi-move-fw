@@ -19,7 +19,7 @@
 #include "hpi_sys.h"
 
 lv_subject_t subj_hr, subj_spo2, subj_ecg, subj_temp, subj_bp,
-             subj_hrv, subj_gsr, subj_steps, subj_time, subj_ampm, subj_date, subj_batt,
+             subj_hrv, subj_rmssd, subj_rmssd_deviation, subj_rmssd_age, subj_gsr, subj_steps, subj_time, subj_ampm, subj_date, subj_batt,
              subj_stress, subj_act, subj_sec;
 lv_subject_t subj_hr_resting, subj_hr_min, subj_hr_max, subj_temp_dev;
 lv_subject_t subj_batt_charging;
@@ -28,7 +28,7 @@ lv_subject_t subj_batt_charging;
 #define SUBJ_STR_LEN 16
 #define DEF_STR_SUBJ(n) static char n##_cur[SUBJ_STR_LEN]; static char n##_prv[SUBJ_STR_LEN]
 DEF_STR_SUBJ(hr); DEF_STR_SUBJ(spo2); DEF_STR_SUBJ(ecg); DEF_STR_SUBJ(temp);
-DEF_STR_SUBJ(bp); DEF_STR_SUBJ(hrv); DEF_STR_SUBJ(gsr); DEF_STR_SUBJ(steps);
+DEF_STR_SUBJ(bp); DEF_STR_SUBJ(hrv); DEF_STR_SUBJ(rmssd); DEF_STR_SUBJ(gsr); DEF_STR_SUBJ(steps);
 DEF_STR_SUBJ(time); DEF_STR_SUBJ(ampm); DEF_STR_SUBJ(date);
 DEF_STR_SUBJ(hr_min); DEF_STR_SUBJ(hr_max);
 static char act_cur[28]; static char act_prv[28];   /* "3.1 MI . 412 KCAL" */
@@ -43,6 +43,10 @@ void hpi_ui_subjects_init(void)
     lv_subject_init_string(&subj_temp, temp_cur, temp_prv, SUBJ_STR_LEN, "--");
     lv_subject_init_string(&subj_bp, bp_cur, bp_prv, SUBJ_STR_LEN, "--");
     lv_subject_init_string(&subj_hrv, hrv_cur, hrv_prv, SUBJ_STR_LEN, "--");
+    lv_subject_init_string(&subj_rmssd, rmssd_cur, rmssd_prv, SUBJ_STR_LEN, "--");
+    //lv_subject_init_int(&subj_rmssd, -1);
+    printk("initialized rmssd_cur: %s, rmssd_prv: %s\n", rmssd_cur, rmssd_prv);
+   // lv_subject_init_string(&subj_recovery, recovery_cur, recovery_prv, SUBJ_STR_LEN, "--");
     lv_subject_init_string(&subj_gsr, gsr_cur, gsr_prv, SUBJ_STR_LEN, "--");
     lv_subject_init_string(&subj_steps, steps_cur, steps_prv, SUBJ_STR_LEN, "--");
     lv_subject_init_string(&subj_time, time_cur, time_prv, SUBJ_STR_LEN, "00:00");
@@ -50,7 +54,7 @@ void hpi_ui_subjects_init(void)
     lv_subject_init_string(&subj_date, date_cur, date_prv, SUBJ_STR_LEN, "---  --- --");
     lv_subject_init_int(&subj_batt, 0);
     lv_subject_init_int(&subj_batt_charging, 0);
-    lv_subject_init_int(&subj_stress, 0);
+    lv_subject_init_int(&subj_stress, -1);
     lv_subject_init_int(&subj_sec, 0);   /* current second 0..59 (minimal-face seconds bar) */
     lv_subject_init_string(&subj_act, act_cur, act_prv, sizeof(act_cur), "--");
     lv_subject_init_string(&subj_hr_resting, hr_resting_cur, hr_resting_prv,
@@ -59,11 +63,14 @@ void hpi_ui_subjects_init(void)
     lv_subject_init_string(&subj_hr_max, hr_max_cur, hr_max_prv, SUBJ_STR_LEN, "--");
     lv_subject_init_string(&subj_temp_dev, temp_dev_cur, temp_dev_prv, sizeof(temp_dev_cur),
                            "baseline forming");
+    lv_subject_init_int(&subj_rmssd_deviation, 0);
+    lv_subject_init_int(&subj_rmssd_age, 0);
 }
 
 void hpi_ui_subj_set_stress(int level)
 {
     lv_subject_set_int(&subj_stress, level);
+    //printk("Stress updated in ui_subjects\n");
 }
 
 void hpi_ui_subj_set_activity(int steps)
@@ -96,6 +103,18 @@ void hpi_ui_subj_set_hr(int hr)       { set_int_str(&subj_hr, hr); }
 void hpi_ui_subj_set_spo2(int spo2)   { set_int_str(&subj_spo2, spo2); }
 void hpi_ui_subj_set_ecg_hr(int hr)   { set_int_str(&subj_ecg, hr); }
 void hpi_ui_subj_set_hrv_sdnn(int s)  { set_int_str(&subj_hrv, s); }
+void hpi_ui_subj_set_hrv_rmssd(int r) { set_int_str(&subj_rmssd, r); }
+void hpi_ui_subj_set_hrv_rmssd_deviation(int d, bool valid)
+{ 
+    if(valid){
+        lv_subject_set_int(&subj_rmssd_deviation, d); 
+    }
+    else{
+        lv_subject_set_int(&subj_rmssd_deviation, -999); 
+    }
+}
+void hpi_ui_subj_set_hrv_rmssd_age(int a) { lv_subject_set_int(&subj_rmssd_age, a); }
+//void hpi_ui_subj_set_recovery(int sleep_rate)  { set_int_str(&subj_recovery, sleep_rate ); }
 void hpi_ui_subj_set_gsr(int gsr)     { set_int_str(&subj_gsr, gsr); }
 
 void hpi_ui_subj_set_hr_resting(int bpm)

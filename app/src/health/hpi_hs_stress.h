@@ -35,6 +35,7 @@
  * realistically one decent night. Below it, report nothing rather than a number the
  * user would reasonably believe. */
 #define HPI_HS_STRESS_MIN_BASELINE_WINDOWS  20
+//#define HPI_HS_STRESS_MIN_BASELINE_PAIRS    600
 
 /* Map RMSSD against the user's own baseline onto 0..100.
  *
@@ -50,10 +51,10 @@
  * inputs cannot support a score -- the caller MUST treat -1 as "no stress value",
  * never as "zero stress". */
 static inline int32_t hpi_hs_stress_from_hrv(int32_t rmssd_x10, int32_t baseline_x10,
-                                             uint32_t baseline_windows)
+                                             uint32_t baseline_pairs)
 {
     if (rmssd_x10 <= 0 || baseline_x10 <= 0 ||
-        baseline_windows < HPI_HS_STRESS_MIN_BASELINE_WINDOWS) {
+        baseline_pairs < HPI_HS_STRESS_MIN_BASELINE_WINDOWS) {
         return -1;
     }
 

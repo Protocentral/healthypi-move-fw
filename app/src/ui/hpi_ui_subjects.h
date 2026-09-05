@@ -23,7 +23,7 @@
 /* Metric subjects (string, pre-formatted incl. "--" for no-data) + battery (int
  * level, so its observer can colour-code). */
 extern lv_subject_t subj_hr, subj_spo2, subj_ecg, subj_temp, subj_bp,
-                    subj_hrv, subj_gsr, subj_steps, subj_time, subj_ampm, subj_date, subj_batt,
+                    subj_hrv, subj_rmssd, subj_rmssd_deviation, subj_rmssd_age, subj_gsr, subj_steps, subj_time, subj_ampm, subj_date, subj_batt,
                     subj_stress, subj_act, subj_sec;
 
 /* Derived (H2) subjects: resting HR, today HR min/max, skin-temp deviation vs
@@ -45,6 +45,9 @@ void hpi_ui_subj_set_ecg_hr(int hr);
 void hpi_ui_subj_set_temp_x100(int temp_x100);
 void hpi_ui_subj_set_bp(int sys, int dia);
 void hpi_ui_subj_set_hrv_sdnn(int sdnn);
+void hpi_ui_subj_set_hrv_rmssd(int rmssd);
+void hpi_ui_subj_set_hrv_rmssd_deviation(int deviation, bool valid);
+void hpi_ui_subj_set_hrv_rmssd_age(int age);
 void hpi_ui_subj_set_gsr(int gsr);
 void hpi_ui_subj_set_steps(int steps);
 void hpi_ui_subj_set_stress(int level);

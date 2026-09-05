@@ -1,0 +1,8 @@
+tests:
+  healthypi.hs.hrv.pool:
+    tags: health_store hrv_pool
+    platform_allow:
+      - qemu_cortex_m3
+      - native_sim
+    integration_platforms:
+      - qemu_cortex_m3

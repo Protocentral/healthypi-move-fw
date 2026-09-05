@@ -25,7 +25,7 @@ struct rec { uint8_t type; int32_t value; uint8_t quality; int64_t ts; };
 static struct rec s_rec[MAX_REC];
 static int s_n;
 
-void hpi_hs_record(uint8_t type, int32_t value, uint8_t quality, int64_t ts_utc)
+void hpi_hs_record(uint8_t type, int32_t value, uint8_t quality, int64_t ts_utc, int64_t now_ms)
 {
     zassert_true(s_n < MAX_REC, "capture overflow");
     s_rec[s_n++] = (struct rec){type, value, quality, ts_utc};
