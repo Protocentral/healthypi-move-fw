@@ -41,8 +41,6 @@
 
 LOG_MODULE_REGISTER(data_module, LOG_LEVEL_DBG);
 
-#include "max30001.h"
-
 #include "hw_module.h"
 #include "hpi_common_types.h"
 #include "hpi_dfu.h"

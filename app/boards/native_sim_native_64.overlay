@@ -1,0 +1,50 @@
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	chosen {
+		zephyr,display = &sdl_dc;
+	};
+
+	gpiokeys: gpio_keys {
+		compatible = "gpio-keys";
+		button_up: sw1 {
+			label = "Button Up / Extra Button";
+			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_UP>;
+		};
+
+		button_down: sw3 {
+			label = "Home Button";
+			gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_HOME>;
+		};
+	};
+
+	ctrlgpio: gpio_ctrl {
+		compatible = "gpio-leds";
+		sensor_dcdc_en: dcdc_en {
+			gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+			label = "Boost 5V converter enable";
+		};
+	};
+};
+
+/* Match the HealthyPi Move's 390x390 round AMOLED */
+&sdl_dc {
+	width = <390>;
+	height = <390>;
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		littlefs_storage: partition@100000 {
+			label = "littlefs_storage";
+			reg = <0x00100000 0x00100000>;	/* 1 MB, the unused back half of flash0 */
+		};
+	};
+};

@@ -82,3 +82,6 @@ twister-out*/
 # /docs/internal/ predates it and still holds the v3 release + DTS migration plans.
 /internal/
 /docs/internal/
+
+# native_sim flash simulator backing file
+flash.bin

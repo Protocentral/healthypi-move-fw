@@ -13,18 +13,27 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(healthypi_move)
 
-FILE(GLOB app_sources   src/*.c
-                        src/health/*.c
-                        src/images/*.c
-                        src/ui/*.c
-                        src/ui/components/*.c
-                        src/ui/images/*.c
-                        src/ui/fonts/*.c
-                        src/ui/fonts/lvgl/*.c
-                        src/ui/screens/*.c
-                        src/ui/screens/*.c
-                        src/ui/screens/*.c
-                        src/sm/*.c)
+file(GLOB app_sources
+    src/*.c
+    src/sm/smf_display.c
+    src/health/*.c
+    src/ui/*.c
+    src/ui/components/*.c
+    src/ui/images/*.c
+    src/ui/fonts/*.c
+    src/ui/fonts/lvgl/*.c
+    src/ui/screens/*.c
+)
+
+if(CONFIG_ARCH_POSIX)
+    target_sources(app PRIVATE src/native_sim/hw_stubs.c)
+endif()
+
+# Real-hardware-only: nrfx clocks, nRF fuel gauge/PMIC, MAX32664 bootloader updater
+if(NOT CONFIG_ARCH_POSIX)
+  file(GLOB hw_sources src/hw/*.c src/sm/smf_ecg_bioz.c src/sm/smf_ppg_*.c)
+  target_sources(app PRIVATE ${hw_sources})
+endif()
 
 # Synthetic data generator is TEST-ONLY; keep it out of the binary when disabled.
 if(NOT CONFIG_HPI_HS_SYNTH)
