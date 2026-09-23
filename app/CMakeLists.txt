@@ -9,6 +9,12 @@ macro(app_set_runner_args)
   endif()
 endmacro()
 
+# The repo root is a Zephyr module (board, drivers, bindings, Kconfig). Register
+# it explicitly so builds from a workspace that doesn't list it (e.g. the
+# upstream Zephyr native_sim workspace) still find it.
+get_filename_component(HPI_MODULE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/.. REALPATH)
+list(APPEND ZEPHYR_EXTRA_MODULES ${HPI_MODULE_DIR})
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(healthypi_move)
