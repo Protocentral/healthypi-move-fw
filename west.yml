@@ -1,35 +1,34 @@
 manifest:
   self:
     west-commands: scripts/west-commands.yml
-    
+
   remotes:
-    - name: nrf
-      url-base: https://github.com/nrfconnect
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
     - name: protocentral
       url-base: https://github.com/Protocentral
 
   projects:
-    - name: sdk-nrf
-      remote: nrf
-      path: nrf
-      revision: v3.4.0
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.4.2
       import:
-         name-blocklist:
-          - ci-tools
-          - hal_altera
-          - hal_cypress
-          - hal_infineon
-          - hal_microchip
-          - hal_nxp
-          - hal_openisa
-          - hal_silabs
-          - hal_xtensa
-          - hal_ti
-          - loramac-node
-          - net-tools
-          - edtt
-          - trusted-firmware-m
-          - sof
+        name-allowlist:
+          - cmsis
+          - cmsis_6
+          - cmsis-dsp
+          - fatfs
+          - hal_nordic
+          - libmetal
+          - littlefs
+          - lvgl
+          - mbedtls
+          - mcuboot
+          - open-amp
+          - picolibc
+          - segger
+          - tf-psa-crypto
+          - zcbor
       clone-depth: 1
 
 #    - name: max30001
