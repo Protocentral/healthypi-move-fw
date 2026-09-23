@@ -203,11 +203,9 @@ void hpi_hs_shutdown_flush(void);
  * for that rather than this directly, so the bulk record tier goes with it. */
 void hpi_hs_wipe_all(void);
 
-#if defined(CONFIG_HPI_HS_SYNTH)
 /* TEST ONLY alias of hpi_hs_wipe_all(), kept so the SYNTH path reads as the test
  * hook it is. */
 void hpi_hs_test_wipe(void);
-#endif
 
 /* Early init: the ingest ring + lock, before any sensor can publish. Does NOT
  * touch the filesystem (not mounted yet at this point in boot). */

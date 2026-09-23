@@ -1396,12 +1396,14 @@ void hpi_hs_wipe_all(void)
     k_mutex_unlock(&s_lock);
 }
 
-#if defined(CONFIG_HPI_HS_SYNTH)
 void hpi_hs_test_wipe(void)
 {
+#if defined(CONFIG_HPI_HS_SYNTH)
     hpi_hs_wipe_all();
-}
+#else
+    printk("hpi_hs_test_wipe() not imlplmented\n");
 #endif
+}
 
 int hpi_hs_storage_init(void)
 {
