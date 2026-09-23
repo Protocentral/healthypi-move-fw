@@ -35,6 +35,7 @@
 #include <lvgl.h>
 #include <zephyr/zbus/zbus.h>
 #include <time.h>
+#include <stdio.h>
 
 #include <display_sh8601.h>
 #include "hpi_common_types.h"

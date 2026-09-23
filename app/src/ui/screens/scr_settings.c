@@ -14,6 +14,7 @@
 #include <zephyr/kernel.h>
 #include <lvgl.h>
 #include <app_version.h>
+#include <stdio.h>
 
 #include "ui/move_ui.h"
 #include "ui/hpi_r0_theme.h"

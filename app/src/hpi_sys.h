@@ -30,6 +30,10 @@
 
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <time.h>
+
 /* Last-value get/set API removed — the health store (app/src/health/) owns
  * per-metric last values + persistence now. */
 
