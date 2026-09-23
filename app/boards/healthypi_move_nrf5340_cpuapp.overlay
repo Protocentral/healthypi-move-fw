@@ -1,5 +1,5 @@
 /*
- * Application devicetree overlay (auto-included by Zephyr for this app).
+ * HealthyPi Move nRF5340 app-core overlay (native_sim has no wdt0).
  *
  * P0 safety net: enable the WDT peripheral so the task watchdog
  * (CONFIG_TASK_WDT) has a hardware timer backing it for stall detection.
