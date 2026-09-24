@@ -468,16 +468,20 @@ static int sh8601_init(const struct device *dev)
 
 	// Init sequence
 
+	/* RFE 00 */
+	args[0] = 0x00;
+	sh8601_transmit_cmd(dev, 0xFE, args, 1U);
+
 	args2[0] = 0x5A;
 	args2[1] = 0x5A;
-	r = sh8601_transmit_cmd(dev, 0xC0, args2, 2U);
-	r = sh8601_transmit_cmd(dev, 0xC1, args2, 2U);
+	sh8601_transmit_cmd(dev, 0xC0, args2, 2U);
+	sh8601_transmit_cmd(dev, 0xC1, args2, 2U);
 
 	args[0] = 0x01;
-	r = sh8601_transmit_cmd(dev, 0xE4, args, 1U);
+	sh8601_transmit_cmd(dev, 0xE4, args, 1U);
 
 	uint8_t args14[14] = {0x01, 0x07, 0x00, 0x64, 0x00, 0xFF, 0x03, 0x04, 0x01, 0x38, 0x1D, 0x61, 0x00, 0x7C};
-	r = sh8601_transmit_cmd(dev, 0xBD, args14, 14U);
+	sh8601_transmit_cmd(dev, 0xBD, args14, 14U);
 
 	r = sh8601_send_cmd(dev, SH8601_C_SLPOUT);
 	k_msleep(SH8601_SLPOUT_DELAY);
@@ -490,24 +494,38 @@ static int sh8601_init(const struct device *dev)
 	args2[1] = 0x0A;
 	r = sh8601_transmit_cmd(dev, SH8601_W_SETTSL, args2, 2U);
 
+	/* RC4 80 - SPI setting, mipi remove - MUST come this early */
+	args[0] = 0x80;
+	sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
+
+	/* R3A 55 - RGB565 */
+	args[0] = 0x55;
+	sh8601_transmit_cmd(dev, SH8601_W_PIXFMT, args, 1U);
+
+	/* R35 00 - tear on */
 	args[0] = 0x00;
-	r = sh8601_transmit_cmd(dev, SH8601_WC_TEARON, args, 1U);
+	sh8601_transmit_cmd(dev, SH8601_WC_TEARON, args, 1U);
 
+	/* R53 20 - WCTRLD1 */
 	args[0] = 0x20;
-	r = sh8601_transmit_cmd(dev, SH8601_W_WCTRLD1, args, 1U);
+	sh8601_transmit_cmd(dev, SH8601_W_WCTRLD1, args, 1U);
 
-	args[0] = 0x75;
-	r = sh8601_transmit_cmd(dev, SH8601_W_PIXFMT, args, 1U);
+	/* R51 FF - normal brightness */
+	args[0] = 0xFF;
+	sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args, 1U);
 
-	args2[0] = 0xFF;
-	args2[1] = 0x03;
-	r = sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args2, 2U);
+	/* R63 FF - previously missing */
+	args[0] = 0xFF;
+	sh8601_transmit_cmd(dev, 0x63, args, 1U);
 
-	args[0] = 0x08;
-	r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
+	/* R2A / R2B */
+	sh8601_transmit_cmd(dev, SH8601_W_CASET, args4, 4U);
+	sh8601_transmit_cmd(dev, SH8601_W_PASET, args4, 4U);
 
-	k_msleep(25);
-	r = sh8601_send_cmd(dev, SH8601_C_DISPON);
+	/* R11 - sleep out, then the datasheet's 60ms delay, then display on */
+	sh8601_send_cmd(dev, SH8601_C_SLPOUT);
+	k_msleep(60);
+	sh8601_send_cmd(dev, SH8601_C_DISPON);
 
 	data->device_in_sleep = false;
 
@@ -567,7 +585,7 @@ static int sh8601_write(const struct device *dev, const uint16_t x,
 	{
 		return r;
 	}
-	sh8601_transmit_data(dev, buf, desc->buf_size);
+	r = sh8601_transmit_data(dev, buf, desc->buf_size);
 	if (r < 0)
 	{
 		return r;
