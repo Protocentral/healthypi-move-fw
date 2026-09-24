@@ -4,5 +4,6 @@
 if INPUT
 
 rsource "Kconfig.chsc5816"
+rsource "Kconfig.cst816s"
 
 endif # INPUT
