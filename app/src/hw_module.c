@@ -173,8 +173,11 @@ static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charge
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
 const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); // DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
-const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
+const struct device *chsc5816_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
+const struct device *cst816s_dev = DEVICE_DT_GET_ONE(hynitron_cst816s);
+const struct device *active_touch_dev = NULL;
 const struct device *i2c2_dev = DEVICE_DT_GET(DT_NODELABEL(i2c2));
+const struct device *i2c1_dev = DEVICE_DT_GET(DT_NODELABEL(i2c1));
 
 // LED Power DC/DC Enable
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
@@ -250,6 +253,28 @@ static void i2c2_bus_scan_debug(void)
     LOG_INF("=== End I2C2 Bus Scan ===");
 }
 
+const struct device *detect_touch_controller(void)
+{
+    uint8_t dummy;
+
+    if (!device_is_ready(i2c1_dev)) {
+        LOG_ERR("I2C1 is not ready");
+        return NULL;
+    }
+
+    if (i2c_read(i2c1_dev, &dummy, 1, 0x2E) == 0) {
+        LOG_INF("CHSC5816 detected at 0x2E");
+        return chsc5816_dev;
+    }
+
+    if (i2c_read(i2c1_dev, &dummy, 1, 0x15) == 0) {
+        LOG_INF("CST816S detected at 0x15");
+        return cst816s_dev;
+    }
+
+    LOG_ERR("No display touch controller detected");
+    return NULL;
+}
 // USB CDC UART (disabled on NCS 3.2; re-enable with CONFIG_USB_DEVICE_STACK_NEXT)
 #if defined(CONFIG_USB_DEVICE_STACK)
 #define RING_BUF_SIZE 512 // Reduced from 1024 to 512 bytes
