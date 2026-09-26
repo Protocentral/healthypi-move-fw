@@ -128,6 +128,22 @@ enum
 int sh8601_transmit_cmd(const struct device *dev, uint8_t cmd,
                         const void *tx_data, size_t tx_len);
 
+/** Display module revisions. Same controller and board, different init sequence. */
+enum sh8601_panel_variant
+{
+  SH8601_PANEL_V1 = 0, /* original module, CHSC5816 touch (default) */
+  SH8601_PANEL_V2,     /* newer module, CST816S touch */
+};
+
+/**
+ * @brief Select the init sequence used by the next sh8601_reinit().
+ *
+ * The POST_KERNEL init always runs V1; call this and then sh8601_reinit()
+ * once the module has been identified.
+ */
+int sh8601_set_panel_variant(const struct device *dev, enum sh8601_panel_variant variant);
+
+/** @brief Hardware-reset the panel and run the selected init sequence. */
 int sh8601_reinit(const struct device *dev);
 
 /**
