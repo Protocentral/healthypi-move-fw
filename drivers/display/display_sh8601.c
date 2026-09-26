@@ -32,6 +32,7 @@ struct sh8601_data
 	bool aod_active;
 	uint8_t aod_brightness;
 	uint8_t nor_brightness; /* last normal-mode (0x51) level for AOD exit restore */
+	enum sh8601_panel_variant panel; /* selects the init sequence; V1 until told otherwise */
 };
 
 static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
@@ -428,6 +429,81 @@ static int sh8601_configure(const struct device *dev)
 	return 0;
 }
 
+/*
+ * Panel init sequences. The board is identical across display modules, so the
+ * variant is chosen at runtime (sh8601_set_panel_variant) before sh8601_reinit.
+ */
+struct sh8601_init_cmd
+{
+	uint8_t cmd;
+	uint8_t len;
+	uint8_t data[14];
+	uint16_t delay_ms; /* wait after this command */
+};
+
+/* V1: original module (CHSC5816 touch). Unchanged from the fielded sequence. */
+static const struct sh8601_init_cmd sh8601_init_v1[] = {
+	{0xC0, 2, {0x5A, 0x5A}, 0},
+	{0xC1, 2, {0x5A, 0x5A}, 0},
+	{0xE4, 1, {0x01}, 0},
+	{0xBD, 14, {0x01, 0x07, 0x00, 0x64, 0x00, 0xFF, 0x03, 0x04, 0x01, 0x38, 0x1D, 0x61, 0x00, 0x7C}, 0},
+	{SH8601_C_SLPOUT, 0, {0}, SH8601_SLPOUT_DELAY},
+	{SH8601_W_CASET, 4, {0x00, 0x00, 0x01, 0x85}, 0},
+	{SH8601_W_PASET, 4, {0x00, 0x00, 0x01, 0x85}, 0},
+	{SH8601_W_SETTSL, 2, {0x00, 0x0A}, 0},
+	{SH8601_WC_TEARON, 1, {0x00}, 0},
+	{SH8601_W_WCTRLD1, 1, {0x20}, 0},
+	{SH8601_W_PIXFMT, 1, {0x75}, 0},
+	{SH8601_W_WDBRIGHTNESSVALNOR, 2, {0xFF, 0x03}, 0},
+	{SH8601_W_SPIMODECTL, 1, {0x08}, 25},
+	{SH8601_C_DISPON, 0, {0}, 0},
+};
+
+/* V2: newer module (CST816S touch). Vendor sequence TM1.19_QSPI, verbatim. */
+static const struct sh8601_init_cmd sh8601_init_v2[] = {
+	{0xFE, 1, {0x00}, 0},
+	{SH8601_W_SPIMODECTL, 1, {0x80}, 0}, /* SPI setting, MIPI removed */
+	{SH8601_W_PIXFMT, 1, {0x55}, 0},     /* RGB565 */
+	{SH8601_WC_TEARON, 1, {0x00}, 0},
+	{SH8601_W_WCTRLD1, 1, {0x20}, 0},
+	{SH8601_W_WDBRIGHTNESSVALNOR, 1, {0xFF}, 0},
+	{0x63, 1, {0xFF}, 0},
+	{SH8601_W_CASET, 4, {0x00, 0x00, 0x01, 0x85}, 0},
+	{SH8601_W_PASET, 4, {0x00, 0x00, 0x01, 0x85}, 0},
+	{SH8601_C_SLPOUT, 0, {0}, 60},
+	{SH8601_C_DISPON, 0, {0}, 0},
+};
+
+static int sh8601_run_init_seq(const struct device *dev)
+{
+	const struct sh8601_data *data = dev->data;
+	const struct sh8601_init_cmd *seq = sh8601_init_v1;
+	size_t n = ARRAY_SIZE(sh8601_init_v1);
+
+	if (data->panel == SH8601_PANEL_V2)
+	{
+		seq = sh8601_init_v2;
+		n = ARRAY_SIZE(sh8601_init_v2);
+	}
+
+	for (size_t i = 0; i < n; i++)
+	{
+		int r = sh8601_transmit_cmd(dev, seq[i].cmd, seq[i].len ? seq[i].data : NULL,
+					    seq[i].len);
+		if (r < 0)
+		{
+			LOG_ERR("Init cmd 0x%02x failed: %d", seq[i].cmd, r);
+			return r;
+		}
+		if (seq[i].delay_ms)
+		{
+			k_msleep(seq[i].delay_ms);
+		}
+	}
+
+	return 0;
+}
+
 static int sh8601_init(const struct device *dev)
 {
 	const struct sh8601_config *config = dev->config;
@@ -463,51 +539,13 @@ static int sh8601_init(const struct device *dev)
 
 	sh8601_configure(dev);
 
-	uint8_t args[1] = {0};
-	uint8_t args2[2] = {0};
-
-	// Init sequence
-
-	args2[0] = 0x5A;
-	args2[1] = 0x5A;
-	r = sh8601_transmit_cmd(dev, 0xC0, args2, 2U);
-	r = sh8601_transmit_cmd(dev, 0xC1, args2, 2U);
-
-	args[0] = 0x01;
-	r = sh8601_transmit_cmd(dev, 0xE4, args, 1U);
-
-	uint8_t args14[14] = {0x01, 0x07, 0x00, 0x64, 0x00, 0xFF, 0x03, 0x04, 0x01, 0x38, 0x1D, 0x61, 0x00, 0x7C};
-	r = sh8601_transmit_cmd(dev, 0xBD, args14, 14U);
-
-	r = sh8601_send_cmd(dev, SH8601_C_SLPOUT);
-	k_msleep(SH8601_SLPOUT_DELAY);
-
-	uint8_t args4[4] = {0x00, 0x00, 0x01, 0x85};
-	r = sh8601_transmit_cmd(dev, SH8601_W_CASET, args4, 4U);
-	r = sh8601_transmit_cmd(dev, SH8601_W_PASET, args4, 4U);
-
-	args2[0] = 0x00;
-	args2[1] = 0x0A;
-	r = sh8601_transmit_cmd(dev, SH8601_W_SETTSL, args2, 2U);
-
-	args[0] = 0x00;
-	r = sh8601_transmit_cmd(dev, SH8601_WC_TEARON, args, 1U);
-
-	args[0] = 0x20;
-	r = sh8601_transmit_cmd(dev, SH8601_W_WCTRLD1, args, 1U);
-
-	args[0] = 0x75;
-	r = sh8601_transmit_cmd(dev, SH8601_W_PIXFMT, args, 1U);
-
-	args2[0] = 0xFF;
-	args2[1] = 0x03;
-	r = sh8601_transmit_cmd(dev, SH8601_W_WDBRIGHTNESSVALNOR, args2, 2U);
-
-	args[0] = 0x08;
-	r = sh8601_transmit_cmd(dev, SH8601_W_SPIMODECTL, args, 1U);
-
-	k_msleep(25);
-	r = sh8601_send_cmd(dev, SH8601_C_DISPON);
+	r = sh8601_run_init_seq(dev);
+	if (r < 0)
+	{
+		LOG_ERR("Panel init sequence failed: %d", r);
+		/* Not fatal: stay "ready" so LVGL still binds to the display, as
+		 * this driver always has. sh8601_reinit() surfaces the error. */
+	}
 
 	data->device_in_sleep = false;
 
@@ -518,9 +556,34 @@ static int sh8601_init(const struct device *dev)
 	return 0;
 }
 
+int sh8601_set_panel_variant(const struct device *dev, enum sh8601_panel_variant variant)
+{
+	struct sh8601_data *data = dev->data;
+
+	if (variant != SH8601_PANEL_V1 && variant != SH8601_PANEL_V2)
+	{
+		return -EINVAL;
+	}
+
+	data->panel = variant;
+	LOG_INF("Panel variant V%d", variant == SH8601_PANEL_V2 ? 2 : 1);
+
+	return 0;
+}
+
 int sh8601_reinit(const struct device *dev)
 {
-	sh8601_init(dev);
+	struct sh8601_data *data = dev->data;
+
+	sh8601_hw_reset(dev);
+	k_msleep(SH8601_RST_DELAY);
+
+	int r = sh8601_run_init_seq(dev);
+
+	data->device_in_sleep = false;
+	k_msleep(200);
+
+	return r;
 }
 
 static int sh8601_set_mem_area(const struct device *dev, const uint16_t x,
@@ -567,7 +630,7 @@ static int sh8601_write(const struct device *dev, const uint16_t x,
 	{
 		return r;
 	}
-	sh8601_transmit_data(dev, buf, desc->buf_size);
+	r = sh8601_transmit_data(dev, buf, desc->buf_size);
 	if (r < 0)
 	{
 		return r;

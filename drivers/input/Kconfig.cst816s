@@ -1,0 +1,8 @@
+config INPUT_CST816S
+	bool "Use CST816S capacitive touch panel driver"
+	default y
+	depends on DT_HAS_HYNITRON_CST816S_ENABLED
+	select GPIO
+	select I2C
+	help
+	  Enable out of tree driver for CST816S touch panel.

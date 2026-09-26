@@ -173,8 +173,16 @@ static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charge
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
 const struct device *display_dev = DEVICE_DT_GET(DT_NODELABEL(sh8601)); // DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
-const struct device *touch_dev = DEVICE_DT_GET_ONE(chipsemi_chsc5816);
 const struct device *i2c2_dev = DEVICE_DT_GET(DT_NODELABEL(i2c2));
+
+/* Display module touch controllers. Exactly one is fitted, depending on the
+ * module revision; both nodes describe the same irq/reset pins and are
+ * deferred-init, so only the detected one is ever brought up. */
+static const struct i2c_dt_spec touch_chsc5816_i2c = I2C_DT_SPEC_GET(DT_NODELABEL(chsc5816));
+static const struct i2c_dt_spec touch_cst816s_i2c = I2C_DT_SPEC_GET(DT_NODELABEL(cst816s));
+static const struct gpio_dt_spec touch_rst = GPIO_DT_SPEC_GET(DT_NODELABEL(chsc5816), rst_gpios);
+static enum hpi_touch_ctrl touch_ctrl = HPI_TOUCH_NONE;
+static bool touch_detected;
 
 // LED Power DC/DC Enable
 static const struct gpio_dt_spec dcdc_5v_en = GPIO_DT_SPEC_GET(DT_NODELABEL(sensor_dcdc_en), gpios);
@@ -250,6 +258,69 @@ static void i2c2_bus_scan_debug(void)
     LOG_INF("=== End I2C2 Bus Scan ===");
 }
 
+/* A bare 1-byte read is enough to tell which address ACKs. */
+static bool touch_probe(const struct i2c_dt_spec *spec)
+{
+    uint8_t dummy;
+
+    return i2c_read_dt(spec, &dummy, 1) == 0;
+}
+
+enum hpi_touch_ctrl hpi_touch_detect(void)
+{
+    if (touch_detected)
+    {
+        return touch_ctrl;
+    }
+    touch_detected = true;
+
+    if (!i2c_is_ready_dt(&touch_chsc5816_i2c))
+    {
+        LOG_ERR("Touch I2C bus not ready");
+        return touch_ctrl;
+    }
+
+    /* Pulse the shared touch reset first. After a warm reboot the controller
+     * has kept power and may be in its own low-power mode, where the CST816S
+     * does not ACK. Both drivers reset the chip again in their own init. */
+    if (gpio_is_ready_dt(&touch_rst) &&
+        gpio_pin_configure_dt(&touch_rst, GPIO_OUTPUT_ACTIVE) == 0)
+    {
+        k_msleep(20);
+        gpio_pin_set_dt(&touch_rst, 0);
+        k_msleep(200); /* longest boot time of the two (CST816S vendor ref) */
+    }
+
+    if (touch_probe(&touch_chsc5816_i2c))
+    {
+        touch_ctrl = HPI_TOUCH_CHSC5816;
+        LOG_INF("Touch: CHSC5816 @0x%02x (display module V1)", touch_chsc5816_i2c.addr);
+    }
+    else if (touch_probe(&touch_cst816s_i2c))
+    {
+        touch_ctrl = HPI_TOUCH_CST816S;
+        LOG_INF("Touch: CST816S @0x%02x (display module V2)", touch_cst816s_i2c.addr);
+    }
+    else
+    {
+        LOG_ERR("No touch controller detected; assuming display module V1, touch disabled");
+    }
+
+    return touch_ctrl;
+}
+
+const struct device *hpi_touch_get_dev(void)
+{
+    switch (hpi_touch_detect())
+    {
+    case HPI_TOUCH_CHSC5816:
+        return DEVICE_DT_GET(DT_NODELABEL(chsc5816));
+    case HPI_TOUCH_CST816S:
+        return DEVICE_DT_GET(DT_NODELABEL(cst816s));
+    default:
+        return NULL;
+    }
+}
 // USB CDC UART (disabled on NCS 3.2; re-enable with CONFIG_USB_DEVICE_STACK_NEXT)
 #if defined(CONFIG_USB_DEVICE_STACK)
 #define RING_BUF_SIZE 512 // Reduced from 1024 to 512 bytes

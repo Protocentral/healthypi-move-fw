@@ -237,9 +237,6 @@ static int m_disp_gsr_remaining_synced = -1;
 static int m_disp_gsr_contact_synced = -1;
 static int m_disp_gsr_sleep_synced = -1;
 
-
-
-
 struct s_disp_object
 {
     struct smf_ctx ctx;
@@ -658,7 +655,6 @@ static int max32664_update_status = MAX32664_UPDATER_STATUS_IDLE;
 
 // Externs
 extern const struct device *display_dev;
-extern const struct device *touch_dev;
 extern lv_obj_t *scr_bpt;
 
 extern struct k_sem sem_disp_smf_start;
@@ -707,10 +703,19 @@ static void st_display_init_entry(void *o)
         // return;
     }
 
+    /* The touch controller identifies the display module revision, and the
+     * two revisions need different panel init sequences. Probe it first. */
+    sh8601_set_panel_variant(display_dev, hpi_touch_detect() == HPI_TOUCH_CST816S
+                                              ? SH8601_PANEL_V2
+                                              : SH8601_PANEL_V1);
     sh8601_reinit(display_dev);
     k_msleep(500);
 
-    device_init(touch_dev);
+    const struct device *touch_dev = hpi_touch_get_dev();
+    if (touch_dev != NULL)
+    {
+        device_init(touch_dev);
+    }
     k_msleep(50);
 
     // Init all styles globally
@@ -1602,7 +1607,11 @@ static void st_display_sleep_exit(void *o)
 
     /* Re-init touch in case its driver needs re-attachment (safe no-op)
      * This keeps the existing wake path behavior. */
-    device_init(touch_dev);
+    const struct device *touch_dev = hpi_touch_get_dev();
+    if (touch_dev != NULL)
+    {
+        device_init(touch_dev);
+    }
     k_msleep(10);
 
     /* S4: the display now sleeps even while low battery, so re-derive the

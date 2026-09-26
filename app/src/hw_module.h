@@ -30,8 +30,22 @@
 
 #pragma once
 
+#include <zephyr/device.h>
+
 void hw_module_init(void);
 void hw_pwr_display_enable(bool enable);
+
+/* Touch controller fitted on the display module; it also identifies the
+ * module revision (CHSC5816 = V1, CST816S = V2). Probed once, on first call,
+ * then cached. hpi_touch_get_dev() returns NULL when none was found. */
+enum hpi_touch_ctrl
+{
+    HPI_TOUCH_NONE = 0,
+    HPI_TOUCH_CHSC5816,
+    HPI_TOUCH_CST816S,
+};
+enum hpi_touch_ctrl hpi_touch_detect(void);
+const struct device *hpi_touch_get_dev(void);
 
 void send_usb_cdc(const char *buf, size_t len);
 

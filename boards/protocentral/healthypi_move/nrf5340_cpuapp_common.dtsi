@@ -70,7 +70,7 @@
 		spi-dev = <&spi4>;
 		#address-cells = <1>;
 		#size-cells = <0>;
-	
+
 		sh8601: sh8601@0 {
 			compatible = "sitronix,sh8601";
 			spi-max-frequency = <DT_FREQ_M(33)>;
@@ -96,6 +96,11 @@
 	};
 
 	pointer {
+		compatible = "zephyr,lvgl-pointer-input";
+		input = <&cst816s>;
+		swap-xy;
+	};
+	pointer1 {
 		compatible = "zephyr,lvgl-pointer-input";
 		input = <&chsc5816>;
 		swap-xy;
@@ -245,6 +250,15 @@
 		zephyr,deferred-init;
 	};
 
+	cst816s: cst816s@15 {
+		status = "okay";
+		compatible = "hynitron,cst816s";
+		reg = <0x15>;
+		irq-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+		zephyr,deferred-init;
+	};
+
 	max32664d: max32664d@55 {
 		compatible = "maxim,max32664";
 		reg = <0x55>;
@@ -379,7 +393,7 @@
 		bioz-gain = <1>; // 20 V/V gain for GSR measurement
 		bioz_cgmag = <2>; // 16 uA excitation current for good GSR sensitivity
 		bioz_dlpf = <1>; // Digital low pass filter
-		bioz_dhpf = <1>; // Digital high pass filter 
+		bioz_dhpf = <1>; // Digital high pass filter
 		bioz_ahpf = <2>; // Analog high pass filter
 		//ecg-invert;
 		ecg-dcloff-enable;
