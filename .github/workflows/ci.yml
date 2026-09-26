@@ -1,15 +1,13 @@
 name: CI Build
 
-# CI auto-build temporarily disabled (manual-only). To re-enable, restore the
-# push/pull_request triggers below.
+# Builds every commit that lands on main (main only accepts squash merges, so
+# this is one run per merged PR), plus manual runs. Feature branches and PRs
+# are not built automatically.
 on:
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - '**'  # Trigger on all branches
-  # pull_request:
-  #   branches:
-  #     - '**'
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
