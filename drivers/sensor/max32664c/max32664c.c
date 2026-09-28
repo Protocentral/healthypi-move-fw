@@ -197,17 +197,22 @@ static int m_read_op_mode(const struct device *dev)
     uint8_t rd_buf[2] = {0x00, 0x00};
 
     uint8_t wr_buf[2] = {0x02, 0x00};
+    int wr_rc;
+    int rd_rc;
 
     k_sleep(K_USEC(300));
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
+    wr_rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
+    rd_rc = max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("Op mode = %x ", rd_buf[1]);
+    /* First exchange after reset: tells a hub that is not answering (I2C
+     * error) apart from one that answers but reads back wrong. 0x00 is
+     * application mode, 0x08 bootloader. */
+    LOG_INF("Op mode read: wr rc %d, rd rc %d, bytes %02x %02x", wr_rc, rd_rc, rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -550,18 +555,24 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     const struct max32664c_config *config = dev->config;
 
     uint8_t wr_buf[2] = {0xFF, 0x03};
+    int wr_rc;
+    int rd_rc;
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
+    wr_rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(4));
 
-    max32664c_i2c_read(&config->i2c, ver_buf, 4);
+    rd_rc = max32664c_i2c_read(&config->i2c, ver_buf, 4);
     k_sleep(K_USEC(300));
 
     gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    // LOG_DBG("Version (decimal) = %d.%d.%d\n", ver_buf[1], ver_buf[2], ver_buf[3]);
+    /* An I2C error means the hub did not acknowledge (power, reset or
+     * brown-out). Success with all-zero bytes means it acknowledged but the
+     * data read back as zeros, which points at signal levels. */
+    LOG_INF("Version read: wr rc %d, rd rc %d, bytes %02x %02x %02x %02x",
+            wr_rc, rd_rc, ver_buf[0], ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
