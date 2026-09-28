@@ -175,6 +175,13 @@
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
 				regulator-initial-mode = <NPM13XX_BUCK_MODE_PWM>;
+				/* hw_module_init power-cycles this rail at boot to reset the
+				 * optical stack, which an nRF reboot alone does not. Pull it
+				 * down when off so the cycle is a real one, and have the
+				 * driver switch it on at init should a cycle ever leave it
+				 * off. */
+				active-discharge;
+				regulator-boot-on;
 			};
 
 			// LDO1 input is 3V, used as LDSW to control Display Power

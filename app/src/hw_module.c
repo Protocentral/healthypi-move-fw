@@ -169,6 +169,7 @@ const struct device *const w25_flash_dev = DEVICE_DT_GET(DT_NODELABEL(w25q01jv))
 static const struct device *regulators = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_regulators));
 static const struct device *ldsw_disp_unit = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo1));
 static const struct device *dev_ldsw_fi_sens = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_ldo2));
+static const struct device *sensor_rail = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_buck2));
 static const struct device *charger = DEVICE_DT_GET(DT_NODELABEL(npm_pmic_charger));
 static const struct device *pmic = DEVICE_DT_GET(DT_NODELABEL(npm_pmic));
 
@@ -815,10 +816,59 @@ static bool hw_check_msbl_file_exists(const char *file_path)
     return true;
 }
 
+#define SENSOR_RAIL_OFF_MS     200
+#define SENSOR_RAIL_ON_TRIES   5
+#define SENSOR_RAIL_SETTLE_MS  50
+
+/* An nRF reboot leaves BUCK2 and the 5 V LED boost powered, so a MAX32664C /
+ * MAX86141 that got stuck (LEDs driven continuously, hub refusing commands)
+ * stays stuck across reboots; only a real power-off cleared it. Switch the
+ * sensor rail and the boost off and back on before any sensor is touched.
+ * Every device on BUCK2 is deferred-init, so none has been initialised yet,
+ * and the hubs' reset/MFIO pins are still unconfigured (high-Z), so they do
+ * not back-power the hubs while the rail is off. */
+static void hw_sensor_rail_power_cycle(void)
+{
+    int ret;
+
+    if (!device_is_ready(sensor_rail))
+    {
+        LOG_ERR("Sensor rail (BUCK2) not ready, skipping power cycle");
+        return;
+    }
+
+    gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_INACTIVE);
+
+    ret = regulator_disable(sensor_rail);
+    if (ret < 0)
+    {
+        LOG_ERR("Sensor rail (BUCK2) disable failed: %d", ret);
+        return;
+    }
+    k_msleep(SENSOR_RAIL_OFF_MS);
+
+    for (int attempt = 1; attempt <= SENSOR_RAIL_ON_TRIES; attempt++)
+    {
+        ret = regulator_enable(sensor_rail);
+        if (ret == 0)
+        {
+            break;
+        }
+        LOG_ERR("Sensor rail (BUCK2) enable failed: %d [try %d/%d]", ret, attempt,
+                SENSOR_RAIL_ON_TRIES);
+        k_msleep(10);
+    }
+    k_msleep(SENSOR_RAIL_SETTLE_MS);
+
+    LOG_INF("Sensor rail power-cycled (%d ms off)", SENSOR_RAIL_OFF_MS);
+}
+
 void hw_module_init(void)
 {
     int ret = 0;
     static struct rtc_time curr_time;
+
+    hw_sensor_rail_power_cycle();
 
     /* Health store: init the ingest ring before any sensor can publish (H1). */
     hpi_hs_init();
