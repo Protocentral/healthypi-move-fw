@@ -146,6 +146,10 @@ static void bmi323_motion_handler(const struct device *dev, const struct sensor_
 	m_last_motion_ms = now_ms;
 	atomic_set(&m_last_motion_uptime_s, (atomic_val_t)(now_ms / 1000));
 
+	/* Wakes the wrist PPG SMF from OFF_SKIN; the hub's own wake-on-motion
+	 * does not report motion. */
+	hpi_ppg_wrist_notify_motion();
+
 	if (new_event) {
 		atomic_inc(&m_motion_evt_count);
 		LOG_INF("BMI323 any-motion detected (#%u)",

@@ -83,6 +83,10 @@ extern struct k_event spo2_evt;
 #define EVT_SPO2_STOP    BIT(1)  /* decode workqueue -> control thread */
 #define EVT_SPO2_CANCEL  BIT(2)  /* UI -> control thread */
 
+/* ---- Wrist PPG wear state ------------------------------------------------ */
+/* BMI323 any-motion -> wrist PPG SMF: wakes it from OFF_SKIN. */
+void hpi_ppg_wrist_notify_motion(void);
+
 /*
  * Peek-and-consume a set of event bits, non-blocking. Returns true if any of
  * the requested bits was set (and clears exactly those bits), else false.
