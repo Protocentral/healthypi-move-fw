@@ -172,8 +172,8 @@
 
 			// BUCK2 is 1.8V, used to power all sensors - except Finger Sensor
 			npm_pmic_buck2: BUCK2 {
-				regulator-min-microvolt = <2000000>;
-				regulator-max-microvolt = <2000000>;
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
 				regulator-initial-mode = <NPM13XX_BUCK_MODE_PWM>;
 			};
 
@@ -181,12 +181,20 @@
 			npm_pmic_ldo1: LDO1 {
 				regulator-initial-mode = <NPM13XX_LDSW_MODE_LDSW>;
 				regulator-boot-off;
+				/* Slowest ramp, to limit the display module's inrush. */
+				soft-start-microamp = <25000>;
+				/* Pull the rail down when switched off so a power-cycle
+				 * actually resets the panel and touch controller. */
+				active-discharge;
 			};
 
 			// LDO2 input is 3V, used as LDSW to control FING_SEN_V for MAX32664D
 			npm_pmic_ldo2: LDO2 {
 				regulator-initial-mode = <NPM13XX_LDSW_MODE_LDSW>;
 				regulator-boot-off;
+				/* Pull the rail down when switched off so the 50 ms
+				 * power-cycle retry in smf_ppg_finger.c resets the hub. */
+				active-discharge;
 			};
 		};
 
