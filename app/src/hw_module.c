@@ -619,20 +619,46 @@ void hw_rtc_set_time(uint8_t m_sec, uint8_t m_min, uint8_t m_hour, uint8_t m_day
     hpi_sys_set_rtc_time(&time_to_set);
 }
 
+/* Zephyr's regulator_enable()/regulator_disable() are reference counted, so
+ * repeated enables (e.g. one per wake from sleep) would stack up and a single
+ * disable would no longer switch the rail off. Track the rail state here so
+ * each call moves the refcount by at most one. */
+static bool disp_power_enabled = false;
+K_MUTEX_DEFINE(mutex_disp_power);
+
 void hw_pwr_display_enable(bool enable)
 {
+    int ret = 0;
+
+    k_mutex_lock(&mutex_disp_power, K_FOREVER);
+
+    if (enable == disp_power_enabled)
+    {
+        k_mutex_unlock(&mutex_disp_power);
+        return;
+    }
+
     if (enable)
     {
-        regulator_enable(ldsw_disp_unit);
-        k_msleep(10);
-        LOG_DBG("Display LDO enabled");
+        ret = regulator_enable(ldsw_disp_unit);
     }
     else
     {
-        regulator_disable(ldsw_disp_unit);
-        k_msleep(10);
-        LOG_DBG("Display LDO disabled");
+        ret = regulator_disable(ldsw_disp_unit);
     }
+
+    if (ret == 0)
+    {
+        disp_power_enabled = enable;
+        k_msleep(10);
+        LOG_DBG("Display LDO %s", enable ? "enabled" : "disabled");
+    }
+    else
+    {
+        LOG_ERR("Failed to %s display LDO: %d", enable ? "enable" : "disable", ret);
+    }
+
+    k_mutex_unlock(&mutex_disp_power);
 }
 
 K_MUTEX_DEFINE(mutex_batt_level);
@@ -720,6 +746,9 @@ static bool fi_sensor_power_enabled = false;
 /* Flag to track if PMIC has been successfully initialized by hw_module_init.
  * This prevents early access from other threads before PMIC is fully ready. */
 static bool pmic_fi_regulator_ready = false;
+/* Serialises the check-then-set on fi_sensor_power_enabled: the boot probe in
+ * hw_thread and the finger SMF threads both switch this rail. */
+K_MUTEX_DEFINE(mutex_fi_power);
 
 void hpi_hw_fi_sensor_on(void)
 {
@@ -731,8 +760,10 @@ void hpi_hw_fi_sensor_on(void)
         LOG_WRN("Finger sensor regulator not ready, skipping enable");
         return;
     }
+    k_mutex_lock(&mutex_fi_power, K_FOREVER);
     if (fi_sensor_power_enabled) {
         LOG_DBG("Finger sensor power already enabled, skipping");
+        k_mutex_unlock(&mutex_fi_power);
         return;
     }
     int ret = regulator_enable(dev_ldsw_fi_sens);
@@ -742,6 +773,7 @@ void hpi_hw_fi_sensor_on(void)
     } else {
         LOG_ERR("Failed to enable finger sensor power: %d", ret);
     }
+    k_mutex_unlock(&mutex_fi_power);
 }
 
 void hpi_hw_fi_sensor_off(void)
@@ -754,8 +786,10 @@ void hpi_hw_fi_sensor_off(void)
         LOG_WRN("Finger sensor regulator not ready, skipping disable");
         return;
     }
+    k_mutex_lock(&mutex_fi_power, K_FOREVER);
     if (!fi_sensor_power_enabled) {
         LOG_DBG("Finger sensor power already disabled, skipping");
+        k_mutex_unlock(&mutex_fi_power);
         return;
     }
     int ret = regulator_disable(dev_ldsw_fi_sens);
@@ -765,6 +799,7 @@ void hpi_hw_fi_sensor_off(void)
     } else {
         LOG_ERR("Failed to disable finger sensor power: %d", ret);
     }
+    k_mutex_unlock(&mutex_fi_power);
 }
 
 static bool hw_check_msbl_file_exists(const char *file_path)
@@ -826,25 +861,22 @@ void hw_module_init(void)
         hw_enable_pmic_callback();
     }
 
-    // Power ON display
-    regulator_disable(ldsw_disp_unit);
+    /* Both LDSWs are regulator-boot-off in DT, so the regulator driver has
+     * already switched them off (refcount 0) — a regulator_disable() here would
+     * be a no-op. Hold them off long enough to fully discharge (DT
+     * active-discharge), which power-cycles the display and finger sensor even
+     * after a warm reboot that left the rails on, then switch them on. */
     k_msleep(100);
-    regulator_enable(ldsw_disp_unit);
+
+    // Power ON display
+    hw_pwr_display_enable(true);
     k_msleep(500);
 
-    // Reset finger sensor power rail - use direct regulator calls for boot sequence
-    // since the wrapper functions require pmic_fi_regulator_ready to be true
     if (device_is_ready(dev_ldsw_fi_sens)) {
-        regulator_disable(dev_ldsw_fi_sens);
-        k_msleep(100);
-        int ret = regulator_enable(dev_ldsw_fi_sens);
-        if (ret == 0) {
-            fi_sensor_power_enabled = true;
-            LOG_INF("Finger sensor power enabled during boot (LDO2)");
-        }
-        k_msleep(100);
         // Mark PMIC FI regulator as ready for other threads to use wrapper functions
         pmic_fi_regulator_ready = true;
+        hpi_hw_fi_sensor_on();
+        k_msleep(100);
     } else {
         LOG_ERR("Finger sensor regulator (LDO2) not ready during boot");
     }
