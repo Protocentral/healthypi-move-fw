@@ -310,6 +310,11 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
     if (edata->chip_op_mode == MAX32664C_OP_MODE_SCD)
     {
+        if (edata->scd_state != m_curr_scd_state)
+        {
+            LOG_INF("SCD state %u -> %u (SMF state %ld)", m_curr_scd_state, edata->scd_state,
+                    (long)atomic_get(&m_curr_state));
+        }
         m_curr_scd_state = edata->scd_state;
 
         if (edata->scd_state == SCD_STATE_ON_SKIN)
