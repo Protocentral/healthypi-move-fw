@@ -200,11 +200,12 @@ static int m_read_op_mode(const struct device *dev)
     int wr_rc;
     int rd_rc;
 
+    /* MFIO low before the write, as for every other command: the write used
+     * to go out with MFIO still high, and some hubs do not acknowledge it. */
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
     wr_rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(45));
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
     rd_rc = max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
     k_sleep(K_MSEC(45));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -574,9 +575,22 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     LOG_INF("Version read: wr rc %d, rd rc %d, bytes %02x %02x %02x %02x",
             wr_rc, rd_rc, ver_buf[0], ver_buf[1], ver_buf[2], ver_buf[3]);
 
+    if (wr_rc != 0)
+    {
+        return wr_rc;
+    }
+    if (rd_rc != 0)
+    {
+        return rd_rc;
+    }
+    /* The hub answered but refused the command; the version bytes are not
+     * valid. Seen right after reset on some sensor boards. */
+    if (ver_buf[0] != MAX32664C_STATUS_SUCCESS)
+    {
+        return -EAGAIN;
+    }
     if (ver_buf[1] == 0x00 && ver_buf[2] == 0x00 && ver_buf[3] == 0x00)
     {
-        LOG_ERR("MAX32664C not found");
         return -ENODEV;
     }
     return 0;
@@ -899,20 +913,48 @@ static int max32664c_chip_init(const struct device *dev)
     gpio_pin_configure_dt(&config->reset_gpio, GPIO_OUTPUT);
     gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
 
-    max32664c_do_enter_app(dev);
+    int ret = -ENODEV;
+    bool acked = false;
 
-    bool hub_found = false;
-
-    if (max32664c_get_ver(dev, data->hub_ver) == 0)
+    /* The version read is retried, and if the hub keeps refusing it the hub is
+     * reset once more: a hub that is not yet ready or was left mid-command by
+     * an unacknowledged write can need either. */
+    for (int reset = 0; reset < MAX32664C_INIT_RESETS && ret != 0; reset++)
     {
-        hub_found = true;
-        LOG_DBG("Hub Version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);
+        max32664c_do_enter_app(dev);
+
+        for (int attempt = 0; attempt < MAX32664C_VER_READ_TRIES; attempt++)
+        {
+            ret = max32664c_get_ver(dev, data->hub_ver);
+            if (ret == 0)
+            {
+                break;
+            }
+            if (ret == -EAGAIN || ret == -ENODEV)
+            {
+                acked = true;
+            }
+            LOG_WRN("Version read failed (%d) [reset %d/%d, try %d/%d]", ret, reset + 1,
+                    MAX32664C_INIT_RESETS, attempt + 1, MAX32664C_VER_READ_TRIES);
+            k_msleep(MAX32664C_VER_READ_RETRY_MS);
+        }
     }
-    else
+
+    if (ret != 0)
     {
-        LOG_ERR("MAX32664C not responding");
+        if (acked)
+        {
+            LOG_ERR("MAX32664C answers but refuses the version read (status 0x%02x)",
+                    data->hub_ver[0]);
+        }
+        else
+        {
+            LOG_ERR("MAX32664C not responding (%d)", ret);
+        }
         return -ENODEV;
     }
+
+    LOG_DBG("Hub Version: %d.%d.%d", data->hub_ver[1], data->hub_ver[2], data->hub_ver[3]);
 
     max32664c_check_sensors(dev);
 

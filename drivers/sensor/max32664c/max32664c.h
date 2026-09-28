@@ -31,6 +31,12 @@
 /* Times a command is re-sent while the hub answers busy / try-again. */
 #define MAX32664C_CMD_BUSY_RETRIES 3
 
+/* Boot-time hub detection: version reads per reset, the wait between them,
+ * and how many resets to try before reporting the hub absent. */
+#define MAX32664C_VER_READ_TRIES    3
+#define MAX32664C_VER_READ_RETRY_MS 100
+#define MAX32664C_INIT_RESETS       2
+
 #define MAX32664C_LATEST_APP_VER1 13
 #define MAX32664C_LATEST_APP_VER2 31
 
