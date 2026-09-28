@@ -329,10 +329,11 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     {
         if (atomic_get(&m_curr_state) == PPG_SAMP_STATE_OFF_SKIN || atomic_get(&m_curr_state) == PPG_SAMP_STATE_MOTION_DETECT)
         {
-            if (edata->num_samples > 0)
-            {
-                k_event_post(&ppg_wr_events, EVT_MOTION_FIFO);
-            }
+            /* Not gated on num_samples: the hub's wake-on-motion never reports
+             * FIFO samples, so gating left the watch stuck in OFF_SKIN with the
+             * LEDs off. Before the driver reported the real count this field
+             * held a stale non-zero value, so every poll already woke it. */
+            k_event_post(&ppg_wr_events, EVT_MOTION_FIFO);
             /* Also notify generic motion-detected event for compatibility */
             k_event_post(&ppg_wr_events, EVT_MOTION_DETECTED);
         }
