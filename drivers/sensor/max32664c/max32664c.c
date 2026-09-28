@@ -36,6 +36,7 @@
 #include <zephyr/sys/reboot.h>
 #include <nrfx.h>
 #include <errno.h>
+#include <string.h>
 
 #ifdef CONFIG_SENSOR_ASYNC_API
 #include <zephyr/rtio/rtio.h>
@@ -222,16 +223,33 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     const struct max32664c_config *config = dev->config;
     uint8_t rd_buf[3] = {0x00, 0x00, 0x00};
     uint8_t wr_buf[2] = {0x00, 0x00};
+    int rc;
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
     k_sleep(K_USEC(300));
 
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-    // k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
+    rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
+    if (rc == 0)
+    {
+        k_msleep(MAX32664C_READ_CMD_DELAY_MS);
+        rc = max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
+    }
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    /* On failure report no flags, so callers do not act on a stale or garbage
+     * DataRdyInt and go on to read the FIFO. */
+    if (rc != 0)
+    {
+        LOG_WRN_RATELIMIT("Hub status read I2C error %d", rc);
+        return 0;
+    }
+    if (rd_buf[0] != MAX32664C_STATUS_SUCCESS)
+    {
+        LOG_WRN_RATELIMIT("Hub status read returned status 0x%02x", rd_buf[0]);
+        return 0;
+    }
 
     LOG_DBG("Hub status bytes: %02x %02x", rd_buf[0], rd_buf[1]);
 
@@ -249,172 +267,138 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     return rd_buf[1];
 }
 
-static int m_i2c_write_cmd_2(const struct device *dev, uint8_t byte1, uint8_t byte2)
+/*
+ * One host command transaction: MFIO low, write, wait cmd_delay_ms, read the
+ * read-status byte (plus rsp_len - 1 data bytes into rsp), keep MFIO low for
+ * hold_ms (300 us when 0), release MFIO, then wait post_ms.
+ *
+ * Busy / try-again is retried. An I2C error, or a hub that stays busy, is
+ * returned so the caller can retry the whole mode sequence. Any other non-zero
+ * status is only logged for now: some commands in the mode sequences may
+ * legitimately be refused depending on the hub's current state (e.g. stopping
+ * an algorithm that is not running), and failing on those would turn today's
+ * silent no-ops into retry loops. Tighten once logs show which codes occur.
+ */
+static int m_hub_cmd(const struct device *dev, const uint8_t *wr_buf, size_t wr_len,
+                     uint8_t *rsp, size_t rsp_len, uint16_t cmd_delay_ms,
+                     uint16_t hold_ms, uint16_t post_ms)
 {
     const struct max32664c_config *config = dev->config;
-    uint8_t wr_buf[2];
-    uint8_t rd_buf[1];
+    uint8_t status_only[1];
+    uint8_t *rd_buf = (rsp != NULL) ? rsp : status_only;
+    size_t rd_len = (rsp != NULL) ? rsp_len : sizeof(status_only);
+    uint8_t cmd1 = (wr_len > 1) ? wr_buf[1] : 0;
+    uint8_t cmd2 = (wr_len > 2) ? wr_buf[2] : 0;
+    int rc = 0;
 
-    wr_buf[0] = byte1;
-    wr_buf[1] = byte2;
+    for (int attempt = 0; attempt <= MAX32664C_CMD_BUSY_RETRIES; attempt++)
+    {
+        memset(rd_buf, 0, rd_len);
 
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
+        gpio_pin_set_dt(&config->mfio_gpio, 0);
+        k_sleep(K_USEC(300));
 
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+        rc = max32664c_i2c_write(&config->i2c, wr_buf, wr_len);
+        if (rc == 0)
+        {
+            k_msleep(cmd_delay_ms);
+            rc = max32664c_i2c_read(&config->i2c, rd_buf, rd_len);
+        }
 
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
+        if (hold_ms > 0)
+        {
+            k_msleep(hold_ms);
+        }
+        else
+        {
+            k_sleep(K_USEC(300));
+        }
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
 
-    LOG_DBG("CMD: %x %x | RSP: %x ", wr_buf[0], wr_buf[1], rd_buf[0]);
+        LOG_DBG("CMD: %02x %02x %02x | RSP: %02x | rc %d", wr_buf[0], cmd1, cmd2, rd_buf[0], rc);
 
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+        k_msleep(post_ms);
 
-    return 0;
+        if (rc != 0)
+        {
+            LOG_ERR("Hub cmd %02x %02x %02x: I2C error %d", wr_buf[0], cmd1, cmd2, rc);
+            return rc;
+        }
+
+        if (rd_buf[0] == MAX32664C_STATUS_BUSY || rd_buf[0] == MAX32664C_STATUS_TRY_AGAIN)
+        {
+            LOG_WRN("Hub cmd %02x %02x %02x: busy (0x%02x) [try %d/%d]", wr_buf[0], cmd1, cmd2,
+                    rd_buf[0], attempt + 1, MAX32664C_CMD_BUSY_RETRIES + 1);
+            continue;
+        }
+
+        if (rd_buf[0] != MAX32664C_STATUS_SUCCESS)
+        {
+            LOG_WRN("Hub cmd %02x %02x %02x: status 0x%02x", wr_buf[0], cmd1, cmd2, rd_buf[0]);
+        }
+        return 0;
+    }
+
+    LOG_ERR("Hub cmd %02x %02x %02x: still busy after %d tries", wr_buf[0], cmd1, cmd2,
+            MAX32664C_CMD_BUSY_RETRIES + 1);
+    return -EBUSY;
+}
+
+/* Stop a mode sequence at the first command that fails, so the caller's retry
+ * re-runs the whole sequence from a known point. */
+#define HUB_TRY(call)          \
+    do                         \
+    {                          \
+        int _hub_rc = (call);  \
+        if (_hub_rc != 0)      \
+        {                      \
+            return _hub_rc;    \
+        }                      \
+    } while (0)
+
+static int m_i2c_write_cmd_2(const struct device *dev, uint8_t byte1, uint8_t byte2)
+{
+    uint8_t wr_buf[2] = {byte1, byte2};
+
+    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), NULL, 0, MAX32664C_DEFAULT_CMD_DELAY,
+                     MAX32664C_DEFAULT_CMD_DELAY, MAX32664C_DEFAULT_CMD_DELAY);
 }
 
 static int m_i2c_write_cmd_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint16_t cmd_delay)
 {
-    const struct max32664c_config *config = dev->config;
-    uint8_t wr_buf[3];
+    uint8_t wr_buf[3] = {byte1, byte2, byte3};
 
-    uint8_t rd_buf[1] = {0x00};
-
-    wr_buf[0] = byte1;
-    wr_buf[1] = byte2;
-    wr_buf[2] = byte3;
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-
-    k_sleep(K_MSEC(cmd_delay));
-
-    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
-
-    k_sleep(K_USEC(300));
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    LOG_DBG("CMD: %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0]);
-
-    k_sleep(K_MSEC(10));
-
-    return 0;
+    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), NULL, 0, cmd_delay, 0, 10);
 }
 
 static int m_i2c_write_cmd_4(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint16_t cmd_delay)
 {
-    const struct max32664c_config *config = dev->config;
-    uint8_t wr_buf[4];
-    uint8_t rd_buf[1];
+    uint8_t wr_buf[4] = {byte1, byte2, byte3, byte4};
 
-    wr_buf[0] = byte1;
-    wr_buf[1] = byte2;
-    wr_buf[2] = byte3;
-    wr_buf[3] = byte4;
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(cmd_delay));
-    max32664c_i2c_read(&config->i2c, rd_buf, 1);
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    LOG_DBG("CMD: %x %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], rd_buf[0]);
-
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    return 0;
+    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), NULL, 0, cmd_delay,
+                     MAX32664C_DEFAULT_CMD_DELAY, MAX32664C_DEFAULT_CMD_DELAY);
 }
 
 static int m_i2c_write_cmd_5(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5)
 {
-    const struct max32664c_config *config = dev->config;
-    uint8_t wr_buf[5];
-    uint8_t rd_buf[1];
+    uint8_t wr_buf[5] = {byte1, byte2, byte3, byte4, byte5};
 
-    wr_buf[0] = byte1;
-    wr_buf[1] = byte2;
-    wr_buf[2] = byte3;
-    wr_buf[3] = byte4;
-    wr_buf[4] = byte5;
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    max32664c_i2c_read(&config->i2c, rd_buf, 1);
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    LOG_DBG("CMD: %x %x %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], rd_buf[0]);
-
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    return 0;
+    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), NULL, 0, MAX32664C_DEFAULT_CMD_DELAY,
+                     MAX32664C_DEFAULT_CMD_DELAY, MAX32664C_DEFAULT_CMD_DELAY);
 }
 
 static int m_i2c_write_cmd_6(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6)
 {
-    const struct max32664c_config *config = dev->config;
-    uint8_t wr_buf[6];
-    uint8_t rd_buf[1];
+    uint8_t wr_buf[6] = {byte1, byte2, byte3, byte4, byte5, byte6};
 
-    wr_buf[0] = byte1;
-    wr_buf[1] = byte2;
-    wr_buf[2] = byte3;
-    wr_buf[3] = byte4;
-    wr_buf[4] = byte5;
-    wr_buf[5] = byte6;
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-    max32664c_i2c_read(&config->i2c, rd_buf, 1);
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    LOG_DBG("CMD: %x %x %x %x %x %x | RSP: %x ", wr_buf[0], wr_buf[1], wr_buf[2], wr_buf[3], wr_buf[4], wr_buf[5], rd_buf[0]);
-
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    return 0;
+    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), NULL, 0, MAX32664C_DEFAULT_CMD_DELAY,
+                     MAX32664C_DEFAULT_CMD_DELAY, MAX32664C_DEFAULT_CMD_DELAY);
 }
 
 static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_len)
 {
-    const struct max32664c_config *config = dev->config;
-
-    uint8_t rd_buf[1] = {0x00};
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-    max32664c_i2c_write(&config->i2c, wr_buf, wr_len);
-
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    k_sleep(K_USEC(300));
-    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    LOG_DBG("Write %d bytes | RSP: %d ", wr_len, rd_buf[0]);
-
-    k_sleep(K_MSEC(45));
-
-    return 0;
+    return m_hub_cmd(dev, wr_buf, wr_len, NULL, 0, MAX32664C_DEFAULT_CMD_DELAY,
+                     MAX32664C_DEFAULT_CMD_DELAY, 45);
 }
 
 static int max32664c_set_spo2_coeffs(const struct device *dev, float a, float b, float c)
@@ -443,42 +427,14 @@ static int max32664c_set_spo2_coeffs(const struct device *dev, float a, float b,
     wr_buf[14] = (c_int & 0x000000ff);
     */
 
-    m_i2c_write(dev, wr_buf, sizeof(wr_buf));
-
-    return 0;
+    return m_i2c_write(dev, wr_buf, sizeof(wr_buf));
 }
 
 static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t *rsp)
 {
-    const struct max32664c_config *config = dev->config;
-    uint8_t wr_buf[3];
+    uint8_t wr_buf[3] = {byte1, byte2, byte3};
 
-    uint8_t rd_buf[3] = {0x00, 0x00, 0x00};
-
-    wr_buf[0] = byte1;
-    wr_buf[1] = byte2;
-    wr_buf[2] = byte3;
-
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-    max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-
-    k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
-
-    // gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-    max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
-    k_sleep(K_MSEC(500));
-
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-    LOG_DBG("CMD: %x %x %x | RSP: %x %x %x ", wr_buf[0], wr_buf[1], wr_buf[2], rd_buf[0], rd_buf[1], rd_buf[2]);
-
-    memcpy(rsp, rd_buf, 3);
-
-    k_sleep(K_MSEC(10));
-
-    return 0;
+    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), rsp, 3, MAX32664C_DEFAULT_CMD_DELAY, 500, 10);
 }
 
 static int max32664c_check_sensors(const struct device *dev)
@@ -530,34 +486,26 @@ static int max32664c_set_mode_extended_algo(const struct device *dev)
 {
     LOG_DBG("MAX32664C entering extended ALGO mode...");
 
-    max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
-
+    HUB_TRY(max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C));
     // Output mode sensor + algo data
-    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY));
     // Set interrupt threshold (extended ALGO value)
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY));
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, MAX32664C_DEFAULT_CMD_DELAY));
     // Set continuous mode
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
     // Enable AEC
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
     // Disable Auto PD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
     // Disable SCD
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
     // Set AGC target PD current
     // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0x64);
 
     // Enable HR, SpO2 algo
-    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x02, 500);
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x02, 500));
     k_sleep(K_MSEC(500));
 
     return 0;
@@ -568,29 +516,21 @@ static int max32664c_set_mode_raw(const struct device *dev)
     LOG_INF("MAX32664C entering RAW mode...");
 
     // Output mode Raw
-    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY));
     // Enable accel
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 200);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 200));
     // Enable AFE
-    m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500));
     // Enabled AFE Sample rate 100
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x18, 50);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x18, 50));
     // Set LED1 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x23, 0x7F, 50);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x23, 0x7F, 50));
     // Set LED2 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x24, 0x7F, 50);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x24, 0x7F, 50));
     // Set LED3 current
-    m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x25, 0xFF, 50);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x25, 0xFF, 50));
     // Set sequence
     // m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x20, 0x21, 50);
 
@@ -636,14 +576,11 @@ static int max32664c_stop_algo(const struct device *dev)
     LOG_DBG("Stopping Algo...");
 
     // Stop Algorithm
-    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, 120);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, 120));
     // Disable AFE
-    m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x00, 0x00, 250);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x00, 0x00, 250));
     // Disable Accel
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, 20);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, 20));
     return 0;
 }
 
@@ -651,31 +588,23 @@ static int max32664c_set_mode_scd(const struct device *dev)
 {
     LOG_DBG("MAX32664C entering SCD mode...");
 
-    max32664c_stop_algo(dev);
-
+    HUB_TRY(max32664c_stop_algo(dev));
     // max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
     // Set LED for SCD
-    m_i2c_write_cmd_2(dev, 0xE5, 0x02);
-
+    HUB_TRY(m_i2c_write_cmd_2(dev, 0xE5, 0x02));
     // Set output mode to algo data
-    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x02, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x02, MAX32664C_DEFAULT_CMD_DELAY));
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY));
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, 100);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, 100));
     // Enable AFE
-    m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500));
     // Enable Accel
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 30);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 30));
     // Enable SCD Only algo
-    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x03, 500);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x03, 500));
     return 0;
 }
 
@@ -683,18 +612,12 @@ static int max32664c_set_mode_wake_on_motion(const struct device *dev)
 {
     LOG_DBG("MAX32664C entering wake on motion mode per datasheet...");
 
-    m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-
-    m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
-
-    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
+    HUB_TRY(m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH));
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
     LOG_INF("Wake-on-motion configured: WUFC=0x%02x (0.4s), ATH=0x%02x (1.5g)", 
             MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
     return 0;
@@ -706,12 +629,10 @@ static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
 
     // Step 1: Disable Wake-Up on Motion configuration
     // Command: AA 46 04 00 00 FF FF (disable motion detection)
-    m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x00, 0xFF, 0xFF);
-
+    HUB_TRY(m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x00, 0xFF, 0xFF));
     // Step 2: Disable Accelerometer 
     // Command: AA 44 04 00 00
-    m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
     LOG_DBG("Wake-on-motion mode disabled");
     return 0;
 }
@@ -720,35 +641,26 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
 {
     LOG_DBG("MAX32664C entering ALGO mode...");
 
-    max32664c_stop_algo(dev);
-
-    max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
-
+    HUB_TRY(max32664c_stop_algo(dev));
+    HUB_TRY(max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C));
     // Output mode sensor + algo data
-    m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY));
     // Set interrupt threshold
-    m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, 200);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, 200));
     // Set report period
-    m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x02, MAX32664C_REPORT_PERIOD, MAX32664C_DEFAULT_CMD_DELAY));
     // Set Algorithm mode
-    m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, algo_mode, MAX32664C_DEFAULT_CMD_DELAY);
-
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0A, algo_mode, MAX32664C_DEFAULT_CMD_DELAY));
     if (mode == MAX32664C_OP_MODE_ALGO_AEC)
     {
         LOG_DBG("MAX32664C entering AEC ALGO mode...");
 
         // Enable AEC
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
+        HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0B, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
         // EN Auto PD
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
+        HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
         // EN SCD
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
-
+        HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
         // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x42, 0x30, 0x00);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x01, 0x01);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
@@ -758,7 +670,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x11, 0x21);
 
         // Enable HR, SpO2 algo
-        m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
+        HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500));
         // k_sleep(K_MSEC(500));
     }
     else if (mode == MAX32664C_OP_MODE_ALGO_AGC)
@@ -766,14 +678,11 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         LOG_DBG("MAX32664C entering AGC ALGO mode...");
 
         // DIS Auto PD
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-
+        HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x12, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
         // DIS SCD
-        m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY);
-
+        HUB_TRY(m_i2c_write_cmd_4(dev, 0x50, 0x07, 0x0C, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
         // Set AGC target PD current
-        m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0xFF);
-
+        HUB_TRY(m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x11, 0x00, 0xFF));
         // m_i2c_write_cmd_6(dev, 0x50, 0x07, 0x19, 0x13, 0x56, 0x00);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x17, 0x00, 0x11);
         // m_i2c_write_cmd_5(dev, 0x50, 0x07, 0x18, 0x30, 0x20);
@@ -783,7 +692,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
         // m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x04, 0x0F);
 
         // Enable HR, SpO2 algo
-        m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500);
+        HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x01, 500));
         // k_sleep(K_MSEC(500));
     }
     return 0;
@@ -828,61 +737,67 @@ static int max32664c_channel_get(const struct device *dev,
     return 0;
 }
 
+static int max32664c_set_op_mode(const struct device *dev, const struct sensor_value *val)
+{
+    switch (val->val1)
+    {
+    case MAX32664C_OP_MODE_ALGO_AEC:
+        return max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+    case MAX32664C_OP_MODE_ALGO_AGC:
+        return max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+    case MAX32664C_OP_MODE_ALGO_EXTENDED:
+        return max32664c_set_mode_extended_algo(dev);
+    case MAX32664C_OP_MODE_RAW:
+        return max32664c_set_mode_raw(dev);
+    case MAX32664C_OP_MODE_SCD:
+        return max32664c_set_mode_scd(dev);
+    case MAX32664C_OP_MODE_WAKE_ON_MOTION:
+        return max32664c_set_mode_wake_on_motion(dev);
+    case MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION:
+        return max32664c_exit_mode_wake_on_motion(dev);
+    case MAX32664C_OP_MODE_STOP_ALGO:
+        return max32664c_stop_algo(dev);
+    default:
+        LOG_ERR("Unsupported sensor operation mode");
+        return -ENOTSUP;
+    }
+}
+
 static int max32664c_attr_set(const struct device *dev,
                               enum sensor_channel chan,
                               enum sensor_attribute attr,
                               const struct sensor_value *val)
 {
     struct max32664c_data *data = dev->data;
+    int ret = 0;
 
     switch (attr)
     {
     case MAX32664C_ATTR_OP_MODE:
-        if (val->val1 == MAX32664C_OP_MODE_ALGO_AEC)
+        k_mutex_lock(&data->lock, K_FOREVER);
+        ret = max32664c_set_op_mode(dev, val);
+        if (ret == 0)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
-            data->op_mode = MAX32664C_OP_MODE_ALGO_AEC;
+            /* The exit / stop commands leave the hub idle. */
+            if (val->val1 == MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION ||
+                val->val1 == MAX32664C_OP_MODE_STOP_ALGO)
+            {
+                data->op_mode = MAX32664C_OP_MODE_IDLE;
+            }
+            else
+            {
+                data->op_mode = val->val1;
+            }
         }
-        else if (val->val1 == MAX32664C_OP_MODE_ALGO_AGC)
+        else if (ret != -ENOTSUP)
         {
-            max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
-            data->op_mode = MAX32664C_OP_MODE_ALGO_AGC;
-        }
-        else if (val->val1 == MAX32664C_OP_MODE_ALGO_EXTENDED)
-        {
-            max32664c_set_mode_extended_algo(dev);
-            data->op_mode = MAX32664C_OP_MODE_ALGO_EXTENDED;
-        }
-        else if (val->val1 == MAX32664C_OP_MODE_RAW)
-        {
-            max32664c_set_mode_raw(dev);
-            data->op_mode = MAX32664C_OP_MODE_RAW;
-        }
-        else if (val->val1 == MAX32664C_OP_MODE_SCD)
-        {
-            max32664c_set_mode_scd(dev);
-            data->op_mode = MAX32664C_OP_MODE_SCD;
-        }
-        else if (val->val1 == MAX32664C_OP_MODE_WAKE_ON_MOTION)
-        {
-            max32664c_set_mode_wake_on_motion(dev);
-            data->op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
-        }
-        else if (val->val1 == MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION)
-        {
-            max32664c_exit_mode_wake_on_motion(dev);
+            /* The sequence stopped part-way, so the hub is in no known mode.
+             * Idle stops sample reads decoding it with the wrong layout until
+             * the caller's retry succeeds. */
+            LOG_ERR("Op mode %d change failed (%d)", val->val1, ret);
             data->op_mode = MAX32664C_OP_MODE_IDLE;
         }
-        else if (val->val1 == MAX32664C_OP_MODE_STOP_ALGO)
-        {
-            max32664c_stop_algo(dev);
-            data->op_mode = MAX32664C_OP_MODE_IDLE;
-        }
-        else
-        {
-            LOG_ERR("Unsupported sensor operation mode");
-            return -ENOTSUP;
-        }
+        k_mutex_unlock(&data->lock);
         break;
     case MAX32664C_ATTR_ENTER_BOOTLOADER:
         // max32664c_do_enter_bl(dev);
@@ -892,7 +807,7 @@ static int max32664c_attr_set(const struct device *dev,
         return -ENOTSUP;
     }
 
-    return 0;
+    return ret;
 }
 
 static int max32664c_check_app_present(const struct device *dev)
@@ -1022,6 +937,10 @@ int max32664c_test_motion_detection(const struct device *dev)
     LOG_INF("Testing MAX32664C motion detection...");
     
     struct max32664c_data *data = dev->data;
+
+    /* Held for the whole test so periodic sample reads stay off the hub. */
+    k_mutex_lock(&data->lock, K_FOREVER);
+
     uint8_t original_mode = data->op_mode;
     
     // Set wake-on-motion mode
@@ -1039,20 +958,24 @@ int max32664c_test_motion_detection(const struct device *dev)
             
             // Trigger the async fetch to decode motion data
             uint8_t chip_op_mode;
-            max32664c_async_sample_fetch_wake_on_motion(dev, &chip_op_mode);
+            uint32_t num_samples;
+            max32664c_async_sample_fetch_wake_on_motion(dev, &chip_op_mode, &num_samples);
         }
         k_msleep(100);
     }
     
     // Restore original mode
     data->op_mode = original_mode;
+    k_mutex_unlock(&data->lock);
     LOG_INF("Motion detection test complete");
     
     return 0;
 }
 
 #define MAX32664C_DEFINE(inst)                                      \
-    static struct max32664c_data max32664c_data_##inst;             \
+    static struct max32664c_data max32664c_data_##inst = {          \
+        .lock = Z_MUTEX_INITIALIZER(max32664c_data_##inst.lock),    \
+    };                                                              \
     static const struct max32664c_config max32664c_config_##inst =  \
         {                                                           \
             .i2c = I2C_DT_SPEC_INST_GET(inst),                      \

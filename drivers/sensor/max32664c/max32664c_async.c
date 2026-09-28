@@ -29,6 +29,7 @@
 
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
+#include <string.h>
 
 LOG_MODULE_REGISTER(MAX32664C_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -60,6 +61,8 @@ static int max32664c_read_fifo_i2c(const struct device *dev, uint8_t *buf, int s
         return rc;
     }
 
+    k_msleep(MAX32664C_READ_CMD_DELAY_MS);
+
     rc = max32664c_i2c_read(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
     if (rc != 0) {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -69,6 +72,12 @@ static int max32664c_read_fifo_i2c(const struct device *dev, uint8_t *buf, int s
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    if (buf[0] != MAX32664C_STATUS_SUCCESS)
+    {
+        LOG_WRN_RATELIMIT("FIFO read returned status 0x%02x", buf[0]);
+        return -EIO;
+    }
     return 0;
 }
 
@@ -90,6 +99,8 @@ int max32664c_get_fifo_count(const struct device *dev)
         return rc;
     }
 
+    k_msleep(MAX32664C_READ_CMD_DELAY_MS);
+
     rc = max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
     if (rc != 0) {
         gpio_pin_set_dt(&config->mfio_gpio, 1);
@@ -99,6 +110,12 @@ int max32664c_get_fifo_count(const struct device *dev)
 
     k_sleep(K_USEC(300));
     gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    if (rd_buf[0] != MAX32664C_STATUS_SUCCESS)
+    {
+        LOG_WRN_RATELIMIT("FIFO count read returned status 0x%02x", rd_buf[0]);
+        return -EIO;
+    }
 
     fifo_count = rd_buf[1];
 
@@ -127,7 +144,11 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
             sample_len = 1;
             *chip_op_mode = data->op_mode;
 
-            max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count);
+            if (max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count) != 0)
+            {
+                *chip_op_mode = MAX32664C_OP_MODE_IDLE;
+                return 0;
+            }
             for (int i = 0; i < fifo_count; i++)
             {
                 uint8_t scd_state_val = (uint8_t)max32664c_fifo_buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
@@ -143,13 +164,18 @@ static int max32664c_async_sample_fetch_scd(const struct device *dev, uint8_t *c
     return 0;
 }
 
-int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode)
+int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode, uint32_t *num_samples)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
 
     int sample_len = 7; // 1 byte op mode + 6 bytes accel data
     bool motion_detected = false;
+
+    /* The app's MOTION_DETECT state waits for num_samples > 0. This was never
+     * written, so it read whatever an earlier read had left in the reused
+     * RTIO buffer. */
+    *num_samples = 0;
 
     uint8_t hub_stat = max32664c_read_hub_status(dev);
     if (hub_stat & MAX32664C_HUB_STAT_DRDY_MASK)
@@ -166,7 +192,11 @@ int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_
             *chip_op_mode = MAX32664C_OP_MODE_WAKE_ON_MOTION;
 
             /* Read FIFO into shared buffer */
-            max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count);
+            if (max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count) != 0)
+            {
+                return 0;
+            }
+            *num_samples = fifo_count;
             for (int i = 0; i < fifo_count; i++)
             {
                 uint8_t algo_op_mode = (uint8_t)max32664c_fifo_buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET];
@@ -228,7 +258,12 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
         {
             *chip_op_mode = data->op_mode;
 
-            max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count);
+            if (max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count) != 0)
+            {
+                *num_samples = 0;
+                *chip_op_mode = MAX32664C_OP_MODE_IDLE;
+                return 0;
+            }
 
             for (int i = 0; i < fifo_count; i++)
             {
@@ -299,7 +334,12 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
             *chip_op_mode = data->op_mode;
 
             /* Read FIFO into shared buffer */
-            max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count);
+            if (max32664c_read_fifo_i2c(dev, max32664c_fifo_buf, sample_len, fifo_count) != 0)
+            {
+                *num_samples = 0;
+                *chip_op_mode = MAX32664C_OP_MODE_IDLE;
+                return 0;
+            }
 
             /*
              * Datasheet note: the MAX32664 provides LED samples as 24-bit MSB-first
@@ -404,6 +444,21 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
         return;
     }
 
+    /* Start from a zeroed, idle sample: the mempool buffer is reused and paths
+     * that return early (idle, busy, failed read) used to hand the app whatever
+     * an earlier read had left in it. */
+    memset(buf, 0, min_buf_len);
+    m_edata = (struct max32664c_encoded_data *)buf;
+    m_edata->chip_op_mode = MAX32664C_OP_MODE_IDLE;
+
+    /* Skip this read while a mode change holds the hub: interleaving would
+     * corrupt the change, and op_mode is not yet the mode being set up. */
+    if (k_mutex_lock(&data->lock, K_NO_WAIT) != 0)
+    {
+        rtio_iodev_sqe_ok(iodev_sqe, 0);
+        return;
+    }
+
     if (data->op_mode == MAX32664C_OP_MODE_ALGO_AGC || data->op_mode == MAX32664C_OP_MODE_ALGO_AEC ||
         data->op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
@@ -431,7 +486,7 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
     {
         m_edata = (struct max32664c_encoded_data *)buf;
         m_edata->header.timestamp = k_ticks_to_ns_floor64(k_uptime_ticks());
-        rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode);
+        rc = max32664c_async_sample_fetch_wake_on_motion(dev, &m_edata->chip_op_mode, &m_edata->num_samples);
     }
     else if (data->op_mode == MAX32664C_OP_MODE_IDLE)
     {
@@ -442,6 +497,8 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
         LOG_ERR("Invalid operation mode %d", data->op_mode);
         // return 4;
     }
+
+    k_mutex_unlock(&data->lock);
 
     if (rc != 0)
     {

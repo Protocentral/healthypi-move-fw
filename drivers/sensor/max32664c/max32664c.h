@@ -19,6 +19,18 @@
 
 #define MAX32664C_DEFAULT_CMD_DELAY 10
 
+/* Wait between the write and the read of a status / FIFO query. These had no
+ * wait at all; a slower hub may not have the answer ready yet. */
+#define MAX32664C_READ_CMD_DELAY_MS 2
+
+/* Read-status byte returned first on every hub read. */
+#define MAX32664C_STATUS_SUCCESS   0x00
+#define MAX32664C_STATUS_TRY_AGAIN 0x05
+#define MAX32664C_STATUS_BUSY      0xFE
+
+/* Times a command is re-sent while the hub answers busy / try-again. */
+#define MAX32664C_CMD_BUSY_RETRIES 3
+
 #define MAX32664C_LATEST_APP_VER1 13
 #define MAX32664C_LATEST_APP_VER2 31
 
@@ -40,7 +52,7 @@ int max32664c_do_enter_app(const struct device *dev);
 int max32664c_test_motion_detection(const struct device *dev);
 
 // Motion detection data fetch function
-int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode);
+int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode, uint32_t *num_samples);
 
 enum max32664c_mode
 {
@@ -119,10 +131,15 @@ struct max32664c_data
 
     uint8_t calib_vector[824];
 
-	// Chip info	
+	// Chip info
 	uint8_t hub_ver[4];
 	uint8_t max86141_id;
 	uint8_t accel_id;
+
+	/* Serialises hub access. A mode change is a chain of commands, each an
+	 * MFIO-low / write / wait / read / MFIO-high transaction; another thread's
+	 * command or FIFO read landing in the middle corrupts both. */
+	struct k_mutex lock;
 };
 
 // Async API types
