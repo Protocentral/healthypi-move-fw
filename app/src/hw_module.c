@@ -443,6 +443,19 @@ static void gpio_keys_cb_handler(struct input_event *evt, void *user_data)
     }
 }
 
+/* The MAX32664C can get into a state where it NAKs or refuses every command
+ * and neither retries nor an RSTN reset (20 ms or 1.25 s, with or without the
+ * LED boost off) brings it back; only a power cycle does. A cold reboot runs
+ * hw_sensor_rail_power_cycle() at boot, which does. Persist the health store
+ * first, as for any deliberate reboot. */
+void hpi_hw_sensor_hub_recover(void)
+{
+    LOG_ERR("MAX32664C unrecoverable - rebooting to power-cycle the sensor rail");
+    hpi_hs_shutdown_flush();
+    k_msleep(100);
+    sys_reboot(SYS_REBOOT_COLD);
+}
+
 void hpi_hw_pmic_off(void)
 {
     /* The single funnel for every deliberate power-off (settings shade, low

@@ -160,6 +160,12 @@ extern struct k_sem sem_ppg_wrist_sm_start;
  * wedged hub becomes visible (LOG_ERR) instead of failing silently. The backoff
  * runs only on failure, so the normal path timing is unchanged. */
 #define WR_HUB_CMD_RETRIES 3
+
+/* Consecutive failed hub operations (each already retried) before rebooting to
+ * power-cycle the sensor rail, and the minimum uptime before doing so, so a
+ * hub that fails straight after every boot cannot cause a tight reboot loop. */
+#define WR_HUB_RECOVER_STREAK       3
+#define WR_HUB_RECOVER_MIN_UPTIME_S 120
 static atomic_t wr_hub_err_streak = ATOMIC_INIT(0);
 
 static void wr_hub_note_result(int ret, const char *what, uint32_t a, uint32_t b)
@@ -172,6 +178,22 @@ static void wr_hub_note_result(int ret, const char *what, uint32_t a, uint32_t b
     long streak = atomic_add(&wr_hub_err_streak, 1) + 1;
     LOG_ERR("MAX32664C hub unresponsive: %s(%u,%u) failed after %d tries (err streak %ld)",
             what, a, b, WR_HUB_CMD_RETRIES + 1, streak);
+
+    if (streak < WR_HUB_RECOVER_STREAK)
+    {
+        return;
+    }
+    if (hpi_dfu_is_active())
+    {
+        LOG_WRN("MAX32664C recovery reboot deferred: DFU in progress");
+        return;
+    }
+    if (k_uptime_get() < (int64_t)WR_HUB_RECOVER_MIN_UPTIME_S * 1000)
+    {
+        LOG_WRN("MAX32664C recovery reboot deferred: uptime < %d s", WR_HUB_RECOVER_MIN_UPTIME_S);
+        return;
+    }
+    hpi_hw_sensor_hub_recover();
 }
 
 static int wr_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
