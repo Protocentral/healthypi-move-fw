@@ -170,10 +170,18 @@
 				regulator-initial-mode = <NPM13XX_BUCK_MODE_AUTO>;
 			};
 
-			// BUCK2 is 1.8V, used to power all sensors - except Finger Sensor
+			/* BUCK2 is 2.0V, used to power all sensors - except Finger Sensor.
+			 * Keep it at 2.0V. At 1.8V some sensor boards had the MAX32664C
+			 * lock up (I2C NAKs, LEDs frozen, not cleared by RSTN reset, only
+			 * by a power cycle), typically at SpO2 start or on movement; at
+			 * 2.0V the same boards and firmware work. The likely cause is
+			 * margin: the nRF drives RSTN/MFIO at 3.0V, so a lower sensor rail
+			 * means more over-voltage on the hub pins and less headroom for
+			 * supply dips. It has been raised back to 2.0V before (68f93fb,
+			 * 234ec45, 7e997e9, e4897b8). */
 			npm_pmic_buck2: BUCK2 {
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <1800000>;
+				regulator-min-microvolt = <2000000>;
+				regulator-max-microvolt = <2000000>;
 				regulator-initial-mode = <NPM13XX_BUCK_MODE_PWM>;
 				/* hw_module_init power-cycles this rail at boot to reset the
 				 * optical stack, which an nRF reboot alone does not. Pull it
