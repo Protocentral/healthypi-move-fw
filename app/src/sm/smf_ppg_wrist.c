@@ -97,10 +97,8 @@ K_EVENT_DEFINE(ppg_wr_events);
 #define EVT_MOTION_FIFO     BIT(3)
 #define EVT_PROBE_TIMEOUT   BIT(4)
 #define EVT_OFFSKIN_TIMEOUT BIT(5)
-#define EVT_IMU_MOTION      BIT(6)
 #define EVT_ALL (EVT_ON_SKIN | EVT_OFF_SKIN | EVT_MOTION_DETECTED | \
-                 EVT_MOTION_FIFO | EVT_PROBE_TIMEOUT | EVT_OFFSKIN_TIMEOUT | \
-                 EVT_IMU_MOTION)
+                 EVT_MOTION_FIFO | EVT_PROBE_TIMEOUT | EVT_OFFSKIN_TIMEOUT)
 
 /* Housekeeping wake period: run handlers return to feed the watchdog at least
  * this often even when no event fires. Must be < the registered WDT timeout. */
@@ -223,14 +221,6 @@ static int wr_stop_algo(void)
     return ret;
 }
 
-/* Called from the BMI323 any-motion trigger (system workqueue). Only the
- * OFF_SKIN and MOTION_DETECT states wait for this bit; every state entry
- * clears it, so a post in any other state is dropped. */
-void hpi_ppg_wrist_notify_motion(void)
-{
-    k_event_post(&ppg_wr_events, EVT_IMU_MOTION);
-}
-
 // Work handlers
 void work_off_skin_threshold_handler(struct k_work *work)
 {
@@ -344,24 +334,13 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     {
         if (atomic_get(&m_curr_state) == PPG_SAMP_STATE_OFF_SKIN || atomic_get(&m_curr_state) == PPG_SAMP_STATE_MOTION_DETECT)
         {
-#if IS_ENABLED(CONFIG_HPI_IMU_MOTION_WAKE)
-            /* Real motion wakes the watch through hpi_ppg_wrist_notify_motion()
-             * (BMI323 any-motion). Only act on the hub if it actually reported
-             * accel samples; waking on every poll bounced OFF_SKIN <->
-             * MOTION_DETECT and reprogrammed the hub every few seconds. */
-            if (edata->num_samples > 0)
-            {
-                k_event_post(&ppg_wr_events, EVT_MOTION_FIFO);
-                k_event_post(&ppg_wr_events, EVT_MOTION_DETECTED);
-            }
-#else
-            /* Without the BMI323 wake, keep waking on every poll: the hub's
-             * wake-on-motion never reports FIFO samples, so gating on them left
-             * the watch stuck in OFF_SKIN with the LEDs off. */
+            /* Not gated on num_samples: the hub's wake-on-motion never reports
+             * FIFO samples, so gating left the watch stuck in OFF_SKIN with the
+             * LEDs off. Before the driver reported the real count this field
+             * held a stale non-zero value, so every poll already woke it. */
             k_event_post(&ppg_wr_events, EVT_MOTION_FIFO);
             /* Also notify generic motion-detected event for compatibility */
             k_event_post(&ppg_wr_events, EVT_MOTION_DETECTED);
-#endif
         }
         return;
     }
@@ -769,19 +748,8 @@ static void st_ppg_samp_off_skin_entry(void *o)
 static enum smf_state_result st_ppg_samp_off_skin_run(void *o)
 {
     // Block for motion or the off-skin timeout (or wake to feed the watchdog).
-    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_DETECTED | EVT_OFFSKIN_TIMEOUT | EVT_IMU_MOTION,
-                               false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
+    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_DETECTED | EVT_OFFSKIN_TIMEOUT, false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
     hpi_watchdog_feed(wdt_ch_ppg_wr);
-
-    // IMU any-motion: go straight to ACTIVE (its entry exits wake-on-motion)
-    if (ev & EVT_IMU_MOTION)
-    {
-        k_event_clear(&ppg_wr_events, EVT_IMU_MOTION);
-        LOG_INF("IMU motion while off-skin - transitioning to ACTIVE state");
-        k_work_cancel_delayable(&work_offskin_timeout);
-        smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
-        return SMF_EVENT_HANDLED;
-    }
 
     // Check for motion detection
     if (ev & EVT_MOTION_DETECTED)
@@ -822,12 +790,12 @@ static enum smf_state_result st_ppg_samp_motion_detect_run(void *o)
 
     for (int checks = 0; checks < max_checks; checks++)
     {
-        uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_FIFO | EVT_IMU_MOTION, false, K_SECONDS(1));
+        uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_FIFO, false, K_SECONDS(1));
         hpi_watchdog_feed(wdt_ch_ppg_wr);
 
-        if (ev & (EVT_MOTION_FIFO | EVT_IMU_MOTION))
+        if (ev & EVT_MOTION_FIFO)
         {
-            k_event_clear(&ppg_wr_events, EVT_MOTION_FIFO | EVT_IMU_MOTION);
+            k_event_clear(&ppg_wr_events, EVT_MOTION_FIFO);
             // We have accel samples in the hub FIFO - now disable wake-on-motion and restart algorithms
             wr_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
             k_msleep(50); // TODO(P2 step 2): convert settle delay to a timed state
