@@ -87,7 +87,6 @@ uint8_t hpi_bpt_cal_points_done(void);
 uint8_t hpi_bpt_cal_vectors(void);
 
 void hpi_hw_pmic_off(void);
-void hpi_hw_sensor_hub_recover(void);
 
 void hpi_hw_fi_sensor_off(void);
 void hpi_hw_fi_sensor_on(void);
