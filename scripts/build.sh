@@ -12,8 +12,9 @@
 # - BOARD_ROOT is passed as an ABSOLUTE path. A relative "." resolves against the
 #   CMake build directory (app/build), so Zephyr would look for app/build/boards/...
 #   and report the board "not found". Using the repo root fixes board lookup.
-# - Selects the NCS toolchain matching the workspace SDK version (nrf/VERSION via
-#   toolchains.json) and activates its FULL environment from environment.json:
+# - Selects the NCS toolchain for the workspace SDK version (nrf/VERSION via
+#   toolchains.json; exact match, else the oldest newer one installed) and
+#   activates its FULL environment from environment.json:
 #   the toolchain's own Python (with pykwalify etc.), west, the Zephyr SDK
 #   compilers, nrfutil home and git. This is the same env the nRF Connect /
 #   nrfutil "toolchain-manager" applies.
@@ -44,22 +45,42 @@ PY
 )"
 
 # Resolve the toolchain bundle id for this SDK version (unless explicitly given).
+# Prefers an exact match; otherwise takes the oldest installed toolchain that is
+# newer than the SDK version (e.g. SDK v3.4.0 builds with the v3.4.1 toolchain).
+# Only bundles actually present on disk are considered.
 TC_ID="${NCS_TOOLCHAIN_ID:-}"
 if [ -z "${TC_ID}" ]; then
-    TC_ID="$(python3 - "${NCS_BASE}/toolchains/toolchains.json" "${NCS_VERSION}" <<'PY'
-import json, sys
-path, want = sys.argv[1], sys.argv[2]
-with open(path) as f:
+    TC_ID="$(python3 - "${NCS_BASE}/toolchains" "${NCS_VERSION}" <<'PY'
+import json, os, re, sys
+tc_dir, want = sys.argv[1], sys.argv[2]
+
+def parse(v):
+    m = re.match(r'v?(\d+)\.(\d+)\.(\d+)', v)
+    return tuple(int(x) for x in m.groups()) if m else None
+
+want_v = parse(want)
+with open(os.path.join(tc_dir, "toolchains.json")) as f:
     data = json.load(f)
+candidates = []
 for group in data:
     for tc in group.get("toolchains", []):
-        if want in tc.get("ncs_versions", []):
-            print(tc["identifier"]["bundle_id"])
-            sys.exit(0)
+        bundle = tc["identifier"]["bundle_id"]
+        if not os.path.isfile(os.path.join(tc_dir, bundle, "environment.json")):
+            continue
+        for v in tc.get("ncs_versions", []):
+            if v == want:
+                print(bundle)
+                sys.exit(0)
+            pv = parse(v)
+            if pv and want_v and pv >= want_v:
+                candidates.append((pv, bundle))
+if candidates:
+    print(min(candidates)[1])
+    sys.exit(0)
 sys.exit(1)
 PY
 )" || {
-        echo "build.sh: no installed NCS toolchain for ${NCS_VERSION}." >&2
+        echo "build.sh: no installed NCS toolchain for ${NCS_VERSION} or newer." >&2
         echo "  Install it (nRF Connect 'Install Toolchain' or nrfutil), or set NCS_TOOLCHAIN_ID." >&2
         exit 1
     }
