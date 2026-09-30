@@ -29,6 +29,7 @@
 
 
 #include <zephyr/kernel.h>
+#include <zephyr/init.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <stdio.h>
@@ -40,6 +41,8 @@
 #include <zephyr/mgmt/mcumgr/grp/os_mgmt/os_mgmt_callbacks.h>
 #include <zephyr/mgmt/mcumgr/grp/img_mgmt/img_mgmt.h>
 #include <zephyr/mgmt/mcumgr/grp/img_mgmt/img_mgmt_callbacks.h>
+#include <zephyr/mgmt/mcumgr/grp/fs_mgmt/fs_mgmt_callbacks.h>
+#include <string.h>
 #include <zephyr/sys/timeutil.h>
 #include <zephyr/drivers/rtc.h>
 
@@ -50,6 +53,7 @@
 #include "hpi_dfu.h"      /* DFU system-mode state + progress */
 #include "hpi_storage_migrate.h" /* one-shot pre-3.0 storage purge */
 #include "ui/move_ui.h"  /* hpi_disp_restore_brightness() */
+#include "max32664_updater.h" /* MSBL file paths */
 
 /* Refuse to start an OTA below this SoC% unless on charger — overwrite-only DFU
  * has no revert, so a brown-out during the post-reboot MCUboot swap can brick. */
@@ -151,6 +155,59 @@ enum mgmt_cb_return img_callback_func(uint32_t event, enum mgmt_cb_return prev_s
     /* Return OK status code to continue with acceptance to underlying handler */
     return MGMT_CB_OK;
 }
+
+#if defined(CONFIG_MCUMGR_GRP_FS_FILE_ACCESS_HOOK)
+static struct mgmt_callback fs_access_callback;
+
+/* The MCUmgr FS group is enabled only so the MAX32664C/D MSBL images can be
+ * uploaded. Allow writes (plus status/hash, to verify an upload) to exactly
+ * those two paths; refuse every read and every other path. Exact string match,
+ * so "..", trailing slashes etc. can't reach anything else. */
+static enum mgmt_cb_return fs_access_callback_func(uint32_t event, enum mgmt_cb_return prev_status,
+                                                   int32_t *rc, uint16_t *group, bool *abort_more,
+                                                   void *data, size_t data_size)
+{
+    ARG_UNUSED(prev_status);
+    ARG_UNUSED(group);
+    ARG_UNUSED(abort_more);
+
+    if (event != MGMT_EVT_OP_FS_MGMT_FILE_ACCESS) {
+        return MGMT_CB_OK;
+    }
+
+    const struct fs_mgmt_file_access *fa = data;
+
+    if (fa == NULL || data_size < sizeof(*fa) || fa->filename == NULL) {
+        *rc = MGMT_ERR_EINVAL;
+        return MGMT_CB_ERROR_RC;
+    }
+
+    bool msbl_path = (strcmp(fa->filename, MAX32664C_FW_PATH) == 0) ||
+                     (strcmp(fa->filename, MAX32664D_FW_PATH) == 0);
+
+    if (msbl_path && fa->access != FS_MGMT_FILE_ACCESS_READ) {
+        if (fa->access == FS_MGMT_FILE_ACCESS_WRITE) {
+            LOG_INF("MCUmgr MSBL upload: %s", fa->filename);
+        }
+        return MGMT_CB_OK;
+    }
+
+    LOG_WRN("MCUmgr file access denied (type %d): %s", fa->access, fa->filename);
+    *rc = MGMT_ERR_EACCESSDENIED;
+    return MGMT_CB_ERROR_RC;
+}
+
+/* Registered at SYS_INIT, not from hpi_sys_thread: with no callback registered
+ * the FS group allows everything, so the filter must be in place before BLE is up. */
+static int fs_access_hook_init(void)
+{
+    fs_access_callback.callback = fs_access_callback_func;
+    fs_access_callback.event_id = MGMT_EVT_OP_FS_MGMT_FILE_ACCESS;
+    mgmt_callback_register(&fs_access_callback);
+    return 0;
+}
+SYS_INIT(fs_access_hook_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+#endif
 
 #if defined(CONFIG_MCUMGR_GRP_OS_DATETIME_HOOK)
 struct mgmt_callback datetime_callback;

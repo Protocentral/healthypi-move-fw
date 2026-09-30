@@ -47,10 +47,6 @@ LOG_MODULE_REGISTER(max32664_updater, LOG_LEVEL_DBG);
 #define MAX32664C_FW_BIN_INCLUDE 0
 #define MAX32664C_WR_SIM_ONLY 0
 
-// File paths for firmware binaries
-#define MAX32664C_FW_PATH "/lfs/sys/max32664c_30_13_31.msbl"
-#define MAX32664D_FW_PATH "/lfs/sys/max32664d_40_6_0.msbl"
-
 // Small shared buffer for temporary operations
 // SAFETY: This buffer is only used in single-threaded context during firmware updates
 #define SHARED_BUFFER_SIZE 1026

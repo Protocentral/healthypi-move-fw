@@ -28,6 +28,11 @@
  */
 
 
+/* MSBL firmware images on the LittleFS partition. Uploaded over BLE with the
+ * MCUmgr file group; hpi_sys_module.c only lets uploads write to these two paths. */
+#define MAX32664C_FW_PATH "/lfs/sys/max32664c_30_13_31.msbl"
+#define MAX32664D_FW_PATH "/lfs/sys/max32664d_40_6_0.msbl"
+
 enum max32664_updater_device_type
 {
     MAX32664_UPDATER_DEV_TYPE_MAX32664C,

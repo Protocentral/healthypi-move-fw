@@ -94,9 +94,7 @@ LOG_MODULE_REGISTER(hw_module, LOG_LEVEL_DBG);
 // #define FORCE_MAX32664C_UPDATE_FOR_TESTING
 // #define FORCE_MAX32664D_UPDATE_FOR_TESTING
 
-// MSBL firmware file paths - must match max32664_updater.c
-#define MAX32664C_FW_PATH "/lfs/sys/max32664c_30_13_31.msbl"
-#define MAX32664D_FW_PATH "/lfs/sys/max32664d_40_6_0.msbl"
+// MSBL firmware file paths: MAX32664C_FW_PATH / MAX32664D_FW_PATH in max32664_updater.h
 
 char curr_string[40];
 
