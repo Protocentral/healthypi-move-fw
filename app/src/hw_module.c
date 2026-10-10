@@ -922,9 +922,7 @@ void hw_module_init(void)
     float boot_batt_voltage = 0.0f;
 
     // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
-    /* DEBUG (QFN MAX32664C bring-up): TWIM2 left at its devicetree rate
-     * (100 kHz); this write would force it back to 390 kHz. */
-    // NRF_TWIM2->FREQUENCY = 0x06200000;
+    NRF_TWIM2->FREQUENCY = 0x06200000;
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
     // Debug: Scan I2C2 bus for available devices before initialization
