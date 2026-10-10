@@ -37,6 +37,10 @@ LOG_MODULE_REGISTER(MAX32664C_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 #define MAX32664C_SENSOR_DATA_OFFSET 1
 
+/* SpO2 progress byte: bit 7 is a flag the hub sets on the first sample of each
+ * new progress step; the low 7 bits are the percentage (0-100). */
+#define MAX32664C_SPO2_PROGRESS_MASK 0x7F
+
 /* shared FIFO read buffer for async operations */
 static uint8_t max32664c_fifo_buf[2048];
 
@@ -293,7 +297,8 @@ static int max32664c_async_sample_fetch_raw(const struct device *dev, uint32_t g
 static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green_samples[16], uint32_t ir_samples[16], uint32_t red_samples[16],
                                         uint32_t *num_samples, uint16_t *spo2, uint8_t *spo2_conf, uint8_t *spo2_valid_percent_complete, uint8_t *spo2_low_quality,
                                         uint8_t *spo2_excessive_motion, uint8_t *spo2_low_pi, uint8_t *spo2_state, uint16_t *hr, uint8_t *hr_conf, uint16_t *rtor,
-                                        uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode)
+                                        uint8_t *rtor_conf, uint8_t *scd_state, uint8_t *activity_class, uint32_t *steps_run, uint32_t *steps_walk, uint8_t *chip_op_mode,
+                                        uint8_t *invalid_samples)
 {
     struct max32664c_data *data = dev->data;
     const struct max32664c_config *config = dev->config;
@@ -347,23 +352,59 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
              * assemble the 24-bit words and right-shift by 4 bits so upper layers
              * receive 20-bit right-aligned integers matching the datasheet.
              */
+            int n = 0;
+            bool invalid_logged = false;
+
+            *num_samples = 0;
+            *invalid_samples = 0;
+
             for (int i = 0; i < fifo_count; i++)
             {
+                /* Drop a sample whose algorithm block is all 0xFF: the hub
+                 * answered the FIFO read with a good status byte and then
+                 * stopped driving the bus. It decodes as SpO2 153 % with
+                 * confidence and progress 255, which used to end a spot check
+                 * with that bogus result. Counted in invalid_samples, which ends
+                 * a running SpO2 spot check as a timeout. */
+                const uint8_t *algo = &max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET +
+                                                          MAX32664C_SENSOR_DATA_OFFSET];
+                bool all_ff = true;
+
+                for (int b = 0; b < sample_len - MAX32664C_ALGO_DATA_OFFSET; b++)
+                {
+                    if (algo[b] != 0xFF)
+                    {
+                        all_ff = false;
+                        break;
+                    }
+                }
+
+                if (all_ff)
+                {
+                    (*invalid_samples)++;
+                    if (!invalid_logged)
+                    {
+                        LOG_WRN("Algo sample %d of %d is all 0xFF - dropped", i, fifo_count);
+                        invalid_logged = true;
+                    }
+                    continue;
+                }
+
                 uint32_t led_green = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 0 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_green |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_green |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 2 + MAX32664C_SENSOR_DATA_OFFSET];
                 /* normalize to datasheet 20-bit resolution */
-                green_samples[i] = (led_green >> 4);
+                green_samples[n] = (led_green >> 4);
 
                 uint32_t led_ir = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 3 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_ir |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 4 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_ir |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 5 + MAX32664C_SENSOR_DATA_OFFSET];
-                ir_samples[i] = (led_ir >> 4);
+                ir_samples[n] = (led_ir >> 4);
 
                 uint32_t led_red = (uint32_t)max32664c_fifo_buf[(sample_len * i) + 6 + MAX32664C_SENSOR_DATA_OFFSET] << 16;
                 led_red |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 7 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 led_red |= (uint32_t)max32664c_fifo_buf[(sample_len * i) + 8 + MAX32664C_SENSOR_DATA_OFFSET];
-                red_samples[i] = (led_red >> 4);
+                red_samples[n] = (led_red >> 4);
 
                 uint16_t hr_val = (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 1 + MAX32664C_SENSOR_DATA_OFFSET] << 8;
                 hr_val |= (uint16_t)max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 2 + MAX32664C_SENSOR_DATA_OFFSET];
@@ -386,13 +427,20 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 *spo2 = (spo2_val / 10);
 
-                *spo2_valid_percent_complete = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 13 + MAX32664C_SENSOR_DATA_OFFSET];
+                /* Bit 7 is a hub flag set on the first sample of each new
+                 * progress step (0x99/0xB2/0xCB/0xE4 = 25/50/75/100 %); the
+                 * percentage is the low 7 bits. */
+                *spo2_valid_percent_complete = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 13 + MAX32664C_SENSOR_DATA_OFFSET] &
+                                               MAX32664C_SPO2_PROGRESS_MASK;
                 *spo2_low_quality = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 14 + MAX32664C_SENSOR_DATA_OFFSET];
                 *spo2_excessive_motion = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 15 + MAX32664C_SENSOR_DATA_OFFSET];
                 *spo2_low_pi = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 16 + MAX32664C_SENSOR_DATA_OFFSET];
                 *spo2_state = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 18 + MAX32664C_SENSOR_DATA_OFFSET];
 
                 *scd_state = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 19 + MAX32664C_SENSOR_DATA_OFFSET];
+
+                n++;
+                *num_samples = n;
 
                 /*
                 else if (data->op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
@@ -468,7 +516,8 @@ void max32664c_submit(const struct device *dev, struct rtio_iodev_sqe *iodev_sqe
                                           &m_edata->num_samples, &m_edata->spo2, &m_edata->spo2_confidence, &m_edata->spo2_valid_percent_complete,
                                           &m_edata->spo2_low_quality, &m_edata->spo2_excessive_motion, &m_edata->spo2_low_pi, &m_edata->spo2_state,
                                           &m_edata->hr, &m_edata->hr_confidence, &m_edata->rtor, &m_edata->rtor_confidence, &m_edata->scd_state,
-                                          &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode);
+                                          &m_edata->activity_class, &m_edata->steps_run, &m_edata->steps_walk, &m_edata->chip_op_mode,
+                                          &m_edata->invalid_samples);
     }
     else if (data->op_mode == MAX32664C_OP_MODE_RAW)
     {

@@ -259,6 +259,11 @@ enum spo2_meas_state
     SPO2_MEAS_UNK,
 };
 
+/* Range a displayed or stored SpO2 reading must fall in. Anything outside it
+ * is a corrupt or unusable result, reported as a timeout ("try again"). */
+#define HPI_SPO2_MIN_PLAUSIBLE 70
+#define HPI_SPO2_MAX_PLAUSIBLE 100
+
 enum spo2_source
 {
     SPO2_SOURCE_PPG_WR = 0x00,

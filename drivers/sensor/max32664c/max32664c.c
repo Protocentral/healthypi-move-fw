@@ -37,6 +37,7 @@
 #include <nrfx.h>
 #include <errno.h>
 #include <string.h>
+#include <stdio.h>
 
 #ifdef CONFIG_SENSOR_ASYNC_API
 #include <zephyr/rtio/rtio.h>
@@ -213,7 +214,7 @@ static int m_read_op_mode(const struct device *dev)
     /* First exchange after reset: tells a hub that is not answering (I2C
      * error) apart from one that answers but reads back wrong. 0x00 is
      * application mode, 0x08 bootloader. */
-    LOG_INF("Op mode read: wr rc %d, rd rc %d, bytes %02x %02x", wr_rc, rd_rc, rd_buf[0], rd_buf[1]);
+    LOG_DBG("Op mode read: wr rc %d, rd rc %d, bytes %02x %02x", wr_rc, rd_rc, rd_buf[0], rd_buf[1]);
 
     return rd_buf[1];
 }
@@ -572,7 +573,7 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     /* An I2C error means the hub did not acknowledge (power, reset or
      * brown-out). Success with all-zero bytes means it acknowledged but the
      * data read back as zeros, which points at signal levels. */
-    LOG_INF("Version read: wr rc %d, rd rc %d, bytes %02x %02x %02x %02x",
+    LOG_DBG("Version read: wr rc %d, rd rc %d, bytes %02x %02x %02x %02x",
             wr_rc, rd_rc, ver_buf[0], ver_buf[1], ver_buf[2], ver_buf[3]);
 
     if (wr_rc != 0)
@@ -762,20 +763,50 @@ static int max32664c_channel_get(const struct device *dev,
     return 0;
 }
 
+/* DEBUG (QFN MAX32664C bring-up): cap every LED at 62 mA full-scale.
+ *
+ * On the QFN board the hub resets once an LED pulse goes much above ~62 mA
+ * (LED ramp test: fine at PA 0x80 on the 124 mA range, crash at 0xFF). The
+ * hub configures the AFE itself when a mode starts, so the cap is written
+ * after the mode is up and read back to show whether the hub kept it.
+ *
+ * MAX86141 LED_RGE (0x2A): two bits per LED, 00 = 31, 01 = 62, 10 = 93,
+ * 11 = 124 mA. 0x15 = 62 mA on LED1-3. */
+#define MAX32664C_LED_RANGE_CAP 0x15
+
+static int max32664c_cap_led_range(const struct device *dev)
+{
+    uint8_t wr_buf[3] = {0x41, 0x00, 0x2A};
+    uint8_t rsp[2];
+
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x2A, MAX32664C_LED_RANGE_CAP, 50));
+    HUB_TRY(m_hub_cmd(dev, wr_buf, sizeof(wr_buf), rsp, sizeof(rsp), MAX32664C_DEFAULT_CMD_DELAY,
+                      0, MAX32664C_DEFAULT_CMD_DELAY));
+    LOG_DBG("LED range capped: wrote 0x%02x, reads back 0x%02x", MAX32664C_LED_RANGE_CAP, rsp[1]);
+    return 0;
+}
+
 static int max32664c_set_op_mode(const struct device *dev, const struct sensor_value *val)
 {
+    int ret;
+
     switch (val->val1)
     {
     case MAX32664C_OP_MODE_ALGO_AEC:
-        return max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+        ret = max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AEC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+        break;
     case MAX32664C_OP_MODE_ALGO_AGC:
-        return max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+        ret = max32664c_set_mode_algo(dev, MAX32664C_OP_MODE_ALGO_AGC, val->val2); // MAX32664C_ALGO_OP_MODE_CONT_HR_CONT_SPO2);
+        break;
     case MAX32664C_OP_MODE_ALGO_EXTENDED:
-        return max32664c_set_mode_extended_algo(dev);
+        ret = max32664c_set_mode_extended_algo(dev);
+        break;
     case MAX32664C_OP_MODE_RAW:
-        return max32664c_set_mode_raw(dev);
+        ret = max32664c_set_mode_raw(dev);
+        break;
     case MAX32664C_OP_MODE_SCD:
-        return max32664c_set_mode_scd(dev);
+        ret = max32664c_set_mode_scd(dev);
+        break;
     case MAX32664C_OP_MODE_WAKE_ON_MOTION:
         return max32664c_set_mode_wake_on_motion(dev);
     case MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION:
@@ -786,6 +817,13 @@ static int max32664c_set_op_mode(const struct device *dev, const struct sensor_v
         LOG_ERR("Unsupported sensor operation mode");
         return -ENOTSUP;
     }
+
+    /* Every mode above drives the LEDs. */
+    if (ret == 0)
+    {
+        ret = max32664c_cap_led_range(dev);
+    }
+    return ret;
 }
 
 static int max32664c_attr_set(const struct device *dev,
@@ -1022,6 +1060,183 @@ int max32664c_test_motion_detection(const struct device *dev)
     k_mutex_unlock(&data->lock);
     LOG_INF("Motion detection test complete");
     
+    return 0;
+}
+
+/* DEBUG (QFN MAX32664C bring-up): LED-current ramp.
+ *
+ * The QFN hub resets once LED pulses get large enough (first ramp: fine at PA
+ * 0x80 on the 124 mA range, crash at 0xFF). This finds the threshold: it runs
+ * the AFE in raw mode with the accelerometer on and the LED range forced to
+ * 124 mA, then steps the LED current through finer levels, polling the hub's
+ * status and the AFE's ID through it at each step. It stops at the first step
+ * with a failure and resets the hub so normal operation can start.
+ *
+ * The transfers here are bare (no retries, no logging) so each failure is
+ * counted once instead of flooding the log. */
+
+#define LED_RAMP_STEP_MS 20000
+#define LED_RAMP_POLL_MS 200
+
+static int led_ramp_xfer(const struct device *dev, const uint8_t *wr, size_t wr_len,
+                         uint8_t *rd, size_t rd_len, uint16_t delay_ms)
+{
+    const struct max32664c_config *config = dev->config;
+    int rc;
+
+    memset(rd, 0, rd_len);
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(300));
+    rc = max32664c_i2c_write(&config->i2c, wr, wr_len);
+    if (rc == 0)
+    {
+        k_msleep(delay_ms);
+        rc = max32664c_i2c_read(&config->i2c, rd, rd_len);
+    }
+    k_sleep(K_USEC(300));
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    return rc;
+}
+
+static void led_ramp_read_reg(const struct device *dev, uint8_t reg, const char *name)
+{
+    uint8_t wr[3] = {0x41, 0x00, reg};
+    uint8_t rd[2];
+    int rc = led_ramp_xfer(dev, wr, sizeof(wr), rd, sizeof(rd), MAX32664C_DEFAULT_CMD_DELAY);
+
+    LOG_INF("  MAX86141 reg 0x%02x (%s): rc %d, status %02x, value %02x", reg, name, rc, rd[0], rd[1]);
+}
+
+/* Returns true if every poll in the step succeeded. */
+static bool led_ramp_poll(const struct device *dev, const char *label)
+{
+    uint8_t wr_status[2] = {0x00, 0x00};
+    uint8_t wr_whoami[3] = {0x41, 0x00, 0xFF};
+    uint8_t rd[2];
+    int polls = 0, ok = 0, rejected = 0, nak = 0, bad_id = 0;
+    bool fail_logged = false;
+    int64_t start = k_uptime_get();
+    int64_t end = start + LED_RAMP_STEP_MS;
+
+    while (k_uptime_get() < end)
+    {
+        const char *what = "status";
+        int rc;
+
+        polls++;
+        rc = led_ramp_xfer(dev, wr_status, sizeof(wr_status), rd, sizeof(rd),
+                           MAX32664C_READ_CMD_DELAY_MS);
+        if (rc == 0 && rd[0] == MAX32664C_STATUS_SUCCESS)
+        {
+            what = "AFE id";
+            rc = led_ramp_xfer(dev, wr_whoami, sizeof(wr_whoami), rd, sizeof(rd),
+                               MAX32664C_DEFAULT_CMD_DELAY);
+        }
+
+        if (rc != 0)
+        {
+            nak++;
+        }
+        else if (rd[0] != MAX32664C_STATUS_SUCCESS)
+        {
+            rejected++;
+        }
+        else if (what[0] == 'A' && rd[1] != MAX32664C_AFE_ID)
+        {
+            bad_id++;
+        }
+        else
+        {
+            ok++;
+            what = NULL;
+        }
+
+        if (what != NULL && !fail_logged)
+        {
+            LOG_WRN("  first failure %lld ms into step: %s read rc %d, bytes %02x %02x",
+                    k_uptime_get() - start, what, rc, rd[0], rd[1]);
+            fail_logged = true;
+        }
+
+        k_msleep(LED_RAMP_POLL_MS);
+    }
+
+    LOG_INF("%s: %d polls - ok %d, rejected %d, NAK %d, bad AFE id %d", label, polls, ok,
+            rejected, nak, bad_id);
+
+    return ok == polls;
+}
+
+static void led_ramp_set_leds(const struct device *dev, uint8_t pa)
+{
+    int rc = 0;
+
+    rc |= m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x23, pa, 50);
+    rc |= m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x24, pa, 50);
+    rc |= m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x25, pa, 50);
+    if (rc != 0)
+    {
+        LOG_WRN("  setting LED PA to 0x%02x failed", pa);
+    }
+}
+
+int max32664c_test_led_ramp(const struct device *dev)
+{
+    struct max32664c_data *data = dev->data;
+    /* On the 124 mA range: ~47, 54, 62, 70, 78, 86, 93 mA. */
+    static const uint8_t levels[] = {0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0, 0xC0};
+    char label[48];
+    bool passed = true;
+
+    k_mutex_lock(&data->lock, K_FOREVER);
+
+    LOG_INF("=== MAX32664C LED ramp test (%d ms per step) ===", LED_RAMP_STEP_MS);
+
+    (void)max32664c_stop_algo(dev);
+
+    /* Raw sensor output, accelerometer on, AFE on at 100 sps, LEDs off. */
+    (void)m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY);
+    (void)m_i2c_write_cmd_3(dev, 0x10, 0x01, MAX32664C_INT_THRESHOLD, MAX32664C_DEFAULT_CMD_DELAY);
+    (void)m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 200);
+    (void)m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x01, 0x00, 500);
+    (void)m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x12, 0x18, 50);
+    led_ramp_set_leds(dev, 0x00);
+
+    /* 124 mA full scale on all LEDs, whatever the cap or the hub left there. */
+    (void)m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x2A, 0x3F, 50);
+    led_ramp_read_reg(dev, 0x2A, "LED range");
+
+    for (size_t i = 0; i < ARRAY_SIZE(levels) && passed; i++)
+    {
+        led_ramp_set_leds(dev, levels[i]);
+        led_ramp_read_reg(dev, 0x23, "LED1 PA");
+        snprintf(label, sizeof(label), "LEDs 0x%02x (~%d mA)", levels[i],
+                 (levels[i] * 124 + 127) / 255);
+        passed = led_ramp_poll(dev, label);
+        if (!passed)
+        {
+            LOG_WRN("Ramp stopped: first failing level 0x%02x (~%d mA)", levels[i],
+                    (levels[i] * 124 + 127) / 255);
+        }
+    }
+
+    if (passed)
+    {
+        LOG_INF("Ramp passed every level up to 0x%02x", levels[ARRAY_SIZE(levels) - 1]);
+    }
+
+    led_ramp_set_leds(dev, 0x00);
+    (void)max32664c_stop_algo(dev);
+
+    /* Reset the hub (it may have crashed) so the PPG SMF starts from a clean
+     * application-mode hub. */
+    max32664c_do_enter_app(dev);
+    data->op_mode = MAX32664C_OP_MODE_IDLE;
+
+    LOG_INF("=== End MAX32664C LED ramp test ===");
+
+    k_mutex_unlock(&data->lock);
     return 0;
 }
 

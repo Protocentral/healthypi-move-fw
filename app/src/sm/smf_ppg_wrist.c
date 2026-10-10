@@ -346,6 +346,31 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
     }
     else if (edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AGC || edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED)
     {
+        /* The driver dropped all-0xFF samples: the hub stopped answering
+         * properly mid-read. A spot check running through that does
+         * not recover (the LEDs sit stuck until it is torn down), so end it now
+         * as a timeout - the user gets "try again" instead of a wait that ends
+         * in a bogus number. The measure screen routes off the TIMEOUT state of
+         * the sample queued here, and EVT_SPO2_STOP returns the hub to HRM. */
+        if (edata->invalid_samples > 0 && atomic_get(&spo2_measurement_in_progress))
+        {
+            struct hpi_ppg_wr_data_t timeout_sample = {0};
+
+            LOG_WRN("SpO2 spot check aborted: hub returned %u invalid sample(s) - reporting timeout",
+                    edata->invalid_samples);
+            atomic_set(&spo2_measurement_in_progress, 0);
+            set_measured_spo2(0, SPO2_MEAS_TIMEOUT);
+            k_event_post(&spo2_evt, EVT_SPO2_STOP);
+
+            timeout_sample.spo2_state = SPO2_MEAS_TIMEOUT;
+            timeout_sample.scd_state = m_curr_scd_state;
+            if (k_msgq_put(&q_ppg_wrist_sample, &timeout_sample, K_MSEC(10)) != 0)
+            {
+                LOG_WRN("Could not queue SpO2 timeout for the display");
+            }
+            return;
+        }
+
         if (_n_samples > 8)
         {
             _n_samples = 8;
@@ -417,7 +442,9 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             if ((ppg_sensor_sample.spo2_valid_percent_complete == 100) && atomic_get(&spo2_measurement_in_progress))
             {
                 k_event_post(&spo2_evt, EVT_SPO2_STOP);
-                if (ppg_sensor_sample.spo2_confidence > 50)
+                if (ppg_sensor_sample.spo2_confidence > 50 && ppg_sensor_sample.spo2_confidence <= 100 &&
+                    ppg_sensor_sample.spo2 >= HPI_SPO2_MIN_PLAUSIBLE &&
+                    ppg_sensor_sample.spo2 <= HPI_SPO2_MAX_PLAUSIBLE)
                 {
                     struct hpi_spo2_point_t spo2_chan_value = {
                         .timestamp = hw_get_sys_time_ts(),
@@ -432,11 +459,15 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
                 }
                 else
                 {
-                   LOG_DBG("SpO2 invalid: conf=%d, motion=%d, low_pi=%d, scd=%d",
+                   LOG_DBG("SpO2 invalid: spo2=%d, conf=%d, motion=%d, low_pi=%d, scd=%d",
+                   ppg_sensor_sample.spo2,
                    ppg_sensor_sample.spo2_confidence,
                    ppg_sensor_sample.spo2_excessive_motion,
                    ppg_sensor_sample.spo2_low_pi,
                    ppg_sensor_sample.scd_state);
+                   /* A finished but unusable spot check is a timeout, so the
+                    * stop handler does not report a stale earlier status. */
+                   set_measured_spo2(0, SPO2_MEAS_TIMEOUT);
                 }
                 atomic_set(&spo2_measurement_in_progress, 0);
             }

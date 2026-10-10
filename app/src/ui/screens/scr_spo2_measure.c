@@ -256,6 +256,17 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
     }
     last_update_ms = k_uptime_get_32();   /* feed the stall watchdog */
 
+    /* An impossible sample (progress or confidence above 100 %, SpO2 above
+     * 100 %) is corrupt hub data, not a result. Clamping its progress to 100
+     * used to end the spot check on it and show e.g. "153 %". Ignore it: the
+     * driver drops such samples and the wrist SMF then ends the measurement as
+     * a timeout, which reaches this screen as a TIMEOUT state. */
+    if (progress > 100 || conf > 100 || spo2 > HPI_SPO2_MAX_PLAUSIBLE) {
+        LOG_WRN("Ignoring impossible SpO2 sample: progress %d, spo2 %d, conf %d",
+                progress, spo2, conf);
+        return;
+    }
+
     if (progress < 0) {
         progress = 0;
     } else if (progress > 100) {
@@ -304,7 +315,8 @@ void hpi_disp_spo2_update_progress(int progress, enum spo2_meas_state state, int
          * firmware threw away — the user would read "96%", tap DONE, and find
          * the tile still saying NOT MEASURED YET. A finished-but-unusable spot
          * check is a timeout: "keep still and try again". */
-        bool usable = (spo2 > 0) && (conf > SPO2_MIN_CONFIDENCE);
+        bool usable = (spo2 >= HPI_SPO2_MIN_PLAUSIBLE) && (spo2 <= HPI_SPO2_MAX_PLAUSIBLE) &&
+                      (conf > SPO2_MIN_CONFIDENCE);
         routed_away = true;
         hpi_load_scr_spl(SCR_SPL_SPO2_RESULT, SCROLL_UP, (uint8_t)SCR_SPO2,
                          usable ? HPI_SPO2_RESULT_SUCCESS : HPI_SPO2_RESULT_TIMEOUT,

@@ -68,6 +68,9 @@ struct max32664_config
 	struct gpio_dt_spec mfio_gpio;
 };
 
+/* Whole-update attempts before giving up and reporting failure. */
+#define MAX32664_UPDATE_ATTEMPTS 3
+
 static int m_read_bl_ver(const struct device *dev)
 {
 	const struct max32664_config *config = dev->config;
@@ -208,6 +211,27 @@ static int m_fw_write_page_single(const struct device *dev, uint8_t *msbl_data, 
 }
 */
 
+/* After a failed transfer, tell a hub that still answers (it reset or refused
+ * the data; mode 08 = bootloader) apart from one that has stopped answering. */
+static void m_log_hub_state(const struct device *dev)
+{
+	const struct max32664_config *config = dev->config;
+	uint8_t rd_buf[2] = {0x00, 0x00};
+	uint8_t wr_buf[2] = {0x02, 0x00};
+	int wr_rc;
+	int rd_rc;
+
+	gpio_pin_set_dt(&config->mfio_gpio, 0);
+	k_sleep(K_USEC(300));
+	wr_rc = i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
+	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
+	rd_rc = i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
+	gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+	LOG_WRN("Hub state after failure: wr rc %d, rd rc %d, bytes %02x %02x",
+		wr_rc, rd_rc, rd_buf[0], rd_buf[1]);
+}
+
 static int m_fw_write_page(const struct device *dev, struct fs_file_t *file, uint32_t msbl_page_offset)
 {
 	const struct max32664_config *config = dev->config;
@@ -253,6 +277,7 @@ static int m_fw_write_page(const struct device *dev, struct fs_file_t *file, uin
 		LOG_ERR("Failed to write page data, error: %d", ret);
 		gpio_pin_set_dt(&config->mfio_gpio, 1);
 		k_free(page_buffer);
+		m_log_hub_state(dev);
 		return ret;
 	}
 
@@ -591,7 +616,6 @@ static int max32664_load_fw(const struct device *dev, const char *fw_file_path, 
 			{
 				LOG_ERR("Failed to write firmware page %d, error: %d", i, ret);
 				fs_close(&file);
-				update_progress(_progress_counter, MAX32664_UPDATER_STATUS_FAILED);
 				return ret;
 			}
 
@@ -608,7 +632,6 @@ static int max32664_load_fw(const struct device *dev, const char *fw_file_path, 
 		int app_ret = max32664_do_enter_app(dev);
 		if (app_ret < 0) {
 			LOG_ERR("Failed to enter application mode, error: %d", app_ret);
-			update_progress(95, MAX32664_UPDATER_STATUS_FAILED);
 			return app_ret;
 		}
 		
@@ -674,38 +697,19 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 	LOG_INF("FW files verified (%d found)", fw_check);
 	update_progress(5, MAX32664_UPDATER_STATUS_IN_PROGRESS);
 
-	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
-
-	gpio_pin_set_dt(&config->mfio_gpio, 0);
-	k_sleep(K_MSEC(10));
-
-	gpio_pin_set_dt(&config->reset_gpio, 0);
-	k_sleep(K_MSEC(10));
-
-	gpio_pin_set_dt(&config->reset_gpio, 1);
-	k_sleep(K_MSEC(1000));
-
-	m_wr_cmd_enter_bl(dev);
-	m_read_op_mode(dev);
-	m_read_bl_ver(dev);
-
-	update_progress(10, MAX32664_UPDATER_STATUS_IN_PROGRESS);
-
-	uint16_t bl_page_size;
-	m_read_bl_page_size(dev, &bl_page_size);
-
 	int load_ret = -EINVAL;
 	const char *device_name = "Unknown";
-	
+	const char *fw_path = NULL;
+
 	if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664C)
 	{
 		device_name = "MAX32664C";
-		load_ret = max32664_load_fw(dev, MAX32664C_FW_PATH, false);
+		fw_path = MAX32664C_FW_PATH;
 	}
 	else if (type == MAX32664_UPDATER_DEV_TYPE_MAX32664D)
 	{
 		device_name = "MAX32664D";
-		load_ret = max32664_load_fw(dev, MAX32664D_FW_PATH, false);
+		fw_path = MAX32664D_FW_PATH;
 	}
 	else
 	{
@@ -713,7 +717,46 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 		update_progress(0, MAX32664_UPDATER_STATUS_FAILED);
 		return;
 	}
-	
+
+	/* A failed transfer leaves the hub's application erased and its
+	 * bootloader part-way through the image, so a retry starts the whole
+	 * sequence again: reset into the bootloader, erase, then every page. */
+	for (int attempt = 1; attempt <= MAX32664_UPDATE_ATTEMPTS; attempt++)
+	{
+		if (attempt > 1)
+		{
+			LOG_WRN("%s update failed (%d), retrying [attempt %d/%d]", device_name,
+				load_ret, attempt, MAX32664_UPDATE_ATTEMPTS);
+			update_progress(5, MAX32664_UPDATER_STATUS_IN_PROGRESS);
+		}
+
+		gpio_pin_configure_dt(&config->mfio_gpio, GPIO_OUTPUT);
+
+		gpio_pin_set_dt(&config->mfio_gpio, 0);
+		k_sleep(K_MSEC(10));
+
+		gpio_pin_set_dt(&config->reset_gpio, 0);
+		k_sleep(K_MSEC(10));
+
+		gpio_pin_set_dt(&config->reset_gpio, 1);
+		k_sleep(K_MSEC(1000));
+
+		m_wr_cmd_enter_bl(dev);
+		m_read_op_mode(dev);
+		m_read_bl_ver(dev);
+
+		update_progress(10, MAX32664_UPDATER_STATUS_IN_PROGRESS);
+
+		uint16_t bl_page_size;
+		m_read_bl_page_size(dev, &bl_page_size);
+
+		load_ret = max32664_load_fw(dev, fw_path, false);
+		if (load_ret == 0 || load_ret == -ENOENT)
+		{
+			break;
+		}
+	}
+
 	if (load_ret < 0) {
 		if (load_ret == -ENOENT) {
 			LOG_ERR("%s firmware file not found - update cannot proceed", device_name);

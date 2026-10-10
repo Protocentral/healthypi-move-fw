@@ -259,6 +259,49 @@ static void i2c2_bus_scan_debug(void)
     LOG_INF("=== End I2C2 Bus Scan ===");
 }
 
+/* Reset the MAX32664C with MFIO low so it starts in its bootloader, and report
+ * whether it answers there (device mode 0x08). Used when the application-mode
+ * probe fails: a hub whose application was erased (e.g. an interrupted update)
+ * still runs its bootloader and can be reloaded. The hub is left reset into
+ * application mode afterwards, as the driver expects. */
+static bool max32664c_bl_probe(void)
+{
+    const struct gpio_dt_spec rst = GPIO_DT_SPEC_GET(DT_NODELABEL(max32664c), reset_gpios);
+    const struct gpio_dt_spec mfio = GPIO_DT_SPEC_GET(DT_NODELABEL(max32664c), mfio_gpios);
+    const uint16_t addr = DT_REG_ADDR(DT_NODELABEL(max32664c));
+    uint8_t wr_op_mode[2] = {0x02, 0x00};
+    uint8_t rd_buf[2] = {0x00, 0x00};
+    int wr_rc;
+    int rd_rc;
+
+    gpio_pin_configure_dt(&mfio, GPIO_OUTPUT);
+    gpio_pin_configure_dt(&rst, GPIO_OUTPUT);
+
+    /* MFIO low while RSTN is released selects the bootloader. */
+    gpio_pin_set_dt(&mfio, 0);
+    k_msleep(10);
+    gpio_pin_set_dt(&rst, 0);
+    k_msleep(10);
+    gpio_pin_set_dt(&rst, 1);
+    k_msleep(1000);
+
+    /* Read device mode: status 00 and mode 08 means bootloader. */
+    wr_rc = i2c_write(i2c2_dev, wr_op_mode, sizeof(wr_op_mode), addr);
+    k_msleep(2);
+    rd_rc = i2c_read(i2c2_dev, rd_buf, sizeof(rd_buf), addr);
+    LOG_DBG("MAX32664C bootloader probe: wr rc %d, rd rc %d, bytes %02x %02x", wr_rc, rd_rc,
+            rd_buf[0], rd_buf[1]);
+
+    /* Leave the hub reset into application mode. */
+    gpio_pin_set_dt(&mfio, 1);
+    k_msleep(10);
+    gpio_pin_set_dt(&rst, 0);
+    k_msleep(20);
+    gpio_pin_set_dt(&rst, 1);
+
+    return (wr_rc == 0 && rd_rc == 0 && rd_buf[0] == 0x00 && rd_buf[1] == 0x08);
+}
+
 /* A bare 1-byte read is enough to tell which address ACKs. */
 static bool touch_probe(const struct i2c_dt_spec *spec)
 {
@@ -879,7 +922,9 @@ void hw_module_init(void)
     float boot_batt_voltage = 0.0f;
 
     // To fix nRF5340 Anomaly 47 (https://docs.nordicsemi.com/bundle/errata_nRF5340_EngD/page/ERR/nRF5340/EngineeringD/latest/anomaly_340_47.html)
-    NRF_TWIM2->FREQUENCY = 0x06200000;
+    /* DEBUG (QFN MAX32664C bring-up): TWIM2 left at its devicetree rate
+     * (100 kHz); this write would force it back to 390 kHz. */
+    // NRF_TWIM2->FREQUENCY = 0x06200000;
     NRF_TWIM1->FREQUENCY = 0x06200000;
 
     // Debug: Scan I2C2 bus for available devices before initialization
@@ -1061,6 +1106,18 @@ void hw_module_init(void)
         LOG_ERR("MAX32664C device not present!");
         max32664c_device_present = false;
         hw_add_boot_msg("MAX32664C", false, true, false, 0);
+
+        /* A hub whose application was erased (e.g. an interrupted update)
+         * fails the application-mode probe but still runs its bootloader.
+         * Reload the application from there; the hub is used from the next
+         * boot on. */
+        if (max32664c_bl_probe() && hw_check_msbl_file_exists(MAX32664C_FW_PATH))
+        {
+            LOG_WRN("MAX32664C is in its bootloader with no application - reloading it");
+            hw_add_boot_msg("	Recovering app", false, false, false, 0);
+            k_sem_give(&sem_boot_update_req);
+            max32664_updater_start(max32664c_dev, MAX32664_UPDATER_DEV_TYPE_MAX32664C);
+        }
     }
     else
     {

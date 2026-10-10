@@ -57,6 +57,9 @@ int max32664c_do_enter_app(const struct device *dev);
 // Motion detection test function
 int max32664c_test_motion_detection(const struct device *dev);
 
+/* DEBUG (QFN MAX32664C bring-up): AFE on, LED current stepped from 0 */
+int max32664c_test_led_ramp(const struct device *dev);
+
 // Motion detection data fetch function
 int max32664c_async_sample_fetch_wake_on_motion(const struct device *dev, uint8_t *chip_op_mode, uint32_t *num_samples);
 
@@ -188,6 +191,12 @@ struct max32664c_encoded_data
 	uint8_t rtor_confidence;
 
 	uint8_t scd_state;
+
+	/* Samples in this read whose algorithm block was all 0xFF, as when the
+	 * hub stops driving the bus mid-read. They are dropped (not counted in
+	 * num_samples, not copied to any field) and end a running SpO2 spot
+	 * check as a timeout. */
+	uint8_t invalid_samples;
 
 	// Extended algo mode only
 	uint8_t activity_class;
