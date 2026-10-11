@@ -97,8 +97,9 @@ K_EVENT_DEFINE(ppg_wr_events);
 #define EVT_MOTION_FIFO     BIT(3)
 #define EVT_PROBE_TIMEOUT   BIT(4)
 #define EVT_OFFSKIN_TIMEOUT BIT(5)
+#define EVT_SPO2_DONE       BIT(6)
 #define EVT_ALL (EVT_ON_SKIN | EVT_OFF_SKIN | EVT_MOTION_DETECTED | \
-                 EVT_MOTION_FIFO | EVT_PROBE_TIMEOUT | EVT_OFFSKIN_TIMEOUT)
+                 EVT_MOTION_FIFO | EVT_PROBE_TIMEOUT | EVT_OFFSKIN_TIMEOUT | EVT_SPO2_DONE)
 
 /* Housekeeping wake period: run handlers return to feed the watchdog at least
  * this often even when no event fires. Must be < the registered WDT timeout. */
@@ -148,6 +149,21 @@ static atomic_t m_curr_state = ATOMIC_INIT(0);
  * (on completion/timeout), read by both of those plus the SMF state-entry fns.
  * atomic for cross-thread visibility, same as m_curr_state. */
 static atomic_t spo2_measurement_in_progress = ATOMIC_INIT(0);
+
+/* Set by the SpO2 control thread when a spot check ends (stop or cancel).
+ *
+ * During a spot check the control thread drives the hub directly, and the
+ * state entries return early without arming their timers. Previously the
+ * control thread then put the hub back in HRM itself, whatever state the SMF
+ * was in: if off-skin had moved the SMF to PROBING meanwhile, PROBING waited
+ * forever for an SCD on-skin event (the hub was in HRM, not SCD) or a probe
+ * timeout (never scheduled), while the decode path, still seeing ACTIVE, kept
+ * re-arming the 20 s off-skin timer. The watch stayed in HRM with the finger
+ * removed. Now every run handler checks this flag and re-enters ACTIVE, whose
+ * entry sets HRM and restarts off-skin detection from a consistent state.
+ * EVT_SPO2_DONE only wakes the handler; the flag survives an entry's
+ * k_event_clear. */
+static atomic_t spo2_resume_pending = ATOMIC_INIT(0);
 static enum max32664c_scd_states m_curr_scd_state;
 
 // Externs
@@ -233,8 +249,17 @@ void work_off_skin_threshold_handler(struct k_work *work)
 }
 K_WORK_DELAYABLE_DEFINE(work_off_skin_threshold, work_off_skin_threshold_handler);
 
+/* The probe and off-skin timers below drive the hub from the system workqueue.
+ * A SpO2 spot check owns the hub until it ends, so they do nothing while one
+ * is running (the spot check start also cancels them; this covers a handler
+ * that was already due). The resume after the spot check re-enters ACTIVE,
+ * which restarts off-skin detection from scratch. */
 void work_probe_enable_handler(struct k_work *work)
 {
+    if (atomic_get(&spo2_measurement_in_progress))
+    {
+        return;
+    }
     probing_algorithm_enabled = false;
     wr_stop_algo();
     k_event_post(&ppg_wr_events, EVT_PROBE_TIMEOUT);
@@ -243,6 +268,10 @@ K_WORK_DELAYABLE_DEFINE(work_probe_enable, work_probe_enable_handler);
 
 void work_probe_sleep_handler(struct k_work *work)
 {
+    if (atomic_get(&spo2_measurement_in_progress))
+    {
+        return;
+    }
     probing_algorithm_enabled = true;
     wr_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
     k_work_schedule(&work_probe_enable, K_SECONDS(PROBE_ENABLE_WAIT_S));
@@ -251,6 +280,10 @@ K_WORK_DELAYABLE_DEFINE(work_probe_sleep, work_probe_sleep_handler);
 
 void work_offskin_timeout_handler(struct k_work *work)
 {
+    if (atomic_get(&spo2_measurement_in_progress))
+    {
+        return;
+    }
     k_event_post(&ppg_wr_events, EVT_OFFSKIN_TIMEOUT);
 }
 K_WORK_DELAYABLE_DEFINE(work_offskin_timeout, work_offskin_timeout_handler);
@@ -416,7 +449,8 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
             m_curr_scd_state = ppg_sensor_sample.scd_state;
 
             // Process SCD state changes for power optimization in ACTIVE state
-            if (atomic_get(&m_curr_state) == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC)
+            if (atomic_get(&m_curr_state) == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC &&
+                !atomic_get(&spo2_measurement_in_progress))
             {
                 if (ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
                 {
@@ -600,6 +634,19 @@ void ppg_wrist_sampling_handler(struct k_timer *dummy)
 
 K_TIMER_DEFINE(tmr_ppg_wrist_sampling, ppg_wrist_sampling_handler, NULL);
 
+/* Re-enter ACTIVE after a SpO2 spot check ended (see spo2_resume_pending).
+ * Returns true if it changed state, in which case the run handler returns. */
+static bool wr_resume_after_spo2(void)
+{
+    if (!atomic_cas(&spo2_resume_pending, 1, 0))
+    {
+        return false;
+    }
+    LOG_INF("SpO2 spot check ended - resuming from ACTIVE");
+    smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_ACTIVE]);
+    return true;
+}
+
 // ACTIVE STATE - Normal operation with AEC/HRM algorithms
 // Entry handler
 static void ppg_samp_state_active_entry(void *obj)
@@ -641,13 +688,24 @@ static void ppg_samp_state_active_entry(void *obj)
 static enum smf_state_result st_ppg_samp_active_run(void *o)
 {
     // Block until off-skin is detected (or wake to feed the watchdog).
-    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_OFF_SKIN, false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
+    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_OFF_SKIN | EVT_SPO2_DONE, false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
     hpi_watchdog_feed(wdt_ch_ppg_wr);
+    k_event_clear(&ppg_wr_events, EVT_SPO2_DONE);
+
+    if (wr_resume_after_spo2())
+    {
+        return SMF_EVENT_HANDLED;
+    }
 
     if (ev & EVT_OFF_SKIN)
     {
         k_event_clear(&ppg_wr_events, EVT_OFF_SKIN);
-        smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
+        /* Stay put during a spot check: the control thread owns the hub until
+         * it ends, and the resume then restarts off-skin detection. */
+        if (!atomic_get(&spo2_measurement_in_progress))
+        {
+            smf_set_state(SMF_CTX(&sm_ctx_ppg_wr), &ppg_samp_states[PPG_SAMP_STATE_PROBING]);
+        }
     }
     return SMF_EVENT_HANDLED;
 }
@@ -689,8 +747,14 @@ static void st_ppg_samp_probing_entry(void *o)
 static enum smf_state_result st_ppg_samp_probing_run(void *o)
 {
     // Block for on-skin detection or probe timeout (or wake to feed the watchdog).
-    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_ON_SKIN | EVT_PROBE_TIMEOUT, false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
+    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_ON_SKIN | EVT_PROBE_TIMEOUT | EVT_SPO2_DONE, false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
     hpi_watchdog_feed(wdt_ch_ppg_wr);
+    k_event_clear(&ppg_wr_events, EVT_SPO2_DONE);
+
+    if (wr_resume_after_spo2())
+    {
+        return SMF_EVENT_HANDLED;
+    }
 
     // Check for on-skin detection during probing
     if (ev & EVT_ON_SKIN)
@@ -779,8 +843,15 @@ static void st_ppg_samp_off_skin_entry(void *o)
 static enum smf_state_result st_ppg_samp_off_skin_run(void *o)
 {
     // Block for motion or the off-skin timeout (or wake to feed the watchdog).
-    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_DETECTED | EVT_OFFSKIN_TIMEOUT, false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
+    uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_DETECTED | EVT_OFFSKIN_TIMEOUT | EVT_SPO2_DONE, false, K_MSEC(PPG_WR_HOUSEKEEP_MS));
     hpi_watchdog_feed(wdt_ch_ppg_wr);
+    k_event_clear(&ppg_wr_events, EVT_SPO2_DONE);
+
+    if (wr_resume_after_spo2())
+    {
+        k_work_cancel_delayable(&work_offskin_timeout);
+        return SMF_EVENT_HANDLED;
+    }
 
     // Check for motion detection
     if (ev & EVT_MOTION_DETECTED)
@@ -821,8 +892,14 @@ static enum smf_state_result st_ppg_samp_motion_detect_run(void *o)
 
     for (int checks = 0; checks < max_checks; checks++)
     {
-        uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_FIFO, false, K_SECONDS(1));
+        uint32_t ev = k_event_wait(&ppg_wr_events, EVT_MOTION_FIFO | EVT_SPO2_DONE, false, K_SECONDS(1));
         hpi_watchdog_feed(wdt_ch_ppg_wr);
+        k_event_clear(&ppg_wr_events, EVT_SPO2_DONE);
+
+        if (wr_resume_after_spo2())
+        {
+            return SMF_EVENT_HANDLED;
+        }
 
         if (ev & EVT_MOTION_FIFO)
         {
@@ -927,6 +1004,21 @@ static void ppg_wrist_ctrl_thread(void)
             LOG_DBG("Stopping PPG Sampling");
             k_timer_stop(&tmr_ppg_wrist_sampling);
 
+            /* Stop the sampling SMF's own hub timers (probe cycle, off-skin
+             * threshold/timeout) before taking over the hub: a probe timer
+             * firing mid-measurement switched the hub to SCD mode or stopped
+             * the algorithm, restarting or stalling the spot check. The _sync
+             * variant also waits for a handler that is already running. */
+            {
+                struct k_work_sync sync;
+
+                k_work_cancel_delayable_sync(&work_probe_enable, &sync);
+                k_work_cancel_delayable_sync(&work_probe_sleep, &sync);
+                k_work_cancel_delayable_sync(&work_off_skin_threshold, &sync);
+                k_work_cancel_delayable_sync(&work_offskin_timeout, &sync);
+                off_skin_timer_active = false;
+            }
+
             LOG_DBG("Starting One Shot SpO2");
 
             /* No navigation here: the SpO2 idle tile opens SCR_SPL_SPO2_MEASURE
@@ -975,10 +1067,11 @@ static void ppg_wrist_ctrl_thread(void)
 
             k_msleep(1000);
 
+            /* Hand the hub back to the sampling SMF: it re-enters ACTIVE
+             * (HRM, off-skin detection restarted) whatever state it was in. */
             LOG_DBG("Switching to Continuous Sampling HR");
-            wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-            k_msleep(600);
-            k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+            atomic_set(&spo2_resume_pending, 1);
+            k_event_post(&ppg_wr_events, EVT_SPO2_DONE);
         }
 
         /* Handle user-initiated cancellation of SpO2 measurement */
@@ -994,11 +1087,10 @@ static void ppg_wrist_ctrl_thread(void)
 
                 k_msleep(600);
 
-                /* Return to continuous HR monitoring mode */
+                /* Return to continuous HR monitoring via the sampling SMF */
                 LOG_DBG("Switching to Continuous Sampling HR after cancel");
-                wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
-                k_msleep(600);
-                k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
+                atomic_set(&spo2_resume_pending, 1);
+                k_event_post(&ppg_wr_events, EVT_SPO2_DONE);
             }
         }
         /* No trailing k_msleep: the k_event_wait at the top of the loop blocks
