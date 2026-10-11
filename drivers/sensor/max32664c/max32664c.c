@@ -204,7 +204,7 @@ static int m_read_op_mode(const struct device *dev)
     /* MFIO low before the write, as for every other command: the write used
      * to go out with MFIO still high, and some hubs do not acknowledge it. */
     gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
+    k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
     wr_rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(45));
     rd_rc = max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
@@ -232,18 +232,35 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     uint8_t wr_buf[2] = {0x00, 0x00};
     int rc;
 
-    gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
-
-    rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
-    if (rc == 0)
+    /* DevBusy (bit 6): the hub is busy and the other flags are not to be acted
+     * on yet. Per AN6924, try again in 1 ms, up to five times. */
+    for (int attempt = 0; attempt <= MAX32664C_HUB_BUSY_RETRIES; attempt++)
     {
-        k_msleep(MAX32664C_READ_CMD_DELAY_MS);
-        rc = max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
-    }
+        if (attempt > 0)
+        {
+            k_msleep(MAX32664C_HUB_BUSY_RETRY_MS);
+        }
 
-    k_sleep(K_USEC(300));
-    gpio_pin_set_dt(&config->mfio_gpio, 1);
+        memset(rd_buf, 0, sizeof(rd_buf));
+        gpio_pin_set_dt(&config->mfio_gpio, 0);
+        k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
+
+        rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
+        if (rc == 0)
+        {
+            k_msleep(MAX32664C_READ_CMD_DELAY_MS);
+            rc = max32664c_i2c_read(&config->i2c, rd_buf, sizeof(rd_buf));
+        }
+
+        k_sleep(K_USEC(300));
+        gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+        if (rc != 0 || rd_buf[0] != MAX32664C_STATUS_SUCCESS ||
+            !(rd_buf[1] & MAX32664C_HUB_STAT_BUSY_MASK))
+        {
+            break;
+        }
+    }
 
     /* On failure report no flags, so callers do not act on a stale or garbage
      * DataRdyInt and go on to read the FIFO. */
@@ -255,6 +272,13 @@ uint8_t max32664c_read_hub_status(const struct device *dev)
     if (rd_buf[0] != MAX32664C_STATUS_SUCCESS)
     {
         LOG_WRN_RATELIMIT("Hub status read returned status 0x%02x", rd_buf[0]);
+        return 0;
+    }
+    if (rd_buf[1] & MAX32664C_HUB_STAT_BUSY_MASK)
+    {
+        /* Still busy: skip this poll rather than read a FIFO the hub is
+         * still filling. */
+        LOG_WRN_RATELIMIT("Hub still busy after %d retries", MAX32664C_HUB_BUSY_RETRIES);
         return 0;
     }
 
@@ -303,7 +327,7 @@ static int m_hub_cmd(const struct device *dev, const uint8_t *wr_buf, size_t wr_
         memset(rd_buf, 0, rd_len);
 
         gpio_pin_set_dt(&config->mfio_gpio, 0);
-        k_sleep(K_USEC(300));
+        k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
 
         rc = max32664c_i2c_write(&config->i2c, wr_buf, wr_len);
         if (rc == 0)
@@ -332,7 +356,7 @@ static int m_hub_cmd(const struct device *dev, const uint8_t *wr_buf, size_t wr_
             return rc;
         }
 
-        if (rd_buf[0] == MAX32664C_STATUS_BUSY || rd_buf[0] == MAX32664C_STATUS_TRY_AGAIN)
+        if (rd_buf[0] == MAX32664C_STATUS_TRY_AGAIN || rd_buf[0] == MAX32664C_STATUS_BL_BUSY)
         {
             LOG_WRN("Hub cmd %02x %02x %02x: busy (0x%02x) [try %d/%d]", wr_buf[0], cmd1, cmd2,
                     rd_buf[0], attempt + 1, MAX32664C_CMD_BUSY_RETRIES + 1);
@@ -561,7 +585,7 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     int rd_rc;
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
+    k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
     wr_rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     k_sleep(K_MSEC(4));
 
@@ -617,8 +641,10 @@ static int max32664c_set_mode_scd(const struct device *dev)
     HUB_TRY(max32664c_stop_algo(dev));
     // max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
 
-    // Set LED for SCD
-    HUB_TRY(m_i2c_write_cmd_2(dev, 0xE5, 0x02));
+    /* LED used by the SCD algorithm (AA E5 LED_IDX): 0 = LED1 green,
+     * 1 = LED2 IR, 2 = LED3 red. IR, so skin-contact probing is not a
+     * visible red light. */
+    HUB_TRY(m_i2c_write_cmd_2(dev, 0xE5, 0x01));
     // Set output mode to algo data
     HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x02, MAX32664C_DEFAULT_CMD_DELAY));
     // Set interrupt threshold
@@ -765,25 +791,85 @@ static int max32664c_channel_get(const struct device *dev,
 
 /* DEBUG (QFN MAX32664C bring-up): cap every LED at 62 mA full-scale.
  *
- * On the QFN board the hub resets once an LED pulse goes much above ~62 mA
- * (LED ramp test: fine at PA 0x80 on the 124 mA range, crash at 0xFF). The
- * hub configures the AFE itself when a mode starts, so the cap is written
- * after the mode is up and read back to show whether the hub kept it.
+ * On the QFN board the hub resets once an LED pulse goes much above ~93 mA
+ * (LED ramp test: clean up to PA 0xC0 on the 124 mA range, crash at 0xFF). The
+ * hub configures the AFE itself when a mode starts, so the cap is applied after
+ * the mode is up.
  *
- * MAX86141 LED_RGE (0x2A): two bits per LED, 00 = 31, 01 = 62, 10 = 93,
- * 11 = 124 mA. 0x15 = 62 mA on LED1-3. */
-#define MAX32664C_LED_RANGE_CAP 0x15
+ * The cap only ever lowers a range: each LED whose range is above 62 mA is set
+ * to 62 mA, and a lower range the hub chose (e.g. for skin-contact detection)
+ * is left alone. Writing 0x15 unconditionally would raise a 31 mA range to
+ * 62 mA and double that LED's current.
+ *
+ * MAX86141 LED_RGE (0x2A): two bits per LED (LED1 bits 1:0, LED2 3:2, LED3
+ * 5:4), 00 = 31, 01 = 62, 10 = 93, 11 = 124 mA full scale. */
+#define MAX32664C_LED_RANGE_MAX 0x01 /* 62 mA */
+
+static int m_read_afe_reg(const struct device *dev, uint8_t reg, uint8_t *val)
+{
+    uint8_t wr_buf[3] = {0x41, 0x00, reg};
+    uint8_t rsp[2];
+
+    HUB_TRY(m_hub_cmd(dev, wr_buf, sizeof(wr_buf), rsp, sizeof(rsp), MAX32664C_DEFAULT_CMD_DELAY,
+                      0, MAX32664C_DEFAULT_CMD_DELAY));
+    *val = rsp[1];
+    return 0;
+}
 
 static int max32664c_cap_led_range(const struct device *dev)
 {
-    uint8_t wr_buf[3] = {0x41, 0x00, 0x2A};
-    uint8_t rsp[2];
+    uint8_t range;
+    uint8_t capped;
 
-    HUB_TRY(m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x2A, MAX32664C_LED_RANGE_CAP, 50));
-    HUB_TRY(m_hub_cmd(dev, wr_buf, sizeof(wr_buf), rsp, sizeof(rsp), MAX32664C_DEFAULT_CMD_DELAY,
-                      0, MAX32664C_DEFAULT_CMD_DELAY));
-    LOG_DBG("LED range capped: wrote 0x%02x, reads back 0x%02x", MAX32664C_LED_RANGE_CAP, rsp[1]);
+    HUB_TRY(m_read_afe_reg(dev, 0x2A, &range));
+
+    capped = range;
+    for (int led = 0; led < 3; led++)
+    {
+        int shift = led * 2;
+
+        if (((capped >> shift) & 0x03) > MAX32664C_LED_RANGE_MAX)
+        {
+            capped = (capped & ~(0x03 << shift)) | (MAX32664C_LED_RANGE_MAX << shift);
+        }
+    }
+
+    if (capped != range)
+    {
+        HUB_TRY(m_i2c_write_cmd_4(dev, 0x40, 0x00, 0x2A, capped, 50));
+        LOG_DBG("LED range capped: 0x%02x -> 0x%02x", range, capped);
+    }
     return 0;
+}
+
+/* Log the LED drive the hub is using: per LED the full-scale range and pulse
+ * amplitude (LEDx_PA, 0x23-0x25) with the resulting peak current, plus the LED
+ * sequence (0x20, 0x21) and PPG config 1 (0x11: pulse width, ADC range). */
+static void max32664c_log_led_settings(const struct device *dev, int op_mode)
+{
+    static const uint8_t regs[] = {0x2A, 0x23, 0x24, 0x25, 0x20, 0x21, 0x11};
+    uint8_t v[ARRAY_SIZE(regs)];
+    int ma[3];
+
+    for (size_t i = 0; i < ARRAY_SIZE(regs); i++)
+    {
+        if (m_read_afe_reg(dev, regs[i], &v[i]) != 0)
+        {
+            LOG_WRN("LED settings (op mode %d): AFE register 0x%02x read failed", op_mode, regs[i]);
+            return;
+        }
+    }
+
+    for (int led = 0; led < 3; led++)
+    {
+        int full_scale = 31 * (((v[0] >> (led * 2)) & 0x03) + 1);
+
+        ma[led] = (full_scale * v[1 + led] + 127) / 255;
+    }
+
+    LOG_INF("LED settings (op mode %d): range 0x%02x, PA %02x %02x %02x = ~%d/%d/%d mA peak "
+            "(LED1/2/3), seq %02x %02x, cfg1 %02x",
+            op_mode, v[0], v[1], v[2], v[3], ma[0], ma[1], ma[2], v[4], v[5], v[6]);
 }
 
 static int max32664c_set_op_mode(const struct device *dev, const struct sensor_value *val)
@@ -822,6 +908,10 @@ static int max32664c_set_op_mode(const struct device *dev, const struct sensor_v
     if (ret == 0)
     {
         ret = max32664c_cap_led_range(dev);
+    }
+    if (ret == 0)
+    {
+        max32664c_log_led_settings(dev, val->val1);
     }
     return ret;
 }
@@ -1086,7 +1176,7 @@ static int led_ramp_xfer(const struct device *dev, const uint8_t *wr, size_t wr_
 
     memset(rd, 0, rd_len);
     gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
+    k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
     rc = max32664c_i2c_write(&config->i2c, wr, wr_len);
     if (rc == 0)
     {

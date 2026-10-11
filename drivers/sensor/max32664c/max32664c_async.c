@@ -37,8 +37,8 @@ LOG_MODULE_REGISTER(MAX32664C_ASYNC, CONFIG_SENSOR_LOG_LEVEL);
 
 #define MAX32664C_SENSOR_DATA_OFFSET 1
 
-/* SpO2 progress byte: bit 7 is a flag the hub sets on the first sample of each
- * new progress step; the low 7 bits are the percentage (0-100). */
+/* SpO2 "valid, % complete" byte (AN6924): bit 7 = SpO2 valid (the sample
+ * carries a newly calculated SpO2), bits 6..0 = percent complete (0-100). */
 #define MAX32664C_SPO2_PROGRESS_MASK 0x7F
 
 /* shared FIFO read buffer for async operations */
@@ -56,7 +56,7 @@ static int max32664c_read_fifo_i2c(const struct device *dev, uint8_t *buf, int s
     /* FIFO read attempt (debug removed) */
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
+    k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
 
     int rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     if (rc != 0) {
@@ -65,7 +65,7 @@ static int max32664c_read_fifo_i2c(const struct device *dev, uint8_t *buf, int s
         return rc;
     }
 
-    k_msleep(MAX32664C_READ_CMD_DELAY_MS);
+    k_msleep(MAX32664C_FIFO_READ_DELAY_MS);
 
     rc = max32664c_i2c_read(&config->i2c, buf, ((sample_len * fifo_count) + MAX32664C_SENSOR_DATA_OFFSET));
     if (rc != 0) {
@@ -94,7 +94,7 @@ int max32664c_get_fifo_count(const struct device *dev)
     uint8_t fifo_count = 0;
 
     gpio_pin_set_dt(&config->mfio_gpio, 0);
-    k_sleep(K_USEC(300));
+    k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
 
     int rc = max32664c_i2c_write(&config->i2c, wr_buf, sizeof(wr_buf));
     if (rc != 0) {
@@ -427,9 +427,8 @@ static int max32664c_async_sample_fetch(const struct device *dev, uint32_t green
 
                 *spo2 = (spo2_val / 10);
 
-                /* Bit 7 is a hub flag set on the first sample of each new
-                 * progress step (0x99/0xB2/0xCB/0xE4 = 25/50/75/100 %); the
-                 * percentage is the low 7 bits. */
+                /* Bit 7 is the hub's "SpO2 valid" flag, not part of the
+                 * percentage (0x99/0xB2/0xCB/0xE4 = 25/50/75/100 % + valid). */
                 *spo2_valid_percent_complete = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 13 + MAX32664C_SENSOR_DATA_OFFSET] &
                                                MAX32664C_SPO2_PROGRESS_MASK;
                 *spo2_low_quality = max32664c_fifo_buf[(sample_len * i) + MAX32664C_ALGO_DATA_OFFSET + 14 + MAX32664C_SENSOR_DATA_OFFSET];

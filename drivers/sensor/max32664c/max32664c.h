@@ -15,7 +15,18 @@
 #define MAX32664C_I2C_ADDRESS 0x55
 
 #define MAX32664C_HUB_STAT_DRDY_MASK 0x08
+#define MAX32664C_HUB_STAT_BUSY_MASK 0x40 /* DevBusy */
 #define MAX32664C_HUB_STAT_SCD_MASK 0x80
+
+/* While the status byte reports DevBusy, Maxim's guide (AN6924) says to try
+ * again in 1 ms, up to five times, before acting on the other flags. */
+#define MAX32664C_HUB_BUSY_RETRIES  5
+#define MAX32664C_HUB_BUSY_RETRY_MS 1
+
+/* MFIO low time before an I2C transaction, to wake the hub. AN6924 asks for at
+ * least 300 us; Maxim's sample host code uses 500 us, and the guide's NAK
+ * troubleshooting says to lengthen it, so use 500 us for margin. */
+#define MAX32664C_MFIO_WAKE_US 500
 
 #define MAX32664C_DEFAULT_CMD_DELAY 10
 
@@ -23,10 +34,15 @@
  * wait at all; a slower hub may not have the answer ready yet. */
 #define MAX32664C_READ_CMD_DELAY_MS 2
 
-/* Read-status byte returned first on every hub read. */
+/* Wait between the FIFO-data read command (0x12 0x01) and reading the data.
+ * Maxim's sample host code uses 10 ms; with 2 ms the hub can answer a good
+ * status byte and then 0xFF for the samples it has not prepared yet. */
+#define MAX32664C_FIFO_READ_DELAY_MS 10
+
+/* Read-status byte returned first on every hub read (AN6924 Table 1). */
 #define MAX32664C_STATUS_SUCCESS   0x00
-#define MAX32664C_STATUS_TRY_AGAIN 0x05
-#define MAX32664C_STATUS_BUSY      0xFE
+#define MAX32664C_STATUS_BL_BUSY   0x05 /* bootloader only: busy, resend */
+#define MAX32664C_STATUS_TRY_AGAIN 0xFE /* busy, try again */
 
 /* Times a command is re-sent while the hub answers busy / try-again. */
 #define MAX32664C_CMD_BUSY_RETRIES 3
