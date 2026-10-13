@@ -54,10 +54,23 @@ K_EVENT_DEFINE(spo2_evt);
 
 // Timing parameters
 #define OFFSKIN_THRESHOLD_S 20       // Duration for SCD "off-skin" before switching to Probing
-#define PROBE_ENABLE_WAIT_S 20       // Duration of probing to monitor SCD state
-#define PROBE_DISABLE_WAIT_BASE_S 1  // Base sleep duration between probing attempts
-#define PROBE_DISABLE_WAIT_MAX_S 8   // Maximum sleep duration (incremental)
-#define MAX_PROBE_ATTEMPTS 3         // Number of probe attempts before going to off-skin
+/* Probing (AN6924 section 5): the HR algorithm, whose SCD runs with it, is
+ * switched on for a short window and off for a growing pause - a flashing
+ * green LED. The window matches the 4 s check Maxim's own hub-side SCD state
+ * machine uses (AN6924 Figure 9); the pause sets the LED duty cycle
+ * (4 s on / 4-8 s off, ~40 %) and the worst-case wear-detection delay. */
+#define PROBE_ENABLE_WAIT_S 4        // Algorithm-on window per probe
+#define PROBE_DISABLE_WAIT_BASE_S 4  // First pause between probes (doubles)
+#define PROBE_DISABLE_WAIT_MAX_S 8   // Longest pause between probes
+#define MAX_PROBE_ATTEMPTS 6         // Probes (~60 s in all) before going to off-skin
+
+/* LED range ceiling (MAX86141 LED_RGE code) during probe windows vs. everything
+ * else. With nothing on the skin AEC drives the LEDs to the ceiling, so probe
+ * bursts would sit at 62 mA; the QFN sensor board's hub stopped working
+ * (VCORE gone) after testing green-LED probing at that level. 31 mA halves the
+ * probe peak current; on skin AEC settles at a few mA, well inside it. */
+#define PROBE_LED_RANGE_MAX  0x00    // 31 mA full scale
+#define NORMAL_LED_RANGE_MAX 0x01    // 62 mA full scale
 #define MOTION_DETECTION_POLLING_S 5 // Polling interval for motion detection in off-skin state
 #define OFFSKIN_TIMEOUT_MINUTES 10   // Timeout in Off-Skin state before transitioning to Probing
 
@@ -80,6 +93,12 @@ static int64_t off_skin_start_time = 0;
 static uint32_t current_probe_attempt = 0;
 static uint32_t current_probe_sleep_duration = PROBE_DISABLE_WAIT_BASE_S;
 static bool probing_algorithm_enabled = false;
+
+/* True while a probe window has the HR algorithm running (AEC, continuous
+ * HRM). ACTIVE entry then keeps it running instead of restarting it, so the
+ * switch to ACTIVE on skin contact costs no hub reconfiguration. Cleared
+ * whenever anything else stops or reconfigures the hub. */
+static atomic_t probe_hrm_running = ATOMIC_INIT(0);
 
 /* P2: event-driven inbox for the sampling SMF.
  *
@@ -261,6 +280,7 @@ void work_probe_enable_handler(struct k_work *work)
         return;
     }
     probing_algorithm_enabled = false;
+    atomic_set(&probe_hrm_running, 0);
     wr_stop_algo();
     k_event_post(&ppg_wr_events, EVT_PROBE_TIMEOUT);
 }
@@ -273,7 +293,11 @@ void work_probe_sleep_handler(struct k_work *work)
         return;
     }
     probing_algorithm_enabled = true;
-    wr_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
+    hw_max32664c_set_led_range_max(PROBE_LED_RANGE_MAX);
+    if (wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM) == 0)
+    {
+        atomic_set(&probe_hrm_running, 1);
+    }
     k_work_schedule(&work_probe_enable, K_SECONDS(PROBE_ENABLE_WAIT_S));
 }
 K_WORK_DELAYABLE_DEFINE(work_probe_sleep, work_probe_sleep_handler);
@@ -447,6 +471,15 @@ static void sensor_ppg_wrist_decode(uint8_t *buf, uint32_t buf_len)
 
             // Update current SCD state for general tracking
             m_curr_scd_state = ppg_sensor_sample.scd_state;
+
+            /* Probing runs the HR algorithm: its SCD field reports skin contact. */
+            if (atomic_get(&m_curr_state) == PPG_SAMP_STATE_PROBING &&
+                edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC &&
+                !atomic_get(&spo2_measurement_in_progress) &&
+                ppg_sensor_sample.scd_state == MAX32664C_SCD_STATE_ON_SKIN)
+            {
+                k_event_post(&ppg_wr_events, EVT_ON_SKIN);
+            }
 
             // Process SCD state changes for power optimization in ACTIVE state
             if (atomic_get(&m_curr_state) == PPG_SAMP_STATE_ACTIVE && edata->chip_op_mode == MAX32664C_OP_MODE_ALGO_AEC &&
@@ -655,6 +688,7 @@ static void ppg_samp_state_active_entry(void *obj)
     if (atomic_get(&spo2_measurement_in_progress))
     {
         LOG_INF("Spo2 ACTIVE -> staying in Spo2 algo");
+        hw_max32664c_set_led_range_max(NORMAL_LED_RANGE_MAX);
         wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
         return;
     }
@@ -666,18 +700,35 @@ static void ppg_samp_state_active_entry(void *obj)
     current_probe_sleep_duration = PROBE_DISABLE_WAIT_BASE_S;
     probing_algorithm_enabled = true;
 
-    // Cancel any leftover work timers from previous states
+    // Cancel any leftover work timers from previous states. The probe timers
+    // are cancelled synchronously: a probe handler mid-run could otherwise stop
+    // or restart the algorithm after the check below.
+    {
+        struct k_work_sync sync;
+
+        k_work_cancel_delayable_sync(&work_probe_enable, &sync);
+        k_work_cancel_delayable_sync(&work_probe_sleep, &sync);
+    }
     k_work_cancel_delayable(&work_off_skin_threshold);
-    k_work_cancel_delayable(&work_probe_enable);
-    k_work_cancel_delayable(&work_probe_sleep);
     k_work_cancel_delayable(&work_offskin_timeout);
 
-    // Ensure wake-on-motion is disabled when entering active state
-    wr_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
-    k_msleep(50); // Allow time for mode change
+    if (atomic_cas(&probe_hrm_running, 1, 0))
+    {
+        /* Skin found during a probe: the HR algorithm (AEC, continuous HRM)
+         * is already running and converged - keep it. */
+        LOG_INF("HR algorithm already running from probe - keeping it (LEDs stay <= 31 mA until the next mode change)");
+    }
+    else
+    {
+        hw_max32664c_set_led_range_max(NORMAL_LED_RANGE_MAX);
 
-    // Enable normal algorithm operation
-    wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+        // Ensure wake-on-motion is disabled when entering active state
+        wr_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
+        k_msleep(50); // Allow time for mode change
+
+        // Enable normal algorithm operation
+        wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM);
+    }
 
     // Use faster sampling rate in active mode for responsive detection
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_ACTIVE_SAMPLING_INTERVAL_MS));
@@ -717,6 +768,7 @@ static void st_ppg_samp_probing_entry(void *o)
     if (atomic_get(&spo2_measurement_in_progress))
     {
         LOG_INF("Spo2 ACTIVE -> staying in Spo2 algo");
+        hw_max32664c_set_led_range_max(NORMAL_LED_RANGE_MAX);
         wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
         return;
     }
@@ -733,9 +785,15 @@ static void st_ppg_samp_probing_entry(void *o)
     wr_set_op_mode(MAX32664C_OP_MODE_EXIT_WAKE_ON_MOTION, MAX32664C_ALGO_MODE_NONE);
     k_msleep(50); // Allow time for mode change
 
-    // Enable SCD mode to check for skin contact
-    wr_set_op_mode(MAX32664C_OP_MODE_SCD, MAX32664C_ALGO_MODE_CONT_HRM);
-    LOG_INF("Entered continuous HRM mode for probing");
+    // Probe with the HR algorithm (its SCD reports skin contact), LEDs capped low
+    hw_max32664c_set_led_range_max(PROBE_LED_RANGE_MAX);
+    if (wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HRM) == 0)
+    {
+        atomic_set(&probe_hrm_running, 1);
+    }
+    LOG_INF("Probing for skin contact: %d s HR windows, %d-%d s pauses, %d attempts",
+            PROBE_ENABLE_WAIT_S, PROBE_DISABLE_WAIT_BASE_S, PROBE_DISABLE_WAIT_MAX_S,
+            MAX_PROBE_ATTEMPTS);
 
     // Use normal sampling rate for probing
     k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));
@@ -778,9 +836,8 @@ static enum smf_state_result st_ppg_samp_probing_run(void *o)
             return SMF_EVENT_HANDLED;
         }
 
-        // Disable algorithm for power saving
+        // work_probe_enable has already stopped the algorithm (LEDs off).
         probing_algorithm_enabled = false;
-        wr_stop_algo();
 
         // Schedule next probe attempt with incremental sleep duration
         k_work_schedule(&work_probe_sleep, K_SECONDS(current_probe_sleep_duration));
@@ -805,6 +862,7 @@ static void st_ppg_samp_off_skin_entry(void *o)
     if (atomic_get(&spo2_measurement_in_progress))
     {
         LOG_INF("Spo2 ACTIVE -> staying in Spo2 algo");
+        hw_max32664c_set_led_range_max(NORMAL_LED_RANGE_MAX);
         wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
         return;
     }
@@ -821,6 +879,7 @@ static void st_ppg_samp_off_skin_entry(void *o)
     current_probe_sleep_duration = PROBE_DISABLE_WAIT_BASE_S;
 
     // Stop all algorithms for maximum power savings
+    atomic_set(&probe_hrm_running, 0);
     wr_stop_algo();
 
     // Configure accelerometer for wake-up on motion (as per datasheet)
@@ -1017,6 +1076,7 @@ static void ppg_wrist_ctrl_thread(void)
                 k_work_cancel_delayable_sync(&work_off_skin_threshold, &sync);
                 k_work_cancel_delayable_sync(&work_offskin_timeout, &sync);
                 off_skin_timer_active = false;
+                atomic_set(&probe_hrm_running, 0);
             }
 
             LOG_DBG("Starting One Shot SpO2");
@@ -1028,6 +1088,7 @@ static void ppg_wrist_ctrl_thread(void)
 
             wr_set_op_mode(MAX32664C_OP_MODE_STOP_ALGO, MAX32664C_ALGO_MODE_NONE);
             k_msleep(600);
+            hw_max32664c_set_led_range_max(NORMAL_LED_RANGE_MAX);
             wr_set_op_mode(MAX32664C_OP_MODE_ALGO_AEC, MAX32664C_ALGO_MODE_CONT_HR_SHOT_SPO2);
             k_msleep(600);
             k_timer_start(&tmr_ppg_wrist_sampling, K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS), K_MSEC(PPG_WRIST_SAMPLING_INTERVAL_MS));

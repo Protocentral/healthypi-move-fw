@@ -51,9 +51,20 @@ LOG_MODULE_REGISTER(MAX32664C, CONFIG_MAX32664C_LOG_LEVEL);
 #define DATE_TIME_VECTOR_SIZE 11
 #define SPO2_CAL_COEFFS_SIZE 15
 
-#define DEFAULT_SPO2_A 1.5958422
-#define DEFAULT_SPO2_B -34.659664
-#define DEFAULT_SPO2_C 112.68987
+/* SpO2 calibration coefficients A, B, C (SpO2 = A*R^2 + B*R + C), sent to the
+ * hub as int32 scaled by 100000 (AA 50 07 00, AN6924 Table 15). These are
+ * Maxim's MAXREFDES103 defaults (A = 0, B = -26.22499, C = 112.317421) - the
+ * bytes the hub has always been sent here, so readings are unchanged.
+ *
+ * ALT_*: a different set that was defined here but never sent (the encoder
+ * ignored its arguments). Origin unknown - needs a decision (and validation)
+ * before it replaces the defaults. */
+#define MAX32664C_SPO2_COEF_A 0
+#define MAX32664C_SPO2_COEF_B (-2622499)
+#define MAX32664C_SPO2_COEF_C 11231742
+/* #define MAX32664C_SPO2_COEF_ALT_A 159584     1.5958422 */
+/* #define MAX32664C_SPO2_COEF_ALT_B (-3465966) -34.659664 */
+/* #define MAX32664C_SPO2_COEF_ALT_C 11268987   112.68987 */
 
 #define MAX32664C_INT_THRESHOLD 0x04
 #define MAX32664C_REPORT_PERIOD 0x01
@@ -216,6 +227,11 @@ static int m_read_op_mode(const struct device *dev)
      * application mode, 0x08 bootloader. */
     LOG_DBG("Op mode read: wr rc %d, rd rc %d, bytes %02x %02x", wr_rc, rd_rc, rd_buf[0], rd_buf[1]);
 
+    /* An error, not 0x00: a failed read must not look like application mode. */
+    if (wr_rc != 0 || rd_rc != 0 || rd_buf[0] != MAX32664C_STATUS_SUCCESS)
+    {
+        return -EIO;
+    }
     return rd_buf[1];
 }
 
@@ -322,57 +338,77 @@ static int m_hub_cmd(const struct device *dev, const uint8_t *wr_buf, size_t wr_
     uint8_t cmd2 = (wr_len > 2) ? wr_buf[2] : 0;
     int rc = 0;
 
-    for (int attempt = 0; attempt <= MAX32664C_CMD_BUSY_RETRIES; attempt++)
+    bool busy = false;
+
+    memset(rd_buf, 0, rd_len);
+
+    gpio_pin_set_dt(&config->mfio_gpio, 0);
+    k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
+
+    /* NAK: the hub was busy; resend after 1 ms, up to five times (AN6924). */
+    rc = max32664c_i2c_write(&config->i2c, wr_buf, wr_len);
+    for (int n = 0; rc != 0 && n < MAX32664C_NAK_RETRIES; n++)
     {
-        memset(rd_buf, 0, rd_len);
-
-        gpio_pin_set_dt(&config->mfio_gpio, 0);
-        k_sleep(K_USEC(MAX32664C_MFIO_WAKE_US));
-
+        k_msleep(MAX32664C_NAK_RETRY_MS);
         rc = max32664c_i2c_write(&config->i2c, wr_buf, wr_len);
-        if (rc == 0)
-        {
-            k_msleep(cmd_delay_ms);
-            rc = max32664c_i2c_read(&config->i2c, rd_buf, rd_len);
-        }
-
-        if (hold_ms > 0)
-        {
-            k_msleep(hold_ms);
-        }
-        else
-        {
-            k_sleep(K_USEC(300));
-        }
-        gpio_pin_set_dt(&config->mfio_gpio, 1);
-
-        LOG_DBG("CMD: %02x %02x %02x | RSP: %02x | rc %d", wr_buf[0], cmd1, cmd2, rd_buf[0], rc);
-
-        k_msleep(post_ms);
-
-        if (rc != 0)
-        {
-            LOG_ERR("Hub cmd %02x %02x %02x: I2C error %d", wr_buf[0], cmd1, cmd2, rc);
-            return rc;
-        }
-
-        if (rd_buf[0] == MAX32664C_STATUS_TRY_AGAIN || rd_buf[0] == MAX32664C_STATUS_BL_BUSY)
-        {
-            LOG_WRN("Hub cmd %02x %02x %02x: busy (0x%02x) [try %d/%d]", wr_buf[0], cmd1, cmd2,
-                    rd_buf[0], attempt + 1, MAX32664C_CMD_BUSY_RETRIES + 1);
-            continue;
-        }
-
-        if (rd_buf[0] != MAX32664C_STATUS_SUCCESS)
-        {
-            LOG_WRN("Hub cmd %02x %02x %02x: status 0x%02x", wr_buf[0], cmd1, cmd2, rd_buf[0]);
-        }
-        return 0;
     }
 
-    LOG_ERR("Hub cmd %02x %02x %02x: still busy after %d tries", wr_buf[0], cmd1, cmd2,
-            MAX32664C_CMD_BUSY_RETRIES + 1);
-    return -EBUSY;
+    if (rc == 0)
+    {
+        k_msleep(cmd_delay_ms);
+        rc = max32664c_i2c_read(&config->i2c, rd_buf, rd_len);
+
+        /* Busy / try-again: the command was received; read the status again
+         * after another CMD_DELAY rather than resending it, as Maxim's host
+         * code does - a resent command could be applied twice. */
+        for (int attempt = 0; attempt < MAX32664C_CMD_BUSY_RETRIES; attempt++)
+        {
+            busy = (rc == 0) && (rd_buf[0] == MAX32664C_STATUS_TRY_AGAIN ||
+                                 rd_buf[0] == MAX32664C_STATUS_BL_BUSY);
+            if (rc == 0 && !busy)
+            {
+                break;
+            }
+            LOG_WRN("Hub cmd %02x %02x %02x: %s (rc %d, 0x%02x) [re-read %d/%d]", wr_buf[0], cmd1,
+                    cmd2, busy ? "busy" : "read failed", rc, rd_buf[0], attempt + 1,
+                    MAX32664C_CMD_BUSY_RETRIES);
+            k_msleep(MAX(cmd_delay_ms, MAX32664C_NAK_RETRY_MS));
+            memset(rd_buf, 0, rd_len);
+            rc = max32664c_i2c_read(&config->i2c, rd_buf, rd_len);
+        }
+        busy = (rc == 0) && (rd_buf[0] == MAX32664C_STATUS_TRY_AGAIN ||
+                             rd_buf[0] == MAX32664C_STATUS_BL_BUSY);
+    }
+
+    if (hold_ms > 0)
+    {
+        k_msleep(hold_ms);
+    }
+    else
+    {
+        k_sleep(K_USEC(300));
+    }
+    gpio_pin_set_dt(&config->mfio_gpio, 1);
+
+    LOG_DBG("CMD: %02x %02x %02x | RSP: %02x | rc %d", wr_buf[0], cmd1, cmd2, rd_buf[0], rc);
+
+    k_msleep(post_ms);
+
+    if (rc != 0)
+    {
+        LOG_ERR("Hub cmd %02x %02x %02x: I2C error %d", wr_buf[0], cmd1, cmd2, rc);
+        return rc;
+    }
+    if (busy)
+    {
+        LOG_ERR("Hub cmd %02x %02x %02x: still busy (0x%02x)", wr_buf[0], cmd1, cmd2, rd_buf[0]);
+        return -EBUSY;
+    }
+    if (rd_buf[0] != MAX32664C_STATUS_SUCCESS)
+    {
+        LOG_WRN("Hub cmd %02x %02x %02x: status 0x%02x", wr_buf[0], cmd1, cmd2, rd_buf[0]);
+    }
+    return 0;
 }
 
 /* Stop a mode sequence at the first command that fails, so the caller's retry
@@ -432,31 +468,22 @@ static int m_i2c_write(const struct device *dev, uint8_t *wr_buf, uint32_t wr_le
                      MAX32664C_DEFAULT_CMD_DELAY, 45);
 }
 
-static int max32664c_set_spo2_coeffs(const struct device *dev, float a, float b, float c)
+static void m_put_be32(uint8_t *p, int32_t v)
 {
-    uint8_t wr_buf[15] = {0x50, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xD7, 0xFB, 0xDD, 0x00, 0xAB, 0x61, 0xFE};
+    p[0] = (uint8_t)((uint32_t)v >> 24);
+    p[1] = (uint8_t)((uint32_t)v >> 16);
+    p[2] = (uint8_t)((uint32_t)v >> 8);
+    p[3] = (uint8_t)v;
+}
 
-    // int32_t a_int = (int32_t)(a * 100000);
+/* a, b, c are the coefficients scaled by 100000, as the hub expects. */
+static int max32664c_set_spo2_coeffs(const struct device *dev, int32_t a, int32_t b, int32_t c)
+{
+    uint8_t wr_buf[15] = {0x50, 0x07, 0x00};
 
-    /*wr_buf[3] = (a_int & 0xff000000) >> 24;
-    wr_buf[4] = (a_int & 0x00ff0000) >> 16;
-    wr_buf[5] = (a_int & 0x0000ff00) >> 8;
-    wr_buf[6] = (a_int & 0x000000ff);
-
-    int32_t b_int = (int32_t)(b * 100000);
-
-    wr_buf[7] = (b_int & 0xff000000) >> 24;
-    wr_buf[8] = (b_int & 0x00ff0000) >> 16;
-    wr_buf[9] = (b_int & 0x0000ff00) >> 8;
-    wr_buf[10] = (b_int & 0x000000ff);
-
-    int32_t c_int = (int32_t)(c * 100000);
-
-    wr_buf[11] = (c_int & 0xff000000) >> 24;
-    wr_buf[12] = (c_int & 0x00ff0000) >> 16;
-    wr_buf[13] = (c_int & 0x0000ff00) >> 8;
-    wr_buf[14] = (c_int & 0x000000ff);
-    */
+    m_put_be32(&wr_buf[3], a);
+    m_put_be32(&wr_buf[7], b);
+    m_put_be32(&wr_buf[11], c);
 
     return m_i2c_write(dev, wr_buf, sizeof(wr_buf));
 }
@@ -465,7 +492,7 @@ static int m_i2c_write_cmd_3_rsp_3(const struct device *dev, uint8_t byte1, uint
 {
     uint8_t wr_buf[3] = {byte1, byte2, byte3};
 
-    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), rsp, 3, MAX32664C_DEFAULT_CMD_DELAY, 500, 10);
+    return m_hub_cmd(dev, wr_buf, sizeof(wr_buf), rsp, 3, MAX32664C_DEFAULT_CMD_DELAY, 0, 10);
 }
 
 static int max32664c_check_sensors(const struct device *dev)
@@ -476,7 +503,8 @@ static int max32664c_check_sensors(const struct device *dev)
 
     uint8_t rsp[3] = {0x00, 0x00, 0x00};
 
-    max32664c_do_enter_app(dev);
+    /* chip_init has just reset the hub into application mode and read its
+     * version, so no second reset here (it cost ~1.7 s per boot). */
 
     // Read MAX86141 WHOAMI
     m_i2c_write_cmd_3_rsp_3(dev, 0x41, 0x00, 0xFF, rsp);
@@ -517,7 +545,7 @@ static int max32664c_set_mode_extended_algo(const struct device *dev)
 {
     LOG_DBG("MAX32664C entering extended ALGO mode...");
 
-    HUB_TRY(max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C));
+    HUB_TRY(max32664c_set_spo2_coeffs(dev, MAX32664C_SPO2_COEF_A, MAX32664C_SPO2_COEF_B, MAX32664C_SPO2_COEF_C));
     // Output mode sensor + algo data
     HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY));
     // Set interrupt threshold (extended ALGO value)
@@ -621,16 +649,27 @@ static int max32664c_get_ver(const struct device *dev, uint8_t *ver_buf)
     return 0;
 }
 
+/* Stop whatever the hub is running (AN6924):
+ * - algorithm modes (AEC/AGC/extended): disable the algorithm; the hub enables
+ *   and disables the sensors it needs itself (30.2.3+) - Table 9 step 3.1;
+ * - modes where the host enabled the sensors (SCD only, raw, wake-on-motion,
+ *   or an unknown state): AFE off, then accel off, then algorithm off -
+ *   Table 13 step 3. Sensor disables are 3 bytes (44 idx 00). */
 static int max32664c_stop_algo(const struct device *dev)
 {
-    LOG_DBG("Stopping Algo...");
+    struct max32664c_data *data = dev->data;
+    bool algo_mode = (data->op_mode == MAX32664C_OP_MODE_ALGO_AEC ||
+                      data->op_mode == MAX32664C_OP_MODE_ALGO_AGC ||
+                      data->op_mode == MAX32664C_OP_MODE_ALGO_EXTENDED);
 
-    // Stop Algorithm
+    LOG_DBG("Stopping hub (op mode %d)", data->op_mode);
+
+    if (!algo_mode)
+    {
+        HUB_TRY(m_i2c_write_cmd_3(dev, 0x44, 0x00, 0x00, 250));
+        HUB_TRY(m_i2c_write_cmd_3(dev, 0x44, 0x04, 0x00, 20));
+    }
     HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, 120));
-    // Disable AFE
-    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x00, 0x00, 0x00, 250));
-    // Disable Accel
-    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, 20));
     return 0;
 }
 
@@ -639,7 +678,7 @@ static int max32664c_set_mode_scd(const struct device *dev)
     LOG_DBG("MAX32664C entering SCD mode...");
 
     HUB_TRY(max32664c_stop_algo(dev));
-    // max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C);
+    // max32664c_set_spo2_coeffs(dev, MAX32664C_SPO2_COEF_A, MAX32664C_SPO2_COEF_B, MAX32664C_SPO2_COEF_C);
 
     /* LED used by the SCD algorithm (AA E5 LED_IDX): 0 = LED1 green,
      * 1 = LED2 IR, 2 = LED3 red. IR, so skin-contact probing is not a
@@ -660,31 +699,39 @@ static int max32664c_set_mode_scd(const struct device *dev)
     return 0;
 }
 
+/* AN6924 Table 16: stop what is running, configure wake-up on motion, output
+ * accel data only, one report per sample, then enable the hub accelerometer. */
 static int max32664c_set_mode_wake_on_motion(const struct device *dev)
 {
-    LOG_DBG("MAX32664C entering wake on motion mode per datasheet...");
+    LOG_DBG("MAX32664C entering wake on motion mode");
 
-    HUB_TRY(m_i2c_write_cmd_3(dev, 0x52, 0x07, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
-    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
+    HUB_TRY(max32664c_stop_algo(dev));
     HUB_TRY(m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x01, MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH));
     HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
     HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x02, 0x01, MAX32664C_DEFAULT_CMD_DELAY));
-    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
-    LOG_INF("Wake-on-motion configured: WUFC=0x%02x (0.4s), ATH=0x%02x (1.5g)", 
-            MAX32664C_MOTION_WUFC, MAX32664C_MOTION_ATH);
+    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x01, 0x00, 20));
+    LOG_INF("Wake-on-motion configured: WUFC=0x%02x (~%d ms), ATH=0x%02x (%d mg)",
+            MAX32664C_MOTION_WUFC, MAX32664C_MOTION_WUFC_MS(MAX32664C_MOTION_WUFC),
+            MAX32664C_MOTION_ATH, MAX32664C_MOTION_ATH_MG(MAX32664C_MOTION_ATH));
     return 0;
 }
 
+/* AN6924 Table 16 step 3: accelerometer off, then wake-up on motion off. Only
+ * when the hub is actually in wake-on-motion: disabling it otherwise made the
+ * hub answer 0xFF ("Hub cmd 46 04 00: status 0xff") on every ACTIVE/PROBING
+ * entry. */
 static int max32664c_exit_mode_wake_on_motion(const struct device *dev)
 {
-    LOG_DBG("MAX32664C exiting wake on motion mode per datasheet...");
+    struct max32664c_data *data = dev->data;
 
-    // Step 1: Disable Wake-Up on Motion configuration
-    // Command: AA 46 04 00 00 FF FF (disable motion detection)
+    if (data->op_mode != MAX32664C_OP_MODE_WAKE_ON_MOTION)
+    {
+        LOG_DBG("Not in wake-on-motion (op mode %d), nothing to exit", data->op_mode);
+        return 0;
+    }
+
+    HUB_TRY(m_i2c_write_cmd_3(dev, 0x44, 0x04, 0x00, 20));
     HUB_TRY(m_i2c_write_cmd_6(dev, 0x46, 0x04, 0x00, 0x00, 0xFF, 0xFF));
-    // Step 2: Disable Accelerometer 
-    // Command: AA 44 04 00 00
-    HUB_TRY(m_i2c_write_cmd_4(dev, 0x44, 0x04, 0x00, 0x00, MAX32664C_DEFAULT_CMD_DELAY));
     LOG_DBG("Wake-on-motion mode disabled");
     return 0;
 }
@@ -694,7 +741,7 @@ static int max32664c_set_mode_algo(const struct device *dev, enum max32664c_mode
     LOG_DBG("MAX32664C entering ALGO mode...");
 
     HUB_TRY(max32664c_stop_algo(dev));
-    HUB_TRY(max32664c_set_spo2_coeffs(dev, DEFAULT_SPO2_A, DEFAULT_SPO2_B, DEFAULT_SPO2_C));
+    HUB_TRY(max32664c_set_spo2_coeffs(dev, MAX32664C_SPO2_COEF_A, MAX32664C_SPO2_COEF_B, MAX32664C_SPO2_COEF_C));
     // Output mode sensor + algo data
     HUB_TRY(m_i2c_write_cmd_3(dev, 0x10, 0x00, 0x03, MAX32664C_DEFAULT_CMD_DELAY));
     // Set interrupt threshold
@@ -803,7 +850,8 @@ static int max32664c_channel_get(const struct device *dev,
  *
  * MAX86141 LED_RGE (0x2A): two bits per LED (LED1 bits 1:0, LED2 3:2, LED3
  * 5:4), 00 = 31, 01 = 62, 10 = 93, 11 = 124 mA full scale. */
-#define MAX32664C_LED_RANGE_MAX 0x01 /* 62 mA */
+/* Default ceiling (data->led_range_max): 62 mA. */
+#define MAX32664C_LED_RANGE_MAX 0x01
 
 static int m_read_afe_reg(const struct device *dev, uint8_t reg, uint8_t *val)
 {
@@ -818,6 +866,8 @@ static int m_read_afe_reg(const struct device *dev, uint8_t reg, uint8_t *val)
 
 static int max32664c_cap_led_range(const struct device *dev)
 {
+    struct max32664c_data *data = dev->data;
+    uint8_t range_max = data->led_range_max;
     uint8_t range;
     uint8_t capped;
 
@@ -828,9 +878,9 @@ static int max32664c_cap_led_range(const struct device *dev)
     {
         int shift = led * 2;
 
-        if (((capped >> shift) & 0x03) > MAX32664C_LED_RANGE_MAX)
+        if (((capped >> shift) & 0x03) > range_max)
         {
-            capped = (capped & ~(0x03 << shift)) | (MAX32664C_LED_RANGE_MAX << shift);
+            capped = (capped & ~(0x03 << shift)) | (range_max << shift);
         }
     }
 
@@ -955,6 +1005,20 @@ static int max32664c_attr_set(const struct device *dev,
     case MAX32664C_ATTR_ENTER_BOOTLOADER:
         // max32664c_do_enter_bl(dev);
         break;
+    case MAX32664C_ATTR_LED_RANGE_MAX:
+        if (val->val1 < 0 || val->val1 > 3)
+        {
+            return -EINVAL;
+        }
+        k_mutex_lock(&data->lock, K_FOREVER);
+        if (data->led_range_max != val->val1)
+        {
+            LOG_DBG("LED range ceiling %u -> %d (%d mA)", data->led_range_max, val->val1,
+                    31 * (val->val1 + 1));
+        }
+        data->led_range_max = (uint8_t)val->val1;
+        k_mutex_unlock(&data->lock);
+        break;
     default:
         LOG_ERR("Unsupported sensor attribute");
         return -ENOTSUP;
@@ -1027,6 +1091,29 @@ static const struct sensor_driver_api max32664c_driver_api = {
 #endif
 };
 
+/* Hub found in its bootloader (e.g. reset with MFIO low): ask it to start the
+ * application (AA 01 00 00, CMD_DELAY 1.5 s), as Maxim's host code does, before
+ * anyone falls back to reflashing it. Fails if the application is not valid
+ * (the hub stays in bootloader mode). */
+static int max32664c_exit_bootloader(const struct device *dev)
+{
+    uint8_t wr_buf[3] = {0x01, 0x00, 0x00};
+    int mode;
+
+    LOG_WRN("MAX32664C is in its bootloader - asking it to start the application");
+    HUB_TRY(m_hub_cmd(dev, wr_buf, sizeof(wr_buf), NULL, 0, MAX32664C_READ_CMD_DELAY_MS, 0, 0));
+    k_msleep(1500);
+
+    mode = m_read_op_mode(dev);
+    if (mode != 0x00)
+    {
+        LOG_ERR("MAX32664C stays in bootloader (mode 0x%02x) - application not valid?", mode);
+        return -EIO;
+    }
+    LOG_INF("MAX32664C left the bootloader, application running");
+    return 0;
+}
+
 static int max32664c_chip_init(const struct device *dev)
 {
     const struct max32664c_config *config = dev->config;
@@ -1043,6 +1130,7 @@ static int max32664c_chip_init(const struct device *dev)
 
     int ret = -ENODEV;
     bool acked = false;
+    bool bl_exit_tried = false;
 
     /* The version read is retried, and if the hub keeps refusing it the hub is
      * reset once more: a hub that is not yet ready or was left mid-command by
@@ -1061,6 +1149,17 @@ static int max32664c_chip_init(const struct device *dev)
             if (ret == -EAGAIN || ret == -ENODEV)
             {
                 acked = true;
+            }
+            /* Refused with the hub in bootloader mode: try starting the
+             * application once before retrying the version read. */
+            if (ret == -EAGAIN && !bl_exit_tried && m_read_op_mode(dev) == 0x08)
+            {
+                bl_exit_tried = true;
+                if (max32664c_exit_bootloader(dev) == 0)
+                {
+                    attempt--;
+                    continue;
+                }
             }
             LOG_WRN("Version read failed (%d) [reset %d/%d, try %d/%d]", ret, reset + 1,
                     MAX32664C_INIT_RESETS, attempt + 1, MAX32664C_VER_READ_TRIES);
@@ -1333,6 +1432,7 @@ int max32664c_test_led_ramp(const struct device *dev)
 #define MAX32664C_DEFINE(inst)                                      \
     static struct max32664c_data max32664c_data_##inst = {          \
         .lock = Z_MUTEX_INITIALIZER(max32664c_data_##inst.lock),    \
+        .led_range_max = MAX32664C_LED_RANGE_MAX,                    \
     };                                                              \
     static const struct max32664c_config max32664c_config_##inst =  \
         {                                                           \

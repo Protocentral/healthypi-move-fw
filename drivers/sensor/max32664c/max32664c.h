@@ -44,8 +44,13 @@
 #define MAX32664C_STATUS_BL_BUSY   0x05 /* bootloader only: busy, resend */
 #define MAX32664C_STATUS_TRY_AGAIN 0xFE /* busy, try again */
 
-/* Times a command is re-sent while the hub answers busy / try-again. */
+/* Times the status of a command is re-read (after another CMD_DELAY) while the
+ * hub answers busy / try-again, as Maxim's host code does. */
 #define MAX32664C_CMD_BUSY_RETRIES 3
+
+/* A NAK on a command write: resend after 1 ms, up to five times (AN6924 Table 1). */
+#define MAX32664C_NAK_RETRIES  5
+#define MAX32664C_NAK_RETRY_MS 1
 
 /* Boot-time hub detection: version reads per reset, the wait between them,
  * and how many resets to try before reporting the hub absent. */
@@ -59,11 +64,15 @@
 #define MAX32664C_AFE_ID 0x25
 #define MAX32664C_ACC_ID 0x1B
 
-// Motion detection parameters according to datasheet
-// WUFC: Time in seconds × 25 (0.4s × 25 = 10) - increased filter time to reduce noise  
-#define MAX32664C_MOTION_WUFC 0x14
-// ATH: Threshold in g × 16 (1.5g × 16 = 24) - increased threshold for actual wrist motion
-#define MAX32664C_MOTION_ATH 0x20
+/* Wake-on-motion (AA 46 04 00 01 WUFC ATH), AN6924 Table 15/16.
+ * ATH: 1/16 g per LSB (0x08 = 0.5 g). WUFC: motion must last this long; per
+ * Maxim's example 0x05 = 0.2 s, i.e. ~40 ms per LSB. These are Maxim's example
+ * values; the old 0x14/0x20 (logged as 0.4 s / 1.5 g) were really ~0.8 s / 2 g,
+ * which normal wrist movement rarely reaches. */
+#define MAX32664C_MOTION_WUFC 0x05
+#define MAX32664C_MOTION_ATH  0x08
+#define MAX32664C_MOTION_WUFC_MS(w) ((w) * 40)
+#define MAX32664C_MOTION_ATH_MG(a)  ((a) * 1000 / 16)
 
 uint8_t max32664c_read_hub_status(const struct device *dev);
 void max32664c_do_enter_bl(const struct device *dev);
@@ -122,6 +131,10 @@ enum max32664c_attribute
 	MAX32664C_ATTR_IS_APP_PRESENT = 0x10,
 	MAX32664C_ATTR_APP_VER=0x11,
 	MAX32664C_ATTR_SENSOR_IDS=0x12,
+	/* Highest MAX86141 LED range the driver allows (val1: 0 = 31 mA,
+	 * 1 = 62 mA, 2 = 93 mA, 3 = 124 mA full scale); applied at the next
+	 * LED-driving op mode change. */
+	MAX32664C_ATTR_LED_RANGE_MAX=0x13,
 };
 
 enum max32664c_scd_states
@@ -165,6 +178,10 @@ struct max32664c_data
 	 * MFIO-low / write / wait / read / MFIO-high transaction; another thread's
 	 * command or FIFO read landing in the middle corrupts both. */
 	struct k_mutex lock;
+
+	/* LED range ceiling applied after each LED-driving mode change
+	 * (MAX32664C_ATTR_LED_RANGE_MAX). */
+	uint8_t led_range_max;
 };
 
 // Async API types

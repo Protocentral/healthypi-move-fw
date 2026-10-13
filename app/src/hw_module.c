@@ -712,6 +712,15 @@ bool hw_is_max32664c_present(void)
     return max32664c_device_present;
 }
 
+/* Highest LED range for the next LED-driving op mode: 0 = 31 mA, 1 = 62 mA
+ * (default), 2 = 93 mA, 3 = 124 mA full scale. */
+int hw_max32664c_set_led_range_max(uint8_t range)
+{
+    struct sensor_value v = {.val1 = range, .val2 = 0};
+
+    return sensor_attr_set(max32664c_dev, SENSOR_CHAN_ALL, MAX32664C_ATTR_LED_RANGE_MAX, &v);
+}
+
 int hw_max32664c_set_op_mode(uint8_t op_mode, uint8_t algo_mode)
 {
     LOG_DBG("Setting op mode: %d, algo mode: %d", op_mode, algo_mode);
@@ -862,6 +871,7 @@ static bool hw_check_msbl_file_exists(const char *file_path)
 #define SENSOR_RAIL_OFF_MS     200
 #define SENSOR_RAIL_ON_TRIES   5
 #define SENSOR_RAIL_SETTLE_MS  50
+#define LED_BOOST_SETTLE_MS    50
 
 /* An nRF reboot leaves BUCK2 and the 5 V LED boost powered, so a MAX32664C /
  * MAX86141 that got stuck (LEDs driven continuously, hub refusing commands)
@@ -903,7 +913,29 @@ static void hw_sensor_rail_power_cycle(void)
     }
     k_msleep(SENSOR_RAIL_SETTLE_MS);
 
-    LOG_INF("Sensor rail power-cycled (%d ms off)", SENSOR_RAIL_OFF_MS);
+    /* Give the wrist hub a defined state as soon as it has power, instead of
+     * leaving RSTN/MFIO floating for the ~10 s of init before its driver runs:
+     * held in reset, MFIO high (application mode when reset is released). On
+     * the QFN sensor board the hub sometimes failed to start at boot (VCORE
+     * absent, no I2C response) and came back after a later reset. The driver's
+     * init releases reset as before. Driven only after the rail is up, so the
+     * pins cannot back-power the hub while it is off. */
+    {
+        const struct gpio_dt_spec hub_rst = GPIO_DT_SPEC_GET(DT_NODELABEL(max32664c), reset_gpios);
+        const struct gpio_dt_spec hub_mfio = GPIO_DT_SPEC_GET(DT_NODELABEL(max32664c), mfio_gpios);
+
+        gpio_pin_configure_dt(&hub_mfio, GPIO_OUTPUT_ACTIVE);
+        gpio_pin_configure_dt(&hub_rst, GPIO_OUTPUT_INACTIVE);
+    }
+
+    /* 5 V LED boost on now, ~10 s before the hub is reset, rather than 100 ms
+     * before: its start-up surge no longer overlaps the hub coming out of reset.
+     * The LEDs draw from it only once the AFE runs. */
+    gpio_pin_set_dt(&dcdc_5v_en, 1);
+    k_msleep(LED_BOOST_SETTLE_MS);
+
+    LOG_INF("Sensor rail power-cycled (%d ms off), wrist hub held in reset, LED boost on",
+            SENSOR_RAIL_OFF_MS);
 }
 
 void hw_module_init(void)
@@ -1084,14 +1116,13 @@ void hw_module_init(void)
 
     k_sleep(K_MSEC(100));
 
-    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT);
+    /* The 5 V LED boost is normally switched on in hw_sensor_rail_power_cycle();
+     * make sure it is on in case that returned early (no glitch if it is). */
+    ret = gpio_pin_configure_dt(&dcdc_5v_en, GPIO_OUTPUT_ACTIVE);
     if (ret < 0)
     {
         LOG_ERR("Error: Could not configure GPIO pin DC/DC 5v EN\n");
     }
-
-    gpio_pin_set_dt(&dcdc_5v_en, 1);
-    k_sleep(K_MSEC(100));
 
     device_init(max32664c_dev);
     k_sleep(K_MSEC(100));

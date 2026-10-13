@@ -90,18 +90,24 @@ static int m_read_bl_ver(const struct device *dev)
 	return 0;
 }
 
-static int m_wr_cmd_enter_bl(const struct device *dev)
+/* Bootloader busy (status 0x05, AN6924 Table 1): insert a delay and read the
+ * status again, up to five times. */
+#define MAX32664_BL_BUSY        0x05
+#define MAX32664_BL_BUSY_TRIES  5
+
+static uint8_t m_bl_wait_not_busy(const struct max32664_config *config, uint8_t status,
+				  int delay_ms, const char *what)
 {
-	const struct max32664_config *config = dev->config;
-	uint8_t wr_buf[3] = {0x01, 0x00, 0x08};
-	uint8_t rd_buf[1] = {0x00};
-
-	i2c_write_dt(&config->i2c, wr_buf, sizeof(wr_buf));
-	k_sleep(K_MSEC(2));
-	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
-
-	// Enter BL command completed
-	return 0;
+	for (int i = 0; status == MAX32664_BL_BUSY && i < MAX32664_BL_BUSY_TRIES; i++) {
+		LOG_WRN("%s: bootloader busy, re-reading status [%d/%d]", what, i + 1,
+			MAX32664_BL_BUSY_TRIES);
+		k_msleep(delay_ms);
+		uint8_t rd = 0x00;
+		if (i2c_read_dt(&config->i2c, &rd, 1) == 0) {
+			status = rd;
+		}
+	}
+	return status;
 }
 
 static int m_read_bl_page_size(const struct device *dev, uint16_t *bl_page_size)
@@ -135,6 +141,7 @@ static int m_write_set_num_pages(const struct device *dev, uint8_t num_pages)
 	k_sleep(K_MSEC(100));
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
+	rd_buf[0] = m_bl_wait_not_busy(config, rd_buf[0], 100, "Set num pages");
 	LOG_DBG("Write Num Pages RSP: %x", rd_buf[0]);
 
 	return rd_buf[0];
@@ -158,6 +165,7 @@ static int m_write_init_vector(const struct device *dev, uint8_t *init_vector)
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 
+	rd_buf[0] = m_bl_wait_not_busy(config, rd_buf[0], MAX32664C_DEFAULT_CMD_DELAY, "Init vector");
 	LOG_DBG("Write Init Vec RSP: %x", rd_buf[0]);
 
 	return rd_buf[0];
@@ -178,6 +186,7 @@ static int m_write_auth_vector(const struct device *dev, uint8_t *auth_vector)
 	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 	i2c_read_dt(&config->i2c, rd_buf, sizeof(rd_buf));
 
+	rd_buf[0] = m_bl_wait_not_busy(config, rd_buf[0], MAX32664C_DEFAULT_CMD_DELAY, "Auth vector");
 	LOG_DBG("Write Auth Vec : RSP: %x", rd_buf[0]);
 
 	return rd_buf[0];
@@ -295,6 +304,8 @@ static int m_fw_write_page(const struct device *dev, struct fs_file_t *file, uin
 		return ret;
 	}
 
+	rd_buf[0] = m_bl_wait_not_busy(config, rd_buf[0], 100, "Page write");
+
 	// Set MFIO back to high
 	gpio_pin_set_dt(&config->mfio_gpio, 1);
 	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
@@ -328,6 +339,7 @@ static int m_erase_app(const struct device *dev)
 	k_sleep(K_MSEC(MAX32664C_DEFAULT_CMD_DELAY));
 	//	gpio_pin_set_dt(&config->mfio_gpio, 1);
 
+	rd_buf[0] = m_bl_wait_not_busy(config, rd_buf[0], 500, "Erase");
 	LOG_DBG("Erase App : RSP: %x", rd_buf[0]);
 
 	return rd_buf[0];
@@ -395,7 +407,15 @@ static int max32664_do_enter_app(const struct device *dev)
 
 	gpio_pin_configure_dt(&config->mfio_gpio, GPIO_INPUT);
 
-	m_read_op_mode(dev);
+	/* Confirm the new application started (AN6924 section 9: read mode, 0x00 =
+	 * application). Logged only: the version read below decides success, and
+	 * the driver re-checks the hub at the next boot. */
+	int mode = m_read_op_mode(dev);
+	if (mode == 0x00) {
+		LOG_INF("Hub in application mode after update");
+	} else {
+		LOG_WRN("Hub mode after update: 0x%02x (expected 0x00 application)", mode);
+	}
 
 	uint8_t ver_buf[4] = {0};
 	if (m_get_ver(dev, ver_buf) == 0)
@@ -741,7 +761,10 @@ void max32664_updater_start(const struct device *dev, enum max32664_updater_devi
 		gpio_pin_set_dt(&config->reset_gpio, 1);
 		k_sleep(K_MSEC(1000));
 
-		m_wr_cmd_enter_bl(dev);
+		/* The RSTN/MFIO sequence above already put the hub in bootloader
+		 * mode. "AA 01 00 08" (invalidate application + enter bootloader) is
+		 * not needed and costs two of the hub's 10,000 flash write cycles
+		 * plus a 4.25 s delay and a reset (AN6924 Table 15). */
 		m_read_op_mode(dev);
 		m_read_bl_ver(dev);
 
