@@ -82,3 +82,4 @@ twister-out*/
 # /docs/internal/ predates it and still holds the v3 release + DTS migration plans.
 /internal/
 /docs/internal/
+app/.DS_Store
