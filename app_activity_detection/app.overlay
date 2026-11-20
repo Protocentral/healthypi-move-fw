@@ -1,0 +1,10 @@
+/*
+ * Application devicetree overlay (auto-included by Zephyr for this app).
+ *
+ * P0 safety net: enable the WDT peripheral so the task watchdog
+ * (CONFIG_TASK_WDT) has a hardware timer backing it for stall detection.
+ */
+
+&wdt0 {
+	status = "okay";
+};

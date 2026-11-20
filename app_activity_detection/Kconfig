@@ -1,0 +1,17 @@
+# --- NCS v3.3 migration shim ---------------------------------------------
+# With SB_CONFIG_SECURE_BOOT_NETCORE=y, NCS sysbuild (nrf/sysbuild/secureboot.cmake)
+# pushes CONFIG_TFM_HAS_B0N into the default (app) image even on this secure
+# `cpuapp` build that does not use TF-M. Upstream only defines TFM_HAS_B0N inside
+# `if BUILD_WITH_TFM` (nrf/modules/trusted-firmware-m/Kconfig), and we blocklist
+# trusted-firmware-m in west.yml, so the symbol is otherwise undefined here -- the
+# sysbuild assignment then aborts Kconfig ("assign to undefined symbol"). Define an
+# inert stub (mirrors the upstream prompt) purely to absorb that informative value.
+# Nothing in this non-TF-M build reads it.
+config TFM_HAS_B0N
+	bool "Network core bootloader present (informative only, do not change)"
+	depends on SOC_SERIES_NRF53
+	help
+	  Migration stub mirroring nrf/modules/trusted-firmware-m/Kconfig. Absorbs the
+	  sysbuild-propagated CONFIG_TFM_HAS_B0N value on no-TF-M secure-boot builds.
+
+source "Kconfig.zephyr"
