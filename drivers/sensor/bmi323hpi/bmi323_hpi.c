@@ -640,6 +640,47 @@ static int bosch_bmi323_driver_api_trigger_set(const struct device *dev,
 
 	return ret;
 }
+/*
+ * Read the accelerometer data registers into data->acc_samples.
+ *
+ * This did not exist: the SENSOR_CHAN_ACCEL_XYZ case in sample_fetch held only
+ * a commented-out call, so acc_samples_valid was never set and every
+ * channel_get(ACCEL_XYZ) returned -ENODATA. The accelerometer was effectively
+ * write-only through this driver — usable for taps and the hardware step
+ * counter, but you could not read a sample out of it.
+ *
+ * Output is m/s^2 in the sensor_value val1.val2 convention, per the Zephyr
+ * sensor API. Range is fixed at +/-8 g by bmi323_enable_acc(), giving
+ * 16-bit signed over +/-8 g:  LSB = (8 * 9.80665) / 32768 m/s^2.
+ */
+static int bosch_bmi323_driver_api_fetch_acc_samples(const struct device *dev)
+{
+	struct bosch_bmi323_data *data = (struct bosch_bmi323_data *)dev->data;
+	static const uint8_t regs[3] = {
+		BMI3_REG_ACC_DATA_X, BMI3_REG_ACC_DATA_Y, BMI3_REG_ACC_DATA_Z,
+	};
+	int ret;
+
+	for (int i = 0; i < 3; i++) {
+		uint16_t raw;
+
+		ret = bmi323_read_reg_16(dev, regs[i], &raw);
+		if (ret < 0) {
+			data->acc_samples_valid = false;
+			return ret;
+		}
+
+		/* micro-m/s^2, computed in int64 so the intermediate product
+		 * cannot overflow at full scale. */
+		int64_t micro = ((int64_t)(int16_t)raw * 8LL * 9806650LL) / 32768LL;
+
+		data->acc_samples[i].val1 = (int32_t)(micro / 1000000);
+		data->acc_samples[i].val2 = (int32_t)(micro % 1000000);
+	}
+
+	data->acc_samples_valid = true;
+	return 0;
+}
 
 static int bosch_bmi323_driver_api_sample_fetch(const struct device *dev, enum sensor_channel chan)
 {
@@ -651,7 +692,7 @@ static int bosch_bmi323_driver_api_sample_fetch(const struct device *dev, enum s
 	switch (chan)
 	{
 	case SENSOR_CHAN_ACCEL_XYZ:
-		// ret = bosch_bmi323_driver_api_fetch_acc_samples(dev);
+		 ret = bosch_bmi323_driver_api_fetch_acc_samples(dev);
 		break;
 	case SENSOR_CHAN_GYRO_XYZ:
 		// ret = bosch_bmi323_driver_api_fetch_gyro_samples(dev);
