@@ -4,6 +4,8 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
+#include <math.h>
+
 #include "gravity_filter.h"
 #include "ml_engine.h"
 #include "activity_model.h"    
@@ -15,7 +17,7 @@ LOG_MODULE_REGISTER(activity, LOG_LEVEL_INF);
 #define MODEL_DATA  activity_model
 #define MODEL_LEN   ACTIVITY_MODEL_LEN
 
-#define TFLITE_TYPE_FLOAT32 1   /* kTfLiteFloat32 */
+#define TFLITE_TYPE_INT8    9   /* kTfLiteInt8 */
 
 #define IN_COUNT (ACTIVITY_WINDOW_LEN * 3)
 
@@ -33,6 +35,13 @@ static atomic_t res_idx  = ATOMIC_INIT(ACT_RES_NONE);
 static atomic_t res_conf = ATOMIC_INIT(0);
 static atomic_t res_ms   = ATOMIC_INIT(0);
 static atomic_t res_seq = ATOMIC_INIT(0);
+
+/* set once in activity_model_init() from the tensor info */
+static float   in_inv_scale;
+static int32_t in_zp;
+static float   out_scale;
+static int32_t out_zp;
+
 
 static const char *const labels[ACTIVITY_NUM_CLASSES] = {
 	"jogging", "stationary", "stairs", "walking"
@@ -78,30 +87,46 @@ int activity_model_init(void)
 		in_info.type, (unsigned)in_info.bytes,
 		out_info.type, (unsigned)out_info.bytes);
 
-	if (in_info.type != TFLITE_TYPE_FLOAT32 ||
-	    out_info.type != TFLITE_TYPE_FLOAT32) {
-		LOG_ERR("Model is not float32 (in=%d out=%d)",
+	if (in_info.type != TFLITE_TYPE_INT8 ||
+	    out_info.type != TFLITE_TYPE_INT8) {
+		LOG_ERR("Model is not int8 (in=%d out=%d)",
 			in_info.type, out_info.type);
 		return -EINVAL;
 	}
-	if (in_info.bytes != IN_COUNT * sizeof(float) ||
-	    out_info.bytes != ACTIVITY_NUM_CLASSES * sizeof(float)) {
+	if (in_info.bytes != IN_COUNT * sizeof(int8_t) ||
+	    out_info.bytes != ACTIVITY_NUM_CLASSES * sizeof(int8_t)) {
 		LOG_ERR("Size mismatch: in=%u (want %u) out=%u (want %u)",
 			(unsigned)in_info.bytes,
-			(unsigned)(IN_COUNT * sizeof(float)),
+			(unsigned)(IN_COUNT * sizeof(int8_t)),
 			(unsigned)out_info.bytes,
-			(unsigned)(ACTIVITY_NUM_CLASSES * sizeof(float)));
+			(unsigned)(ACTIVITY_NUM_CLASSES * sizeof(int8_t)));
 		return -EINVAL;
 	}
+	in_inv_scale = 1.0f / in_info.scale;
+	in_zp        = in_info.zero_point;
+	out_scale    = out_info.scale;
+	out_zp       = out_info.zero_point;
+
+	LOG_INF("in scale=%.6f zp=%d  out scale=%.6f zp=%d",
+		(double)in_info.scale, (int)in_zp, (double)out_scale, (int)out_zp);
 	return 0;
+}
+
+static inline int8_t quantize_i8(float x)
+{
+	int32_t q = (int32_t)lroundf(x * in_inv_scale) + in_zp;
+
+	if (q > 127)  { q = 127;  }
+	if (q < -128) { q = -128; }
+	return (int8_t)q;
 }
 
 static void activity_thread(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
 
-	static float window[IN_COUNT];
-	static float out[ACTIVITY_NUM_CLASSES];
+	static int8_t window[IN_COUNT];
+	static int8_t out[ACTIVITY_NUM_CLASSES];
 
     for (int i = 0; i < 100 && !device_is_ready(accel); i++) {
 		k_sleep(K_MSEC(1000));
@@ -162,9 +187,10 @@ static void activity_thread(void *a, void *b, void *c)
 
 		accel3_t p = gravity_suppress_rotate(raw);
 
-		window[n * 3 + 0] = p.x;
-		window[n * 3 + 1] = p.y;
-		window[n * 3 + 2] = p.z;
+		window[n * 3 + 0] = quantize_i8(p.x);
+		window[n * 3 + 1] = quantize_i8(p.y);
+		window[n * 3 + 2] = quantize_i8(p.z);
+		
 
 		if (++n < ACTIVITY_WINDOW_LEN) {
 			continue;
@@ -187,14 +213,20 @@ static void activity_thread(void *a, void *b, void *c)
 			}
 		}
 
-        atomic_set(&res_conf, (atomic_val_t)(out[best] * 100.0f + 0.5f));
-		atomic_set(&res_ms, (atomic_val_t)inf_time_ms);
-		atomic_set(&res_idx, best);
-        atomic_inc(&res_seq);
+		float pr[ACTIVITY_NUM_CLASSES];
+
+		for (int i = 0; i < ACTIVITY_NUM_CLASSES; i++) {
+			pr[i] = ((int32_t)out[i] - out_zp) * out_scale;
+		}
+
+		atomic_set(&res_conf, (atomic_val_t)(pr[best] * 100.0f + 0.5f));
+		atomic_set(&res_ms,   (atomic_val_t)inf_time_ms);
+		atomic_set(&res_idx,  best);
+		atomic_inc(&res_seq);
 
 		LOG_INF("%s (%.0f%%) [%.2f %.2f %.2f %.2f]", labels[best],
-			(double)(out[best] * 100.0f), (double)out[0], (double)out[1],
-			(double)out[2], (double)out[3]);
+			(double)(pr[best] * 100.0f),
+			(double)pr[0], (double)pr[1], (double)pr[2], (double)pr[3]);
 	}
 }
 K_THREAD_DEFINE(activity_thread_id, ACT_STACK_SIZE , activity_thread, NULL, NULL, NULL, ACT_PRIORITY, 0, 0);

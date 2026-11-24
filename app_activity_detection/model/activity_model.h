@@ -6,7 +6,8 @@ extern "C" {
 #endif
 
 extern const unsigned char activity_model[];
-#define ACTIVITY_MODEL_LEN 9240
+
+#define ACTIVITY_MODEL_LEN 6176
 
 #ifdef __cplusplus
 }
